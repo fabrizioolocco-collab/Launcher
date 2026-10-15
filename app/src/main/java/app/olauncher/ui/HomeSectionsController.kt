@@ -23,6 +23,7 @@ import app.olauncher.data.Prefs
 import app.olauncher.data.SectionApp
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.CustomIcons
+import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
@@ -99,9 +100,12 @@ class HomeSectionsController(
         render()
     }
 
-    private fun findApp(sectionApp: SectionApp): AppModel.App? =
-        apps.firstOrNull { sectionApp.matches(it) }
+    /** The installed app for a section entry; null if missing or blocked by a detox session. */
+    private fun findApp(sectionApp: SectionApp): AppModel.App? {
+        if (!DetoxManager.isAllowed(context, sectionApp.packageName)) return null
+        return apps.firstOrNull { sectionApp.matches(it) }
             ?: apps.firstOrNull { it.appPackage == sectionApp.packageName && it.user.toString() == sectionApp.user }
+    }
 
     // ---------------------------------------------------------------- rendering
 
@@ -110,7 +114,10 @@ class HomeSectionsController(
         emptyHint.isVisible = sections.isEmpty()
         if (!appsLoaded) return
         val gravity = prefs.homeAlignment
+        val detox = DetoxManager.isActive(context)
         sections.forEachIndexed { index, section ->
+            // During detox, sections without allowed apps disappear
+            if (detox && section.apps.none { findApp(it) != null }) return@forEachIndexed
             container.addView(headerView(index, section, gravity))
             if (section.collapsed) return@forEachIndexed
             var shown = 0

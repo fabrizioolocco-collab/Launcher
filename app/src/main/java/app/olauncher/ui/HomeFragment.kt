@@ -32,6 +32,7 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentHomeBinding
+import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.appUsagePermissionGranted
@@ -64,6 +65,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private var uiScope = MainScope()
     private lateinit var sections: HomeSectionsController
     private lateinit var widgets: HomeWidgetsController
+    private lateinit var detox: DetoxController
 
     private var onImagePicked: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -114,6 +116,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         )
         widgets.render()
 
+        detox = DetoxController(
+            activity = requireActivity(),
+            bar = binding.detoxBar,
+            setDefaultLauncher = { viewModel.resetLauncherLiveData.call() },
+            keepScreen = { viewModel.keepCurrentScreen = it },
+        )
+
         initObservers()
         setHomeAlignment(prefs.homeAlignment)
         initSwipeTouchListener()
@@ -123,6 +132,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     override fun onStart() {
         super.onStart()
         widgets.startListening()
+    }
+
+    override fun onPause() {
+        detox.onPause()
+        super.onPause()
     }
 
     override fun onStop() {
@@ -135,6 +149,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         populateHomeScreen(false)
         widgets.refreshIfNeeded()
         widgets.onHomeResumed()
+        detox.onResume()
+        if (!prefs.welcomeShown) {
+            prefs.welcomeShown = true
+            detox.showPermissions()
+        }
         viewModel.loadHomeApps()
         binding.notificationAccessHint.isVisible = !NotificationRepository.isAccessGranted(requireContext())
         viewModel.isOlauncherDefault()
@@ -228,6 +247,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         NotificationRepository.state.observe(viewLifecycleOwner) {
             sections.setNotifications(it)
         }
+        DetoxManager.state.observe(viewLifecycleOwner) {
+            sections.render()
+            widgets.render()
+            detox.updateBar()
+        }
+        DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }
+        viewModel.showPermissions.observe(viewLifecycleOwner) { detox.showPermissions() }
         viewModel.isOlauncherDefault.observe(viewLifecycleOwner, Observer {
             if (it != true) {
                 if (prefs.dailyWallpaper && prefs.appTheme == AppCompatDelegate.MODE_NIGHT_YES) {
@@ -561,6 +587,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         super.onDestroyView()
         uiScope.cancel()
         widgets.release()
+        detox.release()
         _binding = null
     }
 }

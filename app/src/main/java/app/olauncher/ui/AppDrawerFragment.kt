@@ -26,6 +26,7 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
+import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.IconPackManager
@@ -337,6 +338,7 @@ class AppDrawerFragment : BaseFragment() {
                     updateCombinedAppList()
                 }
                 viewModel.getHiddenApps()
+                DetoxManager.state.observe(viewLifecycleOwner) { updateCombinedAppList() }
                 NotificationRepository.state.observe(viewLifecycleOwner) {
                     notifications = it
                     updateCombinedAppList()
@@ -369,7 +371,7 @@ class AppDrawerFragment : BaseFragment() {
         val pool = apps + currentHiddenApps +
                 (if (TestNotifications.isEnabled(requireContext())) listOf(TestNotifications.fakeApp(requireContext())) else emptyList())
         val news = pool.filterIsInstance<AppModel.App>()
-            .filter { notifications.containsKey(notificationKey(it)) }
+            .filter { notifications.containsKey(notificationKey(it)) && DetoxManager.isAllowed(requireContext(), it.appPackage) }
             .distinctBy { notificationKey(it) }
             .sortedWith(
                 if (prefs.newsSortByCount)
@@ -384,10 +386,13 @@ class AppDrawerFragment : BaseFragment() {
     }
 
     private fun updateCombinedAppList() {
-        val apps = currentAppList ?: return
+        val ctx = context ?: return
+        // During detox only allowed apps are listed (picking apps for settings is not affected)
+        val detox = flag == Constants.FLAG_LAUNCH_APP && DetoxManager.isActive(ctx)
+        val apps = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         val combined = (newsBlock(apps) + apps).toMutableList()
 
-        if (flag == Constants.FLAG_LAUNCH_APP && currentPrivateSpaceAvailable) {
+        if (flag == Constants.FLAG_LAUNCH_APP && currentPrivateSpaceAvailable && !detox) {
             combined.add(AppModel.PrivateSpaceHeader(isLocked = currentPrivateSpaceLocked))
             if (!currentPrivateSpaceLocked) {
                 currentPrivateSpaceApps?.let { combined.addAll(it) }

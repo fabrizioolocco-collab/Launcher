@@ -40,6 +40,12 @@ import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.TestNotifications
+import app.olauncher.helper.DetoxManager
+import app.olauncher.helper.getAppsList
+import app.olauncher.helper.showMultiSelectDialog
+import app.olauncher.data.AppModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import app.olauncher.helper.copyToClipboard
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.ui.widgets.WidgetLog
@@ -186,6 +192,11 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
+            R.id.detoxWhitelist -> showDetoxWhitelist()
+            R.id.permissionsScreen -> {
+                findNavController().popBackStack(R.id.mainFragment, false)
+                viewModel.showPermissions.call()
+            }
             R.id.widgetLog -> {
                 val ctx = requireContext()
                 val text = WidgetLog.read(ctx).lines().takeLast(25).joinToString("\n").ifBlank { "-" }
@@ -280,6 +291,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.notificationAccess.setOnClickListener(this)
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
+        binding.detoxWhitelist.setOnClickListener(this)
+        binding.permissionsScreen.setOnClickListener(this)
         binding.widgetColumns.setOnClickListener(this)
         binding.widgetLog.setOnClickListener(this)
         binding.autoLaunchSingle.setOnClickListener(this)
@@ -348,6 +361,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
         binding.widgetColumns.text = prefs.widgetColumns.toString()
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
+        binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
         binding.letterIndex.setText(
             when (prefs.letterIndexMode) {
@@ -388,6 +402,27 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 else -> onPick(options[item.itemId - 1].id)
             }
             populateTextStyle()
+        }
+    }
+
+    private fun showDetoxWhitelist() {
+        val ctx = requireContext()
+        if (DetoxManager.isActive(ctx) && DetoxManager.isStrict(ctx)) {
+            ctx.showToast(getString(R.string.ml_detox_whitelist_locked))
+            return
+        }
+        viewModel.viewModelScope.launch {
+            val apps = getAppsList(ctx, prefs, includeRegularApps = true, includeHiddenApps = true)
+                .filterIsInstance<AppModel.App>()
+                .distinctBy { it.appPackage }
+            val current = DetoxManager.whitelist(ctx)
+            val labels = apps.map { it.appLabel }
+            val checked = apps.indices.filter { apps[it].appPackage in current }.toSet()
+            ctx.showMultiSelectDialog(getString(R.string.ml_detox_whitelist), labels, checked, getString(R.string.ml_done)) { selected ->
+                if (!DetoxManager.setWhitelist(ctx, selected.map { apps[it].appPackage }.toSet()))
+                    ctx.showToast(getString(R.string.ml_detox_whitelist_locked))
+                if (_binding != null) populateTextStyle()
+            }
         }
     }
 

@@ -101,6 +101,17 @@
                     tools:visibility="visible" />
             </FrameLayout>
 
+            <!-- Detox: start button, countdown while a session runs -->
+            <TextView
+                android:id="@+id/detoxBar"
+                style="@style/TextSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="74dp"
+                android:layout_marginTop="6dp"
+                android:paddingVertical="6dp"
+                android:text="@string/ml_detox_start_label" />
+
             <Space
                 android:id="@+id/bottomAlignSpace"
                 android:layout_width="match_parent"

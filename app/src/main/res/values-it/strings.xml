@@ -66,7 +66,7 @@
         \n\nÈ anche il modo migliore per supportare gli sviluppatori di MinimaLauncher. Dai un\'occhiata!</string>
     <string name="wallpaper_message">MinimaLauncher offre bellissimi sfondi nuovi ogni giorno. Dai un aspetto fresco alla tua schermata principale ogni giorno, gratuitamente!
         \n\nVuoi provarlo?</string>
-    <string name="accessibility_service_description">L\'autorizzazione di accessibilità è necessaria per abilitare il gesto Doppio tocco per bloccare. Qualsiasi dato acquisito da MinimaLauncher tramite questo servizio non lascerà il tuo dispositivo.</string>
+    <string name="accessibility_service_description">Il permesso di accessibilità serve per il doppio tocco per bloccare e per le sessioni detox (torna alla home se apri un\'app bloccata). Nessun dato raccolto da MinimaLauncher tramite questo servizio lascia il dispositivo.</string>
     <string name="support_olauncher_for_free">Supporta MinimaLauncher gratuitamente utilizzando il nostro link di affiliazione su Amazon.</string>
     <string name="support_olauncher_message">Ogni volta che acquisti qualcosa utilizzando il nostro link, riceviamo una piccola commissione. Salva il link e usalo ogni volta che fai acquisti online.\nGrazie!</string>
     <string name="open">Apri link</string>

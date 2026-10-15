@@ -408,6 +408,7 @@ class MainActivity : AppCompatActivity() {
         if (HomeWidgetsController.current?.onActivityResult(requestCode, resultCode) == true) return
         when (requestCode) {
             Constants.REQUEST_CODE_ENABLE_ADMIN -> {
+                viewModel.keepCurrentScreen = false
                 if (resultCode == Activity.RESULT_OK)
                     prefs.lockModeOn = true
             }

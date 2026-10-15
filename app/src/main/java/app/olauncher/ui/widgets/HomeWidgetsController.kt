@@ -12,6 +12,7 @@ import app.olauncher.R
 import app.olauncher.data.HomeWidget
 import app.olauncher.data.HomeWidgetsRepository
 import app.olauncher.data.Prefs
+import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getScreenDimensions
@@ -110,6 +111,10 @@ class HomeWidgetsController(
                 widget.col = c; widget.row = r
                 changed = true
             }
+            if (!DetoxManager.isAllowed(activity, info.provider.packageName)) {
+                // Detox: widgets of blocked apps are hidden (kept in place for later)
+                return@forEach
+            }
             if (widget.col + widget.colSpan > columns) {
                 // Fewer columns than when it was placed
                 widget.colSpan = widget.colSpan.coerceAtMost(columns)
@@ -124,7 +129,7 @@ class HomeWidgetsController(
             changed = true
         }
         if (changed) repo.save(widgets)
-        grid.visibility = if (widgets.isEmpty()) View.GONE else View.VISIBLE
+        grid.visibility = if (grid.childCount == 0) View.GONE else View.VISIBLE
     }
 
     /** Called on resume: rebuilds only if the column setting changed meanwhile. */

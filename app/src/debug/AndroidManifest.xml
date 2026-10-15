@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: emergency exit from a detox session over ADB -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name="app.olauncher.debug.DetoxExitReceiver"
+            android:exported="true" />
+    </application>
+</manifest>

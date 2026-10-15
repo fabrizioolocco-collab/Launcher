@@ -29,3 +29,13 @@ La firma usa questi GitHub Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
 
 A ogni push l'Action `Build` produce un APK di debug, scaricabile come artifact.
 Il pacchetto è `app.minimalauncher.debug` e convive con la versione di release.
+
+## Detox: uscita d'emergenza (solo build di debug)
+
+Con la build di debug (`app.minimalauncher.debug`) installata e il telefono collegato via ADB:
+
+```
+adb shell am broadcast -n app.minimalauncher.debug/app.olauncher.debug.DetoxExitReceiver
+```
+
+termina qualunque sessione detox, anche strict. Nella build di release questo ricevitore non esiste.

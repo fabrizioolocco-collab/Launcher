@@ -122,6 +122,7 @@ class Prefs(context: Context) {
     private val NEWS_SORT_BY_COUNT = "NEWS_SORT_BY_COUNT"
     private val AUTO_LAUNCH_SINGLE = "AUTO_LAUNCH_SINGLE"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
+    private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val LETTER_INDEX_MODE = "LETTER_INDEX_MODE"
     private val SECTION_FONT = "SECTION_FONT"
     private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
@@ -151,6 +152,10 @@ class Prefs(context: Context) {
     var appTextSize: Int
         get() = prefs.getInt(APP_TEXT_SIZE, 0)
         set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
+
+    var welcomeShown: Boolean
+        get() = prefs.getBoolean(WELCOME_SHOWN, false)
+        set(value) = prefs.edit { putBoolean(WELCOME_SHOWN, value) }
 
     /** Columns of the home widget grid (2-8). */
     var widgetColumns: Int

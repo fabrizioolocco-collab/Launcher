@@ -64,11 +64,13 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        instance = this
         scheduleRecompute()
     }
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        if (instance === this) instance = null
         NotificationRepository.publish(emptyMap())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
             requestRebind(ComponentName(this, NotificationListener::class.java))
@@ -86,12 +88,86 @@ class NotificationListener : NotificationListenerService() {
         handler.postDelayed(recompute, 250)
     }
 
+    /** Re-applies the detox rules now (session started, whitelist changed). */
+    fun applyDetox() = handler.post { publishCounts() }
+
+    /** Package a notification belongs to for the launcher (test notifications map to the fake app). */
+    private fun ownerOf(sbn: StatusBarNotification): String? {
+        val n = sbn.notification ?: return null
+        if (sbn.packageName != BuildConfig.APPLICATION_ID) return sbn.packageName
+        return if (TestNotifications.isTestNotification(n)) TestNotifications.FAKE_PACKAGE else null
+    }
+
+    /**
+     * During a detox session, snoozes the notifications of blocked apps until the session ends.
+     * Returns the notifications that stay visible.
+     */
+    private fun snoozeBlocked(active: Array<StatusBarNotification>): List<StatusBarNotification> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || !DetoxManager.isActive(this)) return active.toList()
+        val remaining = DetoxManager.remainingMs(this)
+        val snoozed = snoozedKeys().toMutableSet()
+        val visible = mutableListOf<StatusBarNotification>()
+        for (sbn in active) {
+            val owner = ownerOf(sbn)
+            val n = sbn.notification
+            val ongoing = n != null && n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE) != 0
+            if (owner != null && sbn.isClearable && !ongoing && !DetoxManager.isAllowed(this, owner)) {
+                try {
+                    snoozeNotification(sbn.key, remaining)
+                    snoozed += sbn.key
+                    continue
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            visible += sbn
+        }
+        saveSnoozedKeys(snoozed)
+        return visible
+    }
+
+    /** Notifications we paused that are still snoozed. */
+    private fun publishPausedCount() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val ours = snoozedKeys()
+        val stillSnoozed = try {
+            snoozedNotifications?.map { it.key }?.filter { it in ours }.orEmpty()
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (stillSnoozed.size != ours.size) saveSnoozedKeys(stillSnoozed.toSet())
+        DetoxManager.publishPaused(if (DetoxManager.isActive(this)) stillSnoozed.size else 0)
+    }
+
+    /** End of a session: brings back the notifications we paused (a 1 ms re-snooze reposts them). */
+    fun restoreSnoozed() = handler.post {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ours = snoozedKeys()
+            try {
+                snoozedNotifications?.filter { it.key in ours }?.forEach { snoozeNotification(it.key, 1L) }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        saveSnoozedKeys(emptySet())
+        DetoxManager.publishPaused(0)
+        scheduleRecompute()
+    }
+
+    private fun snoozedKeys(): Set<String> =
+        getSharedPreferences(SNOOZE_PREFS, MODE_PRIVATE).getStringSet(SNOOZE_KEY, emptySet()).orEmpty().toSet()
+
+    private fun saveSnoozedKeys(keys: Set<String>) =
+        getSharedPreferences(SNOOZE_PREFS, MODE_PRIVATE).edit().putStringSet(SNOOZE_KEY, keys).apply()
+
     private fun publishCounts() {
-        val active = try {
+        val all = try {
             activeNotifications
         } catch (e: Exception) {
             null
         } ?: return
+        val active = snoozeBlocked(all)
+        publishPausedCount()
         val ranking = try {
             currentRanking
         } catch (e: Exception) {
@@ -109,10 +185,7 @@ class NotificationListener : NotificationListenerService() {
         for (sbn in active) {
             val n = sbn.notification ?: continue
             // The launcher's own notifications are ignored, except the test ones (see TestNotifications)
-            val packageName = if (sbn.packageName == BuildConfig.APPLICATION_ID) {
-                if (!TestNotifications.isTestNotification(n)) continue
-                TestNotifications.FAKE_PACKAGE
-            } else sbn.packageName
+            val packageName = ownerOf(sbn) ?: continue
             if (!sbn.isClearable) continue
             if (n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE) != 0) continue
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ranking != null) {
@@ -151,5 +224,15 @@ class NotificationListener : NotificationListenerService() {
             n.number > 0 -> n.number
             else -> 1
         }
+    }
+
+    companion object {
+        private const val SNOOZE_PREFS = "app.minimalauncher.detox_snoozed"
+        private const val SNOOZE_KEY = "KEYS"
+
+        /** The connected listener, used to apply detox changes right away. */
+        @Volatile
+        var instance: NotificationListener? = null
+            private set
     }
 }

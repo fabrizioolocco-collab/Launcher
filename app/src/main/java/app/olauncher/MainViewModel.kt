@@ -73,6 +73,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val showDialog = SingleLiveEvent<String>()
     val checkForMessages = SingleLiveEvent<Unit?>()
     val resetLauncherLiveData = SingleLiveEvent<Unit?>()
+    val showPermissions = SingleLiveEvent<Unit?>()
     // Home button for recents feature disabled
     // val showRecentApps = SingleLiveEvent<Unit?>()
 
