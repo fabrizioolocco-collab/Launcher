@@ -66,4 +66,13 @@
     <string name="ml_test_removed">Test removed</string>
     <string name="ml_notifications_blocked">Notifications are blocked for MinimaLauncher: allow them to send tests</string>
     <string name="ml_grant_access_first">Turn on notification access too, or badges won\'t update</string>
+    <string name="ml_news">News</string>
+    <string name="ml_all_apps">All apps</string>
+    <string name="ml_news_order">News order</string>
+    <string name="ml_news_recent">Most recent</string>
+    <string name="ml_news_count">Most notifications</string>
+    <string name="ml_letter_index">Letter index</string>
+    <string name="ml_index_always">Always</string>
+    <string name="ml_index_on_scroll">While scrolling</string>
+    <string name="ml_index_never">Never</string>
 </resources>

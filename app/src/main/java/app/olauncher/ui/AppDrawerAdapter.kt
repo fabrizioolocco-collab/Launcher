@@ -21,6 +21,7 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.databinding.AdapterAppDrawerBinding
 import app.olauncher.databinding.AdapterPrivateSpaceHeaderBinding
+import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.isSystemApp
 import app.olauncher.helper.showKeyboard
@@ -39,16 +40,21 @@ class AppDrawerAdapter(
     private val appSectionListener: (AppModel) -> Unit = {},
     private val iconLoader: ((AppModel, TextView) -> Unit)? = null,
     private val titleStyler: ((TextView) -> Unit)? = null,
+    private val badgeCount: ((AppModel) -> Int)? = null,
 ) : ListAdapter<AppModel, RecyclerView.ViewHolder>(DIFF_CALLBACK), Filterable {
 
     companion object {
         const val VIEW_TYPE_APP = 0
         const val VIEW_TYPE_PRIVATE_HEADER = 1
+        const val VIEW_TYPE_LIST_HEADER = 2
 
         val DIFF_CALLBACK = object : DiffUtil.ItemCallback<AppModel>() {
             override fun areItemsTheSame(oldItem: AppModel, newItem: AppModel): Boolean = when {
                 oldItem is AppModel.App && newItem is AppModel.App ->
-                    oldItem.appPackage == newItem.appPackage && oldItem.user == newItem.user
+                    oldItem.appPackage == newItem.appPackage && oldItem.user == newItem.user &&
+                            oldItem.inNews == newItem.inNews
+
+                oldItem is AppModel.ListHeader && newItem is AppModel.ListHeader -> oldItem.title == newItem.title
 
                 oldItem is AppModel.PinnedShortcut && newItem is AppModel.PinnedShortcut ->
                     oldItem.identity == newItem.identity
@@ -77,12 +83,23 @@ class AppDrawerAdapter(
     override fun getItemViewType(position: Int): Int {
         return when (appFilteredList.getOrNull(position)) {
             is AppModel.PrivateSpaceHeader -> VIEW_TYPE_PRIVATE_HEADER
+            is AppModel.ListHeader -> VIEW_TYPE_LIST_HEADER
             else -> VIEW_TYPE_APP
         }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return when (viewType) {
+            VIEW_TYPE_LIST_HEADER -> ListHeaderViewHolder(
+                TextView(parent.context, null, 0, R.style.TextSmall).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+                    setPadding(24.dpToPx(), 18.dpToPx(), 24.dpToPx(), 6.dpToPx())
+                    setTypeface(typeface, android.graphics.Typeface.BOLD)
+                    letterSpacing = 0.06f
+                    alpha = 0.6f
+                }
+            )
+
             VIEW_TYPE_PRIVATE_HEADER -> PrivateSpaceHeaderViewHolder(
                 AdapterPrivateSpaceHeaderBinding.inflate(
                     LayoutInflater.from(parent.context),
@@ -106,6 +123,8 @@ class AppDrawerAdapter(
             if (appFilteredList.isEmpty() || position == RecyclerView.NO_POSITION) return
             val appModel = appFilteredList[holder.bindingAdapterPosition]
             when (holder) {
+                is ListHeaderViewHolder -> holder.bind(appModel as AppModel.ListHeader, appLabelGravity)
+
                 is PrivateSpaceHeaderViewHolder -> {
                     holder.bind(
                         appLabelGravity,
@@ -127,6 +146,7 @@ class AppDrawerAdapter(
                     appSectionListener,
                     iconLoader,
                     titleStyler,
+                    badgeCount?.invoke(appModel) ?: 0,
                 )
             }
         } catch (e: Exception) {
@@ -144,7 +164,9 @@ class AppDrawerAdapter(
 
                 val appFilteredList = (if (charSearch.isNullOrBlank()) appsList
                 else appsList.filter { app ->
-                    app !is AppModel.PrivateSpaceHeader && appLabelMatches(app.appLabel, charSearch)
+                    // While searching, show only the A-Z apps: no headers, no "News" copies
+                    app !is AppModel.PrivateSpaceHeader && app !is AppModel.ListHeader &&
+                            !(app is AppModel.App && app.inNews) && appLabelMatches(app.appLabel, charSearch)
                 } as MutableList<AppModel>)
 
                 val filterResults = FilterResults()
@@ -208,8 +230,18 @@ class AppDrawerAdapter(
     }
 
     fun launchFirstInList() {
-        val first = appFilteredList.firstOrNull { it !is AppModel.PrivateSpaceHeader }
+        val first = appFilteredList.firstOrNull { it !is AppModel.PrivateSpaceHeader && it !is AppModel.ListHeader }
         if (first != null) appClickListener(first)
+    }
+
+    /** Rebinds visible rows so notification badges reflect the latest counts. */
+    fun refreshBadges() = notifyItemRangeChanged(0, itemCount)
+
+    class ListHeaderViewHolder(private val view: TextView) : RecyclerView.ViewHolder(view) {
+        fun bind(header: AppModel.ListHeader, gravity: Int) {
+            view.text = header.title
+            view.gravity = gravity
+        }
     }
 
     class PrivateSpaceHeaderViewHolder(private val binding: AdapterPrivateSpaceHeaderBinding) :
@@ -230,6 +262,8 @@ class AppDrawerAdapter(
 
     class ViewHolder(private val binding: AdapterAppDrawerBinding) :
         RecyclerView.ViewHolder(binding.root) {
+        private val defaultTitleColors = binding.appTitle.textColors
+
         fun bind(
             flag: Int,
             appLabelGravity: Int,
@@ -243,15 +277,22 @@ class AppDrawerAdapter(
             appSectionListener: (AppModel) -> Unit,
             iconLoader: ((AppModel, TextView) -> Unit)?,
             titleStyler: ((TextView) -> Unit)?,
+            notificationCount: Int,
         ) = with(binding) {
             appHideLayout.visibility = View.GONE
             renameLayout.visibility = View.GONE
             appTitle.visibility = View.VISIBLE
 
             // Show indicators in title based on app type and state
-            appTitle.text = buildString {
-                append(appModel.appLabel)
-                if (appModel.isNew) append(" ✦")
+            if (notificationCount > 0) {
+                appTitle.text = HomeSectionsController.badgeText(appModel.appLabel, notificationCount)
+                appTitle.setTextColor(HomeSectionsController.NOTIFICATION_COLOR)
+            } else {
+                appTitle.text = buildString {
+                    append(appModel.appLabel)
+                    if (appModel.isNew) append(" ✦")
+                }
+                appTitle.setTextColor(defaultTitleColors)
             }
             appTitle.gravity = appLabelGravity
             otherProfileIndicator.isVisible = appModel.user != myUserHandle

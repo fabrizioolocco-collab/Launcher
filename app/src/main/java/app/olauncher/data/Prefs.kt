@@ -119,6 +119,8 @@ class Prefs(context: Context) {
     private val IS_SHORTCUT_SWIPE_RIGHT = "IS_SHORTCUT_SWIPE_RIGHT"
 
     private val SHOW_ICONS = "SHOW_ICONS"
+    private val NEWS_SORT_BY_COUNT = "NEWS_SORT_BY_COUNT"
+    private val LETTER_INDEX_MODE = "LETTER_INDEX_MODE"
     private val SECTION_FONT = "SECTION_FONT"
     private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
     private val APP_FONT = "APP_FONT"
@@ -147,6 +149,16 @@ class Prefs(context: Context) {
     var appTextSize: Int
         get() = prefs.getInt(APP_TEXT_SIZE, 0)
         set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
+
+    /** Drawer "News": false = most recent first, true = most notifications first. */
+    var newsSortByCount: Boolean
+        get() = prefs.getBoolean(NEWS_SORT_BY_COUNT, false)
+        set(value) = prefs.edit { putBoolean(NEWS_SORT_BY_COUNT, value) }
+
+    /** Drawer letter index: see Constants.LetterIndex. */
+    var letterIndexMode: Int
+        get() = prefs.getInt(LETTER_INDEX_MODE, Constants.LetterIndex.ALWAYS)
+        set(value) = prefs.edit { putInt(LETTER_INDEX_MODE, value) }
 
     /** Package of the selected icon pack, empty for the system icons. */
     var iconPack: String

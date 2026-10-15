@@ -56,15 +56,28 @@
         android:layout_height="0dp"
         android:layout_weight="0.06" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerView"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginBottom="24dp"
-        android:clipChildren="false"
-        android:clipToPadding="false"
-        android:fadingEdgeLength="24dp"
-        android:requiresFadingEdge="vertical" />
+        android:layout_marginBottom="24dp">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipChildren="false"
+            android:clipToPadding="false"
+            android:fadingEdgeLength="24dp"
+            android:requiresFadingEdge="vertical" />
+
+        <app.olauncher.ui.AlphabetIndexView
+            android:id="@+id/letterIndex"
+            android:layout_width="64dp"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:paddingVertical="8dp"
+            android:visibility="gone" />
+    </FrameLayout>
 
 </LinearLayout>

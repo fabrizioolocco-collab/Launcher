@@ -111,4 +111,10 @@ object Constants {
     const val DIGITAL_WELLBEING_SAMSUNG_PACKAGE_NAME = "com.samsung.android.forest"
     const val DIGITAL_WELLBEING_SAMSUNG_ACTIVITY = "com.samsung.android.forest.launcher.LauncherActivity"
     const val WALLPAPER_WORKER_NAME = "WALLPAPER_WORKER_NAME"
+
+    object LetterIndex {
+        const val ALWAYS = 0
+        const val ON_SCROLL = 1
+        const val NEVER = 2
+    }
 }

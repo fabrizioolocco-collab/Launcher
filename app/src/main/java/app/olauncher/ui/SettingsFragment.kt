@@ -134,6 +134,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         populateTextStyle()
         populateProMessage()
         populateKeyboardText()
+        // MinimaLauncher: the drawer keyboard opens only when the search field is tapped
+        (binding.autoShowKeyboard.parent as? View)?.visibility = View.GONE
         populateScreenTimeOnOff()
         populateLockSettings()
         // Home button for recents feature disabled
@@ -178,6 +180,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.sectionTextSize -> showTextSizeMenu(view) { prefs.sectionTextSize = it }
             R.id.appTextSize -> showTextSizeMenu(view) { prefs.appTextSize = it }
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
+            R.id.newsOrder -> showNewsOrderMenu(view)
+            R.id.letterIndex -> showLetterIndexMenu(view)
             R.id.testNotificationSend -> sendTestNotification()
             R.id.testNotificationRemove -> {
                 TestNotifications.disable(requireContext())
@@ -252,6 +256,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.sectionTextSize.setOnClickListener(this)
         binding.appTextSize.setOnClickListener(this)
         binding.notificationAccess.setOnClickListener(this)
+        binding.newsOrder.setOnClickListener(this)
+        binding.letterIndex.setOnClickListener(this)
         binding.testNotificationSend.setOnClickListener(this)
         binding.testNotificationRemove.setOnClickListener(this)
         binding.screenTimeOnOff.setOnClickListener(this)
@@ -315,6 +321,14 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.appFont.text = FontManager.label(ctx, prefs.appFont)
         binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
+        binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
+        binding.letterIndex.setText(
+            when (prefs.letterIndexMode) {
+                Constants.LetterIndex.ON_SCROLL -> R.string.ml_index_on_scroll
+                Constants.LetterIndex.NEVER -> R.string.ml_index_never
+                else -> R.string.ml_index_always
+            }
+        )
         binding.notificationAccess.setText(
             if (NotificationRepository.isAccessGranted(ctx)) R.string.ml_enabled else R.string.ml_disabled
         )
@@ -345,6 +359,31 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
                 else -> onPick(options[item.itemId - 1].id)
             }
+            populateTextStyle()
+        }
+    }
+
+    private fun showNewsOrderMenu(anchor: View) {
+        anchor.showPopupMenu(
+            configure = { menu ->
+                menu.add(Menu.NONE, 0, 0, getString(R.string.ml_news_recent))
+                menu.add(Menu.NONE, 1, 1, getString(R.string.ml_news_count))
+            }
+        ) { item ->
+            prefs.newsSortByCount = item.itemId == 1
+            populateTextStyle()
+        }
+    }
+
+    private fun showLetterIndexMenu(anchor: View) {
+        anchor.showPopupMenu(
+            configure = { menu ->
+                menu.add(Menu.NONE, Constants.LetterIndex.ALWAYS, 0, getString(R.string.ml_index_always))
+                menu.add(Menu.NONE, Constants.LetterIndex.ON_SCROLL, 1, getString(R.string.ml_index_on_scroll))
+                menu.add(Menu.NONE, Constants.LetterIndex.NEVER, 2, getString(R.string.ml_index_never))
+            }
+        ) { item ->
+            prefs.letterIndexMode = item.itemId
             populateTextStyle()
         }
     }

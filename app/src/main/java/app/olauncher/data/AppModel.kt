@@ -17,6 +17,8 @@ sealed class AppModel : Comparable<AppModel> {
         val activityClassName: String?,
         override val isNew: Boolean = false,
         override val user: UserHandle,
+        /** True for the copy shown in the drawer's "News" block (the app also stays in the A-Z list). */
+        val inNews: Boolean = false,
     ) : AppModel()
 
     data class PinnedShortcut(
@@ -33,6 +35,17 @@ sealed class AppModel : Comparable<AppModel> {
 
     data class PrivateSpaceHeader(
         val isLocked: Boolean = true,
+        override val user: UserHandle = android.os.Process.myUserHandle(),
+    ) : AppModel() {
+        override val appLabel: String = ""
+        override val key: CollationKey? = null
+        override val appPackage: String = ""
+        override val isNew: Boolean = false
+    }
+
+    /** Non-clickable title row in the drawer ("News", "All apps"). */
+    data class ListHeader(
+        val title: String,
         override val user: UserHandle = android.os.Process.myUserHandle(),
     ) : AppModel() {
         override val appLabel: String = ""

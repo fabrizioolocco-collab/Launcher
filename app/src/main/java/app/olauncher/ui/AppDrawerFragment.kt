@@ -14,6 +14,7 @@ import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
+import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -26,7 +27,10 @@ import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
 import app.olauncher.helper.FontManager
+import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.IconPackManager
+import app.olauncher.helper.NotificationRepository
+import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.deletePinnedShortcut
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
@@ -60,6 +64,9 @@ class AppDrawerFragment : BaseFragment() {
     private var currentPrivateSpaceLocked: Boolean = true
     private var currentPrivateSpaceAvailable: Boolean = false
     private var uiScope = MainScope()
+    private var currentHiddenApps: List<AppModel> = emptyList()
+    private var notifications: Map<String, AppNotifications> = emptyMap()
+    private val hideIndexRunnable = Runnable { _binding?.letterIndex?.isVisible = false }
 
     private val viewModel: MainViewModel by activityViewModels()
     private var _binding: FragmentAppDrawerBinding? = null
@@ -88,6 +95,7 @@ class AppDrawerFragment : BaseFragment() {
         initAdapter()
         initObservers()
         initClickListeners()
+        initLetterIndex()
     }
 
     private fun initViews() {
@@ -119,6 +127,7 @@ class AppDrawerFragment : BaseFragment() {
                 try {
                     adapter.allowAutoLaunch = !isSearchComposing()
                     adapter.filter.filter(newText)
+                    updateLetterIndex()
                     binding.appRename.visibility =
                         if (canRename && newText.isNotBlank()) View.VISIBLE else View.GONE
                     return true
@@ -162,7 +171,10 @@ class AppDrawerFragment : BaseFragment() {
             flag,
             prefs.appLabelAlignment,
             appClickListener = { appModel ->
-                viewModel.selectedApp(appModel, flag)
+                if (appModel.appPackage == TestNotifications.FAKE_PACKAGE)
+                    TestNotifications.clearNotifications(requireContext())
+                else
+                    viewModel.selectedApp(appModel, flag)
                 if (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS)
                     findNavController().popBackStack(R.id.mainFragment, false)
                 else
@@ -178,7 +190,7 @@ class AppDrawerFragment : BaseFragment() {
             },
             appDeleteListener = { appModel ->
                 when (appModel) {
-                    is AppModel.PrivateSpaceHeader -> {}
+                    is AppModel.PrivateSpaceHeader, is AppModel.ListHeader -> {}
                     is AppModel.PinnedShortcut ->
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
                             requireContext().deletePinnedShortcut(
@@ -253,6 +265,9 @@ class AppDrawerFragment : BaseFragment() {
             },
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
             titleStyler = { view -> FontManager.apply(view, prefs.appFont, prefs.appTextSize) },
+            badgeCount = { appModel ->
+                if (appModel is AppModel.App) notifications[notificationKey(appModel)]?.count ?: 0 else 0
+            },
         )
 
         linearLayoutManager = object : LinearLayoutManager(requireContext()) {
@@ -317,6 +332,16 @@ class AppDrawerFragment : BaseFragment() {
                 updateCombinedAppList()
             }
             if (flag == Constants.FLAG_LAUNCH_APP) {
+                viewModel.hiddenApps.observe(viewLifecycleOwner) {
+                    currentHiddenApps = it.orEmpty()
+                    updateCombinedAppList()
+                }
+                viewModel.getHiddenApps()
+                NotificationRepository.state.observe(viewLifecycleOwner) {
+                    notifications = it
+                    updateCombinedAppList()
+                    adapter.refreshBadges()
+                }
                 viewModel.privateSpaceAvailable.observe(viewLifecycleOwner) {
                     currentPrivateSpaceAvailable = it
                     updateCombinedAppList()
@@ -333,9 +358,34 @@ class AppDrawerFragment : BaseFragment() {
         }
     }
 
+    private fun notificationKey(app: AppModel) = NotificationRepository.key(app.appPackage, app.user.toString())
+
+    /**
+     * "News": apps with notifications, hidden apps included, most recent first (or most
+     * notifications first, per settings). Each one also stays in the A-Z list below.
+     */
+    private fun newsBlock(apps: List<AppModel>): List<AppModel> {
+        if (flag != Constants.FLAG_LAUNCH_APP || notifications.isEmpty()) return emptyList()
+        val pool = apps + currentHiddenApps +
+                (if (TestNotifications.isEnabled(requireContext())) listOf(TestNotifications.fakeApp(requireContext())) else emptyList())
+        val news = pool.filterIsInstance<AppModel.App>()
+            .filter { notifications.containsKey(notificationKey(it)) }
+            .distinctBy { notificationKey(it) }
+            .sortedWith(
+                if (prefs.newsSortByCount)
+                    compareByDescending<AppModel.App> { notifications[notificationKey(it)]?.count ?: 0 }
+                        .thenByDescending { notifications[notificationKey(it)]?.lastPostTime ?: 0L }
+                else compareByDescending<AppModel.App> { notifications[notificationKey(it)]?.lastPostTime ?: 0L }
+            )
+            .map { it.copy(inNews = true) }
+        if (news.isEmpty()) return emptyList()
+        return listOf(AppModel.ListHeader(getString(R.string.ml_news))) + news +
+                AppModel.ListHeader(getString(R.string.ml_all_apps))
+    }
+
     private fun updateCombinedAppList() {
         val apps = currentAppList ?: return
-        val combined = apps.toMutableList()
+        val combined = (newsBlock(apps) + apps).toMutableList()
 
         if (flag == Constants.FLAG_LAUNCH_APP && currentPrivateSpaceAvailable) {
             combined.add(AppModel.PrivateSpaceHeader(isLocked = currentPrivateSpaceLocked))
@@ -346,6 +396,49 @@ class AppDrawerFragment : BaseFragment() {
 
         adapter.setAppList(combined)
         adapter.filter.filter(binding.search.query)
+        updateLetterIndex()
+    }
+
+    // ---------------------------------------------------------------- letter index
+
+    private fun initLetterIndex() {
+        binding.letterIndex.onLetter = { letter ->
+            val position = adapter.appFilteredList.indexOfFirst { app ->
+                (app is AppModel.App && !app.inNews || app is AppModel.PinnedShortcut) &&
+                        app.appLabel.isNotBlank() && AlphabetIndexView.letterFor(app.appLabel) == letter
+            }
+            if (position >= 0) linearLayoutManager.scrollToPositionWithOffset(position, 0)
+        }
+        binding.letterIndex.onTouchStateChanged = { touching ->
+            binding.letterIndex.removeCallbacks(hideIndexRunnable)
+            if (!touching && prefs.letterIndexMode == Constants.LetterIndex.ON_SCROLL)
+                binding.letterIndex.postDelayed(hideIndexRunnable, INDEX_HIDE_DELAY_MS)
+        }
+        binding.recyclerView.addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (prefs.letterIndexMode != Constants.LetterIndex.ON_SCROLL || !indexAllowed()) return
+                binding.letterIndex.removeCallbacks(hideIndexRunnable)
+                if (newState == RecyclerView.SCROLL_STATE_IDLE)
+                    binding.letterIndex.postDelayed(hideIndexRunnable, INDEX_HIDE_DELAY_MS)
+                else binding.letterIndex.isVisible = true
+            }
+        })
+    }
+
+    /** The index makes sense on the full launch list, not while searching or picking an app. */
+    private fun indexAllowed() =
+        flag == Constants.FLAG_LAUNCH_APP && binding.search.query.isNullOrBlank() &&
+                prefs.letterIndexMode != Constants.LetterIndex.NEVER
+
+    private fun updateLetterIndex() {
+        val letters = adapter.appsList
+            .filter { (it is AppModel.App && !it.inNews || it is AppModel.PinnedShortcut) && it.appLabel.isNotBlank() }
+            .map { AlphabetIndexView.letterFor(it.appLabel) }
+            .distinct()
+            .sortedWith(compareBy({ it == "#" }, { it }))
+        binding.letterIndex.letters = letters
+        binding.letterIndex.isVisible =
+            indexAllowed() && prefs.letterIndexMode == Constants.LetterIndex.ALWAYS && letters.size > 1
     }
 
     private fun initClickListeners() {
@@ -389,9 +482,7 @@ class AppDrawerFragment : BaseFragment() {
                     RecyclerView.SCROLL_STATE_IDLE -> {
                         if (!recyclerView.canScrollVertically(1))
                             binding.search.hideKeyboard()
-                        else if (!recyclerView.canScrollVertically(-1))
-                            if (!onTop && isRemoving.not())
-                                binding.search.showKeyboard(prefs.autoShowKeyboard)
+                        // MinimaLauncher: never open the keyboard by itself
                     }
                 }
             }
@@ -407,7 +498,7 @@ class AppDrawerFragment : BaseFragment() {
     override fun onStart() {
         super.onStart()
         cachedIsCjkKeyboard = null
-        binding.search.showKeyboard(prefs.autoShowKeyboard)
+        // MinimaLauncher: the keyboard opens only when the search field is tapped
     }
 
     override fun onStop() {
@@ -418,7 +509,12 @@ class AppDrawerFragment : BaseFragment() {
     override fun onDestroyView() {
         super.onDestroyView()
         uiScope.cancel()
+        _binding?.letterIndex?.removeCallbacks(hideIndexRunnable)
         searchTextView = null
         _binding = null
+    }
+
+    companion object {
+        private const val INDEX_HIDE_DELAY_MS = 1500L
     }
 }
