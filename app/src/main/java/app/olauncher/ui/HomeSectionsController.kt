@@ -81,6 +81,13 @@ class HomeSectionsController(
     private fun notificationCount(app: AppModel.App): Int =
         notifications[NotificationRepository.key(app.appPackage, app.user.toString())]?.count ?: 0
 
+    /** Closes every open section (tap on empty home space). */
+    fun collapseAll() {
+        if (sections.all { it.collapsed }) return
+        sections.forEach { it.collapsed = true }
+        save()
+    }
+
     /** Re-reads sections from storage (they can change from the app drawer) and redraws. */
     fun reload() {
         sections = repo.load()
@@ -137,7 +144,10 @@ class HomeSectionsController(
             isClickable = true
             isLongClickable = true
             setOnClickListener {
-                section.collapsed = !section.collapsed
+                // Accordion: opening a section closes the others
+                val open = section.collapsed
+                sections.forEach { it.collapsed = true }
+                section.collapsed = !open
                 save()
             }
             setOnLongClickListener {

@@ -237,7 +237,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
             override fun onSwipeLeft() = openSwipeLeftApp()
             override fun onSwipeRight() = openSwipeRightApp()
-            override fun onEmptyTap() = viewModel.checkForMessages.call()
+            override fun onEmptyTap() = sections.collapseAll()
 
             override fun onEmptyLongPress() {
                 sections.showHomeMenu {
