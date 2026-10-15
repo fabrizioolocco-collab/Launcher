@@ -54,4 +54,16 @@
     <string name="ml_enabled">Enabled</string>
     <string name="ml_disabled">Off</string>
     <string name="ml_section_news">%1$d new</string>
+    <string name="ml_test_app_name">Test app</string>
+    <string name="ml_test_section">Test</string>
+    <string name="ml_test_channel">Test notifications</string>
+    <string name="ml_test_notification_text">Test notification #%1$d</string>
+    <string name="ml_test_notification">Test notification</string>
+    <string name="ml_test_send">Send</string>
+    <string name="ml_test_remove_label">Remove test</string>
+    <string name="ml_test_remove">Remove</string>
+    <string name="ml_test_sent">Test notification #%1$d sent</string>
+    <string name="ml_test_removed">Test removed</string>
+    <string name="ml_notifications_blocked">Notifications are blocked for MinimaLauncher: allow them to send tests</string>
+    <string name="ml_grant_access_first">Turn on notification access too, or badges won\'t update</string>
 </resources>

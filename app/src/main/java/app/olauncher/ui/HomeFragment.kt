@@ -33,6 +33,7 @@ import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentHomeBinding
 import app.olauncher.helper.NotificationRepository
+import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.appUsagePermissionGranted
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.expandNotificationDrawer
@@ -89,7 +90,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             emptyHint = binding.noSectionsHint,
             prefs = prefs,
             scope = uiScope,
-            onLaunch = { viewModel.launch(it) },
+            onLaunch = { app ->
+                // The fake test app can't be opened: "opening" it clears its notifications
+                if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
+                else viewModel.launch(app)
+            },
             pickImage = { callback ->
                 onImagePicked = callback
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))

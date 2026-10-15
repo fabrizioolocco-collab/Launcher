@@ -1,9 +1,11 @@
 package app.olauncher.ui
 
+import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
@@ -16,6 +18,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.findNavController
@@ -36,6 +39,7 @@ import app.olauncher.helper.isEinkDisplay
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.NotificationRepository
+import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.isOlauncherDefault
 import app.olauncher.helper.isTablet
 import app.olauncher.helper.openAppInfo
@@ -78,6 +82,35 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         }
         target(id)
         if (_binding != null) populateTextStyle()
+    }
+
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) sendTestNotification()
+        else requireContext().showToast(getString(R.string.ml_notifications_blocked), Toast.LENGTH_LONG)
+    }
+
+    private fun sendTestNotification() {
+        val ctx = requireContext()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        if (!TestNotifications.send(ctx)) {
+            ctx.showToast(getString(R.string.ml_notifications_blocked), Toast.LENGTH_LONG)
+            try {
+                startActivity(
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            return
+        }
+        viewModel.loadHomeApps()
+        if (!NotificationRepository.isAccessGranted(ctx))
+            ctx.showToast(getString(R.string.ml_grant_access_first), Toast.LENGTH_LONG)
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -145,6 +178,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.sectionTextSize -> showTextSizeMenu(view) { prefs.sectionTextSize = it }
             R.id.appTextSize -> showTextSizeMenu(view) { prefs.appTextSize = it }
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
+            R.id.testNotificationSend -> sendTestNotification()
+            R.id.testNotificationRemove -> {
+                TestNotifications.disable(requireContext())
+                viewModel.loadHomeApps()
+                requireContext().showToast(getString(R.string.ml_test_removed))
+            }
             R.id.dailyWallpaperUrl -> requireContext().openUrl(prefs.dailyWallpaperUrl)
             R.id.dailyWallpaper -> toggleDailyWallpaperUpdate()
             R.id.alignment -> showAlignmentMenu(view)
@@ -213,6 +252,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.sectionTextSize.setOnClickListener(this)
         binding.appTextSize.setOnClickListener(this)
         binding.notificationAccess.setOnClickListener(this)
+        binding.testNotificationSend.setOnClickListener(this)
+        binding.testNotificationRemove.setOnClickListener(this)
         binding.screenTimeOnOff.setOnClickListener(this)
         binding.dailyWallpaperUrl.setOnClickListener(this)
         binding.dailyWallpaper.setOnClickListener(this)

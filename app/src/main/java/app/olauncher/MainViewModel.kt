@@ -21,6 +21,7 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.helper.SingleLiveEvent
+import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.WallpaperWorker
 import app.olauncher.helper.formattedTimeSpent
 import app.olauncher.helper.getAppsList
@@ -411,8 +412,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadHomeApps() {
         viewModelScope.launch {
-            homeApps.value = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = false)
+            val apps = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = false)
                 .filterIsInstance<AppModel.App>()
+            homeApps.value = if (TestNotifications.isEnabled(appContext)) apps + TestNotifications.fakeApp(appContext) else apps
         }
     }
 

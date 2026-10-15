@@ -107,8 +107,12 @@ class NotificationListener : NotificationListenerService() {
 
         val acc = HashMap<String, Acc>()
         for (sbn in active) {
-            if (sbn.packageName == BuildConfig.APPLICATION_ID) continue
             val n = sbn.notification ?: continue
+            // The launcher's own notifications are ignored, except the test ones (see TestNotifications)
+            val packageName = if (sbn.packageName == BuildConfig.APPLICATION_ID) {
+                if (!TestNotifications.isTestNotification(n)) continue
+                TestNotifications.FAKE_PACKAGE
+            } else sbn.packageName
             if (!sbn.isClearable) continue
             if (n.flags and (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_FOREGROUND_SERVICE) != 0) continue
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ranking != null) {
@@ -116,7 +120,7 @@ class NotificationListener : NotificationListenerService() {
                 if (ranking.getRanking(sbn.key, r) && !r.canShowBadge()) continue
             }
 
-            val a = acc.getOrPut(NotificationRepository.key(sbn.packageName, sbn.user.toString())) { Acc() }
+            val a = acc.getOrPut(NotificationRepository.key(packageName, sbn.user.toString())) { Acc() }
             a.last = maxOf(a.last, sbn.postTime)
             val isSummary = n.flags and Notification.FLAG_GROUP_SUMMARY != 0
             if (isSummary) {
