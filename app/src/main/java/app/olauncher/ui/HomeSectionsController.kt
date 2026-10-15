@@ -126,12 +126,12 @@ class HomeSectionsController(
         TextView(context, null, 0, R.style.TextSmall).apply {
             val arrow = if (section.collapsed) "▸" else "▾"
             val header = context.getString(R.string.ml_section_header_format, section.name, arrow)
-            val news = if (section.collapsed) sectionNotificationCount(section) else 0
-            text = if (news > 0) "$header  " + context.getString(R.string.ml_section_news, news) else header
+            val total = sectionNotificationCount(section)
+            text = if (section.collapsed && total > 0) "$header  " + context.getString(R.string.ml_section_news, total) else header
             setTypeface(typeface, Typeface.BOLD)
             FontManager.apply(this, prefs.sectionFont, prefs.sectionTextSize)
             letterSpacing = 0.06f
-            alpha = 0.7f
+            if (total > 0) setTextColor(NOTIFICATION_COLOR) else alpha = 0.7f
             this.gravity = gravity
             setPadding(0, 10.dpToPx(), 0, 6.dpToPx())
             isClickable = true
@@ -158,7 +158,9 @@ class HomeSectionsController(
     private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View =
         TextView(context, null, 0, R.style.TextLarge).apply {
             FontManager.apply(this, prefs.appFont, prefs.appTextSize)
-            text = badgeText(app.appLabel, notificationCount(app))
+            val count = notificationCount(app)
+            text = badgeText(app.appLabel, count)
+            if (count > 0) setTextColor(NOTIFICATION_COLOR)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             this.gravity = Gravity.CENTER_VERTICAL or gravity
@@ -417,6 +419,9 @@ class HomeSectionsController(
     }
 
     companion object {
+        /** Red used for apps and sections that have notifications. */
+        const val NOTIFICATION_COLOR = 0xFFE53935.toInt()
+
         /** "Name 3": name in bold followed by the count; just the name when there's nothing new. */
         fun badgeText(label: String, count: Int): CharSequence {
             if (count <= 0) return label
