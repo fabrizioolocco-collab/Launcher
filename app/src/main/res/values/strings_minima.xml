@@ -49,4 +49,9 @@
     <string name="ml_app_text_size">App name size</string>
     <string name="ml_load_font">Load font from file…</string>
     <string name="ml_font_error">This file is not a valid font (.ttf or .otf)</string>
+    <string name="ml_notification_access_hint">Turn on notification access to see badges ›</string>
+    <string name="ml_notification_access">Notification access</string>
+    <string name="ml_enabled">Enabled</string>
+    <string name="ml_disabled">Off</string>
+    <string name="ml_section_news">%1$d new</string>
 </resources>

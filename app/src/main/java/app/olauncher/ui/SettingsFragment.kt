@@ -35,6 +35,7 @@ import app.olauncher.helper.isDarkThemeOn
 import app.olauncher.helper.isEinkDisplay
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
+import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.isOlauncherDefault
 import app.olauncher.helper.isTablet
 import app.olauncher.helper.openAppInfo
@@ -120,6 +121,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             binding.footer.text = getText(R.string.new_app_minimal_todo_lists)
     }
 
+    override fun onResume() {
+        super.onResume()
+        // Notification access may have just been granted in system settings
+        if (_binding != null) populateTextStyle()
+    }
+
     override fun onClick(view: View) {
         when (view.id) {
             R.id.olauncherHiddenApps -> showHiddenApps()
@@ -137,6 +144,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.appFont -> showFontMenu(view, prefs.appFont) { prefs.appFont = it }
             R.id.sectionTextSize -> showTextSizeMenu(view) { prefs.sectionTextSize = it }
             R.id.appTextSize -> showTextSizeMenu(view) { prefs.appTextSize = it }
+            R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.dailyWallpaperUrl -> requireContext().openUrl(prefs.dailyWallpaperUrl)
             R.id.dailyWallpaper -> toggleDailyWallpaperUpdate()
             R.id.alignment -> showAlignmentMenu(view)
@@ -204,6 +212,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.appFont.setOnClickListener(this)
         binding.sectionTextSize.setOnClickListener(this)
         binding.appTextSize.setOnClickListener(this)
+        binding.notificationAccess.setOnClickListener(this)
         binding.screenTimeOnOff.setOnClickListener(this)
         binding.dailyWallpaperUrl.setOnClickListener(this)
         binding.dailyWallpaper.setOnClickListener(this)
@@ -265,6 +274,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.appFont.text = FontManager.label(ctx, prefs.appFont)
         binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
+        binding.notificationAccess.setText(
+            if (NotificationRepository.isAccessGranted(ctx)) R.string.ml_enabled else R.string.ml_disabled
+        )
     }
 
     private fun sizeLabel(size: Int) = if (size <= 0) getString(R.string.ml_default) else size.toString()

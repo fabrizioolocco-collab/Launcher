@@ -47,4 +47,9 @@
     <string name="ml_app_text_size">Dimensione nomi app</string>
     <string name="ml_load_font">Carica font da file…</string>
     <string name="ml_font_error">Il file non è un font valido (.ttf o .otf)</string>
+    <string name="ml_notification_access_hint">Attiva l\'accesso alle notifiche per vedere i badge ›</string>
+    <string name="ml_notification_access">Accesso alle notifiche</string>
+    <string name="ml_enabled">Attivo</string>
+    <string name="ml_disabled">Non attivo</string>
+    <string name="ml_section_news">%1$d novità</string>
 </resources>

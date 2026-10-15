@@ -4,7 +4,11 @@ import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.net.Uri
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextUtils
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -17,10 +21,12 @@ import app.olauncher.data.HomeSection
 import app.olauncher.data.HomeSectionsRepository
 import app.olauncher.data.Prefs
 import app.olauncher.data.SectionApp
+import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.CustomIcons
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getUserHandleFromString
 import app.olauncher.helper.openAppInfo
@@ -53,6 +59,7 @@ class HomeSectionsController(
     private var sections: MutableList<HomeSection> = mutableListOf()
     private var apps: List<AppModel.App> = emptyList()
     private var appsLoaded = false
+    private var notifications: Map<String, AppNotifications> = emptyMap()
 
     init {
         migrateOlauncherHomeApps()
@@ -64,6 +71,15 @@ class HomeSectionsController(
         appsLoaded = true
         render()
     }
+
+    fun setNotifications(map: Map<String, AppNotifications>) {
+        if (map == notifications) return
+        notifications = map
+        render()
+    }
+
+    private fun notificationCount(app: AppModel.App): Int =
+        notifications[NotificationRepository.key(app.appPackage, app.user.toString())]?.count ?: 0
 
     /** Re-reads sections from storage (they can change from the app drawer) and redraws. */
     fun reload() {
@@ -109,7 +125,9 @@ class HomeSectionsController(
     private fun headerView(index: Int, section: HomeSection, gravity: Int): View =
         TextView(context, null, 0, R.style.TextSmall).apply {
             val arrow = if (section.collapsed) "▸" else "▾"
-            text = context.getString(R.string.ml_section_header_format, section.name, arrow)
+            val header = context.getString(R.string.ml_section_header_format, section.name, arrow)
+            val news = if (section.collapsed) sectionNotificationCount(section) else 0
+            text = if (news > 0) "$header  " + context.getString(R.string.ml_section_news, news) else header
             setTypeface(typeface, Typeface.BOLD)
             FontManager.apply(this, prefs.sectionFont, prefs.sectionTextSize)
             letterSpacing = 0.06f
@@ -139,8 +157,8 @@ class HomeSectionsController(
 
     private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View =
         TextView(context, null, 0, R.style.TextLarge).apply {
-            text = app.appLabel
             FontManager.apply(this, prefs.appFont, prefs.appTextSize)
+            text = badgeText(app.appLabel, notificationCount(app))
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             this.gravity = Gravity.CENTER_VERTICAL or gravity
@@ -156,6 +174,10 @@ class HomeSectionsController(
             layoutParams = lp(gravity)
             if (prefs.showIcons) loadIcon(this, app)
         }
+
+    /** Apps that appear more than once in a section are counted once. */
+    private fun sectionNotificationCount(section: HomeSection): Int =
+        section.apps.mapNotNull { findApp(it) }.distinct().sumOf { notificationCount(it) }
 
     private fun loadIcon(view: TextView, app: AppModel.App) {
         val size = (view.textSize * 1.15f).toInt()
@@ -395,6 +417,16 @@ class HomeSectionsController(
     }
 
     companion object {
+        /** "Name 3": name in bold followed by the count; just the name when there's nothing new. */
+        fun badgeText(label: String, count: Int): CharSequence {
+            if (count <= 0) return label
+            return SpannableStringBuilder().apply {
+                append(label, StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                append("  ")
+                append(count.toString(), RelativeSizeSpan(0.75f), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+
         /** Used by the app drawer: add [app] to a section chosen by the user. */
         fun showAddToSectionDialog(context: Context, app: AppModel.App) {
             val repo = HomeSectionsRepository(context)
