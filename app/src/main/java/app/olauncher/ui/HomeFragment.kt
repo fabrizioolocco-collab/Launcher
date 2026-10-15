@@ -106,8 +106,9 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
         widgets = HomeWidgetsController(
             activity = requireActivity(),
-            container = binding.widgetsLayout,
+            grid = binding.widgetsLayout,
             scrollView = binding.homeScroll,
+            prefs = prefs,
             keepScreen = { viewModel.keepCurrentScreen = it },
         )
         widgets.render()
@@ -131,6 +132,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     override fun onResume() {
         super.onResume()
         populateHomeScreen(false)
+        widgets.refreshIfNeeded()
         viewModel.loadHomeApps()
         binding.notificationAccessHint.isVisible = !NotificationRepository.isAccessGranted(requireContext())
         viewModel.isOlauncherDefault()
@@ -257,7 +259,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
             override fun onSwipeLeft() = openSwipeLeftApp()
             override fun onSwipeRight() = openSwipeRightApp()
-            override fun onEmptyTap() = sections.collapseAll()
+            override fun onEmptyTap() {
+                widgets.endEditing()
+                sections.collapseAll()
+            }
 
             override fun onEmptyLongPress() {
                 sections.showHomeMenu(

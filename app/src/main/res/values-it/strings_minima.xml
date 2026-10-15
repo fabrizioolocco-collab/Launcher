@@ -82,4 +82,5 @@
     <string name="ml_widget_remove">Rimuovi widget</string>
     <string name="ml_widget_remove_confirm">Rimuovere questo widget dalla home?</string>
     <string name="ml_widget_drag_hint">↕ trascina per cambiare altezza</string>
+    <string name="ml_widget_columns">Colonne griglia widget</string>
 </resources>

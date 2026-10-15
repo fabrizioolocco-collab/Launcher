@@ -183,6 +183,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
+            R.id.widgetColumns -> view.showPopupMenu(
+                configure = { menu -> (2..8).forEach { menu.add(Menu.NONE, it, it, it.toString()) } }
+            ) { item ->
+                prefs.widgetColumns = item.itemId
+                populateTextStyle()
+            }
             R.id.autoLaunchSingle -> {
                 prefs.autoLaunchSingleResult = !prefs.autoLaunchSingleResult
                 populateTextStyle()
@@ -263,6 +269,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.notificationAccess.setOnClickListener(this)
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
+        binding.widgetColumns.setOnClickListener(this)
         binding.autoLaunchSingle.setOnClickListener(this)
         binding.testNotificationSend.setOnClickListener(this)
         binding.testNotificationRemove.setOnClickListener(this)
@@ -327,6 +334,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.appFont.text = FontManager.label(ctx, prefs.appFont)
         binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
+        binding.widgetColumns.text = prefs.widgetColumns.toString()
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
         binding.letterIndex.setText(

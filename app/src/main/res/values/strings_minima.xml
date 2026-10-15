@@ -84,4 +84,5 @@
     <string name="ml_widget_remove">Remove widget</string>
     <string name="ml_widget_remove_confirm">Remove this widget from home?</string>
     <string name="ml_widget_drag_hint">↕ drag to change height</string>
+    <string name="ml_widget_columns">Widget grid columns</string>
 </resources>

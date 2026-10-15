@@ -1,21 +1,16 @@
 package app.olauncher.ui.widgets
 
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
-import android.widget.LinearLayout
-import android.widget.TextView
 import app.olauncher.R
 import app.olauncher.data.HomeWidget
 import app.olauncher.data.HomeWidgetsRepository
+import app.olauncher.data.Prefs
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getScreenDimensions
@@ -33,8 +28,9 @@ import app.olauncher.ui.HomeScrollView
  */
 class HomeWidgetsController(
     private val activity: Activity,
-    private val container: LinearLayout,
+    private val grid: WidgetGridLayout,
     private val scrollView: HomeScrollView,
+    private val prefs: Prefs,
     /** Called before launching an external screen, so the launcher doesn't jump back to home meanwhile. */
     private val keepScreen: (Boolean) -> Unit,
 ) {
@@ -43,8 +39,11 @@ class HomeWidgetsController(
     private val repo = HomeWidgetsRepository(activity)
     private var widgets = repo.load()
 
+    private var renderedColumns = 0
+
     init {
         current = this
+        grid.resizeListener = resizeListener()
     }
 
     fun startListening() = try {
@@ -65,9 +64,20 @@ class HomeWidgetsController(
 
     // ---------------------------------------------------------------- rendering
 
+    /** Grid cell size in px, also before the grid has been laid out. */
+    private fun cellPx(): Int {
+        val width = grid.width.takeIf { it > 0 } ?: getScreenDimensions(activity).first
+        return ((width - grid.paddingLeft - grid.paddingRight) / prefs.widgetColumns).coerceAtLeast(1)
+    }
+
     fun render() {
-        container.removeAllViews()
+        endEditing()
+        grid.removeAllViews()
+        val columns = prefs.widgetColumns
+        grid.columns = columns
+        renderedColumns = columns
         val removed = mutableListOf<HomeWidget>()
+        var changed = false
         widgets.forEach { widget ->
             val info = manager.getAppWidgetInfo(widget.appWidgetId)
             if (info == null) {
@@ -75,46 +85,143 @@ class HomeWidgetsController(
                 removed += widget
                 return@forEach
             }
-            container.addView(widgetView(widget, info))
+            if (widget.colSpan <= 0) {
+                // Saved by the older stacked layout: full width, same height, first free rows
+                widget.colSpan = columns
+                widget.rowSpan = ceilDiv(widget.legacyHeightDp.dpToPx(), cellPx()).coerceAtLeast(1)
+                val (c, r) = findFreeSpot(widget.colSpan, widget.rowSpan, except = widget)
+                widget.col = c; widget.row = r
+                changed = true
+            }
+            if (widget.col + widget.colSpan > columns) {
+                // Fewer columns than when it was placed
+                widget.colSpan = widget.colSpan.coerceAtMost(columns)
+                widget.col = widget.col.coerceAtMost(columns - widget.colSpan)
+                changed = true
+            }
+            grid.addView(widgetView(widget, info))
         }
         if (removed.isNotEmpty()) {
             removed.forEach { host.deleteAppWidgetId(it.appWidgetId) }
             widgets.removeAll(removed)
-            repo.save(widgets)
+            changed = true
         }
-        container.visibility = if (widgets.isEmpty()) View.GONE else View.VISIBLE
+        if (changed) repo.save(widgets)
+        grid.visibility = if (widgets.isEmpty()) View.GONE else View.VISIBLE
     }
+
+    /** Called on resume: rebuilds only if the column setting changed meanwhile. */
+    fun refreshIfNeeded() {
+        if (renderedColumns != prefs.widgetColumns) render()
+    }
+
+    private fun ceilDiv(a: Int, b: Int) = (a + b - 1) / b
 
     private fun widgetView(widget: HomeWidget, info: AppWidgetProviderInfo): View {
-        val wrapper = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = 8.dpToPx()
-            }
-        }
         val hostView = host.createView(activity, widget.appWidgetId, info) as MinimaWidgetHostView
         hostView.setPadding(0, 0, 0, 0)
-        hostView.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, widget.heightDp.dpToPx())
-        hostView.onLongPress = { showWidgetMenu(widget, info, wrapper, hostView) }
-        updateSize(hostView, widget.heightDp)
-        wrapper.addView(hostView)
-        return wrapper
-    }
-
-    private fun widthDp(): Int {
-        val density = activity.resources.displayMetrics.density
-        val width = container.width.takeIf { it > 0 } ?: getScreenDimensions(activity).first
-        return ((width - container.paddingLeft - container.paddingRight) / density).toInt()
+        hostView.tag = widget
+        hostView.layoutParams = WidgetGridLayout.CellParams(widget.col, widget.row, widget.colSpan, widget.rowSpan)
+        hostView.listener = dragListener(info)
+        updateSize(hostView, widget)
+        return hostView
     }
 
     @Suppress("DEPRECATION")
-    private fun updateSize(view: MinimaWidgetHostView, heightDp: Int) {
-        val w = widthDp()
+    private fun updateSize(view: MinimaWidgetHostView, widget: HomeWidget) {
+        val density = activity.resources.displayMetrics.density
+        val cellDp = (cellPx() / density).toInt()
+        val w = widget.colSpan * cellDp
+        val h = widget.rowSpan * cellDp
         try {
-            view.updateAppWidgetSize(Bundle(), w, heightDp, w, heightDp)
+            view.updateAppWidgetSize(Bundle(), w, h, w, h)
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun overlaps(a: HomeWidget, col: Int, row: Int, colSpan: Int, rowSpan: Int) =
+        col < a.col + a.colSpan && a.col < col + colSpan && row < a.row + a.rowSpan && a.row < row + rowSpan
+
+    private fun isFree(col: Int, row: Int, colSpan: Int, rowSpan: Int, except: HomeWidget?): Boolean =
+        col >= 0 && row >= 0 && col + colSpan <= prefs.widgetColumns &&
+                widgets.none { it !== except && it.colSpan > 0 && overlaps(it, col, row, colSpan, rowSpan) }
+
+    private fun findFreeSpot(colSpan: Int, rowSpan: Int, except: HomeWidget? = null): Pair<Int, Int> {
+        val columns = prefs.widgetColumns
+        var row = 0
+        while (true) {
+            for (col in 0..(columns - colSpan).coerceAtLeast(0))
+                if (isFree(col, row, colSpan, rowSpan, except)) return col to row
+            row++
+        }
+    }
+
+    // ---------------------------------------------------------------- move (drag) and resize
+
+    private fun dragListener(info: AppWidgetProviderInfo) = object : MinimaWidgetHostView.Listener {
+        override fun onLongPress(view: MinimaWidgetHostView) {
+            endEditing()
+            scrollView.gesturesEnabled = false
+            grid.editing = true
+        }
+
+        override fun onDrag(view: MinimaWidgetHostView, dx: Float, dy: Float) {
+            val widget = view.tag as HomeWidget
+            view.translationX = dx
+            view.translationY = dy
+            view.alpha = 0.8f
+            val (col, row) = grid.dropCellFor(view, dx, dy)
+            grid.showDropPreview(col, row, widget.colSpan, widget.rowSpan, isFree(col, row, widget.colSpan, widget.rowSpan, widget))
+        }
+
+        override fun onDrop(view: MinimaWidgetHostView, dx: Float, dy: Float) {
+            val widget = view.tag as HomeWidget
+            val (col, row) = grid.dropCellFor(view, dx, dy)
+            view.translationX = 0f
+            view.translationY = 0f
+            view.alpha = 1f
+            grid.hideDropPreview()
+            if (isFree(col, row, widget.colSpan, widget.rowSpan, widget)) {
+                widget.col = col
+                widget.row = row
+                (view.layoutParams as WidgetGridLayout.CellParams).apply { this.col = col; this.row = row }
+                repo.save(widgets)
+            }
+            grid.editing = false
+            scrollView.gesturesEnabled = true
+        }
+
+        override fun onMenu(view: MinimaWidgetHostView) {
+            grid.editing = false
+            scrollView.gesturesEnabled = true
+            showWidgetMenu(view.tag as HomeWidget, info, view)
+        }
+    }
+
+    private fun resizeListener() = object : WidgetGridLayout.ResizeListener {
+        override fun canPlace(view: View, col: Int, row: Int, colSpan: Int, rowSpan: Int) =
+            isFree(col, row, colSpan, rowSpan, view.tag as HomeWidget)
+
+        override fun onResizeDragging(active: Boolean) {
+            scrollView.gesturesEnabled = !active
+        }
+
+        override fun onResized(view: View) {
+            val widget = view.tag as HomeWidget
+            val p = view.layoutParams as WidgetGridLayout.CellParams
+            widget.col = p.col; widget.row = p.row; widget.colSpan = p.colSpan; widget.rowSpan = p.rowSpan
+            repo.save(widgets)
+            updateSize(view as MinimaWidgetHostView, widget)
+        }
+
+        override fun onTapOutsideFrame() = endEditing()
+    }
+
+    /** Leaves resize mode (tap outside the frame, or anywhere on home). */
+    fun endEditing() {
+        if (grid.resizeTarget != null) grid.resizeTarget = null
+        scrollView.gesturesEnabled = true
     }
 
     // ---------------------------------------------------------------- adding
@@ -208,9 +315,11 @@ class HomeWidgetsController(
     private fun finishAdding(id: Int, info: AppWidgetProviderInfo) {
         pendingId = -1
         pendingInfo = null
-        val density = activity.resources.displayMetrics.density
-        val defaultHeight = (info.minHeight / density).toInt().coerceIn(MIN_HEIGHT_DP, 360)
-        widgets.add(HomeWidget(id, defaultHeight))
+        val cell = cellPx()
+        val colSpan = ceilDiv(info.minWidth, cell).coerceIn(1, prefs.widgetColumns)
+        val rowSpan = ceilDiv(info.minHeight, cell).coerceAtLeast(1)
+        val (col, row) = findFreeSpot(colSpan, rowSpan)
+        widgets.add(HomeWidget(id, col, row, colSpan, rowSpan))
         repo.save(widgets)
         render()
     }
@@ -244,9 +353,9 @@ class HomeWidgetsController(
 
     // ---------------------------------------------------------------- menu, resize, remove
 
-    private fun showWidgetMenu(widget: HomeWidget, info: AppWidgetProviderInfo, wrapper: LinearLayout, hostView: MinimaWidgetHostView) {
+    private fun showWidgetMenu(widget: HomeWidget, info: AppWidgetProviderInfo, hostView: MinimaWidgetHostView) {
         val entries = mutableListOf(
-            MenuEntry(activity.getString(R.string.ml_widget_resize)) { startResize(widget, wrapper, hostView) },
+            MenuEntry(activity.getString(R.string.ml_widget_resize)) { grid.resizeTarget = hostView },
         )
         if (info.configure != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
             entries += MenuEntry(activity.getString(R.string.ml_widget_reconfigure)) {
@@ -272,65 +381,8 @@ class HomeWidgetsController(
         activity.showMenuDialog(title, entries)
     }
 
-    /** Shows a drag bar under the widget; dragging it changes the height, "Done" saves it. */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun startResize(widget: HomeWidget, wrapper: LinearLayout, hostView: MinimaWidgetHostView) {
-        if (wrapper.childCount > 1) return
-        scrollView.gesturesEnabled = false
-        val maxHeight = (getScreenDimensions(activity).second * 0.8f).toInt()
-        val minHeight = MIN_HEIGHT_DP.dpToPx()
-
-        val bar = LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundResource(R.drawable.rounded_rect_shade_color)
-            setPadding(16.dpToPx(), 0, 8.dpToPx(), 0)
-        }
-        val handle = TextView(activity, null, 0, R.style.TextSmall).apply {
-            text = activity.getString(R.string.ml_widget_drag_hint)
-            gravity = Gravity.CENTER
-            setPadding(0, 14.dpToPx(), 0, 14.dpToPx())
-        }
-        val done = TextView(activity, null, 0, R.style.TextSmallBold).apply {
-            text = activity.getString(R.string.ml_done)
-            setPadding(16.dpToPx(), 14.dpToPx(), 8.dpToPx(), 14.dpToPx())
-        }
-        bar.addView(handle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bar.addView(done)
-        wrapper.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = 4.dpToPx()
-        })
-
-        var startY = 0f
-        var startHeight = 0
-        handle.setOnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    v.parent?.requestDisallowInterceptTouchEvent(true)
-                    startY = event.rawY
-                    startHeight = hostView.height
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    val newHeight = (startHeight + (event.rawY - startY)).toInt().coerceIn(minHeight, maxHeight)
-                    hostView.layoutParams = hostView.layoutParams.apply { height = newHeight }
-                }
-            }
-            true
-        }
-        done.setOnClickListener {
-            val density = activity.resources.displayMetrics.density
-            widget.heightDp = (hostView.height / density).toInt().coerceAtLeast(MIN_HEIGHT_DP)
-            repo.save(widgets)
-            updateSize(hostView, widget.heightDp)
-            wrapper.removeView(bar)
-            scrollView.gesturesEnabled = true
-        }
-    }
-
     companion object {
         private const val HOST_ID = 2026
-        private const val MIN_HEIGHT_DP = 48
         const val REQUEST_BIND = 7101
         const val REQUEST_CONFIGURE = 7102
         const val REQUEST_RECONFIGURE = 7103

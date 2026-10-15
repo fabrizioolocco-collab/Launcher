@@ -4,62 +4,96 @@ import android.appwidget.AppWidgetHost
 import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ViewConfiguration
 import kotlin.math.abs
+import kotlin.math.hypot
 
-/** App widget host whose views report long presses (used to open the widget menu). */
+/** App widget host whose views support Nova-style long press: drag to move, release for the menu. */
 class MinimaWidgetHost(context: Context, hostId: Int) : AppWidgetHost(context, hostId) {
     override fun onCreateView(context: Context, appWidgetId: Int, appWidget: AppWidgetProviderInfo?): AppWidgetHostView =
         MinimaWidgetHostView(context)
 }
 
 /**
- * Detects a long press anywhere on the widget, even over its clickable children, and then swallows
- * the rest of the gesture so the widget doesn't also receive a click.
+ * Long press anywhere on the widget (even over its clickable children) takes over the gesture:
+ * moving the finger then drags the widget, lifting it without moving opens the menu.
  */
 class MinimaWidgetHostView(context: Context) : AppWidgetHostView(context) {
 
-    var onLongPress: (() -> Unit)? = null
+    interface Listener {
+        fun onLongPress(view: MinimaWidgetHostView)
+        fun onDrag(view: MinimaWidgetHostView, dx: Float, dy: Float)
+        fun onDrop(view: MinimaWidgetHostView, dx: Float, dy: Float)
+        /** Long press released without dragging. */
+        fun onMenu(view: MinimaWidgetHostView)
+    }
+
+    var listener: Listener? = null
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
-    private var downX = 0f
-    private var downY = 0f
+    private var downRawX = 0f
+    private var downRawY = 0f
     private var longPressed = false
+    private var dragging = false
+
     private val longPressRunnable = Runnable {
         if (parent != null && hasWindowFocus()) {
             longPressed = true
-            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            onLongPress?.invoke()
+            dragging = false
+            parent?.requestDisallowInterceptTouchEvent(true)
+            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            listener?.onLongPress(this)
         }
     }
 
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-        if (longPressed) {
-            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) longPressed = false
-            return true
-        }
+    private fun track(ev: MotionEvent) {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
-                downX = ev.x
-                downY = ev.y
+                downRawX = ev.rawX
+                downRawY = ev.rawY
                 removeCallbacks(longPressRunnable)
                 postDelayed(longPressRunnable, longPressTimeout)
             }
 
             MotionEvent.ACTION_MOVE ->
-                if (abs(ev.x - downX) > touchSlop || abs(ev.y - downY) > touchSlop) removeCallbacks(longPressRunnable)
+                if (abs(ev.rawX - downRawX) > touchSlop || abs(ev.rawY - downRawY) > touchSlop)
+                    removeCallbacks(longPressRunnable)
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> removeCallbacks(longPressRunnable)
         }
+    }
+
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        if (longPressed) return true
+        track(ev)
         return false
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        // Reached when no child handled the touch (empty widget areas): track long press here too
-        onInterceptTouchEvent(event)
-        if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) longPressed = false
+        if (!longPressed) {
+            // Empty widget areas (no child handles the touch): track the long press here
+            track(event)
+            return true
+        }
+        val dx = event.rawX - downRawX
+        val dy = event.rawY - downRawY
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                if (!dragging && hypot(dx, dy) > touchSlop) dragging = true
+                if (dragging) listener?.onDrag(this, dx, dy)
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                if (dragging) listener?.onDrop(this, dx, dy)
+                else if (event.actionMasked == MotionEvent.ACTION_UP) listener?.onMenu(this)
+                else listener?.onDrop(this, 0f, 0f)
+                longPressed = false
+                dragging = false
+            }
+        }
         return true
     }
 
