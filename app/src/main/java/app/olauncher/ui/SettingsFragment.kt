@@ -32,6 +32,7 @@ import app.olauncher.helper.hideStatusBar
 import app.olauncher.helper.isAccessServiceEnabled
 import app.olauncher.helper.isDarkThemeOn
 import app.olauncher.helper.isEinkDisplay
+import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.isOlauncherDefault
 import app.olauncher.helper.isTablet
 import app.olauncher.helper.openAppInfo
@@ -74,7 +75,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         componentName = ComponentName(requireContext(), DeviceAdmin::class.java)
         checkAdminPermission()
 
-        binding.homeAppsNum.text = prefs.homeAppsNum.toString()
+        populateIcons()
         populateProMessage()
         populateKeyboardText()
         populateScreenTimeOnOff()
@@ -108,7 +109,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             // Home button for recents feature disabled
             // R.id.homeButtonRecents -> toggleHomeButtonRecents()
             R.id.autoShowKeyboard -> toggleKeyboardText()
-            R.id.homeAppsNum -> showHomeAppsNumMenu(view)
+            R.id.showIcons -> toggleShowIcons()
+            R.id.iconPack -> showIconPackMenu(view)
             R.id.dailyWallpaperUrl -> requireContext().openUrl(prefs.dailyWallpaperUrl)
             R.id.dailyWallpaper -> toggleDailyWallpaperUpdate()
             R.id.alignment -> showAlignmentMenu(view)
@@ -170,7 +172,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.toggleLock.setOnClickListener(this)
         // Home button for recents feature disabled
         // binding.homeButtonRecents.setOnClickListener(this)
-        binding.homeAppsNum.setOnClickListener(this)
+        binding.showIcons.setOnClickListener(this)
+        binding.iconPack.setOnClickListener(this)
         binding.screenTimeOnOff.setOnClickListener(this)
         binding.dailyWallpaperUrl.setOnClickListener(this)
         binding.dailyWallpaper.setOnClickListener(this)
@@ -219,12 +222,30 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
     // Popup menus
 
-    private fun showHomeAppsNumMenu(anchor: View) {
+    private fun populateIcons() {
+        binding.showIcons.setText(if (prefs.showIcons) R.string.on else R.string.off)
+        val packs = IconPackManager.installedPacks(requireContext())
+        binding.iconPack.text = packs.firstOrNull { it.packageName == prefs.iconPack }?.label
+            ?: getString(R.string.ml_system_icons)
+    }
+
+    private fun toggleShowIcons() {
+        prefs.showIcons = !prefs.showIcons
+        populateIcons()
+    }
+
+    private fun showIconPackMenu(anchor: View) {
+        val packs = IconPackManager.installedPacks(requireContext())
         anchor.showPopupMenu(
             configure = { menu ->
-                for (num in 0..8) menu.add(Menu.NONE, num, num, num.toString())
+                menu.add(Menu.NONE, 0, 0, getString(R.string.ml_system_icons))
+                packs.forEachIndexed { i, pack -> menu.add(Menu.NONE, i + 1, i + 1, pack.label) }
             }
-        ) { item -> updateHomeAppsNum(item.itemId) }
+        ) { item ->
+            prefs.iconPack = if (item.itemId == 0) "" else packs[item.itemId - 1].packageName
+            IconPackManager.clearCache()
+            populateIcons()
+        }
     }
 
     private fun showDateTimeMenu(anchor: View) {
@@ -450,12 +471,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             requireContext().showToast(getString(R.string.your_wallpaper_will_update_shortly))
         else
             requireContext().showToast(getString(R.string.olauncher_is_not_default_launcher), Toast.LENGTH_LONG)
-    }
-
-    private fun updateHomeAppsNum(num: Int) {
-        binding.homeAppsNum.text = num.toString()
-        prefs.homeAppsNum = num
-        viewModel.refreshHome(true)
     }
 
     private var pendingTextSizeScale: Float = -1f

@@ -118,7 +118,19 @@ class Prefs(context: Context) {
     private val SHORTCUT_ID_SWIPE_RIGHT = "SHORTCUT_ID_SWIPE_RIGHT"
     private val IS_SHORTCUT_SWIPE_RIGHT = "IS_SHORTCUT_SWIPE_RIGHT"
 
+    private val SHOW_ICONS = "SHOW_ICONS"
+    private val ICON_PACK = "ICON_PACK"
+
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_FILENAME, 0)
+
+    var showIcons: Boolean
+        get() = prefs.getBoolean(SHOW_ICONS, true)
+        set(value) = prefs.edit { putBoolean(SHOW_ICONS, value) }
+
+    /** Package of the selected icon pack, empty for the system icons. */
+    var iconPack: String
+        get() = prefs.getString(ICON_PACK, "").orEmpty()
+        set(value) = prefs.edit { putString(ICON_PACK, value) }
 
     var firstOpen: Boolean
         get() = prefs.getBoolean(FIRST_OPEN, true)

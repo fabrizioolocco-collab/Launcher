@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.Filter
 import android.widget.Filterable
+import android.widget.TextView
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -35,6 +36,8 @@ class AppDrawerAdapter(
     private val appRenameListener: (AppModel, String) -> Unit,
     private val privateSpaceToggleListener: () -> Unit = {},
     private val privateSpaceSettingsListener: () -> Unit = {},
+    private val appSectionListener: (AppModel) -> Unit = {},
+    private val iconLoader: ((AppModel, TextView) -> Unit)? = null,
 ) : ListAdapter<AppModel, RecyclerView.ViewHolder>(DIFF_CALLBACK), Filterable {
 
     companion object {
@@ -119,7 +122,9 @@ class AppDrawerAdapter(
                     appDeleteListener,
                     appInfoListener,
                     appHideListener,
-                    appRenameListener
+                    appRenameListener,
+                    appSectionListener,
+                    iconLoader,
                 )
             }
         } catch (e: Exception) {
@@ -233,6 +238,8 @@ class AppDrawerAdapter(
             appInfoListener: (AppModel) -> Unit,
             appHideListener: (AppModel, Int) -> Unit,
             appRenameListener: (AppModel, String) -> Unit,
+            appSectionListener: (AppModel) -> Unit,
+            iconLoader: ((AppModel, TextView) -> Unit)?,
         ) = with(binding) {
             appHideLayout.visibility = View.GONE
             renameLayout.visibility = View.GONE
@@ -245,6 +252,8 @@ class AppDrawerAdapter(
             }
             appTitle.gravity = appLabelGravity
             otherProfileIndicator.isVisible = appModel.user != myUserHandle
+            appTitle.setCompoundDrawablesRelative(null, null, null, null)
+            if (appModel.appPackage.isNotEmpty()) iconLoader?.invoke(appModel, appTitle)
 
             appTitle.setOnClickListener { clickListener(appModel) }
 
@@ -268,6 +277,8 @@ class AppDrawerAdapter(
                     appHideLayout.visibility = View.VISIBLE
                     // Only allow renaming non hidden apps
                     appRename.isVisible = flag != Constants.FLAG_HIDDEN_APPS
+                    // Home sections hold launchable apps only (not shortcuts, not hidden apps)
+                    appSection.isVisible = flag == Constants.FLAG_LAUNCH_APP && appModel is AppModel.App
                 }
                 true
             }
@@ -330,6 +341,11 @@ class AppDrawerAdapter(
                 }
             }
             appInfo.setOnClickListener { appInfoListener(appModel) }
+            appSection.setOnClickListener {
+                appHideLayout.visibility = View.GONE
+                appTitle.visibility = View.VISIBLE
+                appSectionListener(appModel)
+            }
             appDelete.setOnClickListener { appDeleteListener(appModel) }
             appMenuClose.setOnClickListener {
                 appHideLayout.visibility = View.GONE

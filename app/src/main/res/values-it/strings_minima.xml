@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ml_settings">Impostazioni</string>
+    <string name="ml_save">Salva</string>
+    <string name="ml_done">Fatto</string>
+    <string name="ml_cancel">Annulla</string>
+    <string name="ml_delete">Elimina</string>
+    <string name="ml_search">Cerca</string>
+
+    <string name="ml_section_new">Nuova sezione</string>
+    <string name="ml_section_new_ellipsis">+ Nuova sezione…</string>
+    <string name="ml_section_name_hint">Nome della sezione</string>
+    <string name="ml_section_rename">Rinomina</string>
+    <string name="ml_section_edit_apps">Aggiungi o togli app</string>
+    <string name="ml_move_up">Sposta su</string>
+    <string name="ml_move_down">Sposta giù</string>
+    <string name="ml_section_delete">Elimina sezione</string>
+    <string name="ml_section_delete_confirm">Eliminare la sezione \"%1$s\"? Le app restano installate.</string>
+    <string name="ml_section_empty_hint">Vuota: tieni premuto il titolo per aggiungere app</string>
+    <string name="ml_home_no_sections_hint">Tieni premuto su uno spazio vuoto per creare una sezione</string>
+    <string name="ml_default_section_name">Preferiti</string>
+    <string name="ml_section">Sezione</string>
+
+    <string name="ml_app_move_to">Sposta in…</string>
+    <string name="ml_app_copy_to">Copia in…</string>
+    <string name="ml_app_remove_from_section">Togli da questa sezione</string>
+    <string name="ml_app_info">Info app</string>
+    <string name="ml_add_to_section">Aggiungi a sezione…</string>
+    <string name="ml_already_in_section">Già presente in %1$s</string>
+    <string name="ml_added_to_section">Aggiunta a %1$s</string>
+    <string name="ml_no_other_sections">Non ci sono altre sezioni</string>
+
+    <string name="ml_icons">Icone delle app</string>
+    <string name="ml_icon_pack">Icon pack</string>
+    <string name="ml_system_icons">Di sistema</string>
+</resources>

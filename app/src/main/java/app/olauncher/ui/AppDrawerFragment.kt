@@ -1,6 +1,7 @@
 package app.olauncher.ui
 
 import android.content.Context
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
@@ -24,7 +25,9 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
+import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.deletePinnedShortcut
+import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.isEinkDisplay
 import app.olauncher.helper.isSystemAnimationsDisabled
@@ -35,6 +38,11 @@ import app.olauncher.helper.openUrl
 import app.olauncher.helper.showKeyboard
 import app.olauncher.helper.showToast
 import app.olauncher.helper.uninstall
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class AppDrawerFragment : BaseFragment() {
 
@@ -50,6 +58,7 @@ class AppDrawerFragment : BaseFragment() {
     private var currentPrivateSpaceApps: List<AppModel>? = null
     private var currentPrivateSpaceLocked: Boolean = true
     private var currentPrivateSpaceAvailable: Boolean = false
+    private var uiScope = MainScope()
 
     private val viewModel: MainViewModel by activityViewModels()
     private var _binding: FragmentAppDrawerBinding? = null
@@ -61,6 +70,7 @@ class AppDrawerFragment : BaseFragment() {
         savedInstanceState: Bundle?,
     ): View {
         _binding = FragmentAppDrawerBinding.inflate(inflater, container, false)
+        uiScope = MainScope()
         return binding.root
     }
 
@@ -233,7 +243,14 @@ class AppDrawerFragment : BaseFragment() {
             privateSpaceSettingsListener = {
                 viewModel.openPrivateSpaceSettings()
                 findNavController().popBackStack(R.id.mainFragment, false)
-            }
+            },
+            appSectionListener = { appModel ->
+                if (appModel is AppModel.App) {
+                    binding.search.hideKeyboard()
+                    HomeSectionsController.showAddToSectionDialog(requireContext(), appModel)
+                }
+            },
+            iconLoader = { appModel, view -> loadIcon(appModel, view) },
         )
 
         linearLayoutManager = object : LinearLayoutManager(requireContext()) {
@@ -259,6 +276,28 @@ class AppDrawerFragment : BaseFragment() {
         else if (requireContext().isSystemAnimationsDisabled().not())
             binding.recyclerView.layoutAnimation =
                 AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_anim_from_bottom)
+    }
+
+    private fun loadIcon(appModel: AppModel, view: TextView) {
+        if (!prefs.showIcons) return
+        val size = (view.textSize * 1.15f).toInt()
+        val key = "${appModel.appPackage}|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
+        view.tag = key
+        view.compoundDrawablePadding = 14.dpToPx()
+        view.setCompoundDrawablesRelative(ColorDrawable(0).apply { setBounds(0, 0, size, size) }, null, null, null)
+        val context = requireContext().applicationContext
+        val iconPack = prefs.iconPack
+        uiScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                IconPackManager.getIcon(
+                    context, appModel.appPackage, (appModel as? AppModel.App)?.activityClassName,
+                    appModel.user, iconPack, size
+                )
+            } ?: return@launch
+            // The row may have been recycled for another app meanwhile
+            if (view.tag == key)
+                view.setCompoundDrawablesRelative(IconPackManager.toDrawable(context, bitmap, size), null, null, null)
+        }
     }
 
     private fun initObservers() {
@@ -376,6 +415,7 @@ class AppDrawerFragment : BaseFragment() {
 
     override fun onDestroyView() {
         super.onDestroyView()
+        uiScope.cancel()
         searchTextView = null
         _binding = null
     }

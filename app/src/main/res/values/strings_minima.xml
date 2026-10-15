@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- MinimaLauncher strings (kept separate from upstream Olauncher strings) -->
+<resources>
+    <string name="ml_settings">Settings</string>
+    <string name="ml_save">Save</string>
+    <string name="ml_done">Done</string>
+    <string name="ml_cancel">Cancel</string>
+    <string name="ml_delete">Delete</string>
+    <string name="ml_search">Search</string>
+
+    <string name="ml_section_new">New section</string>
+    <string name="ml_section_new_ellipsis">+ New section…</string>
+    <string name="ml_section_name_hint">Section name</string>
+    <string name="ml_section_rename">Rename</string>
+    <string name="ml_section_edit_apps">Add or remove apps</string>
+    <string name="ml_move_up">Move up</string>
+    <string name="ml_move_down">Move down</string>
+    <string name="ml_section_delete">Delete section</string>
+    <string name="ml_section_delete_confirm">Delete the section \"%1$s\"? The apps stay installed.</string>
+    <string name="ml_section_empty_hint">Empty: long press the title to add apps</string>
+    <string name="ml_home_no_sections_hint">Long press on empty space to create a section</string>
+    <string name="ml_default_section_name">Favourites</string>
+    <string name="ml_section_header_format" translatable="false">%1$s  %2$s</string>
+    <string name="ml_section">Section</string>
+
+    <string name="ml_app_move_to">Move to…</string>
+    <string name="ml_app_copy_to">Copy to…</string>
+    <string name="ml_app_remove_from_section">Remove from this section</string>
+    <string name="ml_app_info">App info</string>
+    <string name="ml_add_to_section">Add to section…</string>
+    <string name="ml_already_in_section">Already in %1$s</string>
+    <string name="ml_added_to_section">Added to %1$s</string>
+    <string name="ml_no_other_sections">There are no other sections</string>
+
+    <string name="ml_icons">App icons</string>
+    <string name="ml_icon_pack">Icon pack</string>
+    <string name="ml_system_icons">System</string>
+</resources>

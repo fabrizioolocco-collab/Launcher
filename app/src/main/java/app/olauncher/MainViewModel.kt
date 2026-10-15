@@ -54,6 +54,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val launcherResetFailed = MutableLiveData<Boolean>()
     val homeAppAlignment = MutableLiveData<Int>()
     val screenTimeValue = MutableLiveData<String>()
+
+    /** Visible (non hidden) apps, used to resolve labels of the apps placed in home sections. */
+    val homeApps = MutableLiveData<List<AppModel.App>>()
     private var screenTimeJob: Job? = null
 
     val privateSpaceApps = MutableLiveData<List<AppModel>?>()
@@ -405,6 +408,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         getPrivateSpaceAppList()
     }
+
+    fun loadHomeApps() {
+        viewModelScope.launch {
+            homeApps.value = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = false)
+                .filterIsInstance<AppModel.App>()
+        }
+    }
+
+    fun launch(app: AppModel.App) = selectedApp(app, Constants.FLAG_LAUNCH_APP)
 
     fun getHiddenApps() {
         viewModelScope.launch {
