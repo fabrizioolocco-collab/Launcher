@@ -62,29 +62,60 @@ private fun Context.limitedHeight(content: View, itemCount: Int): View {
     return scroll
 }
 
-/** Simple vertical list of actions. Tapping one closes the dialog and runs it. */
+/** Simple vertical list of actions. Tapping one closes the dialog and runs it. Long lists get a search field. */
 fun Context.showMenuDialog(title: String, entries: List<MenuEntry>): OlDialog {
     val (dialog, binding) = baseDialog(title)
     val ctx = dialog.context
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-    entries.forEach { entry ->
-        list.addView(ctx.dialogTextView(R.style.TextSmall).apply {
+    val rows = entries.map { entry ->
+        ctx.dialogTextView(R.style.TextSmall).apply {
             text = entry.label
             textSize = 18f
             setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
             isClickable = true
             isFocusable = true
             setOnClickListener {
+                hideKeyboard()
                 dialog.dismiss()
                 entry.onClick()
             }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }.also {
+            list.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
     }
-    binding.contentContainer.addView(ctx.limitedHeight(list, entries.size))
+    if (entries.size > SEARCH_THRESHOLD) {
+        val filter = EditText(ctx).apply {
+            hint = ctx.getString(R.string.ml_search)
+            setSingleLine(true)
+            textSize = 16f
+            setTextColor(primary)
+            setHintTextColor(ctx.getColorFromAttr(R.attr.primaryColorTrans50))
+            backgroundTintList = ColorStateList.valueOf(primary)
+            imeOptions = EditorInfo.IME_ACTION_DONE
+        }
+        filter.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                val q = s?.toString().orEmpty().trim()
+                rows.forEachIndexed { i, row -> row.isVisible = q.isEmpty() || entries[i].label.contains(q, true) }
+            }
+        })
+        container.addView(filter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 12.dpToPx()
+        })
+        dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+    }
+    container.addView(ctx.limitedHeight(list, entries.size))
+    binding.contentContainer.addView(container)
     binding.contentContainer.isVisible = true
     dialog.showRespectingStatusBar()
     return dialog
 }
+
+private const val SEARCH_THRESHOLD = 12
 
 /** Single-line text input, e.g. a section name. [onSave] gets the trimmed, non-blank text. */
 fun Context.showTextInputDialog(

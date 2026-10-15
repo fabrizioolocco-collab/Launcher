@@ -67,6 +67,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
     private var pendingFontTarget: ((String) -> Unit)? = null
     private val fontPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.keepCurrentScreen = false
         val target = pendingFontTarget
         pendingFontTarget = null
         if (uri == null || target == null) return@registerForActivityResult
@@ -359,6 +360,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 0 -> onPick("")
                 LOAD_FONT_ID -> {
                     pendingFontTarget = onPick
+                    viewModel.keepCurrentScreen = true
                     fontPicker.launch(arrayOf("font/*", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream", "*/*"))
                     return@showPopupMenu
                 }

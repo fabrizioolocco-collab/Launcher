@@ -47,6 +47,7 @@ import app.olauncher.helper.setPlainWallpaperByTheme
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import app.olauncher.ui.widgets.HomeWidgetsController
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -62,6 +63,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private var uiScope = MainScope()
     private lateinit var sections: HomeSectionsController
+    private lateinit var widgets: HomeWidgetsController
 
     private var onImagePicked: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -102,10 +104,28 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         )
         viewModel.homeApps.value?.let { sections.setApps(it) }
 
+        widgets = HomeWidgetsController(
+            activity = requireActivity(),
+            container = binding.widgetsLayout,
+            scrollView = binding.homeScroll,
+            keepScreen = { viewModel.keepCurrentScreen = it },
+        )
+        widgets.render()
+
         initObservers()
         setHomeAlignment(prefs.homeAlignment)
         initSwipeTouchListener()
         initClickListeners()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        widgets.startListening()
+    }
+
+    override fun onStop() {
+        widgets.stopListening()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -240,14 +260,17 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onEmptyTap() = sections.collapseAll()
 
             override fun onEmptyLongPress() {
-                sections.showHomeMenu {
-                    try {
-                        findNavController().navigate(R.id.action_mainFragment_to_settingsFragment)
-                        viewModel.firstOpen(false)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    }
-                }
+                sections.showHomeMenu(
+                    openSettings = {
+                        try {
+                            findNavController().navigate(R.id.action_mainFragment_to_settingsFragment)
+                            viewModel.firstOpen(false)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    addWidget = { widgets.showAddWidgetDialog() },
+                )
             }
 
             override fun onEmptyDoubleTap() {
@@ -530,6 +553,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     override fun onDestroyView() {
         super.onDestroyView()
         uiScope.cancel()
+        widgets.release()
         _binding = null
     }
 }

@@ -76,4 +76,12 @@
     <string name="ml_index_on_scroll">While scrolling</string>
     <string name="ml_index_never">Never</string>
     <string name="ml_auto_launch">Open single search result</string>
+    <string name="ml_add_widget">Add widget</string>
+    <string name="ml_widget">Widget</string>
+    <string name="ml_no_widgets">No widgets available</string>
+    <string name="ml_widget_resize">Resize</string>
+    <string name="ml_widget_reconfigure">Reconfigure</string>
+    <string name="ml_widget_remove">Remove widget</string>
+    <string name="ml_widget_remove_confirm">Remove this widget from home?</string>
+    <string name="ml_widget_drag_hint">↕ drag to change height</string>
 </resources>

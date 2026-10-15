@@ -74,4 +74,12 @@
     <string name="ml_index_on_scroll">Scorrendo</string>
     <string name="ml_index_never">Mai</string>
     <string name="ml_auto_launch">Apri da solo l\'unico risultato</string>
+    <string name="ml_add_widget">Aggiungi widget</string>
+    <string name="ml_widget">Widget</string>
+    <string name="ml_no_widgets">Nessun widget disponibile</string>
+    <string name="ml_widget_resize">Ridimensiona</string>
+    <string name="ml_widget_reconfigure">Riconfigura</string>
+    <string name="ml_widget_remove">Rimuovi widget</string>
+    <string name="ml_widget_remove_confirm">Rimuovere questo widget dalla home?</string>
+    <string name="ml_widget_drag_hint">↕ trascina per cambiare altezza</string>
 </resources>

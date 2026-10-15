@@ -1,5 +1,6 @@
 package app.olauncher.ui
 
+import android.appwidget.AppWidgetHostView
 import android.content.Context
 import android.graphics.Rect
 import android.util.AttributeSet
@@ -35,6 +36,9 @@ class HomeScrollView @JvmOverloads constructor(
     }
 
     var callbacks: GestureCallbacks? = null
+
+    /** Turned off while resizing a widget, so the drag isn't taken as a scroll or a swipe. */
+    var gesturesEnabled = true
 
     private var downOnInteractive = false
     private var atBottomOnDown = false
@@ -81,7 +85,11 @@ class HomeScrollView @JvmOverloads constructor(
         }
     })
 
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean =
+        gesturesEnabled && super.onInterceptTouchEvent(ev)
+
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (!gesturesEnabled) return super.dispatchTouchEvent(ev)
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             flingHandled = false
             atBottomOnDown = !canScrollVertically(1)
@@ -104,7 +112,7 @@ class HomeScrollView @JvmOverloads constructor(
             val child = group.getChildAt(i)
             if (child.visibility != View.VISIBLE) continue
             if (!child.getGlobalVisibleRect(tmpRect) || !tmpRect.contains(x, y)) continue
-            if (child.isClickable || child.isLongClickable) return true
+            if (child.isClickable || child.isLongClickable || child is AppWidgetHostView) return true
             if (child is ViewGroup && isOverInteractiveChild(child, x, y)) return true
         }
         return false

@@ -38,6 +38,16 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <!-- Widgets, stacked above the clock -->
+            <LinearLayout
+                android:id="@+id/widgetsLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="40dp"
+                android:orientation="vertical"
+                android:paddingHorizontal="66dp"
+                android:visibility="gone" />
+
             <FrameLayout
                 android:id="@+id/headerLayout"
                 android:layout_width="match_parent"
