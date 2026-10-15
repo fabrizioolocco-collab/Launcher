@@ -120,6 +120,7 @@ class Prefs(context: Context) {
 
     private val SHOW_ICONS = "SHOW_ICONS"
     private val NEWS_SORT_BY_COUNT = "NEWS_SORT_BY_COUNT"
+    private val AUTO_LAUNCH_SINGLE = "AUTO_LAUNCH_SINGLE"
     private val LETTER_INDEX_MODE = "LETTER_INDEX_MODE"
     private val SECTION_FONT = "SECTION_FONT"
     private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
@@ -149,6 +150,11 @@ class Prefs(context: Context) {
     var appTextSize: Int
         get() = prefs.getInt(APP_TEXT_SIZE, 0)
         set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
+
+    /** Drawer search: open the app by itself when only one result is left. */
+    var autoLaunchSingleResult: Boolean
+        get() = prefs.getBoolean(AUTO_LAUNCH_SINGLE, false)
+        set(value) = prefs.edit { putBoolean(AUTO_LAUNCH_SINGLE, value) }
 
     /** Drawer "News": false = most recent first, true = most notifications first. */
     var newsSortByCount: Boolean

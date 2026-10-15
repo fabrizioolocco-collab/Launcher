@@ -73,4 +73,5 @@
     <string name="ml_index_always">Sempre</string>
     <string name="ml_index_on_scroll">Scorrendo</string>
     <string name="ml_index_never">Mai</string>
+    <string name="ml_auto_launch">Apri da solo l\'unico risultato</string>
 </resources>

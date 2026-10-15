@@ -71,7 +71,7 @@ class AppDrawerAdapter(
 
     private var autoLaunch = true
     private var isBangSearch = false
-    var allowAutoLaunch = true
+    var allowAutoLaunch = false
     private val diacriticsRegex = Regex("\\p{InCombiningDiacriticalMarks}+")
     private val separatorsRegex = Regex("[-_+,.`'\\s\\p{Z}]")
     private val appFilter = createAppFilter()

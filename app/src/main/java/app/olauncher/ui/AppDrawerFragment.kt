@@ -125,7 +125,7 @@ class AppDrawerFragment : BaseFragment() {
 
             override fun onQueryTextChange(newText: String): Boolean {
                 try {
-                    adapter.allowAutoLaunch = !isSearchComposing()
+                    adapter.allowAutoLaunch = prefs.autoLaunchSingleResult && !isSearchComposing()
                     adapter.filter.filter(newText)
                     updateLetterIndex()
                     binding.appRename.visibility =
