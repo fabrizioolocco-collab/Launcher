@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.View
 import app.olauncher.R
 import app.olauncher.data.HomeWidget
@@ -47,6 +48,8 @@ class HomeWidgetsController(
         current = this
         grid.resizeListener = resizeListener()
     }
+
+    private fun log(message: String) = WidgetLog.log(activity, message)
 
     fun startListening() = try {
         host.startListening()
@@ -266,11 +269,14 @@ class HomeWidgetsController(
         val id = host.allocateAppWidgetId()
         pendingId = id
         pendingInfo = info
+        log("add ${info.provider.flattenToShortString()} id=$id configure=${info.configure?.flattenToShortString()}")
         val bound = try {
             manager.bindAppWidgetIdIfAllowed(id, info.profile, info.provider, null)
         } catch (e: Exception) {
+            log("bind error: $e")
             false
         }
+        log("bindIfAllowed=$bound")
         if (bound) configureOrFinish(id, info)
         else {
             // The system asks the user to allow MinimaLauncher to create widgets
@@ -308,15 +314,27 @@ class HomeWidgetsController(
         } catch (e: Exception) {
             false
         }
+        log("configure exported=$exported sameProfile=$sameProfile")
+        configureLaunchTime = SystemClock.elapsedRealtime()
+        if (requestCode == REQUEST_CONFIGURE) {
+            // Hidden view for the new widget: if the app pushes content while (or after) being set up,
+            // the widget was configured even if Android reports "cancelled"
+            probeView = try {
+                host.createView(activity.applicationContext, id, info) as MinimaWidgetHostView
+            } catch (e: Exception) {
+                null
+            }
+        }
         if (sameProfile && exported) {
             try {
                 launchForResult(requestCode) {
                     @Suppress("DEPRECATION")
                     activity.startActivityForResult(direct, requestCode)
                 }
+                log("configure started directly")
                 return true
             } catch (e: Exception) {
-                e.printStackTrace()
+                log("direct configure failed: $e")
                 keepScreen(false)
             }
         }
@@ -325,9 +343,10 @@ class HomeWidgetsController(
                 launchForResult(requestCode) {
                     host.startAppWidgetConfigureActivityForResult(activity, id, 0, requestCode, null)
                 }
+                log("configure started through the system")
                 return true
             } catch (e: Exception) {
-                e.printStackTrace()
+                log("system configure failed: $e")
                 keepScreen(false)
             }
         }
@@ -341,6 +360,7 @@ class HomeWidgetsController(
     }
 
     private fun finishAdding(id: Int, info: AppWidgetProviderInfo) {
+        log("added id=$id")
         pendingId = -1
         pendingInfo = null
         val cell = cellPx()
@@ -353,6 +373,7 @@ class HomeWidgetsController(
     }
 
     private fun cancelAdding() {
+        log("cancelled id=$pendingId")
         if (pendingId != -1) host.deleteAppWidgetId(pendingId)
         pendingId = -1
         pendingInfo = null
@@ -361,8 +382,10 @@ class HomeWidgetsController(
     /** Returns true when the result belonged to the widget flow. */
     fun onActivityResult(requestCode: Int, resultCode: Int): Boolean {
         if (requestCode != REQUEST_BIND && requestCode != REQUEST_CONFIGURE && requestCode != REQUEST_RECONFIGURE) return false
-        keepScreen(false)
         val ok = resultCode == Activity.RESULT_OK
+        val elapsed = SystemClock.elapsedRealtime() - configureLaunchTime
+        log("result request=$requestCode ok=$ok after ${elapsed}ms")
+        keepScreen(false)
         when (requestCode) {
             REQUEST_BIND -> {
                 val info = pendingInfo
@@ -375,8 +398,12 @@ class HomeWidgetsController(
 
             REQUEST_CONFIGURE -> {
                 val info = pendingInfo
-                if (ok && info != null) finishAdding(pendingId, info)
-                else {
+                val configured = probeView?.receivedUpdate == true
+                probeView = null
+                if (info != null && (ok || configured)) {
+                    if (!ok) log("reported cancelled, but the widget received content: adding it")
+                    finishAdding(pendingId, info)
+                } else {
                     activity.showToast(activity.getString(R.string.ml_widget_setup_cancelled))
                     cancelAdding()
                 }
@@ -385,6 +412,20 @@ class HomeWidgetsController(
             REQUEST_RECONFIGURE -> render()
         }
         return true
+    }
+
+    /**
+     * Home is visible again. If a setup screen is still pending without having returned a result
+     * (some apps finish without one), decide now from whether the widget received content.
+     */
+    fun onHomeResumed() {
+        val info = pendingInfo ?: return
+        val probe = probeView ?: return
+        if (SystemClock.elapsedRealtime() - configureLaunchTime < 1000) return
+        log("home resumed with setup pending, received content=${probe.receivedUpdate}")
+        probeView = null
+        keepScreen(false)
+        if (probe.receivedUpdate) finishAdding(pendingId, info) else cancelAdding()
     }
 
     // ---------------------------------------------------------------- menu, resize, remove
@@ -426,6 +467,8 @@ class HomeWidgetsController(
         // The add flow spans activity results; keep its state outside the fragment view
         private var pendingId = -1
         private var pendingInfo: AppWidgetProviderInfo? = null
+        private var configureLaunchTime = 0L
+        private var probeView: MinimaWidgetHostView? = null
 
         /** Controller of the visible home, used by MainActivity to forward activity results. */
         var current: HomeWidgetsController? = null

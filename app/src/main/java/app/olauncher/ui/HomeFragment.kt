@@ -134,6 +134,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         super.onResume()
         populateHomeScreen(false)
         widgets.refreshIfNeeded()
+        widgets.onHomeResumed()
         viewModel.loadHomeApps()
         binding.notificationAccessHint.isVisible = !NotificationRepository.isAccessGranted(requireContext())
         viewModel.isOlauncherDefault()

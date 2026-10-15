@@ -40,6 +40,9 @@ import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.TestNotifications
+import app.olauncher.helper.copyToClipboard
+import app.olauncher.helper.showConfirmDialog
+import app.olauncher.ui.widgets.WidgetLog
 import app.olauncher.helper.isOlauncherDefault
 import app.olauncher.helper.isTablet
 import app.olauncher.helper.openAppInfo
@@ -183,6 +186,14 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
+            R.id.widgetLog -> {
+                val ctx = requireContext()
+                val text = WidgetLog.read(ctx).lines().takeLast(25).joinToString("\n").ifBlank { "-" }
+                ctx.showConfirmDialog(getString(R.string.ml_widget_log), text, getString(R.string.ml_copy)) {
+                    ctx.copyToClipboard(text)
+                    ctx.showToast(getString(R.string.ml_copied))
+                }
+            }
             R.id.widgetColumns -> view.showPopupMenu(
                 configure = { menu -> (2..8).forEach { menu.add(Menu.NONE, it, it, it.toString()) } }
             ) { item ->
@@ -270,6 +281,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
         binding.widgetColumns.setOnClickListener(this)
+        binding.widgetLog.setOnClickListener(this)
         binding.autoLaunchSingle.setOnClickListener(this)
         binding.testNotificationSend.setOnClickListener(this)
         binding.testNotificationRemove.setOnClickListener(this)

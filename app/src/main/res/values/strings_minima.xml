@@ -89,4 +89,8 @@
     <string name="ml_widget_setup_failed">Could not open the widget setup</string>
     <string name="ml_widget_bind_denied">Widget not added: permission not granted</string>
     <string name="ml_widget_setup_cancelled">Widget not added: setup cancelled or refused by the app</string>
+    <string name="ml_widget_log">Widget log</string>
+    <string name="ml_show">Show</string>
+    <string name="ml_copy">Copy</string>
+    <string name="ml_copied">Copied</string>
 </resources>

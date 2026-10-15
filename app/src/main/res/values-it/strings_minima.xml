@@ -87,4 +87,8 @@
     <string name="ml_widget_setup_failed">Impossibile aprire la configurazione del widget</string>
     <string name="ml_widget_bind_denied">Widget non aggiunto: permesso non concesso</string>
     <string name="ml_widget_setup_cancelled">Widget non aggiunto: configurazione annullata o rifiutata dall\'app</string>
+    <string name="ml_widget_log">Registro widget</string>
+    <string name="ml_show">Mostra</string>
+    <string name="ml_copy">Copia</string>
+    <string name="ml_copied">Copiato</string>
 </resources>

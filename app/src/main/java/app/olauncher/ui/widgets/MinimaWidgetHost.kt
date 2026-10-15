@@ -7,6 +7,7 @@ import android.content.Context
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.ViewConfiguration
+import android.widget.RemoteViews
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -31,6 +32,15 @@ class MinimaWidgetHostView(context: Context) : AppWidgetHostView(context) {
     }
 
     var listener: Listener? = null
+
+    /** True once the provider has pushed content: used to tell a configured widget from an abandoned one. */
+    var receivedUpdate = false
+        private set
+
+    override fun updateAppWidget(remoteViews: RemoteViews?) {
+        super.updateAppWidget(remoteViews)
+        if (remoteViews != null) receivedUpdate = true
+    }
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val longPressTimeout = ViewConfiguration.getLongPressTimeout().toLong()
