@@ -56,15 +56,19 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ]; then echo "::error::Secret KEYSTORE_BASE64 is missing"; exit 1; fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
       - name: Build signed release APK
         env:
-          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KS_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.KEY_ALIAS }}
         run: |
+          # PKCS12 keystore: key password == store password, so KEY_PASSWORD is not needed.
+          # Trim stray whitespace/newlines that easily sneak in when pasting secrets.
+          export SIGNING_KEYSTORE_PASSWORD="$(printf '%s' "$KS_PASSWORD" | tr -d '[:space:]')"
+          export SIGNING_KEY_PASSWORD="$SIGNING_KEYSTORE_PASSWORD"
+          export SIGNING_KEY_ALIAS="$(printf '%s' "${KS_ALIAS:-minimalauncher}" | tr -d '[:space:]')"
           chmod +x gradlew
           ./gradlew --no-daemon assembleRelease \
             -PversionCode=${{ steps.version.outputs.code }} \

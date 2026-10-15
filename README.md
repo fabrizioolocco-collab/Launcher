@@ -23,7 +23,7 @@ e lo pubblica come GitHub Release.
 - versionCode = `X*1000 + Y` (Y < 1000)
 
 La firma usa questi GitHub Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
-`KEY_ALIAS`, `KEY_PASSWORD`. Il keystore non va **mai** nel repository.
+`KEY_ALIAS` (la password della chiave coincide con quella del keystore). Il keystore non va **mai** nel repository.
 
 ## Build di debug
 
