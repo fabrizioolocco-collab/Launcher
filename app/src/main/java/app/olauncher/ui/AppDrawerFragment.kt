@@ -25,6 +25,7 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
+import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.deletePinnedShortcut
 import app.olauncher.helper.dpToPx
@@ -251,6 +252,7 @@ class AppDrawerFragment : BaseFragment() {
                 }
             },
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
+            titleStyler = { view -> FontManager.apply(view, prefs.appFont, prefs.appTextSize) },
         )
 
         linearLayoutManager = object : LinearLayoutManager(requireContext()) {

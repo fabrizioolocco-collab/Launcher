@@ -14,6 +14,7 @@ import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.bundleOf
 import androidx.lifecycle.ViewModelProvider
@@ -32,6 +33,7 @@ import app.olauncher.helper.hideStatusBar
 import app.olauncher.helper.isAccessServiceEnabled
 import app.olauncher.helper.isDarkThemeOn
 import app.olauncher.helper.isEinkDisplay
+import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.isOlauncherDefault
 import app.olauncher.helper.isTablet
@@ -58,6 +60,25 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     private val showPentastic = System.currentTimeMillis() % 2 == 0L
     private var dialog: OlDialog? = null
 
+    private var pendingFontTarget: ((String) -> Unit)? = null
+    private val fontPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val target = pendingFontTarget
+        pendingFontTarget = null
+        if (uri == null || target == null) return@registerForActivityResult
+        val ctx = requireContext().applicationContext
+        val id = try {
+            FontManager.importFont(ctx, uri)
+        } catch (e: Exception) {
+            null
+        }
+        if (id == null) {
+            ctx.showToast(getString(R.string.ml_font_error))
+            return@registerForActivityResult
+        }
+        target(id)
+        if (_binding != null) populateTextStyle()
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
         return binding.root
@@ -76,6 +97,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         checkAdminPermission()
 
         populateIcons()
+        populateTextStyle()
         populateProMessage()
         populateKeyboardText()
         populateScreenTimeOnOff()
@@ -111,6 +133,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.autoShowKeyboard -> toggleKeyboardText()
             R.id.showIcons -> toggleShowIcons()
             R.id.iconPack -> showIconPackMenu(view)
+            R.id.sectionFont -> showFontMenu(view, prefs.sectionFont) { prefs.sectionFont = it }
+            R.id.appFont -> showFontMenu(view, prefs.appFont) { prefs.appFont = it }
+            R.id.sectionTextSize -> showTextSizeMenu(view) { prefs.sectionTextSize = it }
+            R.id.appTextSize -> showTextSizeMenu(view) { prefs.appTextSize = it }
             R.id.dailyWallpaperUrl -> requireContext().openUrl(prefs.dailyWallpaperUrl)
             R.id.dailyWallpaper -> toggleDailyWallpaperUpdate()
             R.id.alignment -> showAlignmentMenu(view)
@@ -174,6 +200,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         // binding.homeButtonRecents.setOnClickListener(this)
         binding.showIcons.setOnClickListener(this)
         binding.iconPack.setOnClickListener(this)
+        binding.sectionFont.setOnClickListener(this)
+        binding.appFont.setOnClickListener(this)
+        binding.sectionTextSize.setOnClickListener(this)
+        binding.appTextSize.setOnClickListener(this)
         binding.screenTimeOnOff.setOnClickListener(this)
         binding.dailyWallpaperUrl.setOnClickListener(this)
         binding.dailyWallpaper.setOnClickListener(this)
@@ -227,6 +257,55 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         val packs = IconPackManager.installedPacks(requireContext())
         binding.iconPack.text = packs.firstOrNull { it.packageName == prefs.iconPack }?.label
             ?: getString(R.string.ml_system_icons)
+    }
+
+    private fun populateTextStyle() {
+        val ctx = requireContext()
+        binding.sectionFont.text = FontManager.label(ctx, prefs.sectionFont)
+        binding.appFont.text = FontManager.label(ctx, prefs.appFont)
+        binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
+        binding.appTextSize.text = sizeLabel(prefs.appTextSize)
+    }
+
+    private fun sizeLabel(size: Int) = if (size <= 0) getString(R.string.ml_default) else size.toString()
+
+    private fun showFontMenu(anchor: View, current: String, onPick: (String) -> Unit) {
+        val ctx = requireContext()
+        val options = FontManager.options(ctx)
+        anchor.showPopupMenu(
+            configure = { menu ->
+                menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
+                options.forEachIndexed { i, font ->
+                    val label = if (font.id == current) "✓ ${font.label}" else font.label
+                    menu.add(Menu.NONE, i + 1, i + 1, FontManager.preview(ctx, font.id, label))
+                }
+                menu.add(Menu.NONE, LOAD_FONT_ID, options.size + 1, getString(R.string.ml_load_font))
+            }
+        ) { item ->
+            when (item.itemId) {
+                0 -> onPick("")
+                LOAD_FONT_ID -> {
+                    pendingFontTarget = onPick
+                    fontPicker.launch(arrayOf("font/*", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream", "*/*"))
+                    return@showPopupMenu
+                }
+
+                else -> onPick(options[item.itemId - 1].id)
+            }
+            populateTextStyle()
+        }
+    }
+
+    private fun showTextSizeMenu(anchor: View, onPick: (Int) -> Unit) {
+        anchor.showPopupMenu(
+            configure = { menu ->
+                menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
+                TEXT_SIZES.forEachIndexed { i, size -> menu.add(Menu.NONE, size, i + 1, size.toString()) }
+            }
+        ) { item ->
+            onPick(item.itemId)
+            populateTextStyle()
+        }
     }
 
     private fun toggleShowIcons() {
@@ -688,5 +767,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     override fun onDestroy() {
         viewModel.checkForMessages.call()
         super.onDestroy()
+    }
+
+    companion object {
+        private const val LOAD_FONT_ID = 10_000
+        private val TEXT_SIZES = listOf(12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40)
     }
 }

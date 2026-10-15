@@ -4,6 +4,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
@@ -15,6 +16,8 @@ import android.view.WindowInsets
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.Toast
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.bundleOf
@@ -58,6 +61,12 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private var uiScope = MainScope()
     private lateinit var sections: HomeSectionsController
 
+    private var onImagePicked: ((Uri) -> Unit)? = null
+    private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) onImagePicked?.invoke(uri)
+        onImagePicked = null
+    }
+
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
         uiScope = MainScope()
@@ -80,6 +89,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             prefs = prefs,
             scope = uiScope,
             onLaunch = { viewModel.launch(it) },
+            pickImage = { callback ->
+                onImagePicked = callback
+                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
         )
         viewModel.homeApps.value?.let { sections.setApps(it) }
 

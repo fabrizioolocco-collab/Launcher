@@ -100,6 +100,25 @@ object IconPackManager {
         synchronized(this) { cache.get(key) }?.let { return it }
 
         val bitmap = try {
+            loadCustom(context, CustomIcons.get(context, packageName, activityClassName, user), sizePx)
+                ?: loadDefault(context, packageName, activityClassName, user, iconPackPackage, sizePx)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+        if (bitmap != null) synchronized(this) { cache.put(key, bitmap) }
+        return bitmap
+    }
+
+    private fun loadDefault(
+        context: Context,
+        packageName: String,
+        activityClassName: String?,
+        user: UserHandle,
+        iconPackPackage: String,
+        sizePx: Int,
+    ): Bitmap? {
+        val bitmap = try {
             val pack = if (iconPackPackage.isBlank()) null else getPack(context, iconPackPackage)
             loadFromPack(pack, packageName, activityClassName, sizePx)
                 ?: loadOriginal(context, packageName, activityClassName, user)?.let { original ->
@@ -110,8 +129,78 @@ object IconPackManager {
             e.printStackTrace()
             null
         }
-        if (bitmap != null) synchronized(this) { cache.put(key, bitmap) }
         return bitmap
+    }
+
+    /** Custom icon chosen by the user: "pack:<pack package>:<drawable>" or "file:<absolute path>". */
+    private fun loadCustom(context: Context, spec: String?, sizePx: Int): Bitmap? {
+        spec ?: return null
+        return try {
+            when {
+                spec.startsWith(CustomIcons.PACK_PREFIX) -> {
+                    val rest = spec.removePrefix(CustomIcons.PACK_PREFIX)
+                    loadPackDrawable(context, rest.substringBefore(":"), rest.substringAfter(":"), sizePx)
+                }
+
+                spec.startsWith(CustomIcons.FILE_PREFIX) ->
+                    android.graphics.BitmapFactory.decodeFile(spec.removePrefix(CustomIcons.FILE_PREFIX))
+                        ?.let { Bitmap.createScaledBitmap(it, sizePx, sizePx, true) }
+
+                else -> null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /** Loads one drawable of an icon pack by name. Blocking. */
+    @SuppressLint("DiscouragedApi")
+    fun loadPackDrawable(context: Context, packPackage: String, drawableName: String, sizePx: Int): Bitmap? {
+        return try {
+            val res = context.packageManager.getResourcesForApplication(packPackage)
+            val id = res.getIdentifier(drawableName, "drawable", packPackage)
+            if (id == 0) null
+            else ResourcesCompat.getDrawable(res, id, null)?.toBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * All icon names offered by a pack: its drawable.xml when present (the list packs publish for
+     * manual picking), otherwise every drawable referenced by appfilter.xml.
+     */
+    @SuppressLint("DiscouragedApi")
+    fun packIconNames(context: Context, packPackage: String): List<String> {
+        val names = linkedSetOf<String>()
+        try {
+            val res = context.packageManager.getResourcesForApplication(packPackage)
+            val xmlId = res.getIdentifier("drawable", "xml", packPackage)
+            val parser: XmlPullParser? = if (xmlId != 0) res.getXml(xmlId) else try {
+                XmlPullParserFactory.newInstance().newPullParser()
+                    .apply { setInput(res.assets.open("drawable.xml"), "utf-8") }
+            } catch (e: Exception) {
+                null
+            }
+            if (parser != null) {
+                var event = parser.eventType
+                while (event != XmlPullParser.END_DOCUMENT) {
+                    if (event == XmlPullParser.START_TAG && parser.name == "item")
+                        parser.getAttributeValue(null, "drawable")?.takeIf { it.isNotBlank() }?.let { names.add(it) }
+                    event = parser.next()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        if (names.isEmpty()) {
+            getPack(context, packPackage)?.let { pack ->
+                names.addAll(pack.components.values)
+                names.addAll(pack.packages.values)
+            }
+        }
+        return names.sorted()
     }
 
     fun toDrawable(context: Context, bitmap: Bitmap, sizePx: Int): Drawable =

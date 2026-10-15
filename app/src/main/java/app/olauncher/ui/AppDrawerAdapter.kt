@@ -38,6 +38,7 @@ class AppDrawerAdapter(
     private val privateSpaceSettingsListener: () -> Unit = {},
     private val appSectionListener: (AppModel) -> Unit = {},
     private val iconLoader: ((AppModel, TextView) -> Unit)? = null,
+    private val titleStyler: ((TextView) -> Unit)? = null,
 ) : ListAdapter<AppModel, RecyclerView.ViewHolder>(DIFF_CALLBACK), Filterable {
 
     companion object {
@@ -125,6 +126,7 @@ class AppDrawerAdapter(
                     appRenameListener,
                     appSectionListener,
                     iconLoader,
+                    titleStyler,
                 )
             }
         } catch (e: Exception) {
@@ -240,6 +242,7 @@ class AppDrawerAdapter(
             appRenameListener: (AppModel, String) -> Unit,
             appSectionListener: (AppModel) -> Unit,
             iconLoader: ((AppModel, TextView) -> Unit)?,
+            titleStyler: ((TextView) -> Unit)?,
         ) = with(binding) {
             appHideLayout.visibility = View.GONE
             renameLayout.visibility = View.GONE
@@ -252,6 +255,7 @@ class AppDrawerAdapter(
             }
             appTitle.gravity = appLabelGravity
             otherProfileIndicator.isVisible = appModel.user != myUserHandle
+            titleStyler?.invoke(appTitle)
             appTitle.setCompoundDrawablesRelative(null, null, null, null)
             if (appModel.appPackage.isNotEmpty()) iconLoader?.invoke(appModel, appTitle)
 

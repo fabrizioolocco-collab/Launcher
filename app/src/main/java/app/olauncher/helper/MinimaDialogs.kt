@@ -1,7 +1,9 @@
 package app.olauncher.helper
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -11,14 +13,21 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.core.view.isVisible
 import androidx.core.widget.CompoundButtonCompat
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
 import app.olauncher.databinding.DialogBaseBinding
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.Normalizer
 
 /** A menu entry for [showMenuDialog]. */
@@ -210,6 +219,98 @@ fun Context.showMultiSelectDialog(
         onConfirm(checked)
     }
     // Keep the keyboard closed until the search field is tapped
+    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+    dialog.showRespectingStatusBar()
+    return dialog
+}
+
+/**
+ * Grid of icons with a search field, e.g. all icons of an icon pack.
+ * [loadIcon] is called off the main thread; [onPick] receives the chosen name.
+ */
+fun Context.showIconGridDialog(
+    title: String,
+    names: List<String>,
+    scope: CoroutineScope,
+    loadIcon: (String, Int) -> Bitmap?,
+    onPick: (String) -> Unit,
+): OlDialog {
+    val (dialog, binding) = baseDialog(title)
+    val ctx = dialog.context
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val cellSize = 56.dpToPx()
+    val iconSize = 44.dpToPx()
+
+    val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    val filter = EditText(ctx).apply {
+        hint = ctx.getString(R.string.ml_search)
+        setSingleLine(true)
+        textSize = 16f
+        setTextColor(primary)
+        setHintTextColor(ctx.getColorFromAttr(R.attr.primaryColorTrans50))
+        backgroundTintList = ColorStateList.valueOf(primary)
+        imeOptions = EditorInfo.IME_ACTION_DONE
+    }
+    container.addView(filter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        topMargin = 12.dpToPx()
+    })
+
+    var shown: List<String> = names
+    val adapter = object : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        override fun getItemCount() = shown.size
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val image = ImageView(parent.context).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cellSize)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+                isClickable = true
+                isFocusable = true
+            }
+            return object : RecyclerView.ViewHolder(image) {}
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            val image = holder.itemView as ImageView
+            val name = shown[position]
+            image.tag = name
+            image.setImageDrawable(null)
+            image.contentDescription = name
+            image.setOnClickListener {
+                filter.hideKeyboard()
+                dialog.dismiss()
+                onPick(name)
+            }
+            scope.launch {
+                val bitmap = withContext(Dispatchers.IO) { loadIcon(name, iconSize) } ?: return@launch
+                if (image.tag == name) image.setImageBitmap(bitmap)
+            }
+        }
+    }
+    val grid = RecyclerView(ctx).apply {
+        layoutManager = GridLayoutManager(ctx, 5)
+        this.adapter = adapter
+        layoutParams = LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            (getScreenDimensions(ctx).second * 0.55f).toInt()
+        ).apply { topMargin = 12.dpToPx() }
+    }
+    container.addView(grid)
+
+    filter.addTextChangedListener(object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+        @SuppressLint("NotifyDataSetChanged")
+        override fun afterTextChanged(s: Editable?) {
+            // Icon names use underscores, e.g. "google_maps": match "google maps" too
+            val q = s?.toString().orEmpty().trim().lowercase().replace(" ", "_")
+            shown = if (q.isEmpty()) names else names.filter { it.lowercase().contains(q) }
+            adapter.notifyDataSetChanged()
+        }
+    })
+
+    binding.contentContainer.addView(container)
+    binding.contentContainer.isVisible = true
     dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
     dialog.showRespectingStatusBar()
     return dialog

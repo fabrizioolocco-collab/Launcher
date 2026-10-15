@@ -3,6 +3,7 @@ package app.olauncher.ui
 import android.content.Context
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
+import android.net.Uri
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
@@ -16,12 +17,15 @@ import app.olauncher.data.HomeSection
 import app.olauncher.data.HomeSectionsRepository
 import app.olauncher.data.Prefs
 import app.olauncher.data.SectionApp
+import app.olauncher.helper.CustomIcons
+import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getUserHandleFromString
 import app.olauncher.helper.openAppInfo
 import app.olauncher.helper.showConfirmDialog
+import app.olauncher.helper.showIconGridDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.helper.showTextInputDialog
@@ -42,6 +46,8 @@ class HomeSectionsController(
     private val prefs: Prefs,
     private val scope: CoroutineScope,
     private val onLaunch: (AppModel.App) -> Unit,
+    /** Opens the system photo picker and calls back with the chosen image. */
+    private val pickImage: ((Uri) -> Unit) -> Unit,
 ) {
     private val repo = HomeSectionsRepository(context)
     private var sections: MutableList<HomeSection> = mutableListOf()
@@ -105,6 +111,7 @@ class HomeSectionsController(
             val arrow = if (section.collapsed) "▸" else "▾"
             text = context.getString(R.string.ml_section_header_format, section.name, arrow)
             setTypeface(typeface, Typeface.BOLD)
+            FontManager.apply(this, prefs.sectionFont, prefs.sectionTextSize)
             letterSpacing = 0.06f
             alpha = 0.7f
             this.gravity = gravity
@@ -133,6 +140,7 @@ class HomeSectionsController(
     private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View =
         TextView(context, null, 0, R.style.TextLarge).apply {
             text = app.appLabel
+            FontManager.apply(this, prefs.appFont, prefs.appTextSize)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             this.gravity = Gravity.CENTER_VERTICAL or gravity
@@ -206,10 +214,70 @@ class HomeSectionsController(
             section.apps.removeAll { it.samePackageAndUser(sectionApp) }
             save()
         }
+        entries += MenuEntry(context.getString(R.string.ml_change_icon)) { showChangeIconMenu(app) }
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
         context.showMenuDialog(app.appLabel, entries)
+    }
+
+    private fun showChangeIconMenu(app: AppModel.App) {
+        val entries = mutableListOf(
+            MenuEntry(context.getString(R.string.ml_icon_from_pack)) { pickIconFromPack(app) },
+            MenuEntry(context.getString(R.string.ml_icon_from_gallery)) {
+                pickImage { uri ->
+                    scope.launch {
+                        val ok = withContext(Dispatchers.IO) {
+                            try {
+                                CustomIcons.setFromImage(context, app.appPackage, app.activityClassName, app.user, uri)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                false
+                            }
+                        }
+                        if (!ok) context.showToast(context.getString(R.string.ml_icon_image_error))
+                        render()
+                    }
+                }
+            },
+        )
+        if (CustomIcons.hasCustom(context, app.appPackage, app.activityClassName, app.user))
+            entries += MenuEntry(context.getString(R.string.ml_icon_reset)) {
+                CustomIcons.reset(context, app.appPackage, app.activityClassName, app.user)
+                render()
+            }
+        context.showMenuDialog(context.getString(R.string.ml_change_icon), entries)
+    }
+
+    private fun pickIconFromPack(app: AppModel.App) {
+        val packs = IconPackManager.installedPacks(context)
+        if (packs.isEmpty()) {
+            context.showToast(context.getString(R.string.ml_no_icon_packs))
+            return
+        }
+        fun openPack(pack: IconPackManager.IconPackInfo) {
+            scope.launch {
+                val names = withContext(Dispatchers.IO) { IconPackManager.packIconNames(context, pack.packageName) }
+                if (names.isEmpty()) {
+                    context.showToast(context.getString(R.string.ml_no_icons_in_pack))
+                    return@launch
+                }
+                context.showIconGridDialog(
+                    title = pack.label,
+                    names = names,
+                    scope = scope,
+                    loadIcon = { name, size -> IconPackManager.loadPackDrawable(context, pack.packageName, name, size) },
+                ) { name ->
+                    CustomIcons.setFromPack(context, app.appPackage, app.activityClassName, app.user, pack.packageName, name)
+                    render()
+                }
+            }
+        }
+        if (packs.size == 1) openPack(packs.first())
+        else context.showMenuDialog(
+            context.getString(R.string.ml_icon_pack),
+            packs.map { pack -> MenuEntry(pack.label) { openPack(pack) } }
+        )
     }
 
     // ---------------------------------------------------------------- operations

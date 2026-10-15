@@ -33,4 +33,18 @@
     <string name="ml_icons">Icone delle app</string>
     <string name="ml_icon_pack">Icon pack</string>
     <string name="ml_system_icons">Di sistema</string>
+    <string name="ml_change_icon">Cambia icona</string>
+    <string name="ml_icon_from_pack">Da icon pack…</string>
+    <string name="ml_icon_from_gallery">Dalla galleria…</string>
+    <string name="ml_icon_reset">Ripristina icona predefinita</string>
+    <string name="ml_icon_image_error">Impossibile leggere l\'immagine</string>
+    <string name="ml_no_icon_packs">Nessun icon pack installato</string>
+    <string name="ml_no_icons_in_pack">Questo icon pack non ha icone da scegliere</string>
+    <string name="ml_default">Predefinito</string>
+    <string name="ml_section_font">Font titoli sezione</string>
+    <string name="ml_section_text_size">Dimensione titoli sezione</string>
+    <string name="ml_app_font">Font nomi app</string>
+    <string name="ml_app_text_size">Dimensione nomi app</string>
+    <string name="ml_load_font">Carica font da file…</string>
+    <string name="ml_font_error">Il file non è un font valido (.ttf o .otf)</string>
 </resources>

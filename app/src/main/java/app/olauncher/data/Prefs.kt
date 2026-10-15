@@ -119,6 +119,10 @@ class Prefs(context: Context) {
     private val IS_SHORTCUT_SWIPE_RIGHT = "IS_SHORTCUT_SWIPE_RIGHT"
 
     private val SHOW_ICONS = "SHOW_ICONS"
+    private val SECTION_FONT = "SECTION_FONT"
+    private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
+    private val APP_FONT = "APP_FONT"
+    private val APP_TEXT_SIZE = "APP_TEXT_SIZE"
     private val ICON_PACK = "ICON_PACK"
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_FILENAME, 0)
@@ -126,6 +130,23 @@ class Prefs(context: Context) {
     var showIcons: Boolean
         get() = prefs.getBoolean(SHOW_ICONS, true)
         set(value) = prefs.edit { putBoolean(SHOW_ICONS, value) }
+
+    /** Font ids from FontManager; "" keeps the default style. Sizes in sp, 0 keeps the default size. */
+    var sectionFont: String
+        get() = prefs.getString(SECTION_FONT, "").orEmpty()
+        set(value) = prefs.edit { putString(SECTION_FONT, value) }
+
+    var sectionTextSize: Int
+        get() = prefs.getInt(SECTION_TEXT_SIZE, 0)
+        set(value) = prefs.edit { putInt(SECTION_TEXT_SIZE, value) }
+
+    var appFont: String
+        get() = prefs.getString(APP_FONT, "").orEmpty()
+        set(value) = prefs.edit { putString(APP_FONT, value) }
+
+    var appTextSize: Int
+        get() = prefs.getInt(APP_TEXT_SIZE, 0)
+        set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
 
     /** Package of the selected icon pack, empty for the system icons. */
     var iconPack: String
