@@ -14,18 +14,33 @@ android {
     }
 
     defaultConfig {
-        applicationId "app.olauncher"
+        applicationId "app.minimalauncher"
         minSdkVersion 24
         targetSdkVersion 36
-        versionCode 113
-        versionName "v6.9.17"
+        // Overridden by CI from the git tag vX.Y: versionCode = X*1000 + Y
+        versionCode((project.findProperty("versionCode") ?: "1") as Integer)
+        versionName((project.findProperty("versionName") ?: "0.0-dev") as String)
 
         resourceConfigurations += ["en", "ar", "cs", "da", "de", "el", "es-rES", "es-rUS", "fi", "fr", "he", "hi", "hr", "hu", "in", "it", "ja", "ko", "nb", "nl", "pl", "pt-rBR", "ro", "ru-rRU", "sv", "th", "tr", "uk", "vi", "zh"]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        release {
+            // Populated only in CI from GitHub Secrets; the keystore is never committed
+            def ksFile = System.getenv("SIGNING_KEYSTORE_FILE")
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv("SIGNING_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (System.getenv("SIGNING_KEYSTORE_FILE")) signingConfig signingConfigs.release
             debuggable false
             minifyEnabled true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

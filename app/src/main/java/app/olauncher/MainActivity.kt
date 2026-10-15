@@ -99,6 +99,9 @@ class MainActivity : AppCompatActivity() {
             viewModel.firstOpen(true)
             prefs.firstOpen = false
             prefs.firstOpenTime = System.currentTimeMillis()
+        // MinimaLauncher: no upstream promo/review/share prompts
+        @Suppress("ConstantConditionIf")
+        if (true) return
             viewModel.setDefaultClockApp()
             viewModel.resetLauncherLiveData.call()
         }

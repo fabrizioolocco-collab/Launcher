@@ -1,47 +1,30 @@
-![Olauncher](https://repository-images.githubusercontent.com/278638069/db0acb80-661b-11eb-803e-926cae5dccb4)
+# MinimaLauncher
 
+Launcher Android personale, fork di [Olauncher](https://github.com/tanujnotes/Olauncher)
+di Tanuj (GPL-3.0). Il codice resta sotto licenza GPL-3.0 (vedi `LICENSE`).
 
-# Olauncher | Minimal AF Launcher
-AF stands for Ad-Free! :D
+- applicationId: `app.minimalauncher` (debug: `app.minimalauncher.debug`)
+- Il package Kotlin resta `app.olauncher`, così è più facile importare aggiornamenti da upstream.
 
-[<img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
-    alt="Get it on Play Store"
-    height="80" align="middle">](https://play.google.com/store/apps/details?id=app.olauncher)
-[<img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
-    alt="Get it on F-Droid"
-    height="80" align="middle">](https://f-droid.org/packages/app.olauncher)
-[<img src="https://gitlab.com/IzzyOnDroid/repo/-/raw/master/assets/IzzyOnDroidButtonGreyBorder_nofont.png"
-    alt="Get it on IzzyOnDroid"
-    height="54" hspace="13" align="middle">](https://apt.izzysoft.de/packages/app.olauncher)
+## Installazione con Obtainium
 
-### Install using [Play Store](https://play.google.com/store/apps/details?id=app.olauncher), [F-Droid](https://f-droid.org/packages/app.olauncher), [IzzyOnDroid](https://apt.izzysoft.de/packages/app.olauncher) or the [latest APK](https://github.com/tanujnotes/Olauncher/releases/).
+1. Installa [Obtainium](https://github.com/ImranR98/Obtainium/releases) sul telefono.
+2. In Obtainium tocca **Aggiungi app** e incolla l'URL
+   `https://github.com/fabrizioolocco-collab/Launcher`.
+3. Tocca **Aggiungi** e poi **Installa**. Obtainium ti avvisa a ogni nuova release.
 
-- To maintain the simplicity of the launcher, a few niche features are available but hidden.
+## Rilasci
 
-- Please check out the **[About](https://tanujnotes.substack.com/p/olauncher-minimal-af-launcher?utm_source=github)** page in the Olauncher settings for a complete list of features and **FAQs**.
+Si fa il push di un tag `vX.Y` (es. `v0.1`). L'Action `Release` compila l'APK firmato
+e lo pubblica come GitHub Release.
 
-##
+- versionName = `X.Y`
+- versionCode = `X*1000 + Y` (Y < 1000)
 
-License: [GNU GPLv3](https://www.gnu.org/licenses/gpl-3.0.en.html)
+La firma usa questi GitHub Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
+`KEY_ALIAS`, `KEY_PASSWORD`. Il keystore non va **mai** nel repository.
 
-Contact: [X/Twitter](https://x.com/tanujnotes) • [Reddit](https://reddit.com/user/tanujnotes/) • [Bluesky](https://bsky.app/profile/tanujnotes.bsky.social)
+## Build di debug
 
-##
-
-### My other apps:
-
-- [Pro Launcher](https://play.google.com/store/apps/details?id=app.prolauncher) - Pro version of Olauncher with extra features like widgets, weather, folders, etc.
-
-- [Note to Self](https://play.google.com/store/apps/details?id=com.makenotetoself) - Free and [open source](https://github.com/jeerovan/ntsapp) notes app with chat like interface and end-to-end encryption.
-
-- [Pentastic](https://play.google.com/store/apps/details?id=app.pentastic) - Minimal todo lists. Free and [open source](https://github.com/tanujnotes/Pentastic).
-
-##
-
-### Help me get a new phone for testing:
-
-[<img src="https://img.buymeacoffee.com/button-api/?emoji=&slug=tanujnotes&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff"
-    alt="Get it on Play Store"
-    height="80">](https://www.buymeacoffee.com/tanujnotes)
-
-Thank you!
+A ogni push l'Action `Build` produce un APK di debug, scaricabile come artifact.
+Il pacchetto è `app.minimalauncher.debug` e convive con la versione di release.
