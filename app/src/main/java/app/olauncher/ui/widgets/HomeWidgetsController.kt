@@ -44,6 +44,18 @@ class HomeWidgetsController(
 
     private var renderedColumns = 0
 
+    /**
+     * Context used to inflate widgets: the plain app context with a device default theme, NOT the
+     * AppCompat activity. AppCompat swaps TextView/ImageView etc. with its own classes during
+     * inflation, which makes some widgets fail with "Couldn't add widget".
+     */
+    private val widgetContext: android.content.Context =
+        android.view.ContextThemeWrapper(
+            activity.applicationContext,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) android.R.style.Theme_DeviceDefault_DayNight
+            else android.R.style.Theme_DeviceDefault_Light
+        )
+
     init {
         current = this
         grid.resizeListener = resizeListener()
@@ -123,7 +135,7 @@ class HomeWidgetsController(
     private fun ceilDiv(a: Int, b: Int) = (a + b - 1) / b
 
     private fun widgetView(widget: HomeWidget, info: AppWidgetProviderInfo): View {
-        val hostView = host.createView(activity, widget.appWidgetId, info) as MinimaWidgetHostView
+        val hostView = host.createView(widgetContext, widget.appWidgetId, info) as MinimaWidgetHostView
         hostView.setPadding(0, 0, 0, 0)
         hostView.tag = widget
         hostView.layoutParams = WidgetGridLayout.CellParams(widget.col, widget.row, widget.colSpan, widget.rowSpan)
@@ -320,7 +332,7 @@ class HomeWidgetsController(
             // Hidden view for the new widget: if the app pushes content while (or after) being set up,
             // the widget was configured even if Android reports "cancelled"
             probeView = try {
-                host.createView(activity.applicationContext, id, info) as MinimaWidgetHostView
+                host.createView(widgetContext, id, info) as MinimaWidgetHostView
             } catch (e: Exception) {
                 null
             }

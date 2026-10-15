@@ -37,9 +37,27 @@ class MinimaWidgetHostView(context: Context) : AppWidgetHostView(context) {
     var receivedUpdate = false
         private set
 
+    private var errorShown = false
+
     override fun updateAppWidget(remoteViews: RemoteViews?) {
+        errorShown = false
         super.updateAppWidget(remoteViews)
         if (remoteViews != null) receivedUpdate = true
+        if (errorShown && remoteViews != null) {
+            // Android swallowed the inflation error: reproduce it once to record the cause
+            try {
+                remoteViews.apply(context, this)
+                WidgetLog.log(context, "widget $appWidgetId: error view shown (no exception on retry)")
+            } catch (e: Throwable) {
+                val cause = generateSequence(e) { it.cause }.last()
+                WidgetLog.log(context, "widget $appWidgetId inflate error: $e | cause: $cause")
+            }
+        }
+    }
+
+    override fun getErrorView(): android.view.View {
+        errorShown = true
+        return super.getErrorView()
     }
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
