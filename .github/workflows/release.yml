@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - 'v[0-9]+.[0-9]+'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version X.Y (the tag vX.Y is created on the selected commit)'
+        required: true
 
 permissions:
   contents: write
@@ -23,15 +28,26 @@ jobs:
 
       - name: Derive version from tag
         id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         run: |
-          TAG="${GITHUB_REF_NAME}"            # e.g. v1.12
-          VER="${TAG#v}"                      # 1.12
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VER="$INPUT_VERSION"
+            VER="${VER#v}"
+          else
+            VER="${GITHUB_REF_NAME#v}"        # v1.12 -> 1.12
+          fi
+          if ! echo "$VER" | grep -Eq '^[0-9]+\.[0-9]+$'; then echo "::error::Version must be X.Y, got '$VER'"; exit 1; fi
+          if git ls-remote --exit-code --tags origin "refs/tags/v$VER" >/dev/null 2>&1 && [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "::error::Tag v$VER already exists"; exit 1
+          fi
           MAJOR="${VER%%.*}"
           MINOR="${VER#*.}"
           if [ "$MINOR" -ge 1000 ]; then echo "Minor version must be < 1000"; exit 1; fi
           CODE=$(( MAJOR * 1000 + MINOR ))
           if [ "$CODE" -lt 1 ]; then echo "versionCode must be >= 1 (v0.0 is not allowed)"; exit 1; fi
           echo "name=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VER" >> "$GITHUB_OUTPUT"
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           echo "versionName=$VER versionCode=$CODE"
 
@@ -61,12 +77,14 @@ jobs:
           BT=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
           "$ANDROID_HOME/build-tools/$BT/apksigner" verify --print-certs "$APK"
           mkdir -p dist
-          cp "$APK" "dist/MinimaLauncher-${GITHUB_REF_NAME}.apk"
+          cp "$APK" "dist/MinimaLauncher-${{ steps.version.outputs.tag }}.apk"
           rm -f "$SIGNING_KEYSTORE_FILE"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: MinimaLauncher ${{ github.ref_name }}
+          tag_name: ${{ steps.version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: MinimaLauncher ${{ steps.version.outputs.tag }}
           files: dist/*.apk
           generate_release_notes: true

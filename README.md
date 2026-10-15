@@ -15,7 +15,8 @@ di Tanuj (GPL-3.0). Il codice resta sotto licenza GPL-3.0 (vedi `LICENSE`).
 
 ## Rilasci
 
-Si fa il push di un tag `vX.Y` (es. `v0.1`). L'Action `Release` compila l'APK firmato
+Si fa il push di un tag `vX.Y` (es. `v0.1`), oppure si avvia a mano l'Action `Release`
+con la versione `X.Y` (crea lei il tag). L'Action compila l'APK firmato
 e lo pubblica come GitHub Release.
 
 - versionName = `X.Y`
