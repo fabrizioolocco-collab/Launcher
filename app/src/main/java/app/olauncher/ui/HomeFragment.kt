@@ -109,6 +109,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             grid = binding.widgetsLayout,
             scrollView = binding.homeScroll,
             prefs = prefs,
+            scope = uiScope,
             keepScreen = { viewModel.keepCurrentScreen = it },
         )
         widgets.render()

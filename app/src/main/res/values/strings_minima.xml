@@ -85,4 +85,8 @@
     <string name="ml_widget_remove_confirm">Remove this widget from home?</string>
     <string name="ml_widget_drag_hint">↕ drag to change height</string>
     <string name="ml_widget_columns">Widget grid columns</string>
+    <string name="ml_widget_label_size">%1$s · %2$d×%3$d</string>
+    <string name="ml_widget_setup_failed">Could not open the widget setup</string>
+    <string name="ml_widget_bind_denied">Widget not added: permission not granted</string>
+    <string name="ml_widget_setup_cancelled">Widget not added: setup cancelled or refused by the app</string>
 </resources>

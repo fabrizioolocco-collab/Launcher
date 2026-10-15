@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="ml_widget_preview" type="id" />
+    <item name="ml_widget_label" type="id" />
+</resources>

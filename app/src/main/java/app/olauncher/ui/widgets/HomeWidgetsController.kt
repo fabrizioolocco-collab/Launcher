@@ -18,6 +18,7 @@ import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.HomeScrollView
+import kotlinx.coroutines.CoroutineScope
 
 /**
  * Widget area at the top of home: widgets stacked vertically, full width, each with its own height.
@@ -31,6 +32,7 @@ class HomeWidgetsController(
     private val grid: WidgetGridLayout,
     private val scrollView: HomeScrollView,
     private val prefs: Prefs,
+    private val scope: CoroutineScope,
     /** Called before launching an external screen, so the launcher doesn't jump back to home meanwhile. */
     private val keepScreen: (Boolean) -> Unit,
 ) {
@@ -237,7 +239,8 @@ class HomeWidgetsController(
             activity.showToast(activity.getString(R.string.ml_no_widgets))
             return
         }
-        val entries = providers.map { info ->
+        val cell = cellPx()
+        val items = providers.map { info ->
             val app = try {
                 pm.getApplicationLabel(pm.getApplicationInfo(info.provider.packageName, 0)).toString()
             } catch (e: Exception) {
@@ -248,10 +251,15 @@ class HomeWidgetsController(
             } catch (e: Exception) {
                 null
             } ?: info.provider.shortClassName
-            Triple(app, label, info)
-        }.sortedWith(compareBy({ it.first.lowercase() }, { it.second.lowercase() }))
-            .map { (app, label, info) -> MenuEntry(if (label == app) app else "$app · $label") { startAdding(info) } }
-        activity.showMenuDialog(activity.getString(R.string.ml_add_widget), entries)
+            WidgetPickerDialog.Item(
+                app = app,
+                label = label,
+                info = info,
+                cols = ceilDiv(info.minWidth, cell).coerceIn(1, prefs.widgetColumns),
+                rows = ceilDiv(info.minHeight, cell).coerceAtLeast(1),
+            )
+        }.sortedWith(compareBy({ it.app.lowercase() }, { it.label.lowercase() }))
+        WidgetPickerDialog.show(activity, items, scope) { startAdding(it) }
     }
 
     private fun startAdding(info: AppWidgetProviderInfo) {
@@ -285,26 +293,46 @@ class HomeWidgetsController(
         if (!launchConfigure(id, info, REQUEST_CONFIGURE)) finishAdding(id, info)
     }
 
-    /** Opens the widget's own setup screen. Returns false if it couldn't be started. */
-    private fun launchConfigure(id: Int, info: AppWidgetProviderInfo, requestCode: Int): Boolean = try {
-        launchForResult(requestCode) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                host.startAppWidgetConfigureActivityForResult(activity, id, 0, requestCode, null)
-            else {
-                @Suppress("DEPRECATION")
-                activity.startActivityForResult(
-                    Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
-                        .setComponent(info.configure)
-                        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id),
-                    requestCode
-                )
+    /**
+     * Opens the widget's own setup screen. Launched directly from the launcher when possible (many
+     * apps, e.g. Google and Samsung ones, refuse setup requests that don't come from the host
+     * itself), through the system otherwise. Returns false if it couldn't be started.
+     */
+    private fun launchConfigure(id: Int, info: AppWidgetProviderInfo, requestCode: Int): Boolean {
+        val direct = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE)
+            .setComponent(info.configure)
+            .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
+        val sameProfile = info.profile == android.os.Process.myUserHandle()
+        val exported = try {
+            activity.packageManager.getActivityInfo(info.configure, 0).exported
+        } catch (e: Exception) {
+            false
+        }
+        if (sameProfile && exported) {
+            try {
+                launchForResult(requestCode) {
+                    @Suppress("DEPRECATION")
+                    activity.startActivityForResult(direct, requestCode)
+                }
+                return true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                keepScreen(false)
             }
         }
-        true
-    } catch (e: Exception) {
-        e.printStackTrace()
-        keepScreen(false)
-        false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                launchForResult(requestCode) {
+                    host.startAppWidgetConfigureActivityForResult(activity, id, 0, requestCode, null)
+                }
+                return true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                keepScreen(false)
+            }
+        }
+        activity.showToast(activity.getString(R.string.ml_widget_setup_failed))
+        return false
     }
 
     private fun launchForResult(@Suppress("UNUSED_PARAMETER") requestCode: Int, start: () -> Unit) {
@@ -338,12 +366,20 @@ class HomeWidgetsController(
         when (requestCode) {
             REQUEST_BIND -> {
                 val info = pendingInfo
-                if (ok && info != null) configureOrFinish(pendingId, info) else cancelAdding()
+                if (ok && info != null) configureOrFinish(pendingId, info)
+                else {
+                    activity.showToast(activity.getString(R.string.ml_widget_bind_denied))
+                    cancelAdding()
+                }
             }
 
             REQUEST_CONFIGURE -> {
                 val info = pendingInfo
-                if (ok && info != null) finishAdding(pendingId, info) else cancelAdding()
+                if (ok && info != null) finishAdding(pendingId, info)
+                else {
+                    activity.showToast(activity.getString(R.string.ml_widget_setup_cancelled))
+                    cancelAdding()
+                }
             }
 
             REQUEST_RECONFIGURE -> render()
