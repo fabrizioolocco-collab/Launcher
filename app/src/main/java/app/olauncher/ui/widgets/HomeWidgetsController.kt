@@ -83,6 +83,7 @@ class HomeWidgetsController(
     private var renderedColumns = 0
     private var renderedLabels = false
     private var renderedTiles = false
+    private var renderedIconSize = 0
 
     /**
      * Context used to inflate widgets: the plain app context with a device default theme, NOT the
@@ -257,6 +258,7 @@ class HomeWidgetsController(
         renderedColumns = columns
         renderedLabels = showLabels
         renderedTiles = prefs.iconTiles
+        renderedIconSize = prefs.homeIconSize
         val removed = mutableListOf<HomeWidget>()
         var changed = false
         widgets.forEach { widget ->
@@ -316,7 +318,7 @@ class HomeWidgetsController(
 
     /** Called on resume: rebuilds only if the column or label setting changed meanwhile. */
     fun refreshIfNeeded() {
-        if (renderedColumns != prefs.widgetColumns || renderedLabels != showLabels || renderedTiles != prefs.iconTiles) render()
+        if (renderedColumns != prefs.widgetColumns || renderedLabels != showLabels || renderedTiles != prefs.iconTiles || renderedIconSize != prefs.homeIconSize) render()
     }
 
     private fun ceilDiv(a: Int, b: Int) = (a + b - 1) / b
@@ -342,7 +344,9 @@ class HomeWidgetsController(
         view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, rowDivisions)
         val showLabel = showLabels
         val tile = prefs.iconTiles
-        val size = view.iconSizeFor(cellPx(), showLabel)
+        // The home icon size setting (dp) wins over the automatic size from the cell
+        val size = if (prefs.homeIconSize > 0) prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - 4.dpToPx())
+        else view.iconSizeFor(cellPx(), showLabel)
         view.bind(app.appLabel, showLabel, size, tile)
         view.touch.listener = dragListener(null)
         val iconPack = prefs.iconPack

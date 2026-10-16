@@ -157,7 +157,7 @@
     <string name="ml_no_app">Nessuna app</string>
     <string name="ml_home_columns">Colonne di app nelle sezioni</string>
     <string name="ml_home_labels">Nome delle app in home</string>
-    <string name="ml_home_icon_size">Dimensione icone nelle sezioni</string>
+    <string name="ml_home_icon_size">Dimensione icone in home (griglia e sezioni)</string>
     <string name="ml_open_app">Apri app</string>
     <!-- Home search bar -->
     <string name="ml_search_web">Google</string>

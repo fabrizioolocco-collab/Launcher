@@ -160,7 +160,7 @@
     <string name="ml_no_app">No app</string>
     <string name="ml_home_columns">App columns in sections</string>
     <string name="ml_home_labels">App names on home</string>
-    <string name="ml_home_icon_size">Icon size in sections</string>
+    <string name="ml_home_icon_size">Icon size on home (grid and sections)</string>
     <string name="ml_open_app">Open app</string>
     <string name="ml_date_week" translatable="false">%1$s · W%2$d</string>
     <!-- Home search bar -->

@@ -1056,6 +1056,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     companion object {
         private const val LOAD_FONT_ID = 10_000
         private val TEXT_SIZES = listOf(12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40)
-        private val ICON_SIZES = listOf(24, 32, 40, 48, 56, 64, 72, 80, 96)
+        private val ICON_SIZES = listOf(24, 32, 40, 48, 56, 64, 72, 80, 96, 112, 128)
     }
 }
