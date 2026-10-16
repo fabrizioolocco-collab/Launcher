@@ -11,6 +11,7 @@ import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.graphics.drawable.toBitmap
 import app.olauncher.R
 import app.olauncher.data.AppModel
+import app.olauncher.ui.AlbumActivity
 import app.olauncher.ui.FileExplorerActivity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -80,7 +81,9 @@ object FolderShortcuts {
     /** Opens a phone folder in the built-in explorer or in the file manager. */
     fun openPath(context: Context, dir: File, inExplorer: Boolean = true) {
         if (inExplorer) {
-            FileExplorerActivity.openLocal(context, dir)
+            // A folder with only photos and videos opens as an album grid, like in the explorer
+            if (MediaThumbnails.albumMedia(dir) != null) AlbumActivity.open(context, dir)
+            else FileExplorerActivity.openLocal(context, dir)
             return
         }
         val intents = listOf(
