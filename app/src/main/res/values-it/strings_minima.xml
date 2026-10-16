@@ -280,4 +280,5 @@
     <string name="ml_explorer_copying_many">Copia: %1$d elementi</string>
     <string name="ml_explorer_moving_many">Sposta: %1$d elementi</string>
     <string name="ml_explorer_share_no_folders">Le cartelle non si possono condividere: seleziona dei file</string>
+    <string name="ml_album_same_folder">Sono già in questa cartella</string>
 </resources>
