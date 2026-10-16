@@ -187,7 +187,7 @@
             android:paddingTop="4dp"
             android:paddingBottom="4dp" />
 
-        <!-- Search results (phone / OneDrive), in place of home while searching -->
+        <!-- Search results (phone), in place of home while searching -->
         <ScrollView
             android:id="@+id/searchResultsScroll"
             android:fillViewport="true"
@@ -209,7 +209,7 @@
                 android:paddingBottom="8dp" />
         </ScrollView>
 
-        <!-- Search bar: Google, phone or OneDrive (selector on the right) -->
+        <!-- Search bar: Google or phone (switch on the right) -->
         <LinearLayout
             android:id="@+id/searchBar"
             android:layout_width="match_parent"

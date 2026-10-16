@@ -1,10 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Files shared with other apps: OneDrive downloads opened from the home search -->
+<!-- Phone files opened or shared from the file explorer -->
 <paths>
-    <cache-path
-        name="onedrive"
-        path="onedrive/" />
-    <!-- Phone files opened or shared from the file explorer -->
     <external-path
         name="storage"
         path="." />

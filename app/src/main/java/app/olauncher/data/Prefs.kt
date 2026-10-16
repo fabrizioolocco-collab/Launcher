@@ -196,7 +196,7 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("PHONE_FOLDERS_IN_EXPLORER", true)
         set(value) = prefs.edit { putBoolean("PHONE_FOLDERS_IN_EXPLORER", value) }
 
-    /** Home search bar target: 0 Google, 1 phone, 2 OneDrive. */
+    /** Home search bar target: 0 Google, 1 phone (2 was OneDrive, now phone). */
     var searchMode: Int
         get() = prefs.getInt("SEARCH_MODE", 0)
         set(value) = prefs.edit { putInt("SEARCH_MODE", value) }

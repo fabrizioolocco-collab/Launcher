@@ -40,7 +40,7 @@
         android:theme="@style/AppTheme"
         tools:ignore="UnusedAttribute">
 
-        <!-- Built-in file explorer (phone and OneDrive), also listed as "File" in the app list -->
+        <!-- Built-in file explorer for the phone storage, also listed as "File" in the app list -->
         <activity
             android:name=".ui.FileExplorerActivity"
             android:exported="false"
@@ -62,7 +62,7 @@
             </intent-filter>
         </activity-alias>
 
-        <!-- Shares OneDrive downloads with the app that opens them -->
+        <!-- Shares phone files with the app that opens them -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files"
@@ -72,26 +72,6 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-
-        <!-- OneDrive sign-in: Microsoft redirects here (see OneDriveSearch) -->
-        <activity
-            android:name=".ui.OneDriveAuthActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:noHistory="true"
-            android:theme="@android:style/Theme.Translucent.NoTitleBar">
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data
-                    android:host="auth"
-                    android:scheme="minimalauncher" />
-            </intent-filter>
-        </activity>
 
         <activity
             android:name=".MainActivity"

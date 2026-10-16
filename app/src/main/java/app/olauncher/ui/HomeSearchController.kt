@@ -33,10 +33,8 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Prefs
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.IconPackManager
-import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
-import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +50,7 @@ import java.text.Normalizer
  * Search bar at the bottom of home. Tapping it opens the search page: bar on top, results below.
  * The button on the right switches between:
  * - Google: the search key opens the results in the browser;
- * - Phone: apps, contacts, files and folders (phone and OneDrive) and Android settings, listed
+ * - Phone: apps, contacts, files and folders on the phone and Android settings, listed
  *   while typing. Files can be opened, or their folder (Solid Explorer when installed).
  */
 class HomeSearchController(
@@ -77,11 +75,9 @@ class HomeSearchController(
 ) {
     enum class Mode { WEB, PHONE }
 
-    // Older versions had a separate OneDrive mode (2): now part of "Phone"
+    // Older versions had a separate OneDrive mode (2)
     private var mode = if (prefs.searchMode == 0) Mode.WEB else Mode.PHONE
     private var job: Job? = null
-    private var cloudJob: Job? = null
-    private val oneDrive = OneDriveSearch(activity)
 
     /** True while waiting for a permission or sign-in screen: keep the page when home stops. */
     private var waitingPermission = false
@@ -98,10 +94,6 @@ class HomeSearchController(
             updateMode()
             onQueryChanged()
         }
-        modeButton.setOnLongClickListener {
-            showOneDriveMenu()
-            true
-        }
         clear.setOnClickListener { close() }
         input.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) openPage() }
         input.setOnClickListener { openPage() }
@@ -117,6 +109,8 @@ class HomeSearchController(
             override fun afterTextChanged(s: Editable?) = onQueryChanged()
         })
         updateMode()
+        // OneDrive search was removed: forget its old sign-in
+        activity.deleteSharedPreferences("app.minimalauncher.onedrive")
     }
 
     private fun query() = input.text.toString().trim()
@@ -129,19 +123,6 @@ class HomeSearchController(
             activity.getString(if (mode == Mode.WEB) R.string.ml_search_web else R.string.ml_search_phone)
         )
         input.setHint(if (mode == Mode.WEB) R.string.ml_search_hint_web else R.string.ml_search_hint_phone)
-    }
-
-    private fun showOneDriveMenu() {
-        val entry = if (oneDrive.isConnected()) MenuEntry(activity.getString(R.string.ml_onedrive_disconnect)) {
-            oneDrive.disconnect()
-            onQueryChanged()
-        } else MenuEntry(activity.getString(R.string.ml_onedrive_connect)) { connectOneDrive() }
-        activity.showMenuDialog(activity.getString(R.string.ml_search_onedrive), listOf(entry))
-    }
-
-    private fun connectOneDrive() {
-        keepScreen(true)
-        if (oneDrive.connect()) waitingPermission = true else keepScreen(false)
     }
 
     // ---------------------------------------------------------------- page
@@ -168,7 +149,6 @@ class HomeSearchController(
     /** Clears the query and brings home back. */
     fun close() {
         job?.cancel()
-        cloudJob?.cancel()
         input.setText("")
         input.clearFocus()
         input.hideKeyboard()
@@ -205,7 +185,6 @@ class HomeSearchController(
     private fun onQueryChanged() {
         val q = query()
         job?.cancel()
-        cloudJob?.cancel()
         if (q.isEmpty() || mode == Mode.WEB) {
             results.removeAllViews()
             return
@@ -245,7 +224,7 @@ class HomeSearchController(
     // ---------------------------------------------------------------- phone
 
     private enum class Kind(val glyph: String) {
-        APP(""), CONTACT("👤"), SETTING("⚙️"), PHONE_FILE("📱"), PHONE_FOLDER("📱"), CLOUD_FILE("☁️"), CLOUD_FOLDER("☁️")
+        APP(""), CONTACT("👤"), SETTING("⚙️"), FILE("📄"), FOLDER("📁")
     }
 
     private class Row(
@@ -279,27 +258,17 @@ class HomeSearchController(
         val fileRows = if (filesGranted()) withContext(Dispatchers.IO) { folders(key) + files(q) } else null
         val settingRows = settings().filter { normalize(it.title).contains(key) }
         val found = Found(appRows, contactRows, fileRows, settingRows)
-        render(q, found, cloud = null, cloudLoading = oneDrive.isConnected())
-        if (oneDrive.isConnected()) cloudJob = scope.launch {
-            val cloud = withContext(Dispatchers.IO) { oneDrive.search(q) }
-            render(q, found, cloud = cloud ?: emptyList(), cloudLoading = false, cloudFailed = cloud == null)
-        }
+        render(q, found)
     }
 
-    private fun render(q: String, found: Found, cloud: List<OneDriveSearch.Item>?, cloudLoading: Boolean, cloudFailed: Boolean = false) {
+    private fun render(q: String, found: Found) {
         results.removeAllViews()
         group(R.string.ml_search_group_apps, found.apps)
         if (found.contacts == null) permissionRow(R.string.ml_search_allow_contacts) {
             requestPermission(Manifest.permission.READ_CONTACTS)
         } else group(R.string.ml_search_contacts, found.contacts)
-        val cloudRows = cloud.orEmpty().map { cloudRow(it) }
-        group(R.string.ml_search_files, found.files.orEmpty() + cloudRows)
+        group(R.string.ml_search_files, found.files.orEmpty())
         if (found.files == null) permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
-        when {
-            cloudLoading -> infoRow(activity.getString(R.string.ml_onedrive_searching))
-            cloudFailed -> permissionRow(R.string.ml_onedrive_error) { connectOneDrive() }
-            !oneDrive.isConnected() -> infoRow(activity.getString(R.string.ml_onedrive_connect_hint)) { connectOneDrive() }
-        }
         group(R.string.ml_search_settings, found.settings)
         footer(activity.getString(R.string.ml_search_on_google, q)) { openWeb(q) }
     }
@@ -378,7 +347,7 @@ class HomeSearchController(
                     val dir = c.getString(3)?.let { File(it).parentFile }
                     val uri = ContentUris.withAppendedId(base, id)
                     rows += Row(
-                        Kind.PHONE_FILE, name, dir?.let { relative(it) },
+                        Kind.FILE, name, dir?.let { relative(it) },
                         openFolder = dir?.let { d -> { openLocalFolder(d) } },
                     ) {
                         open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
@@ -396,7 +365,7 @@ class HomeSearchController(
             .filter { normalize(it.name).contains(key) }
             .take(MAX_FOLDERS)
             .map { dir ->
-                Row(Kind.PHONE_FOLDER, dir.name, activity.getString(R.string.ml_search_folder, relative(dir.parentFile ?: dir))) {
+                Row(Kind.FOLDER, dir.name, activity.getString(R.string.ml_search_folder, relative(dir.parentFile ?: dir))) {
                     openLocalFolder(dir)
                 }
             }.toList()
@@ -456,52 +425,6 @@ class HomeSearchController(
             StrictMode.setVmPolicy(policy)
         }
         activity.showToast(activity.getString(R.string.ml_search_cannot_open))
-    }
-
-    private fun cloudRow(item: OneDriveSearch.Item): Row {
-        val where = item.path ?: activity.getString(R.string.ml_search_onedrive)
-        return if (item.isFolder) Row(Kind.CLOUD_FOLDER, item.name, activity.getString(R.string.ml_search_folder, where)) {
-            FileExplorerActivity.openCloud(activity, item.id, item.name)
-            close()
-        } else Row(
-            Kind.CLOUD_FILE, item.name, where,
-            openFolder = {
-                // Parent at the root: its path is empty
-                FileExplorerActivity.openCloud(activity, if (item.path == null) null else item.parentId, item.path?.substringAfterLast('/') ?: activity.getString(R.string.ml_search_onedrive))
-                close()
-            },
-        ) { openCloudFile(item) }
-    }
-
-    /** Downloads the file and opens it with the phone's app for its type, like a local file. */
-    private fun openCloudFile(item: OneDriveSearch.Item) {
-        if (item.size > MAX_DOWNLOAD) {
-            openCloudUrl(item.webUrl)
-            return
-        }
-        activity.showToast(activity.getString(R.string.ml_onedrive_downloading, item.name))
-        scope.launch {
-            val file = withContext(Dispatchers.IO) { oneDrive.download(item) }
-            if (file == null) {
-                activity.showToast(activity.getString(R.string.ml_onedrive_download_failed))
-                return@launch
-            }
-            val uri = androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
-            val mime = item.mimeType ?: android.webkit.MimeTypeMap.getSingleton()
-                .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
-            open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-        }
-    }
-
-    /** OneDrive folders: in the OneDrive app when installed, otherwise the browser. */
-    private fun openCloudUrl(url: String) {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        try {
-            activity.startActivity(Intent(intent).setPackage(ONEDRIVE_APP).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            close()
-        } catch (e: Exception) {
-            open(intent)
-        }
     }
 
     private fun settings(): List<Row> {
@@ -617,18 +540,6 @@ class HomeSearchController(
         }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun infoRow(text: String, onClick: (() -> Unit)? = null) {
-        results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-            this.text = text
-            alpha = 0.5f
-            setPadding(0, 10.dpToPx(), 0, 10.dpToPx())
-            if (onClick != null) {
-                isClickable = true
-                setOnClickListener { onClick() }
-            }
-        })
-    }
-
     private fun footer(text: String, onClick: () -> Unit) {
         results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
             this.text = text
@@ -652,8 +563,6 @@ class HomeSearchController(
         private const val MAX_SCANNED = 30_000
         private const val FOLDER_CACHE_MS = 10 * 60_000L
         private const val SOLID_EXPLORER = "pl.solidexplorer2"
-        private const val ONEDRIVE_APP = "com.microsoft.skydrive"
-        private const val MAX_DOWNLOAD = 200L * 1024 * 1024
         private const val EXTERNAL_STORAGE_DOCS = "com.android.externalstorage.documents"
 
         @Volatile
