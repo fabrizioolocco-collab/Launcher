@@ -260,6 +260,28 @@ class MediaViewerActivity : AppCompatActivity() {
         (pager.layoutManager?.findViewByPosition(current) as? FrameLayout)?.let { stopVideo(it) }
     }
 
+    private var firstResume = true
+
+    override fun onResume() {
+        super.onResume()
+        if (firstResume) {
+            firstResume = false
+            return
+        }
+        // Back from an editor: list the folder again (a saved copy appears next to the original)
+        val shown = media.getOrNull(current) ?: return
+        val dir = shown.parentFile ?: return
+        val fresh = dir.listFiles()
+            ?.filter { it.isFile && !it.name.startsWith(".") && MediaThumbnails.isMedia(MediaThumbnails.mimeOf(it.name)) }
+            ?.sortedByDescending { it.lastModified() }.orEmpty()
+        if (fresh.map { it.absolutePath } == media.map { it.absolutePath }) return
+        media = fresh.ifEmpty { listOf(shown) }
+        current = media.indexOfFirst { it.absolutePath == shown.absolutePath }.coerceAtLeast(0)
+        pager.adapter?.notifyDataSetChanged()
+        pager.scrollToPosition(current)
+        updateTitle()
+    }
+
     private inner class PagesAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         override fun getItemCount() = media.size
         override fun getItemViewType(position: Int) = if (MediaThumbnails.isVideo(media[position])) 1 else 0

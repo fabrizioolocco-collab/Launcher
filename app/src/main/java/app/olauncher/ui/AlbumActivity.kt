@@ -81,6 +81,20 @@ class AlbumActivity : AppCompatActivity() {
         updateSelection()
     }
 
+    private var firstResume = true
+
+    override fun onResume() {
+        super.onResume()
+        if (firstResume) {
+            firstResume = false
+            return
+        }
+        // Back from the viewer or an editor: a saved copy or a deleted file must show at once
+        loadMedia()
+        updateSelection()
+        grid.adapter?.notifyDataSetChanged()
+    }
+
     private fun loadMedia() {
         media = dir.listFiles()
             ?.filter { it.isFile && !it.name.startsWith(".") && isMedia(mimeOf(it.name)) }

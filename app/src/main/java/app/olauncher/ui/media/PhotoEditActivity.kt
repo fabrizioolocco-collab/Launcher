@@ -53,6 +53,7 @@ class PhotoEditActivity : AppCompatActivity() {
     private lateinit var drawTools: LinearLayout
     private lateinit var modeCrop: TextView
     private lateinit var modeDraw: TextView
+    private lateinit var widthButton: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -134,7 +135,8 @@ class PhotoEditActivity : AppCompatActivity() {
             }, LinearLayout.LayoutParams(30.dpToPx(), 30.dpToPx()).apply { marginEnd = 10.dpToPx() })
         }
         drawTools.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        drawTools.addView(toolButton(getString(R.string.ml_edit_width)) { pickWidth() })
+        widthButton = toolButton(getString(R.string.ml_edit_width) + " ●●") { pickWidth() }
+        drawTools.addView(widthButton)
         drawTools.addView(toolButton(getString(R.string.ml_edit_undo)) { editor.undo() })
         root.addView(drawTools)
         updateColorMarks()
@@ -172,6 +174,7 @@ class PhotoEditActivity : AppCompatActivity() {
 
     private fun setMode(crop: Boolean) {
         editor.cropMode = crop
+        editor.invalidate()
         cropTools.isVisible = crop
         drawTools.isVisible = !crop
         modeCrop.alpha = if (crop) 1f else 0.5f
@@ -189,10 +192,13 @@ class PhotoEditActivity : AppCompatActivity() {
         }
     }
 
+    /** Cycles the brush width: thin → medium → thick → extra, showing the chosen one. */
     private fun pickWidth() {
-        showMenuDialog(getString(R.string.ml_edit_width), listOf(4f, 8f, 14f, 24f).map { w ->
-            MenuEntry("${w.toInt()} px") { editor.brushWidth = w.dpToPx().toFloat() }
-        })
+        val widths = listOf(4f, 8f, 14f, 24f)
+        val current = widths.indexOfFirst { abs(it.dpToPx() - editor.brushWidth) < 0.5f }
+        val next = widths[(current + 1) % widths.size]
+        editor.brushWidth = next.dpToPx()
+        widthButton.text = getString(R.string.ml_edit_width) + " " + "●".repeat((widths.indexOf(next) + 1))
     }
 
     private fun Float.dpToPx() = this * resources.displayMetrics.density

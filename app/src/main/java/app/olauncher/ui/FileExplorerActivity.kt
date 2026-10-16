@@ -118,12 +118,15 @@ open class FileExplorerActivity : AppCompatActivity() {
         load()
     }
 
+    private var firstResume = true
+
     override fun onResume() {
         super.onResume()
         if (waitingAccess) {
             waitingAccess = false
             load()
-        }
+        } else if (!firstResume && ::location.isInitialized) load() // back from the viewer/editor: show saved copies
+        firstResume = false
     }
 
     private fun startLocation(intent: Intent?): Location =
