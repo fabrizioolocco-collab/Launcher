@@ -353,8 +353,8 @@ class AppDrawerAdapter(
                     appHideLayout.visibility = View.VISIBLE
                     // Only allow renaming non hidden apps
                     appRename.isVisible = flag != Constants.FLAG_HIDDEN_APPS
-                    // Home sections hold launchable apps only (not shortcuts, not hidden apps)
-                    appSection.isVisible = flag == Constants.FLAG_LAUNCH_APP && appModel is AppModel.App
+                    // Home sections hold launchable apps only (not shortcuts); hidden apps are fine
+                    appSection.isVisible = (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS) && appModel is AppModel.App
                 }
                 true
             }

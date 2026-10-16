@@ -57,7 +57,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val homeAppAlignment = MutableLiveData<Int>()
     val screenTimeValue = MutableLiveData<String>()
 
-    /** Visible (non hidden) apps, used to resolve labels of the apps placed in home sections. */
+    /**
+     * Apps that can live on home (sections, pinned apps, bottom area, widgets). Hidden apps are
+     * included: hiding only takes an app out of the app drawer, not off the home screen.
+     */
     val homeApps = MutableLiveData<List<AppModel.App>>()
     private var screenTimeJob: Job? = null
 
@@ -419,7 +422,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadHomeApps() {
         viewModelScope.launch {
-            val apps = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = false)
+            val apps = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = true)
                 .filterIsInstance<AppModel.App>()
             // Folder shortcuts (and the test app) live on home like apps
             val extra = FolderShortcuts.asApps(appContext) +

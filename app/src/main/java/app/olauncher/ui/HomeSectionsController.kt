@@ -61,7 +61,6 @@ class HomeSectionsController(
     /** Keys (package|user) of apps already placed in the bottom area. */
     private val bottomAppKeys: () -> Set<String> = { emptySet() },
 ) {
-    private var hiddenApps: List<AppModel.App> = emptyList()
     private val repo = HomeSectionsRepository(context)
     private var sections: MutableList<HomeSection> = mutableListOf()
     private var ungrouped: MutableList<SectionApp> = mutableListOf()
@@ -81,11 +80,6 @@ class HomeSectionsController(
         render()
     }
 
-    fun setHiddenApps(list: List<AppModel.App>) {
-        hiddenApps = list
-        if (notifications.isNotEmpty()) render()
-    }
-
     /**
      * Apps with notifications (hidden apps included, bottom area excluded): shown in red at the top
      * of home, newest first, until their notifications are gone. Apps from sections or pinned on
@@ -94,7 +88,7 @@ class HomeSectionsController(
     private fun looseApps(): List<AppModel.App> {
         if (notifications.isEmpty()) return emptyList()
         val bottom = bottomAppKeys()
-        return (apps + hiddenApps)
+        return apps
             .filter { notificationCount(it) > 0 }
             .filter { NotificationRepository.key(it.appPackage, it.user.toString()) !in bottom }
             .filter { DetoxManager.isAllowed(context, it.appPackage) }
@@ -523,8 +517,8 @@ class HomeSectionsController(
             action = context.getString(R.string.ml_done),
         ) { selected ->
             val selectedApps = selected.sorted().map { SectionApp.from(apps[it]) }
-            // Keep the user's order for apps that stay; entries not in the list (e.g. hidden or
-            // currently unavailable apps) are kept untouched.
+            // Keep the user's order for apps that stay; entries not in the list (e.g. currently
+            // unavailable apps) are kept untouched.
             val kept = section.apps.filter { existing ->
                 val match = findApp(existing) ?: return@filter true
                 selectedApps.any { it.samePackageAndUser(SectionApp.from(match)) }

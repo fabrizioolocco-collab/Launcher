@@ -187,7 +187,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             homeViews = listOf(binding.homeScroll, binding.bottomGrid),
             prefs = prefs,
             scope = uiScope,
-            apps = { viewModel.homeApps.value.orEmpty() },
+            apps = {
+                val hidden = prefs.hiddenApps
+                viewModel.homeApps.value.orEmpty().filter { "${it.appPackage}|${it.user}" !in hidden }
+            },
             launchApp = { app -> launchHomeApp(app) },
             requestPermission = { permissionRequest.launch(it) },
             keepScreen = { viewModel.keepCurrentScreen = it },
@@ -247,7 +250,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             detox.showPermissions()
         }
         viewModel.loadHomeApps()
-        viewModel.getHiddenApps()
         binding.notificationAccessHint.isVisible = !NotificationRepository.isAccessGranted(requireContext())
         viewModel.isOlauncherDefault()
         // The battery lives in the system status bar: show it once by default (can be turned off in Settings)
@@ -342,9 +344,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         viewModel.homeApps.observe(viewLifecycleOwner) {
             sections.setApps(it)
             bottomArea.setApps(it)
-        }
-        viewModel.hiddenApps.observe(viewLifecycleOwner) {
-            sections.setHiddenApps(it.orEmpty().filterIsInstance<AppModel.App>())
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             sections.setNotifications(it)

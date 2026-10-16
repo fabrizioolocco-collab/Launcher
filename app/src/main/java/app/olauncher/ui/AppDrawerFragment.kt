@@ -349,7 +349,8 @@ class AppDrawerFragment : BaseFragment() {
         binding.search.hideKeyboard()
         val entries = mutableListOf<MenuEntry>()
         if (appModel is AppModel.App && tabs?.showingHidden == true && binding.search.query.isNullOrBlank()) {
-            // "Hidden" tab: bring the app back
+            // "Hidden" tab: bring the app back (hidden apps can still be placed on home)
+            entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
             entries += MenuEntry(getString(R.string.adapter_show)) { unhide(appModel) }
             entries += changeIconEntry(appModel)
             entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
@@ -358,8 +359,8 @@ class AppDrawerFragment : BaseFragment() {
             return
         }
         if (appModel is AppModel.App) {
+            entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
             if (!adapter.isHiddenList) {
-                entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
                 tabs?.let { t -> entries += MenuEntry(getString(R.string.ml_add_to_tab)) { t.showAddToTab(appModel) } }
                 entries += changeIconEntry(appModel)
                 entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
