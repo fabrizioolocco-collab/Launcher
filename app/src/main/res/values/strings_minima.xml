@@ -95,7 +95,7 @@
     <string name="ml_copied">Copied</string>
     <string name="ml_detox">Detox</string>
     <string name="ml_detox_blocked">Blocked during detox</string>
-    <string name="ml_detox_start_label">◐ Detox</string>
+    <string name="ml_detox_start_label">◐</string>
     <string name="ml_detox_running">Detox %1$s</string>
     <plurals name="ml_detox_paused">
         <item quantity="one">%d notification paused</item>

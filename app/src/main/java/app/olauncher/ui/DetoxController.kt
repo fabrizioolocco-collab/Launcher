@@ -75,21 +75,30 @@ class DetoxController(
         updateBar()
     }
 
+    /** Header icon: "◐" when idle; "◐ 1h 20m" (remaining) while a session runs. */
     fun updateBar() {
         val ctx = activity
         if (!DetoxManager.isActive(ctx)) {
             bar.text = ctx.getString(R.string.ml_detox_start_label)
+            bar.textSize = 22f
             bar.alpha = 0.6f
             return
         }
         bar.alpha = 1f
+        bar.textSize = 16f
+        bar.text = ctx.getString(R.string.ml_detox_start_label) + " " + DetoxManager.formatDuration(DetoxManager.remainingMs(ctx))
+    }
+
+    /** Full session status: remaining time, paused notifications, exit countdown. */
+    private fun statusText(): String {
+        val ctx = activity
         val parts = mutableListOf(ctx.getString(R.string.ml_detox_running, DetoxManager.formatDuration(DetoxManager.remainingMs(ctx))))
         if (pausedCount > 0) parts += ctx.resources.getQuantityString(R.plurals.ml_detox_paused, pausedCount, pausedCount)
         DetoxManager.exitWaitLeftMs(ctx)?.let { left ->
             parts += if (left > 0) ctx.getString(R.string.ml_detox_exit_in, DetoxManager.formatDuration(left))
             else ctx.getString(R.string.ml_detox_exit_ready)
         }
-        bar.text = parts.joinToString("  ·  ")
+        return parts.joinToString("  ·  ")
     }
 
     private fun onBarClick() {
@@ -223,7 +232,7 @@ class DetoxController(
                 else -> entries += MenuEntry(ctx.getString(R.string.ml_detox_end)) { DetoxManager.end(ctx) }
             }
         }
-        ctx.showMenuDialog(bar.text.toString(), entries)
+        ctx.showMenuDialog(statusText(), entries)
     }
 
     // ---------------------------------------------------------------- permissions / welcome

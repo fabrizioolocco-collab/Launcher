@@ -93,7 +93,7 @@
     <string name="ml_copied">Copiato</string>
     <string name="ml_detox">Detox</string>
     <string name="ml_detox_blocked">Bloccata durante il detox</string>
-    <string name="ml_detox_start_label">◐ Detox</string>
+    <string name="ml_detox_start_label">◐</string>
     <string name="ml_detox_running">Detox %1$s</string>
     <plurals name="ml_detox_paused">
         <item quantity="one">%d notifica in pausa</item>
