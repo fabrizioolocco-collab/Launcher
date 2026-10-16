@@ -64,7 +64,7 @@ object PdfSaver {
         when (a) {
             is Annotation.Stroke -> {
                 if (a.points.size < 2) return
-                cs.setStrokingColor(0.1f, 0.1f, 0.6f)
+                cs.setStrokingColor(a.color.r(), a.color.g(), a.color.b())
                 cs.setLineWidth(max(0.5f, a.widthFraction * displayedWidth(page, rotation)))
                 cs.setLineCapStyle(1)
                 cs.setLineJoinStyle(1)
@@ -79,7 +79,7 @@ object PdfSaver {
 
             is Annotation.Check -> {
                 val size = a.sizeFraction * displayedWidth(page, rotation)
-                cs.setStrokingColor(0.1f, 0.1f, 0.6f)
+                cs.setStrokingColor(a.color.r(), a.color.g(), a.color.b())
                 cs.setLineWidth(max(1f, size / 8f))
                 cs.setLineCapStyle(1)
                 // A check mark drawn in displayed space (fractions), mapped point by point
@@ -98,7 +98,7 @@ object PdfSaver {
                 val (x, y) = toPdf(page, rotation, a.x, a.y)
                 cs.beginText()
                 cs.setFont(PDType1Font.HELVETICA, fontSize)
-                cs.setNonStrokingColor(0.1f, 0.1f, 0.6f)
+                cs.setNonStrokingColor(a.color.r(), a.color.g(), a.color.b())
                 // Text runs along the displayed horizontal: rotate it with the page
                 cs.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(rotation.toDouble()), x, y))
                 cs.showText(a.text.filter { it.code in 32..255 })
@@ -117,6 +117,10 @@ object PdfSaver {
             }
         }
     }
+
+    private fun Int.r() = android.graphics.Color.red(this) / 255f
+    private fun Int.g() = android.graphics.Color.green(this) / 255f
+    private fun Int.b() = android.graphics.Color.blue(this) / 255f
 
     private fun Bitmap.ensureArgb(): Bitmap = if (config == Bitmap.Config.ARGB_8888) this else copy(Bitmap.Config.ARGB_8888, false)
 

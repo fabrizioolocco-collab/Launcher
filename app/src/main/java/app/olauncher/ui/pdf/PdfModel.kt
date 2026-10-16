@@ -9,10 +9,20 @@ import java.io.File
  * (width and height), so they don't depend on the zoom or the screen and map to PDF points on save.
  */
 sealed class Annotation(val page: Int) {
-    class Text(page: Int, val text: String, val x: Float, val y: Float, val sizeFraction: Float) : Annotation(page)
-    class Check(page: Int, val x: Float, val y: Float, val sizeFraction: Float) : Annotation(page)
-    class Stroke(page: Int, val points: List<Pair<Float, Float>>, val widthFraction: Float) : Annotation(page)
+    class Text(page: Int, var text: String, var x: Float, var y: Float, val sizeFraction: Float, val color: Int) : Annotation(page)
+    class Check(page: Int, var x: Float, var y: Float, val sizeFraction: Float, val color: Int) : Annotation(page)
+    class Stroke(page: Int, val points: List<Pair<Float, Float>>, val widthFraction: Float, val color: Int) : Annotation(page)
     class Signature(page: Int, val bitmap: Bitmap, val rect: RectF) : Annotation(page)
+
+    /** Moves the annotation by fractions of the page. */
+    fun offset(dx: Float, dy: Float) {
+        when (this) {
+            is Text -> { x += dx; y += dy }
+            is Check -> { x += dx; y += dy }
+            is Signature -> rect.offset(dx, dy)
+            is Stroke -> Unit
+        }
+    }
 }
 
 /** Page order and rotation changes: [order] lists original page indexes (0-based) in the new order; deleted pages are absent. */

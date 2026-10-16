@@ -40,7 +40,6 @@ import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
-import app.olauncher.ui.media.ZoomImageView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,9 +66,16 @@ class PdfViewerActivity : AppCompatActivity() {
     private lateinit var title: TextView
     private lateinit var toolbar: LinearLayout
     private lateinit var hint: TextView
+    private lateinit var options: LinearLayout
     private var tool: Tool = Tool.NONE
     private var pendingText = ""
     private var signature: Bitmap? = null
+    private var inkColor = COLORS[0]
+    private var strokeWidth = 0.004f
+    private var eraser = false
+    private var textSize = 0.025f
+    /** Zoom of the page list (1 = fit width); pinch anywhere changes it. */
+    private var zoom = 1f
 
     private enum class Tool { NONE, TEXT, CHECK, DRAW, SIGN }
 
@@ -107,6 +113,12 @@ class PdfViewerActivity : AppCompatActivity() {
         }
         layout = PageLayout.identity(total)
         signature = SavedSignature.load(this)
+        getSharedPreferences("app.minimalauncher.hints", MODE_PRIVATE).let { prefs ->
+            if (!prefs.getBoolean("pdf_move", false)) {
+                prefs.edit().putBoolean("pdf_move", true).apply()
+                showToast(getString(R.string.ml_pdf_move_hint), android.widget.Toast.LENGTH_LONG)
+            }
+        }
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -177,16 +189,24 @@ class PdfViewerActivity : AppCompatActivity() {
         root.addView(top)
 
         hint = TextView(this).apply {
-            setTextColor(Color.BLACK)
-            setBackgroundColor(0xFFFFE082.toInt())
-            textSize = 13f
+            setTextColor(0xB3FFFFFF.toInt())
+            textSize = 12f
             gravity = Gravity.CENTER
-            setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+            setPadding(12.dpToPx(), 4.dpToPx(), 12.dpToPx(), 2.dpToPx())
             isVisible = false
         }
         root.addView(hint)
+        // Per-tool options: colours, width, eraser, undo (filled in setTool)
+        options = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(Color.BLACK)
+            setPadding(8.dpToPx(), 4.dpToPx(), 8.dpToPx(), 6.dpToPx())
+            isVisible = false
+        }
+        root.addView(options)
 
-        pager = RecyclerView(this).apply {
+        pager = ZoomRecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@PdfViewerActivity)
             adapter = PagesAdapter()
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -255,13 +275,15 @@ class PdfViewerActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- tools
 
+    private fun askText() = showTextInputDialog(getString(R.string.ml_pdf_text), pendingText, getString(R.string.ml_pdf_text), getString(R.string.ml_done)) { text ->
+        pendingText = text
+        setTool(Tool.TEXT)
+    }
+
     private fun onToolTapped(t: Tool) {
         if (tool == t) return setTool(Tool.NONE)
         when (t) {
-            Tool.TEXT -> showTextInputDialog(getString(R.string.ml_pdf_text), pendingText, getString(R.string.ml_pdf_text), getString(R.string.ml_done)) { text ->
-                pendingText = text
-                setTool(Tool.TEXT)
-            }
+            Tool.TEXT -> askText()
 
             Tool.SIGN -> if (signature == null) signatureLauncher.launch(SignatureActivity.intent(this)) else setTool(Tool.SIGN)
             else -> setTool(t)
@@ -290,10 +312,83 @@ class PdfViewerActivity : AppCompatActivity() {
         hint.text = when (t) {
             Tool.TEXT -> getString(R.string.ml_pdf_text_hint) + "  «$pendingText»"
             Tool.CHECK -> getString(R.string.ml_pdf_check_hint)
+            Tool.DRAW -> getString(R.string.ml_pdf_draw_hint)
             Tool.SIGN -> getString(R.string.ml_pdf_sign_hint)
             else -> ""
         }
+        if (t == Tool.NONE) eraser = false
+        buildOptions(t)
         for (i in 0 until pager.childCount) (pager.getChildAt(i) as? PageView)?.invalidate()
+    }
+
+    /** Options row for the active tool. */
+    private fun buildOptions(t: Tool) {
+        options.removeAllViews()
+        options.isVisible = t == Tool.DRAW || t == Tool.TEXT || t == Tool.CHECK
+        if (!options.isVisible) return
+        COLORS.forEach { color ->
+            options.addView(View(this).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(color)
+                    setStroke(2.dpToPx(), if (color == inkColor && !eraser) Color.WHITE else 0x66FFFFFF)
+                }
+                scaleX = if (color == inkColor && !eraser) 1.2f else 1f
+                scaleY = scaleX
+                isClickable = true
+                setOnClickListener {
+                    inkColor = color
+                    eraser = false
+                    buildOptions(t)
+                }
+            }, LinearLayout.LayoutParams(26.dpToPx(), 26.dpToPx()).apply { marginEnd = 10.dpToPx() })
+        }
+        options.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        if (t == Tool.DRAW) {
+            options.addView(optionButton(getString(R.string.ml_pdf_width) + " " + "●".repeat(WIDTHS.indexOf(strokeWidth) + 1)) {
+                strokeWidth = WIDTHS[(WIDTHS.indexOf(strokeWidth) + 1) % WIDTHS.size]
+                buildOptions(t)
+            })
+            options.addView(optionButton(getString(R.string.ml_pdf_eraser), bold = eraser) {
+                eraser = !eraser
+                buildOptions(t)
+            })
+        }
+        if (t == Tool.TEXT) {
+            options.addView(optionButton(getString(R.string.ml_pdf_size) + " " + "●".repeat(SIZES.indexOf(textSize) + 1)) {
+                textSize = SIZES[(SIZES.indexOf(textSize) + 1) % SIZES.size]
+                buildOptions(t)
+            })
+            options.addView(optionButton(getString(R.string.ml_pdf_edit_text)) { askText() })
+        }
+        options.addView(optionButton(getString(R.string.ml_pdf_undo)) { undo() })
+    }
+
+    private fun optionButton(label: String, bold: Boolean = false, onClick: () -> Unit) = TextView(this).apply {
+        text = label
+        textSize = 13f
+        setTextColor(Color.WHITE)
+        setTypeface(null, if (bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        setBackgroundColor(if (bold) 0x33FFFFFF else 0)
+        setPadding(10.dpToPx(), 8.dpToPx(), 10.dpToPx(), 8.dpToPx())
+        isClickable = true
+        setOnClickListener { onClick() }
+    }
+
+    /** Long press with no tool: move the annotation under the finger, or open its menu. */
+    private fun annotationMenu(a: Annotation) {
+        val entries = mutableListOf<MenuEntry>()
+        if (a is Annotation.Text) entries += MenuEntry(getString(R.string.ml_pdf_edit_text)) {
+            showTextInputDialog(getString(R.string.ml_pdf_text), a.text, getString(R.string.ml_pdf_text), getString(R.string.ml_done)) { text ->
+                a.text = text
+                pageViewOf(a.page)?.invalidate()
+            }
+        }
+        entries += MenuEntry(getString(R.string.ml_explorer_delete)) {
+            annotations.remove(a)
+            pageViewOf(a.page)?.invalidate()
+        }
+        showMenuDialog(getString(R.string.ml_pdf_annotation), entries)
     }
 
     private fun undo() {
@@ -422,14 +517,110 @@ class PdfViewerActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The page list with pinch zoom: the whole content (pages and annotations alike) is scaled
+     * around the fingers, so the tools stay precise when zoomed. One finger scrolls the list
+     * vertically as usual and pans sideways when zoomed. Double tap resets.
+     */
+    private inner class ZoomRecyclerView(context: Context) : RecyclerView(context) {
+        private var scale = 1f
+        private var panX = 0f
+        private var panY = 0f
+        private var lastPanX = 0f
+        private var lastPanY = 0f
+        private var panning = false
+        private val detector = android.view.ScaleGestureDetector(context, object : android.view.ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: android.view.ScaleGestureDetector): Boolean {
+                val old = scale
+                scale = (scale * d.scaleFactor).coerceIn(1f, 5f)
+                // Keep the point under the fingers still
+                val f = scale / old
+                panX = d.focusX - (d.focusX - panX) * f
+                panY = d.focusY - (d.focusY - panY) * f
+                clampPan()
+                invalidate()
+                return true
+            }
+        })
+        private val taps = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                if (tool != Tool.NONE) return false
+                if (scale > 1.05f) { scale = 1f; panX = 0f; panY = 0f } else {
+                    scale = 2.5f
+                    panX = e.x - e.x * scale
+                    panY = e.y - e.y * scale
+                    clampPan()
+                }
+                invalidate()
+                return true
+            }
+        })
+
+        private fun clampPan() {
+            panX = panX.coerceIn(width - width * scale, 0f)
+            panY = panY.coerceIn(height - height * scale, 0f)
+        }
+
+        /** Converts a touch into content coordinates (undo the zoom), so children see the right position. */
+        private fun unzoom(e: MotionEvent): MotionEvent = MotionEvent.obtain(e).also {
+            it.setLocation((e.x - panX) / scale, (e.y - panY) / scale)
+        }
+
+        override fun dispatchDraw(canvas: Canvas) {
+            canvas.save()
+            canvas.translate(panX, panY)
+            canvas.scale(scale, scale)
+            super.dispatchDraw(canvas)
+            canvas.restore()
+        }
+
+        override fun dispatchTouchEvent(e: MotionEvent): Boolean {
+            detector.onTouchEvent(e)
+            taps.onTouchEvent(e)
+            if (e.pointerCount > 1 || detector.isInProgress) {
+                // Pinch: cancel whatever the children were doing, pan with the gesture's focus
+                if (e.actionMasked == MotionEvent.ACTION_POINTER_DOWN) {
+                    val cancel = MotionEvent.obtain(e).apply { action = MotionEvent.ACTION_CANCEL }
+                    super.dispatchTouchEvent(unzoom(cancel).also { cancel.recycle() })
+                    panning = true
+                    lastPanX = detector.focusX
+                    lastPanY = detector.focusY
+                } else if (e.actionMasked == MotionEvent.ACTION_MOVE && scale > 1f) {
+                    panX += detector.focusX - lastPanX
+                    panY += detector.focusY - lastPanY
+                    lastPanX = detector.focusX
+                    lastPanY = detector.focusY
+                    clampPan()
+                    invalidate()
+                }
+                return true
+            }
+            if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) {
+                if (panning) {
+                    panning = false
+                    return true
+                }
+            }
+            // Zoomed, no tool: one finger pans sideways too (vertical scroll stays with the list)
+            val u = unzoom(e)
+            val handled = super.dispatchTouchEvent(u)
+            u.recycle()
+            return handled
+        }
+
+        override fun onScrolled(dx: Int, dy: Int) {
+            super.onScrolled(dx, dy)
+            invalidate()
+        }
+    }
+
     /** One page: the rendered bitmap with the annotations of that page drawn on top; handles the tools' touches. */
     private inner class PageView(context: Context) : FrameLayout(context) {
         var original = -1
             private set
-        private val image = ZoomImageView(context).apply {
+        private val image = android.widget.ImageView(context).apply {
             scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
             adjustViewBounds = true
-            onSingleTap = {}
         }
         private val overlay = Overlay(context)
 
@@ -483,7 +674,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 val r = pageRect()
                 if (r.isEmpty) return
                 annotations.filter { it.page == original }.forEach { draw(canvas, r, it) }
-                current?.let { pts -> drawStroke(canvas, r, pts, 0.004f) }
+                current?.let { pts -> drawStroke(canvas, r, pts, strokeWidth, inkColor) }
                 placing?.let { sig ->
                     draw(canvas, r, sig)
                     val v = toView(r, sig.rect)
@@ -501,8 +692,9 @@ class PdfViewerActivity : AppCompatActivity() {
 
             private fun toView(r: RectF, f: RectF) = RectF(r.left + f.left * r.width(), r.top + f.top * r.height(), r.left + f.right * r.width(), r.top + f.bottom * r.height())
 
-            private fun drawStroke(canvas: Canvas, r: RectF, pts: List<Pair<Float, Float>>, widthFraction: Float) {
+            private fun drawStroke(canvas: Canvas, r: RectF, pts: List<Pair<Float, Float>>, widthFraction: Float, color: Int) {
                 if (pts.size < 2) return
+                ink.color = color
                 ink.strokeWidth = max(1f, widthFraction * r.width())
                 val path = Path()
                 path.moveTo(r.left + pts[0].first * r.width(), r.top + pts[0].second * r.height())
@@ -512,11 +704,12 @@ class PdfViewerActivity : AppCompatActivity() {
 
             private fun draw(canvas: Canvas, r: RectF, a: Annotation) {
                 when (a) {
-                    is Annotation.Stroke -> drawStroke(canvas, r, a.points, a.widthFraction)
+                    is Annotation.Stroke -> drawStroke(canvas, r, a.points, a.widthFraction, a.color)
                     is Annotation.Check -> {
                         val s = a.sizeFraction * r.width()
                         val cx = r.left + a.x * r.width()
                         val cy = r.top + a.y * r.height()
+                        ink.color = a.color
                         ink.strokeWidth = max(2f, s / 8f)
                         val p = Path()
                         p.moveTo(cx - 0.4f * s, cy + 0.05f * s)
@@ -526,6 +719,7 @@ class PdfViewerActivity : AppCompatActivity() {
                     }
 
                     is Annotation.Text -> {
+                        textPaint.color = a.color
                         textPaint.textSize = a.sizeFraction * r.width()
                         canvas.drawText(a.text, r.left + a.x * r.width(), r.top + a.y * r.height(), textPaint)
                     }
@@ -534,32 +728,122 @@ class PdfViewerActivity : AppCompatActivity() {
                 }
             }
 
+            private var moving: Annotation? = null
+            private var moved = false
+            private var downX = 0f
+            private var downY = 0f
+            private val longPress = Runnable {
+                val r = pageRect()
+                val a = annotationAt(r, downX, downY) ?: return@Runnable
+                moving = a
+                moved = false
+                performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                parent?.requestDisallowInterceptTouchEvent(true)
+            }
+
+            /** The annotation under a view point (texts, checks, signatures; strokes by nearest point). */
+            private fun annotationAt(r: RectF, x: Float, y: Float): Annotation? {
+                val fx = (x - r.left) / r.width()
+                val fy = (y - r.top) / r.height()
+                val tol = 0.03f
+                return annotations.filter { it.page == original }.lastOrNull { a ->
+                    when (a) {
+                        is Annotation.Check -> abs(a.x - fx) < a.sizeFraction && abs(a.y - fy) < a.sizeFraction * r.width() / r.height()
+                        is Annotation.Text -> {
+                            textPaint.textSize = a.sizeFraction * r.width()
+                            val w = textPaint.measureText(a.text) / r.width()
+                            val h = a.sizeFraction * r.width() / r.height()
+                            fx in a.x - tol..a.x + w + tol && fy in a.y - h - tol..a.y + tol
+                        }
+                        is Annotation.Signature -> a.rect.contains(fx, fy)
+                        is Annotation.Stroke -> a.points.any { (px, py) -> abs(px - fx) < tol && abs(py - fy) < tol }
+                    }
+                }
+            }
+
             override fun onTouchEvent(e: MotionEvent): Boolean {
-                if (tool == Tool.NONE) return false
                 val r = pageRect()
                 if (r.isEmpty) return false
+                // Two fingers: let the zoom handler have it (ends any stroke in progress)
+                if (e.pointerCount > 1) {
+                    current = null
+                    removeCallbacks(longPress)
+                    moving = null
+                    invalidate()
+                    return false
+                }
                 val fx = ((e.x - r.left) / r.width()).coerceIn(0f, 1f)
                 val fy = ((e.y - r.top) / r.height()).coerceIn(0f, 1f)
+                if (tool == Tool.NONE) return handleMove(e, r, fx, fy)
                 parent?.requestDisallowInterceptTouchEvent(true)
+                if (tool == Tool.DRAW && eraser) {
+                    if (e.actionMasked == MotionEvent.ACTION_DOWN || e.actionMasked == MotionEvent.ACTION_MOVE) {
+                        val hit = annotationAt(r, e.x, e.y) as? Annotation.Stroke
+                        if (hit != null) {
+                            annotations.remove(hit)
+                            invalidate()
+                        }
+                    }
+                    return true
+                }
                 when (tool) {
                     Tool.DRAW -> when (e.actionMasked) {
                         MotionEvent.ACTION_DOWN -> current = mutableListOf(fx to fy)
                         MotionEvent.ACTION_MOVE -> current?.add(fx to fy)
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                            current?.let { if (it.size > 1) annotations += Annotation.Stroke(original, it.toList(), 0.004f) }
+                            current?.let { if (it.size > 1) annotations += Annotation.Stroke(original, it.toList(), strokeWidth, inkColor) }
                             current = null
                         }
                     }
 
-                    Tool.CHECK -> if (e.actionMasked == MotionEvent.ACTION_UP) annotations += Annotation.Check(original, fx, fy, 0.035f)
+                    Tool.CHECK -> if (e.actionMasked == MotionEvent.ACTION_UP) annotations += Annotation.Check(original, fx, fy, 0.035f, inkColor)
 
                     Tool.TEXT -> if (e.actionMasked == MotionEvent.ACTION_UP && pendingText.isNotBlank())
-                        annotations += Annotation.Text(original, pendingText, fx, fy, 0.025f)
+                        annotations += Annotation.Text(original, pendingText, fx, fy, textSize, inkColor)
 
                     Tool.SIGN -> handleSign(e, r, fx, fy)
                     Tool.NONE -> Unit
                 }
                 invalidate()
+                return true
+            }
+
+            /** No tool: a long press picks the annotation under the finger; drag moves it, release without moving opens its menu. */
+            private fun handleMove(e: MotionEvent, r: RectF, fx: Float, fy: Float): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downX = e.x
+                        downY = e.y
+                        lastX = fx
+                        lastY = fy
+                        moving = null
+                        if (annotationAt(r, e.x, e.y) == null) return false
+                        postDelayed(longPress, android.view.ViewConfiguration.getLongPressTimeout().toLong())
+                        return true
+                    }
+
+                    MotionEvent.ACTION_MOVE -> {
+                        val a = moving
+                        if (a == null) {
+                            if (abs(e.x - downX) > 20 || abs(e.y - downY) > 20) removeCallbacks(longPress)
+                            return true
+                        }
+                        a.offset(fx - lastX, fy - lastY)
+                        lastX = fx
+                        lastY = fy
+                        moved = true
+                        invalidate()
+                        return true
+                    }
+
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        removeCallbacks(longPress)
+                        val a = moving
+                        moving = null
+                        if (a != null && !moved && e.actionMasked == MotionEvent.ACTION_UP) annotationMenu(a)
+                        return true
+                    }
+                }
                 return true
             }
 
@@ -616,6 +900,9 @@ class PdfViewerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PATH = "path"
+        private val COLORS = listOf(0xFF1A1A99.toInt(), Color.BLACK, Color.RED, 0xFF00A050.toInt())
+        private val WIDTHS = listOf(0.002f, 0.004f, 0.008f)
+        private val SIZES = listOf(0.018f, 0.025f, 0.035f)
 
         fun open(context: Context, file: File) = context.startActivity(
             Intent(context, PdfViewerActivity::class.java).putExtra(EXTRA_PATH, file.absolutePath).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

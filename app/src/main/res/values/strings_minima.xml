@@ -357,4 +357,11 @@
     <string name="ml_signature_hint">Sign in the box with your finger</string>
     <string name="ml_pdf_cannot_open">This PDF can\'t be opened (protected or damaged)</string>
     <string name="ml_pdf_size">Size: %1$s</string>
+    <string name="ml_pdf_draw_hint">Draw with one finger; two fingers zoom</string>
+    <string name="ml_pdf_width">Width</string>
+    <string name="ml_pdf_eraser">Eraser</string>
+    <string name="ml_pdf_size">Size</string>
+    <string name="ml_pdf_edit_text">Edit text</string>
+    <string name="ml_pdf_annotation">Annotation</string>
+    <string name="ml_pdf_move_hint">Long-press an annotation to move it or delete it</string>
 </resources>

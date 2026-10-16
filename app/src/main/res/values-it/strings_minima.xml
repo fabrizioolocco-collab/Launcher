@@ -351,4 +351,11 @@
     <string name="ml_signature_hint">Firma nel riquadro con il dito</string>
     <string name="ml_pdf_cannot_open">Questo PDF non si può aprire (protetto o danneggiato)</string>
     <string name="ml_pdf_size">Dimensione: %1$s</string>
+    <string name="ml_pdf_draw_hint">Disegna con un dito; con due dita zoomi</string>
+    <string name="ml_pdf_width">Spessore</string>
+    <string name="ml_pdf_eraser">Gomma</string>
+    <string name="ml_pdf_size">Dimensione</string>
+    <string name="ml_pdf_edit_text">Modifica testo</string>
+    <string name="ml_pdf_annotation">Annotazione</string>
+    <string name="ml_pdf_move_hint">Tieni premuta un\'annotazione per spostarla o eliminarla</string>
 </resources>
