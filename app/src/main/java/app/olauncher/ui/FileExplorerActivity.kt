@@ -628,6 +628,10 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun uriFor(file: File): Uri = FileProvider.getUriForFile(this, "$packageName.files", file)
 
     private fun view(file: File, mime: String?, chooser: Boolean = false) {
+        if (!chooser && MediaThumbnails.isMedia(mime) && app.olauncher.data.Prefs(this).builtInViewer) {
+            app.olauncher.ui.media.MediaViewerActivity.open(this, file)
+            return
+        }
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uriFor(file), mime ?: "*/*")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         try {

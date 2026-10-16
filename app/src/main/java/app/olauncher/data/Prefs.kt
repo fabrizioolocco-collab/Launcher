@@ -191,6 +191,11 @@ class Prefs(context: Context) {
         set(value) = prefs.edit { putBoolean(AUTO_LAUNCH_SINGLE, value) }
 
     /** Drawer "News": false = most recent first, true = most notifications first. */
+    /** Photos and videos: true = built-in viewer, false = the gallery app (Fossify). */
+    var builtInViewer: Boolean
+        get() = prefs.getBoolean("BUILT_IN_VIEWER", true)
+        set(value) = prefs.edit { putBoolean("BUILT_IN_VIEWER", value) }
+
     /** Phone folders from the search: true = built-in explorer, false = the file manager (Solid Explorer). */
     var phoneFoldersInExplorer: Boolean
         get() = prefs.getBoolean("PHONE_FOLDERS_IN_EXPLORER", true)

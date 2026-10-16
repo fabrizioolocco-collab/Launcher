@@ -221,6 +221,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 prefs.phoneFoldersInExplorer = !prefs.phoneFoldersInExplorer
                 populateTextStyle()
             }
+            R.id.mediaViewer -> {
+                prefs.builtInViewer = !prefs.builtInViewer
+                populateTextStyle()
+            }
             R.id.permissionsScreen -> {
                 findNavController().popBackStack(R.id.mainFragment, false)
                 viewModel.showPermissions.call()
@@ -326,6 +330,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxWhitelist.setOnClickListener(this)
         binding.bottomLabels.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
+        binding.mediaViewer?.setOnClickListener(this)
         binding.permissionsScreen.setOnClickListener(this)
         binding.widgetColumns.setOnClickListener(this)
         binding.widgetLog.setOnClickListener(this)
@@ -399,6 +404,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeIconSize.text = if (prefs.homeIconSize > 0) prefs.homeIconSize.toString() else getString(R.string.ml_default)
         binding.bottomLabels.setText(if (prefs.bottomLabels) R.string.on else R.string.off)
         binding.phoneFolders?.setText(if (prefs.phoneFoldersInExplorer) R.string.ml_explorer else R.string.ml_file_manager)
+        binding.mediaViewer?.setText(if (prefs.builtInViewer) R.string.ml_viewer_builtin else R.string.ml_viewer_gallery)
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)

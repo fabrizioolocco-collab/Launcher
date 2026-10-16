@@ -281,4 +281,15 @@
     <string name="ml_explorer_moving_many">Sposta: %1$d elementi</string>
     <string name="ml_explorer_share_no_folders">Le cartelle non si possono condividere: seleziona dei file</string>
     <string name="ml_album_same_folder">Sono già in questa cartella</string>
+    <!-- Media viewer -->
+    <string name="ml_media_viewer">Apri foto e video in</string>
+    <string name="ml_viewer_builtin">Visualizzatore integrato</string>
+    <string name="ml_viewer_gallery">App Galleria</string>
+    <string name="ml_edit_soon">La modifica arriva nel prossimo aggiornamento</string>
+    <string name="ml_viewer_size">Dimensione: %1$s</string>
+    <string name="ml_viewer_date">Data: %1$s</string>
+    <string name="ml_viewer_path">Percorso: %1$s</string>
+    <string name="ml_viewer_dimensions">Dimensioni: %1$s</string>
+    <string name="ml_viewer_duration">Durata: %1$s</string>
+    <string name="ml_viewer_camera">Fotocamera: %1$s</string>
 </resources>

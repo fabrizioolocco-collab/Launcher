@@ -55,6 +55,24 @@
             android:exported="false"
             android:label="@string/ml_explorer" />
 
+        <!-- Built-in photo/video viewer and editors -->
+        <activity
+            android:name=".ui.media.MediaViewerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme" />
+        <activity
+            android:name=".ui.media.PhotoEditActivity"
+            android:exported="false"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme" />
+        <activity
+            android:name=".ui.media.VideoEditActivity"
+            android:exported="false"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme" />
+
         <!-- Album grid opened from the home search -->
         <activity
             android:name=".ui.AlbumActivity"

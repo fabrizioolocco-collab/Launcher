@@ -303,6 +303,10 @@ class AlbumActivity : AppCompatActivity() {
 
     /** Opens a photo or video in the gallery (Fossify first), which shows the rest of the folder too. */
     private fun open(file: File) {
+        if (app.olauncher.data.Prefs(this).builtInViewer) {
+            app.olauncher.ui.media.MediaViewerActivity.open(this, file)
+            return
+        }
         val mime = mimeOf(file.name) ?: "image/*"
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uriFor(file), mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         for (gallery in GALLERIES) {

@@ -456,7 +456,10 @@ class HomeSearchController(
                         else -> Kind.FILE
                     }
                     rows += Row(kind, name, mime = mime, file = file, uri = uri) {
-                        open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                        if (file != null && MediaThumbnails.isMedia(mime) && prefs.builtInViewer) {
+                            app.olauncher.ui.media.MediaViewerActivity.open(activity, file)
+                            leave()
+                        } else open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                     }
                 }
             }
