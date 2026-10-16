@@ -71,7 +71,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private var uiScope = MainScope()
     private lateinit var sections: HomeSectionsController
     private lateinit var widgets: HomeWidgetsController
-    private lateinit var bottomArea: HomeWidgetsController
     private lateinit var detox: DetoxController
     private lateinit var search: HomeSearchController
 
@@ -116,6 +115,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         widgets = HomeWidgetsController(
             activity = requireActivity(),
             grid = binding.widgetsLayout,
+            free = binding.widgetsFree,
             scrollView = binding.homeScroll,
             prefs = prefs,
             scope = uiScope,
@@ -137,7 +137,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             prefs = prefs,
             scope = uiScope,
             onLaunch = { app -> launchHomeApp(app) },
-            gridAppKeys = { widgets.appKeys() + if (::bottomArea.isInitialized) bottomArea.appKeys() else emptySet() },
+            gridAppKeys = { widgets.appKeys() },
             pickImage = { callback ->
                 onImagePicked = callback
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -145,31 +145,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         )
         viewModel.homeApps.value?.let { sections.setApps(it) }
 
-        bottomArea = HomeWidgetsController(
-            activity = requireActivity(),
-            grid = binding.bottomGrid,
-            scrollView = binding.homeScroll,
-            prefs = prefs,
-            scope = uiScope,
-            keepScreen = { viewModel.keepCurrentScreen = it },
-            bottom = true,
-            onLaunchApp = { app -> launchHomeApp(app) },
-            pickImage = { callback ->
-                onImagePicked = callback
-                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            },
-        )
-        viewModel.homeApps.value?.let { bottomArea.setApps(it) }
-        bottomArea.render()
-        binding.bottomGrid.homeGestures = object : WidgetGridLayout.HomeGestures {
-            override fun onEmptyLongPress(col: Int, row: Int) = bottomArea.showAddMenu(col, row)
-            override fun onSwipeUp() = showAppList(Constants.FLAG_LAUNCH_APP)
-            override fun onSwipeDown() = expandNotificationDrawer(requireContext())
-            override fun onItemSwipe(child: View, up: Boolean): Boolean {
-                val app = child.getTag(R.id.ml_swipe_app) as? AppModel.App ?: return false
-                return SwipeActions.run(requireContext(), app, up)
-            }
-        }
         // Swipe actions on home apps (set from their long-press menu)
         binding.homeScroll.appSwipe = object : HomeScrollView.AppSwipeHandler {
             override fun hasAction(app: AppModel.App, up: Boolean) = SwipeActions.get(requireContext(), app, up) != null
@@ -193,7 +168,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             modeButton = binding.searchMode,
             resultsScroll = binding.searchResultsScroll,
             results = binding.searchResults,
-            homeViews = listOf(binding.homeScroll, binding.bottomGrid),
+            homeViews = listOf(binding.homeScroll),
             prefs = prefs,
             scope = uiScope,
             apps = {
@@ -251,8 +226,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         widgets.reloadIfChanged()
         widgets.refreshIfNeeded()
         widgets.onHomeResumed()
-        bottomArea.refreshIfNeeded()
-        bottomArea.onHomeResumed()
         detox.onResume()
         search.onHomeResumed()
         if (!prefs.welcomeShown) {
@@ -353,17 +326,14 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
         viewModel.homeApps.observe(viewLifecycleOwner) {
             widgets.setApps(it)
-            bottomArea.setApps(it)
             sections.setApps(it)
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             widgets.setNotifications(it)
-            bottomArea.setNotifications(it)
             sections.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {
             widgets.render()
-            bottomArea.render()
             sections.render()
             detox.updateBar()
         }
@@ -405,7 +375,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onSwipeRight() = openSwipeRightApp()
             override fun onEmptyTap() {
                 widgets.endEditing()
-                bottomArea.endEditing()
                 sections.collapseAll()
             }
 
@@ -430,7 +399,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                         widgets.setPreferredCell(cell?.first, cell?.second)
                         widgets.showAddWidgetDialog()
                     },
-                    addToBottom = { bottomArea.showAddMenu() },
                     addFolder = { createFolderShortcut() },
                     parking = { showParkingMenu() },
                 )
@@ -466,9 +434,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private fun setHomeAlignment(horizontalGravity: Int = prefs.homeAlignment) {
         binding.dateTimeLayout.gravity = horizontalGravity
-        (binding.bottomAlignSpace.layoutParams as LinearLayout.LayoutParams).weight =
-            if (prefs.homeBottomAlignment) 1f else 0f
-        binding.bottomAlignSpace.requestLayout()
         sections.render()
     }
 
@@ -740,7 +705,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         super.onDestroyView()
         uiScope.cancel()
         widgets.release()
-        bottomArea.release()
         detox.release()
         _binding = null
     }

@@ -300,14 +300,13 @@ class HomeSectionsController(
     // ---------------------------------------------------------------- menus
 
     /** Long press on an empty cell of the home grid: what to put there (or elsewhere on home). */
-    fun showHomeMenu(row: Int?, openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit, addFolder: () -> Unit, parking: () -> Unit) {
+    fun showHomeMenu(row: Int?, openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addFolder: () -> Unit, parking: () -> Unit) {
         context.showMenuDialog(
             context.getString(R.string.app_name),
             listOf(
                 MenuEntry(context.getString(R.string.ml_add_app)) { addApp() },
                 MenuEntry(context.getString(R.string.ml_add_widget)) { addWidget() },
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection(row = row) },
-                MenuEntry(context.getString(R.string.ml_add_to_bottom)) { addToBottom() },
                 MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
                 MenuEntry(context.getString(R.string.ml_parking_menu)) { parking() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },

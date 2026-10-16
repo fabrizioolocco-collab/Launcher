@@ -28,4 +28,9 @@
     <color name="blackInverseTrans80">#CCFFFFFF</color>
     <color name="blackInverseTrans90">#E6FFFFFF</color>
 
+    <!-- Icon tiles and chips -->
+    <color name="tileDark">#2E383D</color>
+    <color name="tileLight">#E4E8EB</color>
+    <color name="accentDark">#0C5A66</color>
+    <color name="accentLight">#0F7A8A</color>
 </resources>

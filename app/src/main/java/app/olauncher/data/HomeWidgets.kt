@@ -6,10 +6,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * An item in a home grid: a widget, or (when [packageName] is set) an app icon with appWidgetId -1.
- * Position is the top-left cell, size in cells.
- * [colSpan] == 0 marks a widget saved by the older stacked layout (only [legacyHeightDp] known),
- * placed on the grid the first time it's shown.
+ * An item on home: an app icon (when [packageName] is set, appWidgetId -1) on the grid at cell
+ * ([col], [row]); or a widget placed freely at ([x], [y]) with size [w] x [h], all in dp.
+ * A widget with [w] == 0 was saved by an older layout: on the grid ([colSpan] > 0) or stacked
+ * ([legacyHeightDp]); it gets a free position the first time it's shown.
  */
 data class HomeWidget(
     val appWidgetId: Int,
@@ -21,6 +21,10 @@ data class HomeWidget(
     val packageName: String? = null,
     val activityClassName: String? = null,
     val user: String? = null,
+    var x: Int = 0,
+    var y: Int = 0,
+    var w: Int = 0,
+    var h: Int = 0,
 ) {
     val isApp get() = packageName != null
 }
@@ -46,6 +50,10 @@ class HomeWidgetsRepository(context: Context, private val key: String = KEY) {
                     packageName = o.optString("p").ifBlank { null },
                     activityClassName = o.optString("cl").ifBlank { null },
                     user = o.optString("u").ifBlank { null },
+                    x = o.optInt("x", 0),
+                    y = o.optInt("y", 0),
+                    w = o.optInt("w", 0),
+                    h = o.optInt("h", 0),
                 )
             }
         } catch (e: Exception) {
@@ -63,6 +71,7 @@ class HomeWidgetsRepository(context: Context, private val key: String = KEY) {
             val o = JSONObject().put("id", it.appWidgetId).put("c", it.col).put("r", it.row)
                 .put("cs", it.colSpan).put("rs", it.rowSpan)
             if (it.packageName != null) o.put("p", it.packageName).put("cl", it.activityClassName ?: "").put("u", it.user ?: "")
+            if (it.w > 0) o.put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h)
             array.put(o)
         }
         prefs.edit { putString(key, array.toString()) }

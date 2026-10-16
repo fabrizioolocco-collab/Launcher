@@ -40,10 +40,14 @@
             android:overScrollMode="never"
             android:scrollbars="none">
 
+            <FrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
             <LinearLayout
                 android:id="@+id/homeContent"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="match_parent"
                 android:orientation="vertical">
 
                 <!-- Clock on top, date / battery / screen time on its right -->
@@ -136,21 +140,6 @@
                     android:paddingTop="16dp"
                     android:visibility="gone" />
 
-                <!-- The home grid: widgets, app icons and sections, all movable -->
-                <app.olauncher.ui.widgets.WidgetGridLayout
-                    android:id="@+id/widgetsLayout"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:paddingHorizontal="16dp"
-                    android:paddingTop="12dp" />
-
-                <Space
-                    android:id="@+id/bottomAlignSpace"
-                    android:layout_width="match_parent"
-                    android:layout_height="0dp"
-                    android:layout_weight="0" />
-
                 <TextView
                     android:id="@+id/notificationAccessHint"
                     style="@style/TextSmall"
@@ -174,22 +163,28 @@
                     android:text="@string/ml_home_no_sections_hint"
                     android:visibility="gone" />
 
-                <!-- Room to scroll the last row clear of the bottom area -->
-                <Space
+                <!-- The home grid: app icons and sections, all movable; fills the rest of the screen -->
+                <app.olauncher.ui.widgets.WidgetGridLayout
+                    android:id="@+id/widgetsLayout"
                     android:layout_width="match_parent"
-                    android:layout_height="96dp" />
+                    android:layout_height="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginTop="4dp"
+                    android:paddingHorizontal="16dp"
+                    android:paddingTop="12dp"
+                    android:paddingBottom="4dp" />
 
             </LinearLayout>
+
+            <!-- Widgets float over the whole home, independent of the grid -->
+            <app.olauncher.ui.widgets.FreeWidgetLayout
+                android:id="@+id/widgetsFree"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            </FrameLayout>
         </app.olauncher.ui.HomeScrollView>
 
-        <!-- Fixed bottom area: app icons and widgets on a grid -->
-        <app.olauncher.ui.widgets.WidgetGridLayout
-            android:id="@+id/bottomGrid"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingHorizontal="16dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp" />
 
         <!-- Search results (phone), in place of home while searching -->
         <ScrollView

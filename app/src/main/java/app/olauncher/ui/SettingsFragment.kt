@@ -184,6 +184,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             // R.id.homeButtonRecents -> toggleHomeButtonRecents()
             R.id.autoShowKeyboard -> toggleKeyboardText()
             R.id.showIcons -> toggleShowIcons()
+            R.id.iconTiles -> {
+                prefs.iconTiles = !prefs.iconTiles
+                populateTextStyle()
+            }
             R.id.iconPack -> showIconPackMenu(view)
             R.id.sectionFont -> showFontMenu(view, prefs.sectionFont) { prefs.sectionFont = it }
             R.id.appFont -> showFontMenu(view, prefs.appFont) { prefs.appFont = it }
@@ -252,10 +256,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             }
             R.id.tabsSettings -> DrawerTabsController.showTabsSettings(requireContext())
             R.id.detoxWhitelist -> showDetoxWhitelist()
-            R.id.bottomLabels -> {
-                prefs.bottomLabels = !prefs.bottomLabels
-                populateTextStyle()
-            }
             R.id.phoneFolders -> {
                 prefs.phoneFoldersInExplorer = !prefs.phoneFoldersInExplorer
                 populateTextStyle()
@@ -358,6 +358,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         // Home button for recents feature disabled
         // binding.homeButtonRecents.setOnClickListener(this)
         binding.showIcons.setOnClickListener(this)
+        binding.iconTiles.setOnClickListener(this)
         binding.iconPack.setOnClickListener(this)
         binding.sectionFont.setOnClickListener(this)
         binding.appFont.setOnClickListener(this)
@@ -378,7 +379,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeIconSize.setOnClickListener(this)
         binding.tabsSettings.setOnClickListener(this)
         binding.detoxWhitelist.setOnClickListener(this)
-        binding.bottomLabels.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
         binding.mediaViewer?.setOnClickListener(this)
         binding.pdfViewer?.setOnClickListener(this)
@@ -453,13 +453,13 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeColumns.text = prefs.homeColumns.toString()
         binding.homeLabels.setText(if (prefs.homeShowLabels) R.string.on else R.string.off)
         binding.homeIconSize.text = if (prefs.homeIconSize > 0) prefs.homeIconSize.toString() else getString(R.string.ml_default)
-        binding.bottomLabels.setText(if (prefs.bottomLabels) R.string.on else R.string.off)
         binding.phoneFolders?.setText(if (prefs.phoneFoldersInExplorer) R.string.ml_explorer else R.string.ml_file_manager)
         binding.mediaViewer?.setText(if (prefs.builtInViewer) R.string.ml_viewer_builtin else R.string.ml_viewer_gallery)
         binding.pdfViewer?.setText(if (prefs.builtInPdf) R.string.ml_pdf_tool else R.string.ml_pdf_external)
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
+        binding.iconTiles.setText(if (prefs.iconTiles) R.string.on else R.string.off)
         binding.drawerLayout.setText(if (prefs.drawerGrid) R.string.ml_drawer_grid else R.string.ml_drawer_list)
         binding.drawerColumns.text = prefs.drawerColumns.toString()
         binding.drawerRows.text = if (prefs.drawerRows > 0) prefs.drawerRows.toString() else getString(R.string.ml_default)

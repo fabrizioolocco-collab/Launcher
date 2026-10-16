@@ -394,4 +394,10 @@
     <string name="ml_parking_no_signal">Nessun segnale GPS: esci all\'aperto e riprova</string>
     <string name="ml_parking_no_maps">Nessuna app di mappe installata</string>
     <string name="ml_parking_permission">Serve il permesso di posizione</string>
+    <string name="ml_home_full">Non c\u2019è più spazio in home</string>
+    <string name="ml_settings_drawer">Menù app</string>
+    <string name="ml_settings_notifications">Notifiche e detox</string>
+    <string name="ml_settings_files">File e contenuti</string>
+    <string name="ml_settings_system">Sistema</string>
+    <string name="ml_icon_tiles">Riquadri dietro le icone</string>
 </resources>

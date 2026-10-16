@@ -51,15 +51,21 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
 
     /** Icon edge for a cell of [cellPx], leaving room for the label when shown. */
     fun iconSizeFor(cellPx: Int, showLabel: Boolean): Int =
-        (cellPx * if (showLabel) 0.58f else 0.72f).toInt()
+        (cellPx * if (showLabel) 0.62f else 0.76f).toInt()
 
-    fun bind(text: String, showLabel: Boolean, iconSize: Int) {
+    /** [tile]: draw the icon on a rounded square ([iconSize] is then the tile's edge). */
+    fun bind(text: String, showLabel: Boolean, iconSize: Int, tile: Boolean = false) {
         label.text = text
         label.isVisible = showLabel
         contentDescription = text
         iconFrame.layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
-        icon.layoutParams = LayoutParams(iconSize, iconSize, Gravity.CENTER)
+        iconFrame.background = if (tile) IconTiles.drawable(context, iconSize) else null
+        val inner = if (tile) (iconSize * IconTiles.ICON_FRACTION).toInt() else iconSize
+        icon.layoutParams = LayoutParams(inner, inner, Gravity.CENTER)
     }
+
+    /** The icon bitmap edge to load for a cell, given [bind]'s parameters. */
+    fun bitmapSizeFor(iconSize: Int, tile: Boolean): Int = if (tile) (iconSize * IconTiles.ICON_FRACTION).toInt() else iconSize
 
     fun setIcon(bitmap: Bitmap?) = icon.setImageBitmap(bitmap)
 

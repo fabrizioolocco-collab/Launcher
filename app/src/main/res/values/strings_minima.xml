@@ -400,4 +400,10 @@
     <string name="ml_parking_no_signal">No GPS signal: move outdoors and try again</string>
     <string name="ml_parking_no_maps">No maps app installed</string>
     <string name="ml_parking_permission">Location permission is needed</string>
+    <string name="ml_home_full">No room left on home</string>
+    <string name="ml_settings_drawer">App list</string>
+    <string name="ml_settings_notifications">Notifications and detox</string>
+    <string name="ml_settings_files">Files and media</string>
+    <string name="ml_settings_system">System</string>
+    <string name="ml_icon_tiles">Rounded tiles behind icons</string>
 </resources>

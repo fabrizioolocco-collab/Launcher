@@ -55,6 +55,8 @@ class AppDrawerAdapter(
         val cellHeightPx: Int,
         val iconSizePx: Int,
         val showLabels: Boolean,
+        /** Rounded square behind the icon ([iconSizePx] is then the tile's edge). */
+        val tiles: Boolean,
         val iconLoader: (AppModel, android.widget.ImageView, Int) -> Unit,
     )
 
@@ -326,8 +328,10 @@ class AppDrawerAdapter(
             setPadding(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 8.dpToPx())
             isClickable = true
             isLongClickable = true
-            addView(android.widget.ImageView(context).apply {
-                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            addView(android.widget.FrameLayout(context).apply {
+                addView(android.widget.ImageView(context).apply {
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                }, android.widget.FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
             }, android.widget.LinearLayout.LayoutParams(1, 1))
             addView(TextView(context, null, 0, R.style.TextSmall).apply {
                 maxLines = 1
@@ -338,7 +342,8 @@ class AppDrawerAdapter(
         }
     ) {
         private val cell = itemView as android.widget.LinearLayout
-        private val icon = cell.getChildAt(0) as android.widget.ImageView
+        private val tile = cell.getChildAt(0) as android.widget.FrameLayout
+        private val icon = tile.getChildAt(0) as android.widget.ImageView
         private val title = cell.getChildAt(1) as TextView
         private val defaultTitleColors = title.textColors
 
@@ -346,8 +351,13 @@ class AppDrawerAdapter(
         private fun applyStyle(style: GridStyle) {
             val cellHeight = if (style.cellHeightPx > 0) style.cellHeightPx else ViewGroup.LayoutParams.WRAP_CONTENT
             if (cell.layoutParams.height != cellHeight) cell.layoutParams = cell.layoutParams.apply { height = cellHeight }
-            val lp = icon.layoutParams
-            if (lp.width != style.iconSizePx) icon.layoutParams = lp.apply { width = style.iconSizePx; height = style.iconSizePx }
+            val tp = tile.layoutParams
+            if (tp.width != style.iconSizePx) {
+                tile.layoutParams = tp.apply { width = style.iconSizePx; height = style.iconSizePx }
+                tile.background = if (style.tiles) app.olauncher.ui.widgets.IconTiles.drawable(cell.context, style.iconSizePx) else null
+                val inner = if (style.tiles) (style.iconSizePx * app.olauncher.ui.widgets.IconTiles.ICON_FRACTION).toInt() else style.iconSizePx
+                icon.layoutParams = icon.layoutParams.apply { width = inner; height = inner }
+            }
             title.isVisible = style.showLabels
         }
 
@@ -375,7 +385,7 @@ class AppDrawerAdapter(
             cell.contentDescription = appModel.appLabel
             icon.setImageDrawable(null)
             icon.colorFilter = if (notificationCount > 0) NotificationBadge.redFilter else null
-            if (!spacer) style.iconLoader(appModel, icon, style.iconSizePx)
+            if (!spacer) style.iconLoader(appModel, icon, icon.layoutParams.width)
             cell.setOnClickListener {
                 if (spacer) return@setOnClickListener
                 if (notificationCount > 0 && badgeTap != null) badgeTap(appModel) else clickListener(appModel)

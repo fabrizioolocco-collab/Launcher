@@ -266,7 +266,21 @@ class WidgetGridLayout @JvmOverloads constructor(
             )
         }
         val rows = maxOf(usedRows() + if (editing) 1 else 0, minRows)
-        setMeasuredDimension(width, rowTopFor(rows, rowH) + paddingBottom)
+        val content = rowTopFor(rows, rowH) + paddingBottom
+        // Given a fixed height (the home doesn't scroll), keep it: rows beyond it are not placeable
+        val height = when (MeasureSpec.getMode(heightMeasureSpec)) {
+            MeasureSpec.EXACTLY -> MeasureSpec.getSize(heightMeasureSpec)
+            MeasureSpec.AT_MOST -> minOf(content, MeasureSpec.getSize(heightMeasureSpec))
+            else -> content
+        }
+        setMeasuredDimension(width, height)
+    }
+
+    /** Can an item on [row] spanning [rowSpan] rows be fully visible? Always true before the first layout. */
+    fun fits(row: Int, rowSpan: Int): Boolean {
+        val h = if (height > 0) height else measuredHeight
+        if (h <= 0) return true
+        return rowTop(row + rowSpan) <= h - paddingBottom
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {

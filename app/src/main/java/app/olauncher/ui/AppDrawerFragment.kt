@@ -420,11 +420,11 @@ class AppDrawerFragment : BaseFragment() {
         val width = binding.recyclerView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
         val cellWidth = (width - binding.recyclerView.paddingLeft - binding.recyclerView.paddingRight) / columns
         val iconSize = if (prefs.drawerIconSize > 0) prefs.drawerIconSize.dpToPx()
-        else (cellWidth * if (prefs.drawerLabels) 0.5f else 0.62f).toInt().coerceAtLeast(24.dpToPx())
+        else (cellWidth * if (prefs.drawerLabels) 0.62f else 0.74f).toInt().coerceAtLeast(24.dpToPx())
         val rows = prefs.drawerRows
         val height = binding.recyclerView.height
         val cellHeight = if (rows > 0 && height > 0) (height - binding.recyclerView.paddingTop - binding.recyclerView.paddingBottom) / rows else 0
-        adapter.grid = AppDrawerAdapter.GridStyle(cellHeight, iconSize, prefs.drawerLabels) { appModel, view, size ->
+        adapter.grid = AppDrawerAdapter.GridStyle(cellHeight, iconSize, prefs.drawerLabels, prefs.iconTiles) { appModel, view, size ->
             loadGridIcon(appModel, view, size)
         }
         if (rows > 0 && height == 0) {

@@ -2,6 +2,7 @@ package app.olauncher.ui
 
 import android.content.Context
 import android.graphics.Typeface
+import app.olauncher.helper.getColorFromAttr
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -87,15 +88,25 @@ class DrawerTabsController(
         })
     }
 
+    /** A pill: the selected tab in the accent colour, the others on a tile. Tabs share the width, scrolling when many. */
     private fun chip(text: String, selected: Boolean) = TextView(context, null, 0, R.style.TextSmall).apply {
         this.text = text
         textSize = 16f
+        maxLines = 1
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        gravity = android.view.Gravity.CENTER
         setTypeface(typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
-        alpha = if (selected) 1f else 0.5f
-        setPadding(14.dpToPx(), 8.dpToPx(), 14.dpToPx(), 8.dpToPx())
+        setBackgroundResource(if (selected) R.drawable.bg_pill_accent else R.drawable.bg_pill_tile)
+        setTextColor(if (selected) 0xFFFFFFFF.toInt() else context.getColorFromAttr(R.attr.primaryColor))
+        if (!selected) alpha = 0.75f
+        setPadding(20.dpToPx(), 11.dpToPx(), 20.dpToPx(), 11.dpToPx())
         isClickable = true
         isLongClickable = true
-        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        val plus = text == "+"
+        minWidth = if (plus) 0 else 96.dpToPx()
+        layoutParams = LinearLayout.LayoutParams(if (plus) ViewGroup.LayoutParams.WRAP_CONTENT else 0, ViewGroup.LayoutParams.WRAP_CONTENT, if (plus) 0f else 1f).apply {
+            marginStart = 4.dpToPx(); marginEnd = 4.dpToPx()
+        }
     }
 
     private fun save() {

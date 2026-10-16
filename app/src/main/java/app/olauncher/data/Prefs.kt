@@ -220,6 +220,11 @@ class Prefs(context: Context) {
         get() = prefs.getInt(LETTER_INDEX_MODE, Constants.LetterIndex.ALWAYS)
         set(value) = prefs.edit { putInt(LETTER_INDEX_MODE, value) }
 
+    /** Rounded squares behind the icons (home grid and app list grid). */
+    var iconTiles: Boolean
+        get() = prefs.getBoolean("ICON_TILES", true)
+        set(value) = prefs.edit { putBoolean("ICON_TILES", value) }
+
     // ---- App drawer layout: list (default) or a grid of icons
 
     var drawerGrid: Boolean

@@ -11,5 +11,8 @@
     <attr name="primaryShadeColor" format="color" />
     <attr name="dialogShadeColor" format="color" />
     <attr name="primaryShadeDarkColor" format="color" />
+    <!-- Restyle: rounded tiles behind icons and unselected chips; accent of the selected chip -->
+    <attr name="tileColor" format="color" />
+    <attr name="accentColor" format="color" />
     <attr name="mainFontFamily" format="string" />
 </resources>
