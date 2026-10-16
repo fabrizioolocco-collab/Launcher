@@ -143,7 +143,7 @@ class HomeWidgetsController(
                 appWidgetId = -1, colSpan = 1, rowSpan = rowDivisions,
                 packageName = app.packageName, activityClassName = app.activityClassName, user = app.user,
             )
-            val (c, r) = findFreeSpot(1, rowDivisions)
+            val (c, r) = findFreeSpot(1, rowDivisions) ?: return@forEach
             item.col = c; item.row = r
             widgets.add(item)
         }
