@@ -124,6 +124,9 @@ class Prefs(context: Context) {
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val BOTTOM_LABELS = "BOTTOM_LABELS"
+    private val HOME_COLUMNS = "HOME_COLUMNS"
+    private val HOME_SHOW_LABELS = "HOME_SHOW_LABELS"
+    private val HOME_ICON_SIZE = "HOME_ICON_SIZE"
     private val LETTER_INDEX_MODE = "LETTER_INDEX_MODE"
     private val SECTION_FONT = "SECTION_FONT"
     private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
@@ -153,6 +156,20 @@ class Prefs(context: Context) {
     var appTextSize: Int
         get() = prefs.getInt(APP_TEXT_SIZE, 0)
         set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
+
+    /** Columns of apps in home sections (1-6). */
+    var homeColumns: Int
+        get() = prefs.getInt(HOME_COLUMNS, 1).coerceIn(1, 6)
+        set(value) = prefs.edit { putInt(HOME_COLUMNS, value.coerceIn(1, 6)) }
+
+    var homeShowLabels: Boolean
+        get() = prefs.getBoolean(HOME_SHOW_LABELS, true)
+        set(value) = prefs.edit { putBoolean(HOME_SHOW_LABELS, value) }
+
+    /** Icon size in dp for home apps, 0 = automatic. */
+    var homeIconSize: Int
+        get() = prefs.getInt(HOME_ICON_SIZE, 0)
+        set(value) = prefs.edit { putInt(HOME_ICON_SIZE, value) }
 
     /** Show app names under the icons of the bottom area. */
     var bottomLabels: Boolean

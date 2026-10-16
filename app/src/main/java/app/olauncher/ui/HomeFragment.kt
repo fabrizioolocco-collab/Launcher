@@ -279,6 +279,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         DetoxManager.state.observe(viewLifecycleOwner) {
             sections.render()
             widgets.render()
+            updateHeaderSpacing()
             bottomArea.render()
             detox.updateBar()
         }
@@ -410,7 +411,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply {
-            topMargin = marginTop
+            topMargin = (marginTop + headerOffsetPx()).coerceAtLeast(4.dpToPx())
             marginStart = horizontalMargin
             marginEnd = horizontalMargin
             gravity = if (prefs.homeAlignment == Gravity.END) Gravity.START else Gravity.END
@@ -419,7 +420,18 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         binding.tvScreenTime.setPadding(10.dpToPx())
     }
 
+    /** With widgets on top the clock moves up to them instead of keeping the status-bar gap. */
+    private fun headerOffsetPx(): Int = if (binding.widgetsLayout.isVisible) (-48).dpToPx() else 0
+
+    private fun updateHeaderSpacing() {
+        val params = binding.dateTimeLayout.layoutParams as ViewGroup.MarginLayoutParams
+        val base = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 48 else 56
+        params.topMargin = (base.dpToPx() + headerOffsetPx()).coerceAtLeast(4.dpToPx())
+        binding.dateTimeLayout.layoutParams = params
+    }
+
     private fun populateHomeScreen(@Suppress("UNUSED_PARAMETER") appCountUpdated: Boolean) {
+        updateHeaderSpacing()
         populateDateTime()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)

@@ -147,28 +147,20 @@ class HomeSectionsController(
         val gravity = prefs.homeAlignment
         val detox = DetoxManager.isActive(context)
         // Pinned apps outside groups (user order), then apps shown only for their notifications
-        var topRows = 0
-        ungrouped.forEach { sectionApp ->
-            val app = findApp(sectionApp) ?: return@forEach
-            container.addView(appView(UNGROUPED, sectionApp, app, gravity))
-            topRows++
-        }
-        val loose = looseApps()
-        loose.forEach { app -> container.addView(appView(LOOSE, SectionApp.from(app), app, gravity)) }
-        topRows += loose.size
-        if (topRows > 0) container.addView(View(context), LinearLayout.LayoutParams(1, 18.dpToPx()))
+        val top = ungrouped.mapNotNull { sectionApp -> findApp(sectionApp)?.let { appView(UNGROUPED, sectionApp, it, gravity) } } +
+                looseApps().map { app -> appView(LOOSE, SectionApp.from(app), app, gravity) }
+        addAppRows(top, gravity)
+        if (top.isNotEmpty()) container.addView(View(context), LinearLayout.LayoutParams(1, 12.dpToPx()))
         sections.forEachIndexed { index, section ->
             // During detox, sections without allowed apps disappear
             if (detox && section.apps.none { findApp(it) != null }) return@forEachIndexed
             container.addView(headerView(index, section, gravity))
             if (section.collapsed) return@forEachIndexed
-            var shown = 0
-            section.apps.forEach { sectionApp ->
-                val app = findApp(sectionApp) ?: return@forEach
-                container.addView(appView(index, sectionApp, app, gravity))
-                shown++
+            val views = section.apps.mapNotNull { sectionApp ->
+                findApp(sectionApp)?.let { appView(index, sectionApp, it, gravity) }
             }
-            if (shown == 0) container.addView(hintView(gravity))
+            addAppRows(views, gravity)
+            if (views.isEmpty()) container.addView(hintView(gravity))
         }
     }
 
@@ -214,15 +206,43 @@ class HomeSectionsController(
             layoutParams = lp(gravity)
         }
 
+    /** One column with names: icon beside the name. More columns or no names: icon above, centered. */
+    private fun iconOnTop() = prefs.homeColumns > 1 || !prefs.homeShowLabels
+
+    /** Adds app views to the container, [Prefs.homeColumns] per row. */
+    private fun addAppRows(views: List<View>, gravity: Int) {
+        val columns = prefs.homeColumns
+        if (columns <= 1) {
+            views.forEach { container.addView(it) }
+            return
+        }
+        views.chunked(columns).forEach { chunk ->
+            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            chunk.forEach { v ->
+                row.addView(v, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }
+            // Keep cells the same width in the last, shorter row
+            repeat(columns - chunk.size) { row.addView(View(context), LinearLayout.LayoutParams(0, 1, 1f)) }
+            container.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+    }
+
     private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View =
         TextView(context, null, 0, R.style.TextLarge).apply {
             FontManager.apply(this, prefs.appFont, prefs.appTextSize)
             val count = notificationCount(app)
-            text = badgeText(app.appLabel, count)
+            val onTop = iconOnTop()
+            text = when {
+                prefs.homeShowLabels -> badgeText(app.appLabel, count)
+                count > 0 -> count.toString()
+                else -> ""
+            }
+            if (onTop) setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, if (prefs.homeShowLabels) 12f else 11f)
             if (count > 0) setTextColor(NOTIFICATION_COLOR)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
-            this.gravity = Gravity.CENTER_VERTICAL or gravity
+            contentDescription = app.appLabel
+            this.gravity = if (onTop) Gravity.CENTER else Gravity.CENTER_VERTICAL or gravity
             val padV = context.resources.getDimensionPixelSize(R.dimen.home_app_padding_vertical)
             setPadding(0, padV, 0, padV)
             isClickable = true
@@ -233,24 +253,29 @@ class HomeSectionsController(
                 true
             }
             layoutParams = lp(gravity)
-            if (prefs.showIcons) loadIcon(this, app)
+            // Without names the icon is all there is: show it even if icons are turned off
+            if (prefs.showIcons || !prefs.homeShowLabels) loadIcon(this, app, onTop)
         }
 
     /** Apps that appear more than once in a section are counted once. */
     private fun sectionNotificationCount(section: HomeSection): Int =
         section.apps.mapNotNull { findApp(it) }.distinct().sumOf { notificationCount(it) }
 
-    private fun loadIcon(view: TextView, app: AppModel.App) {
-        val size = (view.textSize * 1.15f).toInt()
-        view.compoundDrawablePadding = 14.dpToPx()
+    private fun loadIcon(view: TextView, app: AppModel.App, onTop: Boolean = false) {
+        val size = if (prefs.homeIconSize > 0) prefs.homeIconSize.dpToPx() else
+            if (onTop) 44.dpToPx() else (view.textSize * 1.15f).toInt()
+        view.compoundDrawablePadding = if (onTop) 4.dpToPx() else 14.dpToPx()
+        fun place(d: android.graphics.drawable.Drawable) =
+            if (onTop) view.setCompoundDrawablesRelative(null, d, null, null)
+            else view.setCompoundDrawablesRelative(d, null, null, null)
         // Transparent placeholder keeps the text from shifting when the icon arrives
-        view.setCompoundDrawablesRelative(ColorDrawable(0).apply { setBounds(0, 0, size, size) }, null, null, null)
+        place(ColorDrawable(0).apply { setBounds(0, 0, size, size) })
         val iconPack = prefs.iconPack
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size)
             } ?: return@launch
-            view.setCompoundDrawablesRelative(IconPackManager.toDrawable(context, bitmap, size), null, null, null)
+            place(IconPackManager.toDrawable(context, bitmap, size))
         }
     }
 

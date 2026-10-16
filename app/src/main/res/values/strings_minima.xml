@@ -157,4 +157,7 @@
     <string name="ml_tab_hidden_off">Remove the Hidden tab</string>
     <string name="ml_choose_app">Choose app…</string>
     <string name="ml_no_app">No app</string>
+    <string name="ml_home_columns">App columns on home</string>
+    <string name="ml_home_labels">App names on home</string>
+    <string name="ml_home_icon_size">Home icon size</string>
 </resources>

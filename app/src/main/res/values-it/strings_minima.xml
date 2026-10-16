@@ -154,4 +154,7 @@
     <string name="ml_tab_hidden_off">Togli tab Nascoste</string>
     <string name="ml_choose_app">Scegli app…</string>
     <string name="ml_no_app">Nessuna app</string>
+    <string name="ml_home_columns">Colonne di app in home</string>
+    <string name="ml_home_labels">Nome delle app in home</string>
+    <string name="ml_home_icon_size">Dimensione icone in home</string>
 </resources>

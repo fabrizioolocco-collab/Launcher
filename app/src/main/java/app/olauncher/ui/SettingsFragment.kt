@@ -192,6 +192,25 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
+            R.id.homeColumns -> view.showPopupMenu(
+                configure = { menu -> (1..6).forEach { menu.add(Menu.NONE, it, it, it.toString()) } }
+            ) { item ->
+                prefs.homeColumns = item.itemId
+                populateTextStyle()
+            }
+            R.id.homeLabels -> {
+                prefs.homeShowLabels = !prefs.homeShowLabels
+                populateTextStyle()
+            }
+            R.id.homeIconSize -> view.showPopupMenu(
+                configure = { menu ->
+                    menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
+                    listOf(24, 32, 40, 48, 56, 64, 72, 80, 96).forEachIndexed { i, size -> menu.add(Menu.NONE, size, i + 1, size.toString()) }
+                }
+            ) { item ->
+                prefs.homeIconSize = item.itemId
+                populateTextStyle()
+            }
             R.id.tabsSettings -> DrawerTabsController.showTabsSettings(requireContext())
             R.id.detoxWhitelist -> showDetoxWhitelist()
             R.id.bottomLabels -> {
@@ -296,6 +315,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.notificationAccess.setOnClickListener(this)
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
+        binding.homeColumns.setOnClickListener(this)
+        binding.homeLabels.setOnClickListener(this)
+        binding.homeIconSize.setOnClickListener(this)
         binding.tabsSettings.setOnClickListener(this)
         binding.detoxWhitelist.setOnClickListener(this)
         binding.bottomLabels.setOnClickListener(this)
@@ -367,6 +389,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
         binding.widgetColumns.text = prefs.widgetColumns.toString()
+        binding.homeColumns.text = prefs.homeColumns.toString()
+        binding.homeLabels.setText(if (prefs.homeShowLabels) R.string.on else R.string.off)
+        binding.homeIconSize.text = if (prefs.homeIconSize > 0) prefs.homeIconSize.toString() else getString(R.string.ml_default)
         binding.bottomLabels.setText(if (prefs.bottomLabels) R.string.on else R.string.off)
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
