@@ -658,12 +658,14 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private fun askNewFolder() {
         showTextInputDialog(getString(R.string.ml_explorer_new_folder), "", getString(R.string.ml_explorer_folder_name), getString(R.string.ml_save)) { name ->
-            run(getString(R.string.ml_explorer_new_folder)) { File(location.dir, name).mkdirs() }
+            val dir = File(location.dir, name)
+            // While copying or moving, go into the new folder: more can be made inside, then paste
+            run(getString(R.string.ml_explorer_new_folder), then = { ok -> if (ok && clip != null) open(Location(dir)) }) { dir.mkdirs() }
         }
     }
 
     /** Runs a file operation off the main thread, then reloads the folder. */
-    private fun run(label: String, op: () -> Boolean) {
+    private fun run(label: String, then: ((Boolean) -> Unit)? = null, op: () -> Boolean) {
         showStatus(getString(R.string.ml_explorer_working, label))
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
@@ -676,6 +678,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             }
             if (!ok) showToast(getString(R.string.ml_explorer_failed, label))
             load()
+            then?.invoke(ok)
         }
     }
 
