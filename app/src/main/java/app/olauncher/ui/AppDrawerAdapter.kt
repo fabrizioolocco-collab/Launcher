@@ -370,7 +370,7 @@ class AppDrawerAdapter(
                 if (appModel.user != myUserHandle) append(" ●")
             }
             title.text = if (notificationCount > 0) HomeSectionsController.badgeText(appModel.appLabel, -1) else label
-            title.setTextColor(if (notificationCount > 0) HomeSectionsController.NOTIFICATION_COLOR else defaultTitleColors)
+            if (notificationCount > 0) title.setTextColor(HomeSectionsController.NOTIFICATION_COLOR) else title.setTextColor(defaultTitleColors)
             titleStyler?.invoke(title)
             cell.contentDescription = appModel.appLabel
             icon.setImageDrawable(null)
