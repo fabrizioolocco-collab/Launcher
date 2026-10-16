@@ -5,7 +5,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
-import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
@@ -181,6 +180,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         viewModel.getHiddenApps()
         binding.notificationAccessHint.isVisible = !NotificationRepository.isAccessGranted(requireContext())
         viewModel.isOlauncherDefault()
+        // The battery lives in the system status bar: show it once by default (can be turned off in Settings)
+        if (!prefs.statusBarDefaultApplied) {
+            prefs.statusBarDefaultApplied = true
+            prefs.showStatusBar = true
+        }
         if (prefs.showStatusBar) showStatusBar()
         else hideStatusBar()
     }
@@ -360,13 +364,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         binding.setDefaultLauncher.setOnLongClickListener(this)
         binding.tvScreenTime.setOnClickListener(this)
         binding.tvScreenTime.setOnLongClickListener(this)
-        binding.battery.setOnClickListener {
-            try {
-                startActivity(Intent(Intent.ACTION_POWER_USAGE_SUMMARY))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
         binding.notificationAccessHint.setOnClickListener {
             NotificationRepository.openAccessSettings(requireContext())
         }
@@ -385,17 +382,17 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         binding.dateTimeLayout.isVisible = prefs.dateTimeVisibility != Constants.DateTime.OFF
         binding.clock.isVisible = Constants.DateTime.isTimeVisible(prefs.dateTimeVisibility)
         binding.date.isVisible = Constants.DateTime.isDateVisible(prefs.dateTimeVisibility)
-        // Date and battery sit on the right of the clock, or at the start when the clock is hidden
+        // The date sits on the right of the clock, or at the start when the clock is hidden
         (binding.dateColumn.layoutParams as ViewGroup.MarginLayoutParams).marginStart =
             if (binding.clock.isVisible) 16.dpToPx() else 0
 
-        val dateFormat = SimpleDateFormat("EEE, d MMM", Locale.getDefault())
-        binding.date.text = dateFormat.format(Date()).replace(".,", ",")
-
-        val battery = (requireContext().getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
-            .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-        binding.battery.isVisible = battery > 0
-        binding.battery.text = getString(R.string.ml_battery, battery)
+        // "ven 16 ott · W42": ISO week (starts on Monday, week 1 holds the first Thursday)
+        val dateFormat = SimpleDateFormat("EEE d MMM", Locale.getDefault())
+        val week = java.util.Calendar.getInstance().apply {
+            firstDayOfWeek = java.util.Calendar.MONDAY
+            minimalDaysInFirstWeek = 4
+        }.get(java.util.Calendar.WEEK_OF_YEAR)
+        binding.date.text = getString(R.string.ml_date_week, dateFormat.format(Date()).replace(".", ""), week)
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)

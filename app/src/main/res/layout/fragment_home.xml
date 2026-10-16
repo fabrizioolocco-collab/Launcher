@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/mainLayout"
     android:layout_width="match_parent"
@@ -76,27 +77,26 @@
 
                         <LinearLayout
                             android:id="@+id/dateColumn"
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
+                            android:layout_weight="1"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="16dp"
                             android:orientation="vertical">
 
-                            <TextView
+                            <!-- Date and week number, as large as fits next to the clock -->
+                            <androidx.appcompat.widget.AppCompatTextView
                                 android:id="@+id/date"
                                 style="@style/TextDefault"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:textSize="@dimen/date_size"
-                                tools:text="Thu, 30 Dec" />
+                                android:layout_width="match_parent"
+                                android:layout_height="36dp"
+                                android:gravity="center_vertical|start"
+                                android:maxLines="1"
+                                android:paddingVertical="2dp"
+                                app:autoSizeMaxTextSize="26sp"
+                                app:autoSizeMinTextSize="14sp"
+                                app:autoSizeTextType="uniform"
+                                tools:text="ven 16 ott · W42" />
 
-                            <TextView
-                                android:id="@+id/battery"
-                                style="@style/TextDefault"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:alpha="0.8"
-                                android:textSize="@dimen/date_size"
-                                tools:text="Batteria 66%" />
 
                             <androidx.appcompat.widget.AppCompatTextView
                                 android:id="@+id/tvScreenTime"

@@ -85,16 +85,16 @@ class HomeSectionsController(
     }
 
     /**
-     * Apps with notifications that aren't in any section nor in the bottom area (hidden apps
-     * included): shown in red above the sections until their notifications are gone.
+     * Apps with notifications (hidden apps included, bottom area excluded): shown in red at the top
+     * of home, newest first, until their notifications are gone. Apps from sections or pinned on
+     * home leave their place meanwhile and go back to it afterwards.
      */
     private fun looseApps(): List<AppModel.App> {
         if (notifications.isEmpty()) return emptyList()
-        val placed = (sections.flatMap { it.apps } + ungrouped).map { NotificationRepository.key(it.packageName, it.user) }.toSet() +
-                bottomAppKeys()
+        val bottom = bottomAppKeys()
         return (apps + hiddenApps)
             .filter { notificationCount(it) > 0 }
-            .filter { NotificationRepository.key(it.appPackage, it.user.toString()) !in placed }
+            .filter { NotificationRepository.key(it.appPackage, it.user.toString()) !in bottom }
             .filter { DetoxManager.isAllowed(context, it.appPackage) }
             .distinctBy { NotificationRepository.key(it.appPackage, it.user.toString()) }
             .sortedWith(
@@ -146,9 +146,13 @@ class HomeSectionsController(
         if (!appsLoaded) return
         val gravity = prefs.homeAlignment
         val detox = DetoxManager.isActive(context)
-        // Pinned apps outside groups (user order), then apps shown only for their notifications
-        val top = ungrouped.mapNotNull { sectionApp -> findApp(sectionApp)?.let { appView(UNGROUPED, sectionApp, it, gravity) } } +
-                looseApps().map { app -> appView(LOOSE, SectionApp.from(app), app, gravity) }
+        // Apps with notifications first (newest first), then pinned apps outside groups (user order).
+        // Notified apps are shown only up there, not in their usual place.
+        val loose = looseApps()
+        val notifiedKeys = loose.map { NotificationRepository.key(it.appPackage, it.user.toString()) }.toSet()
+        fun atItsPlace(app: AppModel.App) = NotificationRepository.key(app.appPackage, app.user.toString()) !in notifiedKeys
+        val top = loose.map { app -> appView(LOOSE, SectionApp.from(app), app, gravity) } +
+                ungrouped.mapNotNull { sectionApp -> findApp(sectionApp)?.takeIf(::atItsPlace)?.let { appView(UNGROUPED, sectionApp, it, gravity) } }
         addAppRows(top, gravity)
         if (top.isNotEmpty()) container.addView(View(context), LinearLayout.LayoutParams(1, 12.dpToPx()))
         sections.forEachIndexed { index, section ->
@@ -157,10 +161,10 @@ class HomeSectionsController(
             container.addView(headerView(index, section, gravity))
             if (section.collapsed) return@forEachIndexed
             val views = section.apps.mapNotNull { sectionApp ->
-                findApp(sectionApp)?.let { appView(index, sectionApp, it, gravity) }
+                findApp(sectionApp)?.takeIf(::atItsPlace)?.let { appView(index, sectionApp, it, gravity) }
             }
             addAppRows(views, gravity)
-            if (views.isEmpty()) container.addView(hintView(gravity))
+            if (section.apps.none { findApp(it) != null }) container.addView(hintView(gravity))
         }
     }
 

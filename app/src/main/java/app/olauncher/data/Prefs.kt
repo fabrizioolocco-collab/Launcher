@@ -261,6 +261,11 @@ class Prefs(context: Context) {
         get() = prefs.getInt(APP_LABEL_ALIGNMENT, Gravity.START)
         set(value) = prefs.edit { putInt(APP_LABEL_ALIGNMENT, value).apply() }
 
+    /** True once the status bar has been turned on by default (it shows the battery). */
+    var statusBarDefaultApplied: Boolean
+        get() = prefs.getBoolean("STATUS_BAR_DEFAULT_APPLIED", false)
+        set(value) = prefs.edit { putBoolean("STATUS_BAR_DEFAULT_APPLIED", value) }
+
     var showStatusBar: Boolean
         get() = prefs.getBoolean(STATUS_BAR, false)
         set(value) = prefs.edit { putBoolean(STATUS_BAR, value).apply() }
