@@ -292,4 +292,19 @@
     <string name="ml_viewer_dimensions">Dimensioni: %1$s</string>
     <string name="ml_viewer_duration">Durata: %1$s</string>
     <string name="ml_viewer_camera">Fotocamera: %1$s</string>
+    <!-- Photo editor -->
+    <string name="ml_edit_crop">Ritaglia</string>
+    <string name="ml_edit_draw">Disegna</string>
+    <string name="ml_edit_rotate">Ruota</string>
+    <string name="ml_edit_square">Quadrato</string>
+    <string name="ml_edit_reset">Reimposta</string>
+    <string name="ml_edit_width">Spessore</string>
+    <string name="ml_edit_undo">Annulla</string>
+    <string name="ml_edit_discard_title">Scartare le modifiche?</string>
+    <string name="ml_edit_discard">Le modifiche a questa foto andranno perse.</string>
+    <string name="ml_edit_discard_action">Scarta</string>
+    <string name="ml_edit_save_title">Salva</string>
+    <string name="ml_edit_save_copy">Salva come copia</string>
+    <string name="ml_edit_save_overwrite">Sovrascrivi l\'originale</string>
+    <string name="ml_edit_saved">Salvato come %1$s</string>
 </resources>

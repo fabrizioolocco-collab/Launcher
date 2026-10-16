@@ -298,4 +298,19 @@
     <string name="ml_viewer_dimensions">Dimensions: %1$s</string>
     <string name="ml_viewer_duration">Duration: %1$s</string>
     <string name="ml_viewer_camera">Camera: %1$s</string>
+    <!-- Photo editor -->
+    <string name="ml_edit_crop">Crop</string>
+    <string name="ml_edit_draw">Draw</string>
+    <string name="ml_edit_rotate">Rotate</string>
+    <string name="ml_edit_square">Square</string>
+    <string name="ml_edit_reset">Reset</string>
+    <string name="ml_edit_width">Width</string>
+    <string name="ml_edit_undo">Undo</string>
+    <string name="ml_edit_discard_title">Discard changes?</string>
+    <string name="ml_edit_discard">The changes to this photo will be lost.</string>
+    <string name="ml_edit_discard_action">Discard</string>
+    <string name="ml_edit_save_title">Save</string>
+    <string name="ml_edit_save_copy">Save as a copy</string>
+    <string name="ml_edit_save_overwrite">Overwrite the original</string>
+    <string name="ml_edit_saved">Saved as %1$s</string>
 </resources>
