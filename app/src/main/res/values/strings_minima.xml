@@ -114,6 +114,7 @@
     <string name="ml_detox_request_exit">Ask to leave (10-minute wait)</string>
     <string name="ml_detox_cancel_exit">Cancel leave request</string>
     <string name="ml_detox_whitelist">Apps allowed in detox</string>
+    <string name="ml_detox_allowed">Allowed in detox</string>
     <string name="ml_detox_whitelist_locked">Strict session running: allowed apps can\'t be changed</string>
     <string name="ml_detox_admin_disable_warning">A detox session is running.</string>
     <string name="ml_permissions">Permissions</string>

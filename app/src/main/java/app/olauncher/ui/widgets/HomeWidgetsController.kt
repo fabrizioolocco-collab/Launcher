@@ -383,6 +383,7 @@ class HomeWidgetsController(
                 MenuEntry(activity.getString(R.string.ml_app_info)) {
                     openAppInfo(activity, app.user, app.appPackage)
                 },
+                app.olauncher.ui.DetoxController.whitelistEntry(activity, app.appPackage),
             ),
             header = AppNotificationsView.create(activity, app),
         )

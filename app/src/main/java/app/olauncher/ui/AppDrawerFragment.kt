@@ -347,7 +347,7 @@ class AppDrawerFragment : BaseFragment() {
             entries += MenuEntry(getString(R.string.adapter_show)) { unhide(appModel) }
             entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
-            ctx.showMenuDialog(appModel.appLabel, entries, header = AppNotificationsView.create(ctx, appModel))
+            ctx.showMenuDialog(appModel.appLabel, entries + DetoxController.whitelistEntry(ctx, appModel.appPackage), header = AppNotificationsView.create(ctx, appModel))
             return
         }
         if (appModel is AppModel.App) {
@@ -370,7 +370,7 @@ class AppDrawerFragment : BaseFragment() {
             }
             entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
-            ctx.showMenuDialog(appModel.appLabel, entries, header = AppNotificationsView.create(ctx, appModel))
+            ctx.showMenuDialog(appModel.appLabel, entries + DetoxController.whitelistEntry(ctx, appModel.appPackage), header = AppNotificationsView.create(ctx, appModel))
         } else if (appModel is AppModel.PinnedShortcut) {
             entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }

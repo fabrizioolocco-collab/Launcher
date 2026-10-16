@@ -346,7 +346,7 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
-        context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, entries + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
     }
 
     /** Menu of an app pinned on home outside any group. */
@@ -371,7 +371,7 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, app.user, app.appPackage)
         }
-        context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, entries + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
     }
 
     private fun moveUngrouped(position: Int, delta: Int) {
@@ -401,7 +401,7 @@ class HomeSectionsController(
                 openAppInfo(context, app.user, app.appPackage)
             },
         )
-        context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, entries + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
     }
 
     // ---------------------------------------------------------------- operations

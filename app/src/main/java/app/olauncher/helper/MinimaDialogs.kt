@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatCheckBox
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.CompoundButtonCompat
 import androidx.recyclerview.widget.GridLayoutManager
@@ -31,7 +32,16 @@ import kotlinx.coroutines.withContext
 import java.text.Normalizer
 
 /** A menu entry for [showMenuDialog]. */
-class MenuEntry(val label: String, val onClick: () -> Unit)
+/**
+ * A menu row. With [checked] set it's a switch instead: flipping it calls [onToggle] with the new
+ * state and keeps the menu open; when [onToggle] returns false the switch flips back.
+ */
+class MenuEntry(
+    val label: String,
+    val checked: Boolean? = null,
+    val onToggle: ((Boolean) -> Boolean)? = null,
+    val onClick: () -> Unit = {},
+)
 
 private fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding> {
     val dialog = OlDialog(this)
@@ -70,6 +80,24 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
     val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val rows = entries.map { entry ->
+        if (entry.checked != null) return@map SwitchCompat(ctx).apply {
+            text = entry.label
+            textSize = 18f
+            setTextColor(primary)
+            setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
+            isChecked = entry.checked
+            var reverting = false
+            setOnCheckedChangeListener { button, isChecked ->
+                if (reverting) return@setOnCheckedChangeListener
+                if (entry.onToggle?.invoke(isChecked) == false) {
+                    reverting = true
+                    button.isChecked = !isChecked
+                    reverting = false
+                }
+            }
+        }.also {
+            list.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
         ctx.dialogTextView(R.style.TextSmall).apply {
             text = entry.label
             textSize = 18f
@@ -243,15 +271,29 @@ fun Context.showMultiSelectDialog(
 
     binding.contentContainer.addView(container)
     binding.contentContainer.isVisible = true
-    binding.tvAction.text = action
-    binding.tvAction.isVisible = true
-    binding.tvAction.setOnClickListener {
-        filter.hideKeyboard()
-        dialog.dismiss()
-        onConfirm(checked)
-    }
-    // Keep the keyboard closed until the search field is tapped
-    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
+    // The action sits in the title row, next to the close icon: a long list or the keyboard can
+    // push the bottom row off screen
+    binding.tvAction.isVisible = false
+    val titleRow = binding.tvTitle.parent as android.widget.FrameLayout
+    (binding.tvTitle.layoutParams as ViewGroup.MarginLayoutParams).marginEnd = 120.dpToPx()
+    titleRow.addView(ctx.dialogTextView(R.style.TextSmallBold).apply {
+        text = action
+        textSize = 18f
+        setPadding(8.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
+        isClickable = true
+        isFocusable = true
+        setOnClickListener {
+            filter.hideKeyboard()
+            dialog.dismiss()
+            onConfirm(checked)
+        }
+    }, android.widget.FrameLayout.LayoutParams(
+        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL
+    ).apply { marginEnd = 40.dpToPx() })
+    // Keep the keyboard closed until the search field is tapped; then shrink to stay above it
+    dialog.window?.setSoftInputMode(
+        WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+    )
     dialog.showRespectingStatusBar()
     return dialog
 }

@@ -112,6 +112,7 @@
     <string name="ml_detox_request_exit">Chiedi di uscire (attesa 10 minuti)</string>
     <string name="ml_detox_cancel_exit">Annulla la richiesta di uscita</string>
     <string name="ml_detox_whitelist">App consentite in detox</string>
+    <string name="ml_detox_allowed">Consentita in detox</string>
     <string name="ml_detox_whitelist_locked">Sessione strict in corso: le app consentite non si possono cambiare</string>
     <string name="ml_detox_admin_disable_warning">È in corso una sessione detox.</string>
     <string name="ml_permissions">Permessi</string>

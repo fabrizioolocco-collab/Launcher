@@ -320,4 +320,18 @@ class DetoxController(
         handler.removeCallbacks(ticker)
         permissionsDialog?.dismiss()
     }
+
+    companion object {
+        /** App menu switch: allowed during detox or not. Locked while a strict session runs. */
+        fun whitelistEntry(context: Context, packageName: String) = MenuEntry(
+            context.getString(R.string.ml_detox_allowed),
+            checked = packageName in DetoxManager.whitelist(context),
+            onToggle = { on ->
+                val list = DetoxManager.whitelist(context)
+                val ok = DetoxManager.setWhitelist(context, if (on) list + packageName else list - packageName)
+                if (!ok) context.showToast(context.getString(R.string.ml_detox_whitelist_locked))
+                ok
+            },
+        )
+    }
 }
