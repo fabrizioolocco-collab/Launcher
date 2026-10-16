@@ -246,4 +246,29 @@
     <string name="ml_swipe_shortcut_of">Shortcut of %1$s…</string>
     <string name="ml_swipe_shortcut_other">Shortcut of another app…</string>
     <string name="ml_swipe_open_file">Open a file…</string>
+    <!-- File explorer views -->
+    <string name="ml_explorer_view">View</string>
+    <string name="ml_explorer_grid">Grid</string>
+    <string name="ml_explorer_columns">Columns: %1$d</string>
+    <string name="ml_explorer_columns_title">Columns</string>
+    <string name="ml_explorer_sort_by">Sort by: %1$s</string>
+    <string name="ml_explorer_sort_title">Sort by</string>
+    <string name="ml_explorer_sort_name">Name</string>
+    <string name="ml_explorer_sort_date">Date</string>
+    <string name="ml_explorer_sort_size">Size</string>
+    <string name="ml_explorer_sort_type">Type</string>
+    <string name="ml_explorer_sort_manual">Manual</string>
+    <string name="ml_explorer_manual_hint">Long-press and drag to reorder</string>
+    <string name="ml_explorer_descending">Descending</string>
+    <string name="ml_explorer_folders_first">Folders first</string>
+    <string name="ml_explorer_show_names">Show names</string>
+    <string name="ml_explorer_show_size">Show size</string>
+    <string name="ml_explorer_show_date">Show date</string>
+    <string name="ml_explorer_show_extension">Show extension</string>
+    <string name="ml_explorer_show_thumbnails">Thumbnails</string>
+    <string name="ml_explorer_show_hidden">Hidden files</string>
+    <string name="ml_explorer_view_reset">Use the settings of the folder above</string>
+    <string name="ml_explorer_view_own">Settings of this folder (also used by its subfolders)</string>
+    <string name="ml_explorer_view_from">Settings inherited from «%1$s»: a change applies to this folder</string>
+    <string name="ml_explorer_view_default">Default settings: a change applies to this folder and its subfolders</string>
 </resources>

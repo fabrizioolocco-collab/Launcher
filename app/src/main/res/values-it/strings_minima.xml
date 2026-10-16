@@ -240,4 +240,29 @@
     <string name="ml_swipe_shortcut_of">Scorciatoia di %1$s…</string>
     <string name="ml_swipe_shortcut_other">Scorciatoia di un\'altra app…</string>
     <string name="ml_swipe_open_file">Apri un file…</string>
+    <!-- File explorer views -->
+    <string name="ml_explorer_view">Vista</string>
+    <string name="ml_explorer_grid">Griglia</string>
+    <string name="ml_explorer_columns">Colonne: %1$d</string>
+    <string name="ml_explorer_columns_title">Colonne</string>
+    <string name="ml_explorer_sort_by">Ordina per: %1$s</string>
+    <string name="ml_explorer_sort_title">Ordina per</string>
+    <string name="ml_explorer_sort_name">Nome</string>
+    <string name="ml_explorer_sort_date">Data</string>
+    <string name="ml_explorer_sort_size">Dimensione</string>
+    <string name="ml_explorer_sort_type">Tipo</string>
+    <string name="ml_explorer_sort_manual">Manuale</string>
+    <string name="ml_explorer_manual_hint">Tieni premuto e trascina per riordinare</string>
+    <string name="ml_explorer_descending">Decrescente</string>
+    <string name="ml_explorer_folders_first">Cartelle prima</string>
+    <string name="ml_explorer_show_names">Mostra i nomi</string>
+    <string name="ml_explorer_show_size">Mostra la dimensione</string>
+    <string name="ml_explorer_show_date">Mostra la data</string>
+    <string name="ml_explorer_show_extension">Mostra l\'estensione</string>
+    <string name="ml_explorer_show_thumbnails">Miniature</string>
+    <string name="ml_explorer_show_hidden">File nascosti</string>
+    <string name="ml_explorer_view_reset">Usa le impostazioni della cartella sopra</string>
+    <string name="ml_explorer_view_own">Impostazioni di questa cartella (valgono anche per le sottocartelle)</string>
+    <string name="ml_explorer_view_from">Impostazioni ereditate da «%1$s»: una modifica vale per questa cartella</string>
+    <string name="ml_explorer_view_default">Impostazioni predefinite: una modifica vale per questa cartella e le sottocartelle</string>
 </resources>
