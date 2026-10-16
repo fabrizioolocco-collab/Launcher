@@ -55,6 +55,37 @@
             android:exported="false"
             android:label="@string/ml_explorer" />
 
+        <!-- Built-in PDF viewer and editor; also offered to other apps opening a PDF -->
+        <activity
+            android:name=".ui.pdf.PdfViewerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="true"
+            android:label="@string/ml_pdf_tool"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".ui.pdf.PdfPagesActivity"
+            android:exported="false"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme" />
+        <activity
+            android:name=".ui.pdf.SignatureActivity"
+            android:exported="false"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme" />
+
         <!-- Built-in photo/video viewer and editors -->
         <activity
             android:name=".ui.media.MediaViewerActivity"

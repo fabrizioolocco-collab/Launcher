@@ -70,6 +70,8 @@ dependencies {
     implementation libs.appcompat
     implementation libs.recyclerview
     implementation libs.exifinterface
+    // PDF editing (annotations, signature, page order) without rasterising the pages
+    implementation libs.pdfbox
 
     // Android lifecycle
     implementation libs.lifecycle.extensions

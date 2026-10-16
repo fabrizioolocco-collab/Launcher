@@ -1,6 +1,7 @@
 [versions]
 appcompat = "1.7.0"
 exifinterface = "1.3.7"
+pdfbox = "2.0.27.0"
 coreKtx = "1.16.0"
 gradle = "8.9.1"
 kotlinStdlib = "2.1.20"
@@ -14,6 +15,7 @@ junit = "4.13.2"
 [libraries]
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
+pdfbox = { module = "com.tom-roush:pdfbox-android", version.ref = "pdfbox" }
 core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 gradle = { module = "com.android.tools.build:gradle", version.ref = "gradle" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlinStdlib" }

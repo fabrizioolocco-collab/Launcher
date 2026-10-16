@@ -459,6 +459,9 @@ class HomeSearchController(
                         if (file != null && MediaThumbnails.isMedia(mime) && prefs.builtInViewer) {
                             app.olauncher.ui.media.MediaViewerActivity.open(activity, file)
                             leave()
+                        } else if (file != null && mime == "application/pdf" && prefs.builtInPdf) {
+                            app.olauncher.ui.pdf.PdfViewerActivity.open(activity, file)
+                            leave()
                         } else open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                     }
                 }

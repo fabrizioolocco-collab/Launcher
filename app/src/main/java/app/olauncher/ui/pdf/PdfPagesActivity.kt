@@ -1,0 +1,299 @@
+package app.olauncher.ui.pdf
+
+import android.content.Context
+import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
+import android.os.Bundle
+import android.os.ParcelFileDescriptor
+import android.text.TextUtils
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
+import androidx.recyclerview.widget.RecyclerView
+import app.olauncher.R
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.dpToPx
+import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showToast
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+
+/**
+ * Page thumbnails of a PDF: drag to reorder, long press to rotate, delete or restore. The result
+ * (order and rotations, indexes of the original pages) goes back to the viewer.
+ */
+class PdfPagesActivity : AppCompatActivity() {
+
+    private lateinit var file: File
+    private var renderer: PdfRenderer? = null
+    private var total = 0
+    /** Current order (original indexes); deleted pages are kept aside to be restorable. */
+    private val order = mutableListOf<Int>()
+    private val deleted = mutableListOf<Int>()
+    private val rotation = mutableMapOf<Int, Int>()
+    private val thumbs = HashMap<Int, Bitmap>()
+    private lateinit var grid: RecyclerView
+    private lateinit var restoreButton: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        file = File(intent.getStringExtra(EXTRA_PATH) ?: run { finish(); return })
+        intent.getIntArrayExtra(EXTRA_ORDER)?.let { order.addAll(it.toList()) }
+        intent.getIntArrayExtra(EXTRA_ROTATION_KEYS)?.let { keys ->
+            val values = intent.getIntArrayExtra(EXTRA_ROTATION_VALUES) ?: IntArray(keys.size)
+            keys.forEachIndexed { i, k -> rotation[k] = values[i] }
+        }
+        try {
+            renderer = PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY))
+            total = renderer!!.pageCount
+        } catch (e: Exception) {
+            showToast(getString(R.string.ml_pdf_cannot_open))
+            finish()
+            return
+        }
+        if (order.isEmpty()) order.addAll(0 until total)
+        deleted.addAll((0 until total).filter { it !in order })
+        setContentView(buildLayout())
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        renderer?.close()
+    }
+
+    private fun buildLayout(): View {
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.BLACK)
+        }
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(0, bars.top, 0, bars.bottom)
+            insets
+        }
+        val top = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(12.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
+        }
+        top.addView(button("←", 26f) { finish() })
+        top.addView(TextView(this).apply {
+            setText(R.string.ml_pdf_pages)
+            setTextColor(Color.WHITE)
+            textSize = 18f
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 8.dpToPx() })
+        restoreButton = button(getString(R.string.ml_pdf_restore_page), 14f) { restore() }
+        top.addView(restoreButton)
+        top.addView(button("✓", 26f) { done() })
+        root.addView(top)
+        root.addView(TextView(this).apply {
+            setText(R.string.ml_pdf_pages_hint)
+            setTextColor(0xB3FFFFFF.toInt())
+            textSize = 13f
+            setPadding(20.dpToPx(), 0, 20.dpToPx(), 8.dpToPx())
+        })
+        grid = RecyclerView(this).apply {
+            layoutManager = GridLayoutManager(this@PdfPagesActivity, 3)
+            adapter = PagesAdapter()
+            overScrollMode = View.OVER_SCROLL_NEVER
+            setPadding(8.dpToPx(), 0, 8.dpToPx(), 16.dpToPx())
+            clipToPadding = false
+        }
+        dragHelper.attachToRecyclerView(grid)
+        root.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        updateRestore()
+        return root
+    }
+
+    private fun button(label: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
+        text = label
+        textSize = size
+        setTextColor(Color.WHITE)
+        gravity = Gravity.CENTER
+        setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
+        isClickable = true
+        setOnClickListener { onClick() }
+    }
+
+    private fun updateRestore() {
+        restoreButton.isVisible = deleted.isNotEmpty()
+    }
+
+    private fun restore() {
+        showMenuDialog(getString(R.string.ml_pdf_restore_page), deleted.map { index ->
+            MenuEntry(getString(R.string.ml_pdf_page_of, index + 1, total)) {
+                deleted.remove(index)
+                order.add(index)
+                grid.adapter?.notifyDataSetChanged()
+                updateRestore()
+            }
+        })
+    }
+
+    private fun done() {
+        if (order.isEmpty()) {
+            showToast(getString(R.string.ml_pdf_nothing))
+            return
+        }
+        setResult(RESULT_OK, Intent()
+            .putExtra(EXTRA_ORDER, order.toIntArray())
+            .putExtra(EXTRA_ROTATION_KEYS, rotation.keys.toIntArray())
+            .putExtra(EXTRA_ROTATION_VALUES, rotation.keys.map { rotation.getValue(it) }.toIntArray()))
+        finish()
+    }
+
+    private fun pageMenu(position: Int) {
+        val index = order[position]
+        val entries = mutableListOf<MenuEntry>()
+        if (position > 0) entries += MenuEntry(getString(R.string.ml_pdf_move_left)) { move(position, position - 1) }
+        if (position < order.lastIndex) entries += MenuEntry(getString(R.string.ml_pdf_move_right)) { move(position, position + 1) }
+        entries += MenuEntry(getString(R.string.ml_pdf_rotate)) {
+            rotation[index] = ((rotation[index] ?: 0) + 90) % 360
+            grid.adapter?.notifyItemChanged(position)
+        }
+        entries += MenuEntry(getString(R.string.ml_pdf_delete_page)) {
+            order.removeAt(position)
+            deleted.add(index)
+            grid.adapter?.notifyItemRemoved(position)
+            updateRestore()
+        }
+        showMenuDialog(getString(R.string.ml_pdf_page_of, index + 1, total), entries)
+    }
+
+    private fun move(from: Int, to: Int) {
+        order.add(to, order.removeAt(from))
+        grid.adapter?.notifyItemMoved(from, to)
+    }
+
+    private var dragMoved = false
+    private var dragPos = -1
+    private val dragHelper = ItemTouchHelper(object : ItemTouchHelper.Callback() {
+        override fun getMovementFlags(rv: RecyclerView, vh: RecyclerView.ViewHolder) =
+            makeMovementFlags(ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT, 0)
+
+        override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder, to: RecyclerView.ViewHolder): Boolean {
+            val a = from.bindingAdapterPosition
+            val b = to.bindingAdapterPosition
+            if (a < 0 || b < 0) return false
+            order.add(b, order.removeAt(a))
+            rv.adapter?.notifyItemMoved(a, b)
+            dragMoved = true
+            return true
+        }
+
+        override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+        override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+            super.onSelectedChanged(viewHolder, actionState)
+            if (actionState == ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null) {
+                dragMoved = false
+                dragPos = viewHolder.bindingAdapterPosition
+                viewHolder.itemView.alpha = 0.6f
+            }
+        }
+
+        override fun clearView(rv: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+            super.clearView(rv, viewHolder)
+            viewHolder.itemView.alpha = 1f
+            // A long press without moving opens the page menu
+            if (!dragMoved && dragPos in order.indices) pageMenu(dragPos)
+            dragPos = -1
+        }
+    })
+
+    private suspend fun thumbnail(index: Int, width: Int): Bitmap? {
+        thumbs[index]?.let { return it }
+        val r = renderer ?: return null
+        val bitmap = withContext(Dispatchers.IO) {
+            try {
+                synchronized(r) {
+                    r.openPage(index).use { page ->
+                        val h = width * page.height / page.width
+                        Bitmap.createBitmap(width, h, Bitmap.Config.ARGB_8888).also { b ->
+                            b.eraseColor(Color.WHITE)
+                            page.render(b, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (bitmap != null) thumbs[index] = bitmap
+        return bitmap
+    }
+
+    private inner class PagesAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        override fun getItemCount() = order.size
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val side = (parent.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) / 3
+            val cell = LinearLayout(parent.context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(6.dpToPx(), 6.dpToPx(), 6.dpToPx(), 10.dpToPx())
+                isClickable = true
+                layoutParams = RecyclerView.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
+            val box = FrameLayout(parent.context).apply { setBackgroundColor(0xFF333333.toInt()) }
+            box.addView(ImageView(parent.context).apply { scaleType = ImageView.ScaleType.FIT_CENTER },
+                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            val inner = side - 12.dpToPx()
+            cell.addView(box, LinearLayout.LayoutParams(inner, inner * 4 / 3))
+            cell.addView(TextView(parent.context).apply {
+                setTextColor(Color.WHITE)
+                textSize = 12f
+                maxLines = 1
+                ellipsize = TextUtils.TruncateAt.END
+                setPadding(0, 4.dpToPx(), 0, 0)
+            })
+            return object : RecyclerView.ViewHolder(cell) {}
+        }
+
+        override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+            val index = order[position]
+            val cell = holder.itemView as LinearLayout
+            val box = cell.getChildAt(0) as FrameLayout
+            val image = box.getChildAt(0) as ImageView
+            val label = cell.getChildAt(1) as TextView
+            val rot = rotation[index] ?: 0
+            label.text = "${index + 1}" + if (rot != 0) "  ↻$rot°" else ""
+            image.rotation = rot.toFloat()
+            image.tag = index
+            image.setImageBitmap(null)
+            lifecycleScope.launch {
+                val b = thumbnail(index, box.layoutParams.width.coerceAtLeast(64)) ?: return@launch
+                if (image.tag == index) image.setImageBitmap(b)
+            }
+            cell.setOnClickListener { pageMenu(holder.bindingAdapterPosition) }
+        }
+    }
+
+    companion object {
+        const val EXTRA_PATH = "path"
+        const val EXTRA_ORDER = "order"
+        const val EXTRA_ROTATION_KEYS = "rot_keys"
+        const val EXTRA_ROTATION_VALUES = "rot_values"
+
+        fun intent(context: Context, file: File, layout: PageLayout) = Intent(context, PdfPagesActivity::class.java)
+            .putExtra(EXTRA_PATH, file.absolutePath)
+            .putExtra(EXTRA_ORDER, layout.order.toIntArray())
+            .putExtra(EXTRA_ROTATION_KEYS, layout.rotation.keys.toIntArray())
+            .putExtra(EXTRA_ROTATION_VALUES, layout.rotation.keys.map { layout.rotation.getValue(it) }.toIntArray())
+    }
+}

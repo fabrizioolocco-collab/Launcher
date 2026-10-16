@@ -191,6 +191,11 @@ class Prefs(context: Context) {
         set(value) = prefs.edit { putBoolean(AUTO_LAUNCH_SINGLE, value) }
 
     /** Drawer "News": false = most recent first, true = most notifications first. */
+    /** PDFs: true = built-in viewer/editor, false = an external app. */
+    var builtInPdf: Boolean
+        get() = prefs.getBoolean("BUILT_IN_PDF", true)
+        set(value) = prefs.edit { putBoolean("BUILT_IN_PDF", value) }
+
     /** Photos and videos: true = built-in viewer, false = the gallery app (Fossify). */
     var builtInViewer: Boolean
         get() = prefs.getBoolean("BUILT_IN_VIEWER", true)

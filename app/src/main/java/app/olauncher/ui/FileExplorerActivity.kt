@@ -640,6 +640,10 @@ open class FileExplorerActivity : AppCompatActivity() {
             app.olauncher.ui.media.MediaViewerActivity.open(this, file)
             return
         }
+        if (!chooser && mime == "application/pdf" && app.olauncher.data.Prefs(this).builtInPdf) {
+            app.olauncher.ui.pdf.PdfViewerActivity.open(this, file)
+            return
+        }
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uriFor(file), mime ?: "*/*")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         try {
