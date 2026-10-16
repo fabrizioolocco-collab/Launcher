@@ -296,6 +296,7 @@ class HomeSectionsController(
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection() },
                 MenuEntry(context.getString(R.string.ml_add_widget_top)) { addWidget() },
                 MenuEntry(context.getString(R.string.ml_add_to_bottom)) { addToBottom() },
+                MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },
                 MenuEntry(context.getString(R.string.ml_settings)) { openSettings() },
             )
         )

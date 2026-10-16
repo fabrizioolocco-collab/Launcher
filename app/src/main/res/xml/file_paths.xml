@@ -4,4 +4,8 @@
     <cache-path
         name="onedrive"
         path="onedrive/" />
+    <!-- Phone files opened or shared from the file explorer -->
+    <external-path
+        name="storage"
+        path="." />
 </paths>

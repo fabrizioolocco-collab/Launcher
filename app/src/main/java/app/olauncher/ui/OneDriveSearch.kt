@@ -8,6 +8,9 @@ import android.util.Base64
 import androidx.core.content.edit
 import app.olauncher.R
 import app.olauncher.helper.showToast
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.asRequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -188,7 +191,10 @@ class OneDriveSearch(private val context: Context) {
     }
 
     private fun requestToken(vararg params: Pair<String, String>): Boolean = try {
-        val body = (listOf("client_id" to CLIENT_ID, "scope" to SCOPES) + params)
+        // A refresh keeps the scopes granted at sign-in (older sign-ins were read-only)
+        val refreshing = params.any { it.first == "grant_type" && it.second == "refresh_token" }
+        val scope = if (refreshing) prefs.getString(KEY_SCOPE, null) ?: OLD_SCOPES else SCOPES
+        val body = (listOf("client_id" to CLIENT_ID, "scope" to scope) + params)
             .joinToString("&") { (k, v) -> "$k=" + URLEncoder.encode(v, "UTF-8") }
         val conn = (URL("$AUTHORITY/token").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -215,6 +221,7 @@ class OneDriveSearch(private val context: Context) {
                 putString(KEY_ACCESS, json.getString("access_token"))
                 putLong(KEY_EXPIRES, System.currentTimeMillis() + (json.optLong("expires_in", 3600) - 60) * 1000)
                 json.optString("refresh_token").takeIf { it.isNotBlank() }?.let { putString(KEY_REFRESH, it) }
+                if (!refreshing) putString(KEY_SCOPE, scope)
                 remove(KEY_VERIFIER)
                 remove(KEY_STATE)
             }
@@ -224,6 +231,162 @@ class OneDriveSearch(private val context: Context) {
         e.printStackTrace()
         lastError = e.toString()
         false
+    }
+
+    // ---------------------------------------------------------------- file explorer
+
+    /** False for sign-ins made before editing was supported: the user must connect again. */
+    fun canWrite(): Boolean = prefs.getString(KEY_SCOPE, null)?.contains("ReadWrite") == true
+
+    private val http by lazy { okhttp3.OkHttpClient() }
+
+    private fun call(method: String, url: String, json: JSONObject? = null): JSONObject? {
+        val token = accessToken() ?: return null
+        val body = json?.toString()?.jsonBody()
+        val request = okhttp3.Request.Builder().url(url).header("Authorization", "Bearer $token")
+            .method(method, body ?: if (method == "POST" || method == "PATCH") "".jsonBody() else null)
+            .build()
+        return try {
+            http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    lastError = "HTTP ${response.code}"
+                    null
+                } else response.body?.string()?.takeIf { it.isNotBlank() }?.let { JSONObject(it) } ?: JSONObject()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            lastError = e.toString()
+            null
+        }
+    }
+
+    private fun String.jsonBody() = toRequestBody("application/json".toMediaType())
+
+    private fun itemUrl(id: String?) = if (id == null) "$GRAPH/root" else "$GRAPH/items/${Uri.encode(id)}"
+
+    private fun parseItem(o: JSONObject): Item {
+        val parent = o.optJSONObject("parentReference")
+        val path = parent?.optString("path")?.substringAfter("root:", "")?.trimStart('/')?.ifBlank { null }
+        return Item(
+            id = o.optString("id"),
+            name = o.optString("name"),
+            path = path?.let { Uri.decode(it) },
+            webUrl = o.optString("webUrl"),
+            isFolder = o.has("folder"),
+            parentId = parent?.optString("id")?.ifBlank { null },
+            mimeType = o.optJSONObject("file")?.optString("mimeType")?.ifBlank { null },
+            size = o.optLong("size"),
+        )
+    }
+
+    /** A folder or file; [id] null for the root. */
+    fun item(id: String?): Item? = call("GET", itemUrl(id) + "?\$select=$ITEM_FIELDS")?.let { parseItem(it) }
+
+    /** Content of a folder ([folderId] null for the root), or null on errors. */
+    fun children(folderId: String?): List<Item>? {
+        val list = mutableListOf<Item>()
+        var url: String? = itemUrl(folderId) + "/children?\$top=200&\$select=$ITEM_FIELDS"
+        while (url != null && list.size < 2000) {
+            val page = call("GET", url) ?: return null
+            val values = page.optJSONArray("value") ?: break
+            for (i in 0 until values.length()) list += parseItem(values.getJSONObject(i))
+            url = page.optString("@odata.nextLink").ifBlank { null }
+        }
+        return list
+    }
+
+    fun rename(id: String, name: String) = call("PATCH", itemUrl(id), JSONObject().put("name", name)) != null
+
+    fun delete(id: String): Boolean {
+        val token = accessToken() ?: return false
+        val request = okhttp3.Request.Builder().url(itemUrl(id)).header("Authorization", "Bearer $token").delete().build()
+        return try {
+            http.newCall(request).execute().use { it.isSuccessful }
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun folderRef(folderId: String?): JSONObject {
+        val id = folderId ?: item(null)?.id
+        return JSONObject().put("id", id)
+    }
+
+    fun move(id: String, targetFolderId: String?) =
+        call("PATCH", itemUrl(id) + "?@microsoft.graph.conflictBehavior=rename", JSONObject().put("parentReference", folderRef(targetFolderId))) != null
+
+    /** Server-side copy: runs in the background on OneDrive, the result shows up shortly after. */
+    fun copy(id: String, targetFolderId: String?): Boolean {
+        val drive = call("GET", "$GRAPH?\$select=id")?.optString("id")
+        val ref = folderRef(targetFolderId).apply { if (!drive.isNullOrBlank()) put("driveId", drive) }
+        return call("POST", itemUrl(id) + "/copy?@microsoft.graph.conflictBehavior=rename", JSONObject().put("parentReference", ref)) != null
+    }
+
+    fun createFolder(parentId: String?, name: String): Item? = call(
+        "POST", itemUrl(parentId) + "/children",
+        JSONObject().put("name", name).put("folder", JSONObject()).put("@microsoft.graph.conflictBehavior", "rename"),
+    )?.let { parseItem(it) }
+
+    /** Uploads a local file into [parentId] (null = root); big files go in chunks. */
+    fun upload(file: java.io.File, parentId: String?): Boolean {
+        val token = accessToken() ?: return false
+        val target = itemUrl(parentId) + ":/" + Uri.encode(file.name) + ":"
+        return try {
+            if (file.length() <= SMALL_UPLOAD) {
+                val request = okhttp3.Request.Builder().url("$target/content?@microsoft.graph.conflictBehavior=rename")
+                    .header("Authorization", "Bearer $token")
+                    .put(file.asRequestBody("application/octet-stream".toMediaType()))
+                    .build()
+                http.newCall(request).execute().use { it.isSuccessful }
+            } else {
+                val session = call(
+                    "POST", "$target/createUploadSession",
+                    JSONObject().put("item", JSONObject().put("@microsoft.graph.conflictBehavior", "rename")),
+                ) ?: return false
+                val uploadUrl = session.optString("uploadUrl").ifBlank { return false }
+                val total = file.length()
+                val buffer = ByteArray(CHUNK)
+                file.inputStream().use { input ->
+                    var offset = 0L
+                    while (offset < total) {
+                        var read = 0
+                        while (read < CHUNK) {
+                            val n = input.read(buffer, read, CHUNK - read)
+                            if (n < 0) break
+                            read += n
+                        }
+                        val chunk = buffer.toRequestBody("application/octet-stream".toMediaType(), 0, read)
+                        val request = okhttp3.Request.Builder().url(uploadUrl)
+                            .header("Content-Range", "bytes $offset-${offset + read - 1}/$total")
+                            .put(chunk).build()
+                        val ok = http.newCall(request).execute().use { it.isSuccessful }
+                        if (!ok) return false
+                        offset += read
+                    }
+                }
+                true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /** Downloads [item] to [target]. */
+    fun downloadTo(item: Item, target: java.io.File): Boolean {
+        val token = accessToken() ?: return false
+        val request = okhttp3.Request.Builder().url(itemUrl(item.id) + "/content").header("Authorization", "Bearer $token").build()
+        return try {
+            http.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return false
+                response.body?.byteStream()?.use { input -> target.outputStream().use { input.copyTo(it) } } ?: return false
+                true
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            target.delete()
+            false
+        }
     }
 
     private fun randomString(): String = base64Url(ByteArray(32).also { SecureRandom().nextBytes(it) })
@@ -236,7 +399,13 @@ class OneDriveSearch(private val context: Context) {
         const val CLIENT_ID = "583f7ca6-fa44-4333-a927-eb8f8580d3ab"
         const val REDIRECT_URI = "minimalauncher://auth"
         private const val AUTHORITY = "https://login.microsoftonline.com/consumers/oauth2/v2.0"
-        private const val SCOPES = "Files.Read offline_access"
+        private const val SCOPES = "Files.ReadWrite offline_access"
+        private const val OLD_SCOPES = "Files.Read offline_access"
+        private const val KEY_SCOPE = "SCOPE"
+        private const val GRAPH = "https://graph.microsoft.com/v1.0/me/drive"
+        private const val ITEM_FIELDS = "id,name,webUrl,parentReference,folder,file,size,lastModifiedDateTime"
+        private const val SMALL_UPLOAD = 4L * 1024 * 1024
+        private const val CHUNK = 320 * 1024 * 16
         private const val MAX_RESULTS = 15
 
         private const val KEY_ACCESS = "ACCESS"

@@ -191,6 +191,11 @@ class Prefs(context: Context) {
         set(value) = prefs.edit { putBoolean(AUTO_LAUNCH_SINGLE, value) }
 
     /** Drawer "News": false = most recent first, true = most notifications first. */
+    /** Phone folders from the search: true = built-in explorer, false = the file manager (Solid Explorer). */
+    var phoneFoldersInExplorer: Boolean
+        get() = prefs.getBoolean("PHONE_FOLDERS_IN_EXPLORER", true)
+        set(value) = prefs.edit { putBoolean("PHONE_FOLDERS_IN_EXPLORER", value) }
+
     /** Home search bar target: 0 Google, 1 phone, 2 OneDrive. */
     var searchMode: Int
         get() = prefs.getInt("SEARCH_MODE", 0)

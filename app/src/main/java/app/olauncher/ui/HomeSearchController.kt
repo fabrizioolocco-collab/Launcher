@@ -424,6 +424,11 @@ class HomeSearchController(
      * to receive a folder, so the usual variants are tried in turn.
      */
     private fun openLocalFolder(dir: File) {
+        if (prefs.phoneFoldersInExplorer) {
+            FileExplorerActivity.openLocal(activity, dir)
+            close()
+            return
+        }
         val fileUri = Uri.fromFile(dir)
         val docUri = DocumentsContract.buildDocumentUri(EXTERNAL_STORAGE_DOCS, "primary:" + relative(dir))
         val dirMime = DocumentsContract.Document.MIME_TYPE_DIR
@@ -456,10 +461,15 @@ class HomeSearchController(
     private fun cloudRow(item: OneDriveSearch.Item): Row {
         val where = item.path ?: activity.getString(R.string.ml_search_onedrive)
         return if (item.isFolder) Row(Kind.CLOUD_FOLDER, item.name, activity.getString(R.string.ml_search_folder, where)) {
-            openCloudUrl(item.webUrl)
+            FileExplorerActivity.openCloud(activity, item.id, item.name)
+            close()
         } else Row(
             Kind.CLOUD_FILE, item.name, where,
-            openFolder = item.parentId?.let { parentId -> { openCloudFolder(parentId) } },
+            openFolder = {
+                // Parent at the root: its path is empty
+                FileExplorerActivity.openCloud(activity, if (item.path == null) null else item.parentId, item.path?.substringAfterLast('/') ?: activity.getString(R.string.ml_search_onedrive))
+                close()
+            },
         ) { openCloudFile(item) }
     }
 
@@ -491,14 +501,6 @@ class HomeSearchController(
             close()
         } catch (e: Exception) {
             open(intent)
-        }
-    }
-
-    private fun openCloudFolder(parentId: String) {
-        scope.launch {
-            val url = withContext(Dispatchers.IO) { oneDrive.webUrlOf(parentId) }
-            if (url != null) openCloudUrl(url)
-            else activity.showToast(activity.getString(R.string.ml_search_cannot_open))
         }
     }
 

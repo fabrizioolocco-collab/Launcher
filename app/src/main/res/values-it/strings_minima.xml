@@ -210,4 +210,27 @@
     <string name="ml_search_open_folder">Apri cartella</string>
     <string name="ml_onedrive_downloading">Scarico %1$s…</string>
     <string name="ml_onedrive_download_failed">Download da OneDrive non riuscito</string>
+    <!-- File explorer -->
+    <string name="ml_explorer">File</string>
+    <string name="ml_file_manager">File manager</string>
+    <string name="ml_phone_folders">Apri le cartelle del telefono in</string>
+    <string name="ml_explorer_new_folder">Nuova cartella</string>
+    <string name="ml_explorer_folder_name">Nome della cartella</string>
+    <string name="ml_explorer_paste">Incolla qui</string>
+    <string name="ml_explorer_copying">Copia: %1$s</string>
+    <string name="ml_explorer_moving">Sposta: %1$s</string>
+    <string name="ml_explorer_delete">Elimina</string>
+    <string name="ml_explorer_copy">Copia</string>
+    <string name="ml_explorer_move">Sposta</string>
+    <string name="ml_explorer_share">Condividi</string>
+    <string name="ml_explorer_open_with">Apri con…</string>
+    <string name="ml_explorer_folder">Cartella</string>
+    <string name="ml_explorer_empty">Cartella vuota</string>
+    <string name="ml_explorer_loading">Carico…</string>
+    <string name="ml_explorer_cannot_read">Questa cartella non si può leggere</string>
+    <string name="ml_explorer_working">%1$s in corso…</string>
+    <string name="ml_explorer_failed">%1$s non riuscito</string>
+    <string name="ml_explorer_delete_confirm">Eliminare «%1$s»? Non si può annullare.</string>
+    <string name="ml_explorer_into_itself">Una cartella non può andare dentro se stessa</string>
+    <string name="ml_explorer_reconnect">Per modificare i file su OneDrive collegalo di nuovo e consenti la modifica.</string>
 </resources>

@@ -40,6 +40,28 @@
         android:theme="@style/AppTheme"
         tools:ignore="UnusedAttribute">
 
+        <!-- Built-in file explorer (phone and OneDrive), also listed as "File" in the app list -->
+        <activity
+            android:name=".ui.FileExplorerActivity"
+            android:exported="false"
+            android:label="@string/ml_explorer"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.files"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity-alias
+            android:name=".FilesAlias"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/ml_explorer"
+            android:targetActivity=".ui.FileExplorerActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Shares OneDrive downloads with the app that opens them -->
         <provider
             android:name="androidx.core.content.FileProvider"

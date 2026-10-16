@@ -215,4 +215,27 @@
     <string name="ml_search_open_folder">Open folder</string>
     <string name="ml_onedrive_downloading">Downloading %1$s…</string>
     <string name="ml_onedrive_download_failed">Download from OneDrive failed</string>
+    <!-- File explorer -->
+    <string name="ml_explorer">Files</string>
+    <string name="ml_file_manager">File manager</string>
+    <string name="ml_phone_folders">Open phone folders in</string>
+    <string name="ml_explorer_new_folder">New folder</string>
+    <string name="ml_explorer_folder_name">Folder name</string>
+    <string name="ml_explorer_paste">Paste here</string>
+    <string name="ml_explorer_copying">Copy: %1$s</string>
+    <string name="ml_explorer_moving">Move: %1$s</string>
+    <string name="ml_explorer_delete">Delete</string>
+    <string name="ml_explorer_copy">Copy</string>
+    <string name="ml_explorer_move">Move</string>
+    <string name="ml_explorer_share">Share</string>
+    <string name="ml_explorer_open_with">Open with…</string>
+    <string name="ml_explorer_folder">Folder</string>
+    <string name="ml_explorer_empty">Empty folder</string>
+    <string name="ml_explorer_loading">Loading…</string>
+    <string name="ml_explorer_cannot_read">This folder can\'t be read</string>
+    <string name="ml_explorer_working">%1$s in progress…</string>
+    <string name="ml_explorer_failed">%1$s failed</string>
+    <string name="ml_explorer_delete_confirm">Delete «%1$s»? This cannot be undone.</string>
+    <string name="ml_explorer_into_itself">A folder can\'t go inside itself</string>
+    <string name="ml_explorer_reconnect">To change files on OneDrive, connect it again and allow editing.</string>
 </resources>
