@@ -106,7 +106,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         views = FolderViewsRepository(this)
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = if (selecting) clearSelection() else goUp()
+            override fun handleOnBackPressed() = if (selecting) clearSelection() else goBack()
         })
         location = startLocation(intent)
         load()
@@ -295,6 +295,13 @@ open class FileExplorerActivity : AppCompatActivity() {
             return
         }
         open(Location(dir.parentFile ?: storageRoot))
+    }
+
+    /** Back gesture: up one folder while inside the folder the explorer was opened in; past it, leave the explorer. */
+    private fun goBack() {
+        val entry = startLocation(intent).dir.absolutePath
+        val dir = location.dir.absolutePath
+        if (dir == entry || !dir.startsWith("$entry/")) finish() else goUp()
     }
 
     private fun open(loc: Location) {
