@@ -307,4 +307,9 @@
     <string name="ml_edit_save_copy">Salva come copia</string>
     <string name="ml_edit_save_overwrite">Sovrascrivi l\'originale</string>
     <string name="ml_edit_saved">Salvato come %1$s</string>
+    <!-- Video trim -->
+    <string name="ml_edit_trim">Taglia</string>
+    <string name="ml_edit_trim_range">%1$s – %2$s  ·  %3$s</string>
+    <string name="ml_edit_trim_too_short">Tieni almeno mezzo secondo</string>
+    <string name="ml_edit_trim_saving">Salvo il video tagliato…</string>
 </resources>
