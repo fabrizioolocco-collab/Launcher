@@ -92,6 +92,13 @@ class MainActivity : AppCompatActivity() {
                 // Back never leaves the home screen; elsewhere it pops the nav stack
                 if (navController.currentDestination?.id != R.id.mainFragment)
                     navController.popBackStack()
+                else {
+                    // On home, let the home screen handle it (e.g. close the search page). Its
+                    // callback was registered first, so pass the event on explicitly.
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
             }
         }
         onBackPressedDispatcher.addCallback(this, onBackPressedCallback)
