@@ -279,8 +279,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         DetoxManager.state.observe(viewLifecycleOwner) {
             sections.render()
             widgets.render()
-            updateHeaderSpacing()
-            bottomArea.render()
+                bottomArea.render()
             detox.updateBar()
         }
         DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }
@@ -361,6 +360,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         binding.setDefaultLauncher.setOnLongClickListener(this)
         binding.tvScreenTime.setOnClickListener(this)
         binding.tvScreenTime.setOnLongClickListener(this)
+        binding.battery.setOnClickListener {
+            try {
+                startActivity(Intent(Intent.ACTION_POWER_USAGE_SUMMARY))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
         binding.notificationAccessHint.setOnClickListener {
             NotificationRepository.openAccessSettings(requireContext())
         }
@@ -379,59 +385,27 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         binding.dateTimeLayout.isVisible = prefs.dateTimeVisibility != Constants.DateTime.OFF
         binding.clock.isVisible = Constants.DateTime.isTimeVisible(prefs.dateTimeVisibility)
         binding.date.isVisible = Constants.DateTime.isDateVisible(prefs.dateTimeVisibility)
+        // Date and battery sit on the right of the clock, or at the start when the clock is hidden
+        (binding.dateColumn.layoutParams as ViewGroup.MarginLayoutParams).marginStart =
+            if (binding.clock.isVisible) 16.dpToPx() else 0
 
-//        var dateText = SimpleDateFormat("EEE, d MMM", Locale.getDefault()).format(Date())
         val dateFormat = SimpleDateFormat("EEE, d MMM", Locale.getDefault())
-        var dateText = dateFormat.format(Date())
+        binding.date.text = dateFormat.format(Date()).replace(".,", ",")
 
-        if (!prefs.showStatusBar) {
-            val battery = (requireContext().getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
-                .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-            if (battery > 0)
-                dateText = getString(R.string.day_battery, dateText, battery)
-        }
-        binding.date.text = dateText.replace(".,", ",")
+        val battery = (requireContext().getSystemService(Context.BATTERY_SERVICE) as BatteryManager)
+            .getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        binding.battery.isVisible = battery > 0
+        binding.battery.text = getString(R.string.ml_battery, battery)
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun populateScreenTime() {
         if (requireContext().appUsagePermissionGranted().not()) return
-
         viewModel.getTodaysScreenTime()
         binding.tvScreenTime.visibility = View.VISIBLE
-
-        val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val horizontalMargin = if (isLandscape) 64.dpToPx() else 10.dpToPx()
-        val marginTop = if (isLandscape) {
-            if (prefs.dateTimeVisibility == Constants.DateTime.DATE_ONLY) 36.dpToPx() else 56.dpToPx()
-        } else {
-            if (prefs.dateTimeVisibility == Constants.DateTime.DATE_ONLY) 45.dpToPx() else 72.dpToPx()
-        }
-        val params = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            topMargin = (marginTop + headerOffsetPx()).coerceAtLeast(4.dpToPx())
-            marginStart = horizontalMargin
-            marginEnd = horizontalMargin
-            gravity = if (prefs.homeAlignment == Gravity.END) Gravity.START else Gravity.END
-        }
-        binding.tvScreenTime.layoutParams = params
-        binding.tvScreenTime.setPadding(10.dpToPx())
-    }
-
-    /** With widgets on top the clock moves up to them instead of keeping the status-bar gap. */
-    private fun headerOffsetPx(): Int = if (binding.widgetsLayout.isVisible) (-48).dpToPx() else 0
-
-    private fun updateHeaderSpacing() {
-        val params = binding.dateTimeLayout.layoutParams as ViewGroup.MarginLayoutParams
-        val base = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 48 else 56
-        params.topMargin = (base.dpToPx() + headerOffsetPx()).coerceAtLeast(4.dpToPx())
-        binding.dateTimeLayout.layoutParams = params
     }
 
     private fun populateHomeScreen(@Suppress("UNUSED_PARAMETER") appCountUpdated: Boolean) {
-        updateHeaderSpacing()
         populateDateTime()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)

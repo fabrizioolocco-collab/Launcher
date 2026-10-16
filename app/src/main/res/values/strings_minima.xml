@@ -161,4 +161,5 @@
     <string name="ml_home_labels">App names on home</string>
     <string name="ml_home_icon_size">Home icon size</string>
     <string name="ml_open_app">Open app</string>
+    <string name="ml_battery">Battery %1$d%%</string>
 </resources>
