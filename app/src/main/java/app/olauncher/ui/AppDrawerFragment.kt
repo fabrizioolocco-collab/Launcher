@@ -111,6 +111,7 @@ class AppDrawerFragment : BaseFragment() {
                 context = requireContext(),
                 bar = binding.tabsBar,
                 allApps = { currentAppList.orEmpty().filterIsInstance<AppModel.App>() },
+                hiddenApps = { currentHiddenApps },
                 onSelectionChanged = { updateCombinedAppList() },
             ).also { it.render() }
             updateCombinedAppList()
@@ -335,6 +336,14 @@ class AppDrawerFragment : BaseFragment() {
         val ctx = requireContext()
         binding.search.hideKeyboard()
         val entries = mutableListOf<MenuEntry>()
+        if (appModel is AppModel.App && tabs?.showingHidden == true && binding.search.query.isNullOrBlank()) {
+            // "Hidden" tab: bring the app back
+            entries += MenuEntry(getString(R.string.adapter_show)) { unhide(appModel) }
+            entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
+            entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
+            ctx.showMenuDialog(appModel.appLabel, entries, header = AppNotificationsView.create(ctx, appModel))
+            return
+        }
         if (appModel is AppModel.App) {
             if (!adapter.isHiddenList) {
                 entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
@@ -361,6 +370,12 @@ class AppDrawerFragment : BaseFragment() {
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
             ctx.showMenuDialog(appModel.appLabel, entries)
         }
+    }
+
+    private fun unhide(appModel: AppModel) {
+        prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { remove(appModel.appPackage + "|" + appModel.user.toString()) }
+        viewModel.getAppList()
+        viewModel.getHiddenApps()
     }
 
     private fun askRename(appModel: AppModel) {
@@ -467,7 +482,8 @@ class AppDrawerFragment : BaseFragment() {
         val detox = flag == Constants.FLAG_LAUNCH_APP && DetoxManager.isActive(ctx)
         val allowed = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         val searching = !binding.search.query.isNullOrBlank()
-        val apps = if (searching) allowed else tabs?.filter(allowed) ?: allowed
+        val apps = (if (searching) allowed else tabs?.filter(allowed) ?: allowed)
+            .filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         // "News" block removed: apps with notifications are shown on home instead
         val combined = apps.toMutableList()
 

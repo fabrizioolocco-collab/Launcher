@@ -152,4 +152,7 @@
     <string name="ml_add_to_tab">Add to tab…</string>
     <string name="ml_tabs_settings">App list tabs</string>
     <string name="ml_home" translatable="false">Home</string>
+    <string name="ml_tab_hidden">Hidden</string>
+    <string name="ml_tab_hidden_on">Show the Hidden tab</string>
+    <string name="ml_tab_hidden_off">Remove the Hidden tab</string>
 </resources>

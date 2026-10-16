@@ -149,4 +149,7 @@
     <string name="ml_tab_delete_confirm">Eliminare il tab \"%1$s\"? Le app restano installate.</string>
     <string name="ml_add_to_tab">Aggiungi a tab…</string>
     <string name="ml_tabs_settings">Tab della lista app</string>
+    <string name="ml_tab_hidden">Nascoste</string>
+    <string name="ml_tab_hidden_on">Mostra tab Nascoste</string>
+    <string name="ml_tab_hidden_off">Togli tab Nascoste</string>
 </resources>

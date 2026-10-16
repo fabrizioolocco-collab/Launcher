@@ -27,6 +27,8 @@ class DrawerTabsController(
     private val bar: LinearLayout,
     /** All launchable apps, used when editing a tab's apps. */
     private val allApps: () -> List<AppModel.App>,
+    /** Hidden apps, listed by the "Hidden" tab. */
+    private val hiddenApps: () -> List<AppModel>,
     private val onSelectionChanged: () -> Unit,
 ) {
     private val repo = DrawerTabsRepository(context)
@@ -34,7 +36,11 @@ class DrawerTabsController(
 
     /** Visible tabs in order: (All) + enabled user tabs. A null id stands for "All". */
     private fun visibleIds(): List<String> =
-        (if (repo.allEnabled) listOf(DrawerTabsRepository.ALL_ID) else emptyList()) + tabs.filter { it.enabled }.map { it.id }
+        (if (repo.allEnabled) listOf(DrawerTabsRepository.ALL_ID) else emptyList()) + tabs.filter { it.enabled }.map { it.id } +
+                (if (repo.hiddenEnabled) listOf(DrawerTabsRepository.HIDDEN_ID) else emptyList())
+
+    /** True when the "Hidden" tab is the one shown. */
+    val showingHidden get() = selectedId() == DrawerTabsRepository.HIDDEN_ID
 
     private fun selectedId(): String {
         val visible = visibleIds()
@@ -46,6 +52,7 @@ class DrawerTabsController(
     fun filter(apps: List<AppModel>): List<AppModel> {
         val id = selectedId()
         if (id == DrawerTabsRepository.ALL_ID) return apps
+        if (id == DrawerTabsRepository.HIDDEN_ID) return hiddenApps()
         val tab = tabs.firstOrNull { it.id == id } ?: return apps
         return apps.filter { DrawerTabsRepository.key(it) in tab.apps }
     }
@@ -54,8 +61,11 @@ class DrawerTabsController(
         bar.removeAllViews()
         val selected = selectedId()
         visibleIds().forEach { id ->
-            val name = if (id == DrawerTabsRepository.ALL_ID) context.getString(R.string.ml_tab_all)
-            else tabs.first { it.id == id }.name
+            val name = when (id) {
+                DrawerTabsRepository.ALL_ID -> context.getString(R.string.ml_tab_all)
+                DrawerTabsRepository.HIDDEN_ID -> context.getString(R.string.ml_tab_hidden)
+                else -> tabs.first { it.id == id }.name
+            }
             bar.addView(chip(name, id == selected).apply {
                 setOnClickListener {
                     repo.selected = id
@@ -111,8 +121,26 @@ class DrawerTabsController(
         if (id == DrawerTabsRepository.ALL_ID) {
             context.showMenuDialog(
                 context.getString(R.string.ml_tab_all),
+                listOf(
+                    MenuEntry(context.getString(if (repo.hiddenEnabled) R.string.ml_tab_hidden_off else R.string.ml_tab_hidden_on)) {
+                        repo.hiddenEnabled = !repo.hiddenEnabled
+                        render()
+                        onSelectionChanged()
+                    },
+                    MenuEntry(context.getString(R.string.ml_tab_disable)) {
+                        repo.allEnabled = false
+                        render()
+                        onSelectionChanged()
+                    },
+                )
+            )
+            return
+        }
+        if (id == DrawerTabsRepository.HIDDEN_ID) {
+            context.showMenuDialog(
+                context.getString(R.string.ml_tab_hidden),
                 listOf(MenuEntry(context.getString(R.string.ml_tab_disable)) {
-                    repo.allEnabled = false
+                    repo.hiddenEnabled = false
                     render()
                     onSelectionChanged()
                 })
@@ -188,13 +216,16 @@ class DrawerTabsController(
         fun showTabsSettings(context: Context) {
             val repo = DrawerTabsRepository(context)
             val tabs = repo.load()
-            val labels = listOf(context.getString(R.string.ml_tab_all)) + tabs.map { it.name }
+            val labels = listOf(context.getString(R.string.ml_tab_all)) + tabs.map { it.name } + context.getString(R.string.ml_tab_hidden)
+            val hiddenIndex = labels.lastIndex
             val checked = buildSet {
                 if (repo.allEnabled) add(0)
                 tabs.forEachIndexed { i, t -> if (t.enabled) add(i + 1) }
+                if (repo.hiddenEnabled) add(hiddenIndex)
             }
             context.showMultiSelectDialog(context.getString(R.string.ml_tabs_settings), labels, checked, context.getString(R.string.ml_done)) { selected ->
                 repo.allEnabled = 0 in selected
+                repo.hiddenEnabled = hiddenIndex in selected
                 tabs.forEachIndexed { i, t -> t.enabled = (i + 1) in selected }
                 repo.save(tabs)
             }

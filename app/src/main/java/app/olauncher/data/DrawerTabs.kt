@@ -25,6 +25,11 @@ class DrawerTabsRepository(context: Context) {
         get() = prefs.getBoolean(KEY_ALL_ENABLED, true)
         set(value) = prefs.edit { putBoolean(KEY_ALL_ENABLED, value) }
 
+    /** The "Hidden" tab (hidden apps), last in the bar. Off by default. */
+    var hiddenEnabled: Boolean
+        get() = prefs.getBoolean(KEY_HIDDEN_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(KEY_HIDDEN_ENABLED, value) }
+
     /** Last selected tab id ([ALL_ID] for "All"). */
     var selected: String
         get() = prefs.getString(KEY_SELECTED, ALL_ID) ?: ALL_ID
@@ -62,6 +67,8 @@ class DrawerTabsRepository(context: Context) {
 
     companion object {
         const val ALL_ID = "all"
+        const val HIDDEN_ID = "hidden"
+        private const val KEY_HIDDEN_ENABLED = "HIDDEN_ENABLED"
         private const val KEY_TABS = "TABS"
         private const val KEY_ALL_ENABLED = "ALL_ENABLED"
         private const val KEY_SELECTED = "SELECTED"
