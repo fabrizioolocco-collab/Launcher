@@ -135,4 +135,7 @@
     <string name="ml_add_widget_top">Add widget at the top</string>
     <string name="ml_add_to_bottom">Add to the bottom area…</string>
     <string name="ml_search_apps">Search apps</string>
+    <string name="ml_add_to_home">Add to home</string>
+    <string name="ml_added_to_home">Added to home</string>
+    <string name="ml_already_on_home">Already on home</string>
 </resources>

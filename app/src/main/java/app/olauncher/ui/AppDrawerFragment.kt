@@ -320,6 +320,9 @@ class AppDrawerFragment : BaseFragment() {
         val entries = mutableListOf<MenuEntry>()
         if (appModel is AppModel.App) {
             if (!adapter.isHiddenList) {
+                entries += MenuEntry(getString(R.string.ml_add_to_home)) {
+                    ctx.showToast(getString(if (HomeSectionsController.addUngrouped(ctx, appModel)) R.string.ml_added_to_home else R.string.ml_already_on_home))
+                }
                 entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
                 entries += MenuEntry(getString(R.string.ml_change_icon)) {
                     IconChooser.show(ctx, appModel, uiScope, { callback ->

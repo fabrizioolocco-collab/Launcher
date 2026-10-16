@@ -62,6 +62,26 @@ class HomeSectionsRepository(context: Context) {
     /** True once sections have ever been saved (even an empty list), so we migrate Olauncher's home apps only once. */
     fun isInitialized(): Boolean = prefs.contains(KEY_SECTIONS)
 
+    /** Apps pinned on home outside any section, in the user's order. */
+    fun loadUngrouped(): MutableList<SectionApp> {
+        val raw = prefs.getString(KEY_UNGROUPED, null) ?: return mutableListOf()
+        return try {
+            val array = JSONArray(raw)
+            MutableList(array.length()) { i ->
+                val a = array.getJSONObject(i)
+                SectionApp(a.getString("p"), a.optString("c").ifBlank { null }, a.getString("u"))
+            }
+        } catch (e: Exception) {
+            mutableListOf()
+        }
+    }
+
+    fun saveUngrouped(apps: List<SectionApp>) {
+        val array = JSONArray()
+        apps.forEach { array.put(JSONObject().put("p", it.packageName).put("c", it.activityClassName ?: "").put("u", it.user)) }
+        prefs.edit { putString(KEY_UNGROUPED, array.toString()) }
+    }
+
     private fun HomeSection.toJson() = JSONObject().apply {
         put("id", id)
         put("name", name)
@@ -98,5 +118,6 @@ class HomeSectionsRepository(context: Context) {
     companion object {
         private const val PREFS_FILE = "app.minimalauncher.sections"
         private const val KEY_SECTIONS = "SECTIONS"
+        private const val KEY_UNGROUPED = "UNGROUPED"
     }
 }

@@ -133,4 +133,7 @@
     <string name="ml_add_widget_top">Aggiungi widget in alto</string>
     <string name="ml_add_to_bottom">Aggiungi nella zona in basso…</string>
     <string name="ml_search_apps">Cerca app</string>
+    <string name="ml_add_to_home">Aggiungi alla home</string>
+    <string name="ml_added_to_home">Aggiunta alla home</string>
+    <string name="ml_already_on_home">Già presente in home</string>
 </resources>

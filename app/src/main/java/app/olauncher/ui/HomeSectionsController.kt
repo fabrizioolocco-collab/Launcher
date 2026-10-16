@@ -62,6 +62,7 @@ class HomeSectionsController(
     private var hiddenApps: List<AppModel.App> = emptyList()
     private val repo = HomeSectionsRepository(context)
     private var sections: MutableList<HomeSection> = mutableListOf()
+    private var ungrouped: MutableList<SectionApp> = mutableListOf()
     private var apps: List<AppModel.App> = emptyList()
     private var appsLoaded = false
     private var notifications: Map<String, AppNotifications> = emptyMap()
@@ -69,6 +70,7 @@ class HomeSectionsController(
     init {
         migrateOlauncherHomeApps()
         sections = repo.load()
+        ungrouped = repo.loadUngrouped()
     }
 
     fun setApps(list: List<AppModel.App>) {
@@ -88,7 +90,7 @@ class HomeSectionsController(
      */
     private fun looseApps(): List<AppModel.App> {
         if (notifications.isEmpty()) return emptyList()
-        val placed = sections.flatMap { it.apps }.map { NotificationRepository.key(it.packageName, it.user) }.toSet() +
+        val placed = (sections.flatMap { it.apps } + ungrouped).map { NotificationRepository.key(it.packageName, it.user) }.toSet() +
                 bottomAppKeys()
         return (apps + hiddenApps)
             .filter { notificationCount(it) > 0 }
@@ -120,6 +122,7 @@ class HomeSectionsController(
     /** Re-reads sections from storage (they can change from the app drawer) and redraws. */
     fun reload() {
         sections = repo.load()
+        ungrouped = repo.loadUngrouped()
         render()
     }
 
@@ -143,9 +146,17 @@ class HomeSectionsController(
         if (!appsLoaded) return
         val gravity = prefs.homeAlignment
         val detox = DetoxManager.isActive(context)
+        // Pinned apps outside groups (user order), then apps shown only for their notifications
+        var topRows = 0
+        ungrouped.forEach { sectionApp ->
+            val app = findApp(sectionApp) ?: return@forEach
+            container.addView(appView(UNGROUPED, sectionApp, app, gravity))
+            topRows++
+        }
         val loose = looseApps()
         loose.forEach { app -> container.addView(appView(LOOSE, SectionApp.from(app), app, gravity)) }
-        if (loose.isNotEmpty()) container.addView(View(context), LinearLayout.LayoutParams(1, 18.dpToPx()))
+        topRows += loose.size
+        if (topRows > 0) container.addView(View(context), LinearLayout.LayoutParams(1, 18.dpToPx()))
         sections.forEachIndexed { index, section ->
             // During detox, sections without allowed apps disappear
             if (detox && section.apps.none { findApp(it) != null }) return@forEachIndexed
@@ -275,6 +286,10 @@ class HomeSectionsController(
             showLooseAppMenu(app)
             return
         }
+        if (sectionIndex == UNGROUPED) {
+            showUngroupedAppMenu(sectionApp, app)
+            return
+        }
         val section = sections.getOrNull(sectionIndex) ?: return
         val position = section.indexOf(sectionApp)
         val entries = mutableListOf<MenuEntry>()
@@ -301,10 +316,60 @@ class HomeSectionsController(
         context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
     }
 
+    /** Menu of an app pinned on home outside any group. */
+    private fun showUngroupedAppMenu(sectionApp: SectionApp, app: AppModel.App) {
+        val position = ungrouped.indexOfFirst { it.samePackageAndUser(sectionApp) }
+        val entries = mutableListOf<MenuEntry>()
+        if (position > 0) entries += MenuEntry(context.getString(R.string.ml_move_up)) { moveUngrouped(position, -1) }
+        if (position in 0 until ungrouped.lastIndex) entries += MenuEntry(context.getString(R.string.ml_move_down)) { moveUngrouped(position, 1) }
+        entries += MenuEntry(context.getString(R.string.ml_app_move_to)) {
+            val targets = sections.mapIndexed { i, s ->
+                MenuEntry(s.name) {
+                    removeUngrouped(sectionApp)
+                    copyApp(sectionApp, i, removeFrom = null)
+                }
+            } + MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) {
+                createSection { i ->
+                    removeUngrouped(sectionApp)
+                    copyApp(sectionApp, i, removeFrom = null)
+                }
+            }
+            context.showMenuDialog(context.getString(R.string.ml_section), targets)
+        }
+        entries += MenuEntry(context.getString(R.string.ml_remove_from_home)) {
+            removeUngrouped(sectionApp)
+            render()
+        }
+        entries += MenuEntry(context.getString(R.string.ml_change_icon)) {
+            IconChooser.show(context, app, scope, pickImage) { render() }
+        }
+        entries += MenuEntry(context.getString(R.string.ml_app_info)) {
+            openAppInfo(context, app.user, app.appPackage)
+        }
+        context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
+    }
+
+    private fun moveUngrouped(position: Int, delta: Int) {
+        val target = position + delta
+        if (position !in ungrouped.indices || target !in ungrouped.indices) return
+        ungrouped.add(target, ungrouped.removeAt(position))
+        repo.saveUngrouped(ungrouped)
+        render()
+    }
+
+    private fun removeUngrouped(sectionApp: SectionApp) {
+        ungrouped.removeAll { it.samePackageAndUser(sectionApp) }
+        repo.saveUngrouped(ungrouped)
+    }
+
     /** Menu of an app shown only because of its notifications. */
     private fun showLooseAppMenu(app: AppModel.App) {
         val sectionApp = SectionApp.from(app)
         val entries = mutableListOf(
+            MenuEntry(context.getString(R.string.ml_add_to_home)) {
+                if (addUngrouped(context, app)) ungrouped = repo.loadUngrouped()
+                render()
+            },
             MenuEntry(context.getString(R.string.ml_add_to_section)) {
                 val targets = sections.mapIndexed { i, s -> MenuEntry(s.name) { copyApp(sectionApp, i, removeFrom = null) } } +
                         MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) {
@@ -438,6 +503,18 @@ class HomeSectionsController(
 
     companion object {
         private const val LOOSE = -1
+        private const val UNGROUPED = -2
+
+        /** Pins [app] on home outside any group. Returns false if it was already there. */
+        fun addUngrouped(context: Context, app: AppModel.App): Boolean {
+            val repo = HomeSectionsRepository(context)
+            val list = repo.loadUngrouped()
+            val entry = SectionApp.from(app)
+            if (list.any { it.samePackageAndUser(entry) }) return false
+            list.add(entry)
+            repo.saveUngrouped(list)
+            return true
+        }
 
         /** Red used for apps and sections that have notifications. */
         const val NOTIFICATION_COLOR = 0xFFE53935.toInt()
