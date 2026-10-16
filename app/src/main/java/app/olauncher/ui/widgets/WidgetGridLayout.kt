@@ -40,6 +40,73 @@ class WidgetGridLayout @JvmOverloads constructor(
         fun onTapOutsideFrame()
     }
 
+    /** Home gestures for a grid outside the home scroll view (bottom area). */
+    interface HomeGestures {
+        fun onEmptyLongPress(col: Int, row: Int)
+        fun onSwipeUp()
+        fun onSwipeDown()
+    }
+
+    var homeGestures: HomeGestures? = null
+
+    /** Minimum height in rows even when empty (bottom area keeps a reachable strip). */
+    var minRows = 0
+        set(value) {
+            field = value
+            requestLayout()
+        }
+
+    private var downOnChild = false
+    private var flingHandled = false
+    private val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent) = true
+
+        override fun onLongPress(e: MotionEvent) {
+            if (downOnChild || resizeTarget != null) return
+            val cell = cellSize()
+            val col = ((e.x - paddingLeft) / cell).toInt().coerceIn(0, columns - 1)
+            val row = ((e.y - paddingTop) / cell).toInt().coerceAtLeast(0)
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            homeGestures?.onEmptyLongPress(col, row)
+        }
+
+        override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+            val start = e1 ?: return false
+            val dy = e2.rawY - start.rawY
+            val dx = e2.rawX - start.rawX
+            if (abs(dy) > abs(dx) && abs(dy) > 100 && abs(velocityY) > 100) {
+                flingHandled = true
+                if (dy < 0) homeGestures?.onSwipeUp() else homeGestures?.onSwipeDown()
+            }
+            return false
+        }
+    })
+
+    private fun childAt(x: Float, y: Float): View? {
+        for (i in childCount - 1 downTo 0) {
+            val c = getChildAt(i)
+            if (x >= c.left && x < c.right && y >= c.top && y < c.bottom) return c
+        }
+        return null
+    }
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (homeGestures == null || resizeTarget != null || editing) return super.dispatchTouchEvent(ev)
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+            flingHandled = false
+            downOnChild = childAt(ev.x, ev.y) != null
+        }
+        gestureDetector.onTouchEvent(ev)
+        if (flingHandled && ev.actionMasked == MotionEvent.ACTION_UP) {
+            // A swipe never launches the icon under the finger
+            val cancel = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+            super.dispatchTouchEvent(cancel)
+            cancel.recycle()
+            return true
+        }
+        return super.dispatchTouchEvent(ev) || true
+    }
+
     var columns = 6
         set(value) {
             field = value.coerceIn(2, 8)
@@ -115,7 +182,7 @@ class WidgetGridLayout @JvmOverloads constructor(
                 MeasureSpec.makeMeasureSpec(p.rowSpan * cell - 2 * gap, MeasureSpec.EXACTLY)
             )
         }
-        val rows = usedRows() + if (editing) 1 else 0
+        val rows = maxOf(usedRows() + if (editing) 1 else 0, minRows)
         setMeasuredDimension(width, rows * cell + paddingTop + paddingBottom)
     }
 

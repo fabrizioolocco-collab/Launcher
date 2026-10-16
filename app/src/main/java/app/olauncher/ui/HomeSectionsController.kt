@@ -214,12 +214,13 @@ class HomeSectionsController(
 
     // ---------------------------------------------------------------- menus
 
-    fun showHomeMenu(openSettings: () -> Unit, addWidget: () -> Unit) {
+    fun showHomeMenu(openSettings: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit) {
         context.showMenuDialog(
             context.getString(R.string.app_name),
             listOf(
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection() },
-                MenuEntry(context.getString(R.string.ml_add_widget)) { addWidget() },
+                MenuEntry(context.getString(R.string.ml_add_widget_top)) { addWidget() },
+                MenuEntry(context.getString(R.string.ml_add_to_bottom)) { addToBottom() },
                 MenuEntry(context.getString(R.string.ml_settings)) { openSettings() },
             )
         )

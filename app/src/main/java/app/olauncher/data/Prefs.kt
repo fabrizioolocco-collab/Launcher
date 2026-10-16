@@ -123,6 +123,7 @@ class Prefs(context: Context) {
     private val AUTO_LAUNCH_SINGLE = "AUTO_LAUNCH_SINGLE"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
+    private val BOTTOM_LABELS = "BOTTOM_LABELS"
     private val LETTER_INDEX_MODE = "LETTER_INDEX_MODE"
     private val SECTION_FONT = "SECTION_FONT"
     private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
@@ -152,6 +153,11 @@ class Prefs(context: Context) {
     var appTextSize: Int
         get() = prefs.getInt(APP_TEXT_SIZE, 0)
         set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
+
+    /** Show app names under the icons of the bottom area. */
+    var bottomLabels: Boolean
+        get() = prefs.getBoolean(BOTTOM_LABELS, false)
+        set(value) = prefs.edit { putBoolean(BOTTOM_LABELS, value) }
 
     var welcomeShown: Boolean
         get() = prefs.getBoolean(WELCOME_SHOWN, false)

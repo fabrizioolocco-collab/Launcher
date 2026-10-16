@@ -126,4 +126,10 @@
     <string name="ml_perm_admin">Amministratore dispositivo</string>
     <string name="ml_perm_admin_desc">Strict mode: impedisce di disinstallare MinimaLauncher</string>
     <string name="ml_perm_admin_explanation">Usato dalla strict mode del detox per impedire la disinstallazione del launcher durante la sessione.</string>
+    <string name="ml_bottom_area">Zona in basso</string>
+    <string name="ml_add_app">Aggiungi app</string>
+    <string name="ml_remove_from_home">Rimuovi dalla home</string>
+    <string name="ml_bottom_labels">Nome sotto le icone in basso</string>
+    <string name="ml_add_widget_top">Aggiungi widget in alto</string>
+    <string name="ml_add_to_bottom">Aggiungi nella zona in basso…</string>
 </resources>

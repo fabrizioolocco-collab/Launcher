@@ -193,6 +193,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
             R.id.detoxWhitelist -> showDetoxWhitelist()
+            R.id.bottomLabels -> {
+                prefs.bottomLabels = !prefs.bottomLabels
+                populateTextStyle()
+            }
             R.id.permissionsScreen -> {
                 findNavController().popBackStack(R.id.mainFragment, false)
                 viewModel.showPermissions.call()
@@ -292,6 +296,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
         binding.detoxWhitelist.setOnClickListener(this)
+        binding.bottomLabels.setOnClickListener(this)
         binding.permissionsScreen.setOnClickListener(this)
         binding.widgetColumns.setOnClickListener(this)
         binding.widgetLog.setOnClickListener(this)
@@ -360,6 +365,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
         binding.widgetColumns.text = prefs.widgetColumns.toString()
+        binding.bottomLabels.setText(if (prefs.bottomLabels) R.string.on else R.string.off)
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)

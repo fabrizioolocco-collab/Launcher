@@ -49,6 +49,7 @@ import app.olauncher.helper.showToast
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import app.olauncher.ui.widgets.HomeWidgetsController
+import app.olauncher.ui.widgets.WidgetGridLayout
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -65,6 +66,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private var uiScope = MainScope()
     private lateinit var sections: HomeSectionsController
     private lateinit var widgets: HomeWidgetsController
+    private lateinit var bottomArea: HomeWidgetsController
     private lateinit var detox: DetoxController
 
     private var onImagePicked: ((Uri) -> Unit)? = null
@@ -94,11 +96,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             emptyHint = binding.noSectionsHint,
             prefs = prefs,
             scope = uiScope,
-            onLaunch = { app ->
-                // The fake test app can't be opened: "opening" it clears its notifications
-                if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
-                else viewModel.launch(app)
-            },
+            onLaunch = { app -> launchHomeApp(app) },
             pickImage = { callback ->
                 onImagePicked = callback
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -116,6 +114,24 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         )
         widgets.render()
 
+        bottomArea = HomeWidgetsController(
+            activity = requireActivity(),
+            grid = binding.bottomGrid,
+            scrollView = binding.homeScroll,
+            prefs = prefs,
+            scope = uiScope,
+            keepScreen = { viewModel.keepCurrentScreen = it },
+            bottom = true,
+            onLaunchApp = { app -> launchHomeApp(app) },
+        )
+        viewModel.homeApps.value?.let { bottomArea.setApps(it) }
+        bottomArea.render()
+        binding.bottomGrid.homeGestures = object : WidgetGridLayout.HomeGestures {
+            override fun onEmptyLongPress(col: Int, row: Int) = bottomArea.showAddMenu(col, row)
+            override fun onSwipeUp() = showAppList(Constants.FLAG_LAUNCH_APP)
+            override fun onSwipeDown() = expandNotificationDrawer(requireContext())
+        }
+
         detox = DetoxController(
             activity = requireActivity(),
             bar = binding.detoxBar,
@@ -131,7 +147,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     override fun onStart() {
         super.onStart()
-        widgets.startListening()
+        HomeWidgetsController.startListening(requireContext())
     }
 
     override fun onPause() {
@@ -140,7 +156,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     override fun onStop() {
-        widgets.stopListening()
+        HomeWidgetsController.stopListening(requireContext())
         super.onStop()
     }
 
@@ -149,6 +165,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         populateHomeScreen(false)
         widgets.refreshIfNeeded()
         widgets.onHomeResumed()
+        bottomArea.refreshIfNeeded()
+        bottomArea.onHomeResumed()
         detox.onResume()
         if (!prefs.welcomeShown) {
             prefs.welcomeShown = true
@@ -243,13 +261,16 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
         viewModel.homeApps.observe(viewLifecycleOwner) {
             sections.setApps(it)
+            bottomArea.setApps(it)
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             sections.setNotifications(it)
+            bottomArea.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {
             sections.render()
             widgets.render()
+            bottomArea.render()
             detox.updateBar()
         }
         DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }
@@ -289,6 +310,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onSwipeRight() = openSwipeRightApp()
             override fun onEmptyTap() {
                 widgets.endEditing()
+                bottomArea.endEditing()
                 sections.collapseAll()
             }
 
@@ -303,6 +325,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                         }
                     },
                     addWidget = { widgets.showAddWidgetDialog() },
+                    addToBottom = { bottomArea.showAddMenu() },
                 )
             }
 
@@ -581,12 +604,19 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
     }
 
+    /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
+    private fun launchHomeApp(app: AppModel.App) {
+        if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
+        else viewModel.launch(app)
+    }
+
     private fun showLongPressToast() = requireContext().showToast(getString(R.string.long_press_to_select_app))
 
     override fun onDestroyView() {
         super.onDestroyView()
         uiScope.cancel()
         widgets.release()
+        bottomArea.release()
         detox.release()
         _binding = null
     }
