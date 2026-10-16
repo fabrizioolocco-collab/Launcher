@@ -185,7 +185,80 @@
             android:layout_height="wrap_content"
             android:paddingHorizontal="66dp"
             android:paddingTop="4dp"
-            android:paddingBottom="28dp" />
+            android:paddingBottom="4dp" />
+
+        <!-- Search results (phone / OneDrive), in place of home while searching -->
+        <ScrollView
+            android:id="@+id/searchResultsScroll"
+            android:fillViewport="true"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:overScrollMode="never"
+            android:scrollbars="none"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:id="@+id/searchResults"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="bottom"
+                android:orientation="vertical"
+                android:paddingHorizontal="74dp"
+                android:paddingTop="40dp"
+                android:paddingBottom="8dp" />
+        </ScrollView>
+
+        <!-- Search bar: Google, phone or OneDrive (selector on the right) -->
+        <LinearLayout
+            android:id="@+id/searchBar"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginHorizontal="66dp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="24dp"
+            android:background="@drawable/rounded_rect_shade_color"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="16dp"
+            android:paddingEnd="4dp">
+
+            <EditText
+                android:id="@+id/searchInput"
+                style="@style/TextSmall"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:hint="@string/ml_search_hint_web"
+                android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:textColorHint="?attr/primaryColorTrans50"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/searchClear"
+                style="@style/TextSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:paddingHorizontal="10dp"
+                android:text="✕"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/searchMode"
+                style="@style/TextSmallBold"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:paddingHorizontal="12dp"
+                android:textSize="14sp"
+                tools:text="Google ▾" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView

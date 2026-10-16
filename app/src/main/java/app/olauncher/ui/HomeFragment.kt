@@ -67,6 +67,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private lateinit var widgets: HomeWidgetsController
     private lateinit var bottomArea: HomeWidgetsController
     private lateinit var detox: DetoxController
+    private lateinit var search: HomeSearchController
+
+    private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
+        if (::search.isInitialized) search.refresh()
+    }
 
     private var onImagePicked: ((Uri) -> Unit)? = null
     private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -136,6 +141,33 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
         }
 
+        search = HomeSearchController(
+            activity = requireActivity(),
+            input = binding.searchInput,
+            clear = binding.searchClear,
+            modeButton = binding.searchMode,
+            resultsScroll = binding.searchResultsScroll,
+            results = binding.searchResults,
+            homeViews = listOf(binding.homeScroll, binding.bottomGrid),
+            prefs = prefs,
+            scope = uiScope,
+            apps = { viewModel.homeApps.value.orEmpty() },
+            launchApp = { app -> launchHomeApp(app) },
+            requestPermission = { permissionRequest.launch(it) },
+            keepScreen = { viewModel.keepCurrentScreen = it },
+        )
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : androidx.activity.OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (search.isActive) search.close()
+            }
+        })
+        // Keep the search bar above the keyboard
+        androidx.core.view.ViewCompat.setOnApplyWindowInsetsListener(binding.homeColumn) { v, insets ->
+            val ime = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
+            v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, ime)
+            insets
+        }
+
         detox = DetoxController(
             activity = requireActivity(),
             bar = binding.detoxBar,
@@ -160,6 +192,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     override fun onStop() {
+        search.onHomeStopped()
         HomeWidgetsController.stopListening(requireContext())
         super.onStop()
     }
@@ -172,6 +205,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         bottomArea.refreshIfNeeded()
         bottomArea.onHomeResumed()
         detox.onResume()
+        search.onHomeResumed()
         if (!prefs.welcomeShown) {
             prefs.welcomeShown = true
             detox.showPermissions()

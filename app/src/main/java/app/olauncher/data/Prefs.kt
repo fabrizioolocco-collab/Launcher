@@ -191,6 +191,11 @@ class Prefs(context: Context) {
         set(value) = prefs.edit { putBoolean(AUTO_LAUNCH_SINGLE, value) }
 
     /** Drawer "News": false = most recent first, true = most notifications first. */
+    /** Home search bar target: 0 Google, 1 phone, 2 OneDrive. */
+    var searchMode: Int
+        get() = prefs.getInt("SEARCH_MODE", 0)
+        set(value) = prefs.edit { putInt("SEARCH_MODE", value) }
+
     var newsSortByCount: Boolean
         get() = prefs.getBoolean(NEWS_SORT_BY_COUNT, false)
         set(value) = prefs.edit { putBoolean(NEWS_SORT_BY_COUNT, value) }
