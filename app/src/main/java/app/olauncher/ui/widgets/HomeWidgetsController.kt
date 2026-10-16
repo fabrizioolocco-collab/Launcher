@@ -18,6 +18,7 @@ import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.ui.AppNotificationsView
+import app.olauncher.ui.DetoxController
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
@@ -383,7 +384,7 @@ class HomeWidgetsController(
                 MenuEntry(activity.getString(R.string.ml_app_info)) {
                     openAppInfo(activity, app.user, app.appPackage)
                 },
-                app.olauncher.ui.DetoxController.whitelistEntry(activity, app.appPackage),
+                DetoxController.whitelistEntry(activity, app.appPackage),
             ),
             header = AppNotificationsView.create(activity, app),
         )
