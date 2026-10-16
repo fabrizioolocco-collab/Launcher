@@ -44,7 +44,7 @@ object NotificationBadge {
         context.showMenuDialog(
             app.appLabel,
             listOf(MenuEntry(context.getString(R.string.ml_open_app)) { openApp() }),
-            header = AppNotificationsView.create(context, app),
+            header = AppNotificationsView.create(context, app, closeWhenEmpty = true),
         )
     }
 }

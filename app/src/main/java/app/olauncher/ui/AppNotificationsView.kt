@@ -30,12 +30,15 @@ import kotlin.math.abs
  */
 object AppNotificationsView {
 
-    /** Header factory for [app.olauncher.helper.showMenuDialog]; null when the app has no notifications. */
-    fun create(context: Context, app: AppModel.App): ((OlDialog) -> View?)? {
+    /**
+     * Header factory for [app.olauncher.helper.showMenuDialog]; null when the app has no notifications.
+     * With [closeWhenEmpty] the dialog closes once the last notification is swiped away.
+     */
+    fun create(context: Context, app: AppModel.App, closeWhenEmpty: Boolean = false): ((OlDialog) -> View?)? {
         val listener = NotificationListener.instance ?: return null
         val items = listener.activeFor(app.appPackage, app.user.toString())
         if (items.isEmpty()) return null
-        return { dialog -> build(dialog, app, items, listener) }
+        return { dialog -> build(dialog, app, items, listener, closeWhenEmpty) }
     }
 
     /**
@@ -69,7 +72,7 @@ object AppNotificationsView {
         }
     }
 
-    private fun build(dialog: OlDialog, app: AppModel.App, items: List<StatusBarNotification>, listener: NotificationListener): View {
+    private fun build(dialog: OlDialog, app: AppModel.App, items: List<StatusBarNotification>, listener: NotificationListener, closeWhenEmpty: Boolean): View {
         val ctx = dialog.context
         val primary = ctx.getColorFromAttr(R.attr.primaryColor)
         val list = LinearLayout(ctx).apply {
@@ -115,7 +118,9 @@ object AppNotificationsView {
                 onDismissed = {
                     listener.dismiss(sbn.key)
                     list.removeView(card)
-                    if (list.childCount == 0) list.visibility = View.GONE
+                    if (list.childCount == 0) {
+                        if (closeWhenEmpty) dialog.dismiss() else list.visibility = View.GONE
+                    }
                 },
             )
         }
