@@ -452,6 +452,11 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun loadLocal(loc: Location) {
         title.text = if (loc.dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else loc.dir.name
         subtitle.text = "📱 /" + relative(loc.dir)
+        subtitle.isVisible = true
+        // An album folder (only photos and videos) shows no path, like the album grid
+        lifecycleScope.launch {
+            if (location == loc && albumCover(loc.dir) != null) subtitle.isVisible = false
+        }
         if (!hasFilesAccess()) {
             setEntries(emptyList())
             showStatus(getString(R.string.ml_search_allow_files)) { askFilesAccess() }
