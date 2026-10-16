@@ -196,7 +196,6 @@
     <string name="ml_set_about">Info sul telefono</string>
     <string name="ml_set_all">Impostazioni</string>
     <string name="ml_set_data_usage">Utilizzo dati</string>
-    <string name="ml_search_folder">Cartella in %1$s</string>
     <string name="ml_search_open_folder">Apri cartella</string>
     <!-- File explorer -->
     <string name="ml_explorer">File</string>
@@ -227,6 +226,8 @@
     <string name="ml_search_tab_videos">Video</string>
     <string name="ml_search_tab_music">Musica</string>
     <string name="ml_search_tab_documents">Documenti</string>
-    <string name="ml_search_album_info">%1$d foto e video · %2$s</string>
     <string name="ml_album_count">%1$d foto e video</string>
+    <string name="ml_search_open">Apri</string>
+    <string name="ml_search_copy_path">Copia percorso</string>
+    <string name="ml_search_path_copied">Percorso copiato</string>
 </resources>

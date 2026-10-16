@@ -33,6 +33,10 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Prefs
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.IconPackManager
+import app.olauncher.helper.MediaThumbnails
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.getColorFromAttr
+import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.showToast
@@ -244,8 +248,12 @@ class HomeSearchController(
         val subtitle: String? = null,
         val app: AppModel.App? = null,
         val mime: String? = null,
-        /** For files and albums: opens the folder holding them. */
-        val openFolder: (() -> Unit)? = null,
+        /** Files, folders and albums: their path (long press menu). */
+        val file: File? = null,
+        /** Files: MediaStore address, to open or share. */
+        val uri: Uri? = null,
+        /** Albums: the photo or video shown as cover. */
+        val cover: File? = null,
         val onClick: () -> Unit,
     ) {
         val isDocument
@@ -320,6 +328,7 @@ class HomeSearchController(
                 requestPermission(Manifest.permission.READ_CONTACTS)
             }
             current == Tab.FILES && missingFiles -> permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
+            current == Tab.ALBUMS -> albumGrid(found.rows(current))
             current != null -> found.rows(current).forEach { results.addView(rowView(it)) }
         }
         if (current == null || found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
@@ -431,7 +440,7 @@ class HomeSearchController(
                     val id = c.getLong(0)
                     val name = c.getString(1) ?: continue
                     val mime = c.getString(2)
-                    val dir = c.getString(3)?.let { File(it).parentFile }
+                    val file = c.getString(3)?.let { File(it) }
                     val uri = ContentUris.withAppendedId(base, id)
                     val kind = when {
                         mime?.startsWith("image/") == true -> Kind.PHOTO
@@ -439,10 +448,7 @@ class HomeSearchController(
                         mime?.startsWith("audio/") == true -> Kind.MUSIC
                         else -> Kind.FILE
                     }
-                    rows += Row(
-                        kind, name, dir?.let { relative(it) }, mime = mime,
-                        openFolder = dir?.let { d -> { openLocalFolder(d) } },
-                    ) {
+                    rows += Row(kind, name, mime = mime, file = file, uri = uri) {
                         open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
                     }
                 }
@@ -461,13 +467,9 @@ class HomeSearchController(
             .filter { normalize(it.name).contains(key) }
             .take(MAX_FOLDERS)
             .forEach { dir ->
-                val where = activity.getString(R.string.ml_search_folder, relative(dir.parentFile ?: dir))
                 val media = albumMedia(dir)
-                if (media != null) albums += Row(
-                    Kind.ALBUM, dir.name, activity.getString(R.string.ml_search_album_info, media.size, where),
-                    openFolder = { openLocalFolder(dir) },
-                ) { openAlbum(dir) }
-                else folders += Row(Kind.FOLDER, dir.name, where) { openLocalFolder(dir) }
+                if (media != null) albums += Row(Kind.ALBUM, dir.name, file = dir, cover = media.first()) { openAlbum(dir) }
+                else folders += Row(Kind.FOLDER, dir.name, file = dir) { openLocalFolder(dir) }
             }
         return folders to albums
     }
@@ -633,11 +635,22 @@ class HomeSearchController(
         isFocusable = true
         tag = RESULT
         setOnClickListener { row.onClick() }
-        if (row.kind != Kind.APP) addView(TextView(activity, null, 0, R.style.TextLarge).apply {
-            text = row.kind.glyph
-            textSize = 18f
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(36.dpToPx(), ViewGroup.LayoutParams.WRAP_CONTENT))
+        if (row.file != null) setOnLongClickListener {
+            showItemMenu(row)
+            true
+        }
+        val thumb = row.file?.takeIf { row.kind == Kind.PHOTO || row.kind == Kind.VIDEO }
+        when {
+            thumb != null -> addView(roundedImage().also {
+                MediaThumbnails.load(scope, it, thumb, 44.dpToPx())
+            }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply { marginEnd = 12.dpToPx() })
+
+            row.kind != Kind.APP -> addView(TextView(activity, null, 0, R.style.TextLarge).apply {
+                text = row.kind.glyph
+                textSize = 18f
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(44.dpToPx(), ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 12.dpToPx() })
+        }
         val texts = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         val title = TextView(activity, null, 0, R.style.TextLarge).apply {
             text = row.title
@@ -652,22 +665,94 @@ class HomeSearchController(
                 text = sub
                 alpha = 0.6f
                 maxLines = 1
-                ellipsize = TextUtils.TruncateAt.START
+                ellipsize = TextUtils.TruncateAt.END
             })
         }
         addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        row.openFolder?.let { openFolder ->
-            addView(TextView(activity, null, 0, R.style.TextLarge).apply {
-                text = "📂"
-                textSize = 20f
-                gravity = Gravity.CENTER
-                contentDescription = activity.getString(R.string.ml_search_open_folder)
-                setPadding(12.dpToPx(), 8.dpToPx(), 4.dpToPx(), 8.dpToPx())
-                isClickable = true
-                setOnClickListener { openFolder() }
-            })
-        }
         row.app?.let { app -> loadIcon(title, app) }
+    }
+
+    private fun roundedImage() = android.widget.ImageView(activity).apply {
+        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+        setBackgroundColor(0x22888888)
+        clipToOutline = true
+        outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) =
+                outline.setRoundRect(0, 0, view.width, view.height, 10.dpToPx().toFloat())
+        }
+    }
+
+    /** Albums tab: covers in two columns, name below. */
+    private fun albumGrid(rows: List<Row>) {
+        val width = (resultsScroll.width.takeIf { it > 0 } ?: activity.resources.displayMetrics.widthPixels) -
+                results.paddingLeft - results.paddingRight
+        val gap = 12.dpToPx()
+        val side = (width - gap) / 2
+        rows.chunked(2).forEach { pair ->
+            val line = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
+            }
+            pair.forEachIndexed { index, row ->
+                line.addView(LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    isClickable = true
+                    tag = RESULT
+                    setOnClickListener { row.onClick() }
+                    setOnLongClickListener {
+                        showItemMenu(row)
+                        true
+                    }
+                    addView(roundedImage().also { image ->
+                        row.cover?.let { MediaThumbnails.load(scope, image, it, side) }
+                    }, LinearLayout.LayoutParams(side, side))
+                    addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+                        text = row.title
+                        maxLines = 2
+                        ellipsize = TextUtils.TruncateAt.END
+                        setPadding(2.dpToPx(), 6.dpToPx(), 2.dpToPx(), 0)
+                    })
+                }, LinearLayout.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    if (index == 0) marginEnd = gap
+                })
+            }
+            results.addView(line)
+        }
+    }
+
+    /** Long press on a file, folder or album: its path, then the actions. */
+    private fun showItemMenu(row: Row) {
+        val file = row.file ?: return
+        val entries = mutableListOf(MenuEntry(activity.getString(R.string.ml_search_open)) { row.onClick() })
+        if (!file.isDirectory) {
+            val uri = row.uri ?: androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
+            val mime = row.mime ?: mimeOf(file.name) ?: "*/*"
+            entries += MenuEntry(activity.getString(R.string.ml_explorer_open_with)) {
+                val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                open(Intent.createChooser(intent, row.title))
+            }
+            entries += MenuEntry(activity.getString(R.string.ml_explorer_share)) {
+                val intent = Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                open(Intent.createChooser(intent, row.title))
+            }
+            file.parentFile?.let { dir -> entries += MenuEntry(activity.getString(R.string.ml_search_open_folder)) { openLocalFolder(dir) } }
+        } else if (row.kind == Kind.ALBUM) {
+            entries += MenuEntry(activity.getString(R.string.ml_search_open_folder)) { openLocalFolder(file) }
+        }
+        entries += MenuEntry(activity.getString(R.string.ml_search_copy_path)) {
+            val clipboard = activity.getSystemService(android.content.ClipboardManager::class.java)
+            clipboard?.setPrimaryClip(android.content.ClipData.newPlainText(row.title, file.absolutePath))
+            activity.showToast(activity.getString(R.string.ml_search_path_copied))
+        }
+        activity.showMenuDialog(row.title, entries, header = { dialog ->
+            TextView(dialog.context, null, 0, R.style.TextSmall).apply {
+                text = "/" + relative(file)
+                alpha = 0.6f
+                setTextColor(dialog.context.getColorFromAttr(R.attr.primaryColor))
+                setPadding(0, 8.dpToPx(), 0, 4.dpToPx())
+            }
+        })
     }
 
     private fun loadIcon(view: TextView, app: AppModel.App) {

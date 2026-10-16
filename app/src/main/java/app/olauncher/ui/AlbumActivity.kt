@@ -3,17 +3,11 @@ package app.olauncher.ui
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Typeface
-import android.media.ThumbnailUtils
 import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.text.TextUtils
-import android.util.LruCache
-import android.util.Size
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -31,11 +25,9 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
+import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showToast
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -47,9 +39,6 @@ class AlbumActivity : AppCompatActivity() {
 
     private lateinit var dir: File
     private var media: List<File> = emptyList()
-    private val thumbs = object : LruCache<String, Bitmap>(64 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap) = value.byteCount
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -120,25 +109,6 @@ class AlbumActivity : AppCompatActivity() {
 
     private fun isMedia(mime: String?) = mime != null && (mime.startsWith("image/") || mime.startsWith("video/"))
 
-    private fun thumbnail(file: File, size: Int): Bitmap? = try {
-        val video = mimeOf(file.name)?.startsWith("video/") == true
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val s = Size(size, size)
-            if (video) ThumbnailUtils.createVideoThumbnail(file, s, null) else ThumbnailUtils.createImageThumbnail(file, s, null)
-        } else if (video) {
-            @Suppress("DEPRECATION")
-            ThumbnailUtils.createVideoThumbnail(file.absolutePath, MediaStore.Images.Thumbnails.MINI_KIND)
-        } else {
-            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(file.absolutePath, bounds)
-            var sample = 1
-            while (bounds.outWidth / (sample * 2) >= size && bounds.outHeight / (sample * 2) >= size) sample *= 2
-            BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = sample })
-        }
-    } catch (e: Exception) {
-        null
-    }
-
     /** Opens a photo or video in the gallery (Fossify first), which shows the rest of the folder too. */
     private fun open(file: File) {
         val mime = mimeOf(file.name) ?: "image/*"
@@ -206,17 +176,7 @@ class AlbumActivity : AppCompatActivity() {
             val play = cell.getChildAt(1) as TextView
             play.isVisible = mimeOf(file.name)?.startsWith("video/") == true
             cell.setOnClickListener { open(file) }
-            image.tag = file.absolutePath
-            val cached = thumbs.get(file.absolutePath)
-            image.setImageBitmap(cached)
-            if (cached != null) return
-            val size = cell.layoutParams.width.coerceAtLeast(64)
-            lifecycleScope.launch {
-                val bitmap = withContext(Dispatchers.IO) { thumbnail(file, size) } ?: return@launch
-                thumbs.put(file.absolutePath, bitmap)
-                // The cell may show another file by now
-                if (image.tag == file.absolutePath) image.setImageBitmap(bitmap)
-            }
+            MediaThumbnails.load(lifecycleScope, image, file, cell.layoutParams.width.coerceAtLeast(64))
         }
     }
 
