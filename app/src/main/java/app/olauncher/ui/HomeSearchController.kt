@@ -468,7 +468,10 @@ class HomeSearchController(
             .take(MAX_FOLDERS)
             .forEach { dir ->
                 val media = albumMedia(dir)
-                if (media != null) albums += Row(Kind.ALBUM, dir.name, file = dir, cover = media.first()) { openAlbum(dir) }
+                if (media != null) albums += Row(
+                    Kind.ALBUM, dir.name, file = dir, cover = media.first(),
+                    uri = MediaThumbnails.mediaUris(activity, dir)[media.first().absolutePath],
+                ) { openAlbum(dir) }
                 else folders += Row(Kind.FOLDER, dir.name, file = dir) { openLocalFolder(dir) }
             }
         return folders to albums
@@ -642,7 +645,7 @@ class HomeSearchController(
         val thumb = row.file?.takeIf { row.kind == Kind.PHOTO || row.kind == Kind.VIDEO }
         when {
             thumb != null -> addView(roundedImage().also {
-                MediaThumbnails.load(scope, it, thumb, 44.dpToPx())
+                MediaThumbnails.load(scope, it, thumb, 44.dpToPx(), row.uri)
             }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply { marginEnd = 12.dpToPx() })
 
             row.kind != Kind.APP -> addView(TextView(activity, null, 0, R.style.TextLarge).apply {
@@ -704,7 +707,7 @@ class HomeSearchController(
                         true
                     }
                     addView(roundedImage().also { image ->
-                        row.cover?.let { MediaThumbnails.load(scope, image, it, side) }
+                        row.cover?.let { MediaThumbnails.load(scope, image, it, side, row.uri) }
                     }, LinearLayout.LayoutParams(side, side))
                     addView(TextView(activity, null, 0, R.style.TextSmall).apply {
                         text = row.title

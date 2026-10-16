@@ -1,12 +1,10 @@
 package app.olauncher.ui
 
-import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.graphics.Typeface
 import android.net.Uri
 import android.os.Bundle
-import android.provider.MediaStore
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
@@ -39,6 +37,8 @@ class AlbumActivity : AppCompatActivity() {
 
     private lateinit var dir: File
     private var media: List<File> = emptyList()
+    /** MediaStore address of each file: fast system thumbnails and gallery opening. */
+    private var uris: Map<String, Uri> = emptyMap()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +47,7 @@ class AlbumActivity : AppCompatActivity() {
             ?.filter { it.isFile && !it.name.startsWith(".") && isMedia(mimeOf(it.name)) }
             ?.sortedByDescending { it.lastModified() }
             .orEmpty()
+        uris = MediaThumbnails.mediaUris(this, dir)
         setContentView(buildLayout())
     }
 
@@ -112,16 +113,7 @@ class AlbumActivity : AppCompatActivity() {
     /** Opens a photo or video in the gallery (Fossify first), which shows the rest of the folder too. */
     private fun open(file: File) {
         val mime = mimeOf(file.name) ?: "image/*"
-        var uri: Uri? = null
-        try {
-            @Suppress("DEPRECATION")
-            contentResolver.query(
-                MediaStore.Files.getContentUri("external"), arrayOf(MediaStore.MediaColumns._ID),
-                "${MediaStore.MediaColumns.DATA} = ?", arrayOf(file.absolutePath), null,
-            )?.use { c -> if (c.moveToFirst()) uri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), c.getLong(0)) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        val uri = uris[file.absolutePath]
         val target = uri ?: FileProvider.getUriForFile(this, "$packageName.files", file)
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(target, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         for (gallery in GALLERIES) {
@@ -176,7 +168,7 @@ class AlbumActivity : AppCompatActivity() {
             val play = cell.getChildAt(1) as TextView
             play.isVisible = mimeOf(file.name)?.startsWith("video/") == true
             cell.setOnClickListener { open(file) }
-            MediaThumbnails.load(lifecycleScope, image, file, cell.layoutParams.width.coerceAtLeast(64))
+            MediaThumbnails.load(lifecycleScope, image, file, cell.layoutParams.width.coerceAtLeast(64), uris[file.absolutePath])
         }
     }
 
