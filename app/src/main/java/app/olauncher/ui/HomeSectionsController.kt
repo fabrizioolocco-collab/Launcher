@@ -227,17 +227,43 @@ class HomeSectionsController(
         }
     }
 
-    private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View =
+    /** App row/cell: the label view plus a red pill with the count; tapping the pill lists the notifications. */
+    private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View {
+        val label = labelView(sectionIndex, sectionApp, app, gravity)
+        val count = notificationCount(app)
+        if (count <= 0) return label
+        val badge = NotificationBadge.create(context)
+        NotificationBadge.bind(badge, count) { NotificationBadge.showNotifications(context, app) { onLaunch(app) } }
+        return if (iconOnTop()) {
+            android.widget.FrameLayout(context).apply {
+                addView(label, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(badge, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
+                    marginEnd = 4.dpToPx()
+                    topMargin = 2.dpToPx()
+                })
+                layoutParams = lp(gravity)
+            }
+        } else {
+            LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                this.gravity = Gravity.CENTER_VERTICAL
+                addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f).apply { weight = 0f })
+                addView(badge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    marginStart = 10.dpToPx()
+                })
+                layoutParams = lp(gravity)
+            }
+        }
+    }
+
+    private fun labelView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): TextView =
         TextView(context, null, 0, R.style.TextLarge).apply {
             FontManager.apply(this, prefs.appFont, prefs.appTextSize)
             val count = notificationCount(app)
             val onTop = iconOnTop()
-            text = when {
-                prefs.homeShowLabels -> badgeText(app.appLabel, count)
-                count > 0 -> count.toString()
-                else -> ""
-            }
-            if (onTop) setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, if (prefs.homeShowLabels) 12f else 11f)
+            // The count goes in a red pill next to the app (see withBadge)
+            text = if (prefs.homeShowLabels) badgeText(app.appLabel, if (count > 0) -1 else 0) else ""
+            if (onTop) setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
             if (count > 0) setTextColor(NOTIFICATION_COLOR)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
@@ -545,7 +571,11 @@ class HomeSectionsController(
 
         /** "Name 3": name in bold followed by the count; just the name when there's nothing new. */
         fun badgeText(label: String, count: Int): CharSequence {
-            if (count <= 0) return label
+            if (count == 0) return label
+            // -1: bold name only (the count is shown in a pill)
+            if (count < 0) return SpannableStringBuilder().apply {
+                append(label, StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
             return SpannableStringBuilder().apply {
                 append(label, StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
                 append("  ")

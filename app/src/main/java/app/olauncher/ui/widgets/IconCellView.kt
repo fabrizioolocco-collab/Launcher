@@ -81,9 +81,14 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
 
     fun setIcon(bitmap: Bitmap?) = icon.setImageBitmap(bitmap)
 
+    /** Tap on the red pill (instead of launching the app). */
+    var onBadgeTap: (() -> Unit)? = null
+
     fun setBadge(count: Int) {
         badge.isVisible = count > 0
         badge.text = if (count > 99) "99+" else count.toString()
+        badge.isClickable = count > 0
+        badge.setOnClickListener { onBadgeTap?.invoke() }
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = touch.intercept(ev)

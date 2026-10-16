@@ -43,6 +43,8 @@ class AppDrawerAdapter(
     private val badgeCount: ((AppModel) -> Int)? = null,
     /** When set, a long press opens this menu instead of the inline action bar. */
     private val longPressMenu: ((AppModel, Int) -> Unit)? = null,
+    /** Tap on the red notification pill of a row. */
+    private val badgeTap: ((AppModel) -> Unit)? = null,
 ) : ListAdapter<AppModel, RecyclerView.ViewHolder>(DIFF_CALLBACK), Filterable {
 
     companion object {
@@ -150,6 +152,7 @@ class AppDrawerAdapter(
                     titleStyler,
                     badgeCount?.invoke(appModel) ?: 0,
                     longPressMenu,
+                    badgeTap,
                 )
             }
         } catch (e: Exception) {
@@ -274,6 +277,12 @@ class AppDrawerAdapter(
     class ViewHolder(private val binding: AdapterAppDrawerBinding) :
         RecyclerView.ViewHolder(binding.root) {
         private val defaultTitleColors = binding.appTitle.textColors
+        private val badge = NotificationBadge.create(binding.root.context).also {
+            binding.root.addView(it, android.widget.FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
+            ).apply { marginEnd = 72.dpToPx() })
+        }
 
         fun bind(
             flag: Int,
@@ -290,14 +299,16 @@ class AppDrawerAdapter(
             titleStyler: ((TextView) -> Unit)?,
             notificationCount: Int,
             longPressMenu: ((AppModel, Int) -> Unit)?,
+            badgeTap: ((AppModel) -> Unit)?,
         ) = with(binding) {
             appHideLayout.visibility = View.GONE
             renameLayout.visibility = View.GONE
             appTitle.visibility = View.VISIBLE
 
             // Show indicators in title based on app type and state
+            NotificationBadge.bind(badge, notificationCount) { badgeTap?.invoke(appModel) }
             if (notificationCount > 0) {
-                appTitle.text = HomeSectionsController.badgeText(appModel.appLabel, notificationCount)
+                appTitle.text = HomeSectionsController.badgeText(appModel.appLabel, -1)
                 appTitle.setTextColor(HomeSectionsController.NOTIFICATION_COLOR)
             } else {
                 appTitle.text = buildString {

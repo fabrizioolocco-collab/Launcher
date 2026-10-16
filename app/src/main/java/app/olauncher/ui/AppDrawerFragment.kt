@@ -294,6 +294,12 @@ class AppDrawerFragment : BaseFragment() {
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
             titleStyler = { view -> FontManager.apply(view, prefs.appFont, prefs.appTextSize) },
             longPressMenu = { appModel, position -> showAppMenu(appModel, position) },
+            badgeTap = { appModel ->
+                if (appModel is AppModel.App) NotificationBadge.showNotifications(requireContext(), appModel) {
+                    viewModel.selectedApp(appModel, Constants.FLAG_LAUNCH_APP)
+                    findNavController().popBackStack(R.id.mainFragment, false)
+                }
+            },
             badgeCount = { appModel ->
                 if (appModel is AppModel.App) notifications[notificationKey(appModel)]?.count ?: 0 else 0
             },

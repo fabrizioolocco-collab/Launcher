@@ -18,6 +18,7 @@ import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.ui.AppNotificationsView
+import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
 import app.olauncher.helper.MenuEntry
@@ -199,6 +200,7 @@ class HomeWidgetsController(
 
     private fun iconView(item: HomeWidget, app: AppModel.App): View {
         val view = IconCellView(activity) { onLaunchApp(app) }
+        view.onBadgeTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
         view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, 1)
         val showLabel = prefs.bottomLabels
