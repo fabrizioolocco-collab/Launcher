@@ -39,6 +39,15 @@ object MediaThumbnails {
 
     fun isVideo(file: File) = mimeOf(file.name)?.startsWith("video/") == true
 
+    fun isMedia(mime: String?) = mime != null && (mime.startsWith("image/") || mime.startsWith("video/"))
+
+    /** Photos and videos of [dir], newest first, when it holds nothing else (an album); null otherwise. */
+    fun albumMedia(dir: File): List<File>? {
+        val files = dir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") } ?: return null
+        if (files.isEmpty() || !files.all { isMedia(mimeOf(it.name)) }) return null
+        return files.sortedByDescending { it.lastModified() }
+    }
+
     /** MediaStore addresses of the files directly inside [dir], by absolute path. */
     fun mediaUris(context: Context, dir: File): Map<String, Uri> {
         val base = MediaStore.Files.getContentUri("external")

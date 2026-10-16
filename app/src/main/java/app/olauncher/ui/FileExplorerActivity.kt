@@ -451,7 +451,22 @@ class FileExplorerActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- items
 
     private fun onTap(entry: Entry) {
-        if (entry.isFolder) open(Location(entry.file)) else view(entry.file, entry.mime)
+        if (!entry.isFolder) return view(entry.file, entry.mime)
+        // A folder with only photos and videos opens as an album grid, like from the search
+        lifecycleScope.launch {
+            val album = albumCover(entry.file) != null
+            if (album) AlbumActivity.open(this@FileExplorerActivity, entry.file) else open(Location(entry.file))
+        }
+    }
+
+    /** Album covers found so far (folder path → newest photo/video, or null when not an album). */
+    private val albumCovers = HashMap<String, File?>()
+
+    private suspend fun albumCover(dir: File): File? {
+        if (albumCovers.containsKey(dir.absolutePath)) return albumCovers[dir.absolutePath]
+        val cover = withContext(Dispatchers.IO) { MediaThumbnails.albumMedia(dir)?.firstOrNull() }
+        albumCovers[dir.absolutePath] = cover
+        return cover
     }
 
     private fun onLongPress(entry: Entry) {
@@ -666,10 +681,24 @@ class FileExplorerActivity : AppCompatActivity() {
             glyph.text = glyphOf(entry)
             glyph.isVisible = !thumb
             image.isVisible = thumb
-            if (thumb) {
-                val size = if (view.grid) iconBox.layoutParams.width.coerceAtLeast(64) else 40.dpToPx()
-                MediaThumbnails.load(lifecycleScope, image, entry.file, size)
-            } else image.setImageBitmap(null)
+            val size = if (view.grid) iconBox.layoutParams.width.coerceAtLeast(64) else 40.dpToPx()
+            if (thumb) MediaThumbnails.load(lifecycleScope, image, entry.file, size)
+            else {
+                image.tag = null
+                image.setImageBitmap(null)
+            }
+            // Albums show their newest photo instead of the folder icon
+            if (entry.isFolder && view.showThumbnails) {
+                val path = entry.file.absolutePath
+                image.tag = path
+                lifecycleScope.launch {
+                    val cover = albumCover(entry.file) ?: return@launch
+                    if (image.tag != path) return@launch
+                    glyph.isVisible = false
+                    image.isVisible = true
+                    MediaThumbnails.load(lifecycleScope, image, cover, size)
+                }
+            }
             if (view.grid) {
                 val name = root.getChildAt(1) as TextView
                 name.text = shownName(entry)

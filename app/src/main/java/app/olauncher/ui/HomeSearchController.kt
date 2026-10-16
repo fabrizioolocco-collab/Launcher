@@ -485,13 +485,8 @@ class HomeSearchController(
     }
 
     /** Photos and videos of [dir], newest first, when it holds nothing else; null otherwise. */
-    private fun albumMedia(dir: File): List<File>? {
-        val files = dir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") } ?: return null
-        if (files.isEmpty() || !files.all { isMedia(mimeOf(it.name)) }) return null
-        return files.sortedByDescending { it.lastModified() }
-    }
+    private fun albumMedia(dir: File): List<File>? = MediaThumbnails.albumMedia(dir)
 
-    private fun isMedia(mime: String?) = mime != null && (mime.startsWith("image/") || mime.startsWith("video/"))
 
     private fun mimeOf(name: String) =
         android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
