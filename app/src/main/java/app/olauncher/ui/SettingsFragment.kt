@@ -235,8 +235,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.textSizeValue -> showTextSizeDialog()
             R.id.boldFont -> toggleBoldFont()
 
-            R.id.swipeLeftApp -> showAppListIfEnabled(Constants.FLAG_SET_SWIPE_LEFT_APP)
-            R.id.swipeRightApp -> showAppListIfEnabled(Constants.FLAG_SET_SWIPE_RIGHT_APP)
+            R.id.swipeLeftApp -> showSwipeAppMenu(view, left = true)
+            R.id.swipeRightApp -> showSwipeAppMenu(view, left = false)
 
             R.id.aboutOlauncher -> {
                 prefs.aboutClicked = true
@@ -578,6 +578,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             binding.swipeLeftApp.setTextColor(requireContext().getColorFromAttr(R.attr.primaryColorTrans50))
             requireContext().showToast(getString(R.string.swipe_left_app_disabled))
         }
+        populateSwipeApps()
     }
 
     private fun toggleSwipeRight() {
@@ -589,6 +590,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             binding.swipeRightApp.setTextColor(requireContext().getColorFromAttr(R.attr.primaryColorTrans50))
             requireContext().showToast(getString(R.string.swipe_right_app_disabled))
         }
+        populateSwipeApps()
     }
 
     private fun toggleStatusBar() {
@@ -872,9 +874,30 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         }
     }
 
+    /** Swipe left/right: pick an app, or "No app" to turn the gesture off. */
+    private fun showSwipeAppMenu(anchor: View, left: Boolean) {
+        anchor.showPopupMenu(
+            configure = { menu ->
+                menu.add(Menu.NONE, 1, 1, getString(R.string.ml_choose_app))
+                menu.add(Menu.NONE, 2, 2, getString(R.string.ml_no_app))
+            }
+        ) { item ->
+            if (item.itemId == 1) {
+                if (left) prefs.swipeLeftEnabled = true else prefs.swipeRightEnabled = true
+                showAppListIfEnabled(if (left) Constants.FLAG_SET_SWIPE_LEFT_APP else Constants.FLAG_SET_SWIPE_RIGHT_APP)
+            } else {
+                if (left) prefs.swipeLeftEnabled = false else prefs.swipeRightEnabled = false
+                populateSwipeApps()
+            }
+        }
+    }
+
     private fun populateSwipeApps() {
-        binding.swipeLeftApp.text = prefs.appNameSwipeLeft
-        binding.swipeRightApp.text = prefs.appNameSwipeRight
+        val primary = requireContext().getColorFromAttr(R.attr.primaryColor)
+        binding.swipeLeftApp.setTextColor(primary)
+        binding.swipeRightApp.setTextColor(primary)
+        binding.swipeLeftApp.text = if (prefs.swipeLeftEnabled) prefs.appNameSwipeLeft else getString(R.string.ml_no_app)
+        binding.swipeRightApp.text = if (prefs.swipeRightEnabled) prefs.appNameSwipeRight else getString(R.string.ml_no_app)
         if (!prefs.swipeLeftEnabled)
             binding.swipeLeftApp.setTextColor(requireContext().getColorFromAttr(R.attr.primaryColorTrans50))
         if (!prefs.swipeRightEnabled)

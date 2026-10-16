@@ -155,4 +155,6 @@
     <string name="ml_tab_hidden">Hidden</string>
     <string name="ml_tab_hidden_on">Show the Hidden tab</string>
     <string name="ml_tab_hidden_off">Remove the Hidden tab</string>
+    <string name="ml_choose_app">Choose app…</string>
+    <string name="ml_no_app">No app</string>
 </resources>
