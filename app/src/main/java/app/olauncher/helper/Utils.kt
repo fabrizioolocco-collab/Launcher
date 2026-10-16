@@ -156,7 +156,10 @@ private suspend fun getPinnedShortcuts(
                             shortcut.id,
                             profile.toString()
                         )
-                        if (shortcut.isPinned && pinnedShortcuts.none { it.identity == identity }) {
+                        // Gallery album shortcuts (id = folder path) are used by the home search, not listed
+                        val albumShortcut = shortcut.`package` in setOf("org.fossify.gallery", "com.simplemobiletools.gallery.pro") &&
+                                shortcut.id.startsWith("/")
+                        if (shortcut.isPinned && !albumShortcut && pinnedShortcuts.none { it.identity == identity }) {
                             val label = prefs.getAppRenameLabel(identity)
                                 .ifBlank { prefs.getAppRenameLabel(shortcut.id) }
                                 .takeIf { it.isNotBlank() }

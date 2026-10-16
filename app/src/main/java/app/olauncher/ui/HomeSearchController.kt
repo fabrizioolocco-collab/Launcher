@@ -456,7 +456,7 @@ class HomeSearchController(
                 if (media != null) albums += Row(
                     Kind.ALBUM, dir.name, activity.getString(R.string.ml_search_album_info, media.size, where),
                     openFolder = { openLocalFolder(dir) },
-                ) { openAlbum(media) }
+                ) { openAlbum(dir, media) }
                 else folders += Row(Kind.FOLDER, dir.name, where) { openLocalFolder(dir) }
             }
         return folders to albums
@@ -475,10 +475,46 @@ class HomeSearchController(
         android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
 
     /**
-     * Opens an album in the gallery: Android has no standard "open album" request, so the newest
-     * photo or video is opened; galleries usually let you swipe through the rest of the folder.
+     * Fossify Gallery shortcut for [dir], if the user created one (Fossify: long press on the
+     * album > "Create shortcut"; its id is the folder path). It opens the album's grid, which
+     * Fossify doesn't let other apps open directly.
      */
-    private fun openAlbum(media: List<File>) {
+    private fun albumShortcut(dir: File): android.content.pm.ShortcutInfo? {
+        val launcherApps = activity.getSystemService(android.content.pm.LauncherApps::class.java) ?: return null
+        if (!launcherApps.hasShortcutHostPermission()) return null
+        val path = dir.absolutePath.trimEnd('/')
+        return GALLERIES.firstNotNullOfOrNull { gallery ->
+            try {
+                val query = android.content.pm.LauncherApps.ShortcutQuery()
+                    .setPackage(gallery)
+                    .setQueryFlags(android.content.pm.LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
+                launcherApps.getShortcuts(query, android.os.Process.myUserHandle())
+                    ?.firstOrNull { it.id.trimEnd('/') == path }
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    /**
+     * Opens an album: as a grid through its Fossify shortcut when there is one; otherwise the
+     * newest photo or video, which Fossify shows with the rest of the folder to swipe through.
+     */
+    private fun openAlbum(dir: File, media: List<File>) {
+        albumShortcut(dir)?.let { shortcut ->
+            try {
+                activity.getSystemService(android.content.pm.LauncherApps::class.java)
+                    .startShortcut(shortcut, null, null)
+                close()
+                return
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        if (!prefs.albumShortcutHintShown) {
+            prefs.albumShortcutHintShown = true
+            activity.showToast(activity.getString(R.string.ml_search_album_hint), android.widget.Toast.LENGTH_LONG)
+        }
         val first = media.first()
         val mime = mimeOf(first.name) ?: "image/*"
         var uri: Uri? = null

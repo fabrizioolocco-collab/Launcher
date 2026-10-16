@@ -228,4 +228,5 @@
     <string name="ml_search_tab_music">Musica</string>
     <string name="ml_search_tab_documents">Documenti</string>
     <string name="ml_search_album_info">%1$d foto e video · %2$s</string>
+    <string name="ml_search_album_hint">Suggerimento: per aprire gli album come griglia, in Fossify tieni premuto l\'album e scegli "Crea scorciatoia"</string>
 </resources>
