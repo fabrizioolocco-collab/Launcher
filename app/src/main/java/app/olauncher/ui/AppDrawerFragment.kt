@@ -28,6 +28,12 @@ import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.FontManager
+import app.olauncher.helper.IconChooser
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showTextInputDialog
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.NotificationRepository
@@ -269,6 +275,7 @@ class AppDrawerFragment : BaseFragment() {
             },
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
             titleStyler = { view -> FontManager.apply(view, prefs.appFont, prefs.appTextSize) },
+            longPressMenu = { appModel, position -> showAppMenu(appModel, position) },
             badgeCount = { appModel ->
                 if (appModel is AppModel.App) notifications[notificationKey(appModel)]?.count ?: 0 else 0
             },
@@ -297,6 +304,54 @@ class AppDrawerFragment : BaseFragment() {
         else if (requireContext().isSystemAnimationsDisabled().not())
             binding.recyclerView.layoutAnimation =
                 AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_anim_from_bottom)
+    }
+
+    private var onImagePicked: ((android.net.Uri) -> Unit)? = null
+    private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        viewModel.keepCurrentScreen = false
+        if (uri != null) onImagePicked?.invoke(uri)
+        onImagePicked = null
+    }
+
+    /** Same long-press menu as on home: the app's notifications on top, then its actions. */
+    private fun showAppMenu(appModel: AppModel, position: Int) {
+        val ctx = requireContext()
+        binding.search.hideKeyboard()
+        val entries = mutableListOf<MenuEntry>()
+        if (appModel is AppModel.App) {
+            if (!adapter.isHiddenList) {
+                entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
+                entries += MenuEntry(getString(R.string.ml_change_icon)) {
+                    IconChooser.show(ctx, appModel, uiScope, { callback ->
+                        onImagePicked = callback
+                        viewModel.keepCurrentScreen = true
+                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }) {
+                        adapter.refreshBadges()
+                    }
+                }
+                entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
+            }
+            entries += MenuEntry(getString(if (adapter.isHiddenList) R.string.adapter_show else R.string.adapter_hide)) {
+                adapter.toggleHidden(appModel, position)
+            }
+            entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
+            entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
+            ctx.showMenuDialog(appModel.appLabel, entries, header = AppNotificationsView.create(ctx, appModel))
+        } else if (appModel is AppModel.PinnedShortcut) {
+            entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
+            entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
+            ctx.showMenuDialog(appModel.appLabel, entries)
+        }
+    }
+
+    private fun askRename(appModel: AppModel) {
+        requireContext().showTextInputDialog(
+            title = getString(R.string.rename),
+            initial = appModel.appLabel,
+            hint = appModel.appLabel,
+            action = getString(R.string.ml_save),
+        ) { label -> adapter.rename(appModel, label) }
     }
 
     private fun loadIcon(appModel: AppModel, view: TextView) {

@@ -41,6 +41,8 @@ class AppDrawerAdapter(
     private val iconLoader: ((AppModel, TextView) -> Unit)? = null,
     private val titleStyler: ((TextView) -> Unit)? = null,
     private val badgeCount: ((AppModel) -> Int)? = null,
+    /** When set, a long press opens this menu instead of the inline action bar. */
+    private val longPressMenu: ((AppModel, Int) -> Unit)? = null,
 ) : ListAdapter<AppModel, RecyclerView.ViewHolder>(DIFF_CALLBACK), Filterable {
 
     companion object {
@@ -147,6 +149,7 @@ class AppDrawerAdapter(
                     iconLoader,
                     titleStyler,
                     badgeCount?.invoke(appModel) ?: 0,
+                    longPressMenu,
                 )
             }
         } catch (e: Exception) {
@@ -234,6 +237,14 @@ class AppDrawerAdapter(
         if (first != null) appClickListener(first)
     }
 
+    // Actions for the long-press menu, same behavior as the inline bar
+    fun openInfo(app: AppModel) = appInfoListener(app)
+    fun delete(app: AppModel) = appDeleteListener(app)
+    fun toggleHidden(app: AppModel, position: Int) = appHideListener(app, position)
+    fun rename(app: AppModel, label: String) = appRenameListener(app, label)
+    fun addToSection(app: AppModel) = appSectionListener(app)
+    val isHiddenList get() = flag == Constants.FLAG_HIDDEN_APPS
+
     /** Rebinds visible rows so notification badges reflect the latest counts. */
     fun refreshBadges() = notifyItemRangeChanged(0, itemCount)
 
@@ -278,6 +289,7 @@ class AppDrawerAdapter(
             iconLoader: ((AppModel, TextView) -> Unit)?,
             titleStyler: ((TextView) -> Unit)?,
             notificationCount: Int,
+            longPressMenu: ((AppModel, Int) -> Unit)?,
         ) = with(binding) {
             appHideLayout.visibility = View.GONE
             renameLayout.visibility = View.GONE
@@ -303,6 +315,10 @@ class AppDrawerAdapter(
             appTitle.setOnClickListener { clickListener(appModel) }
 
             appTitle.setOnLongClickListener {
+                if (longPressMenu != null) {
+                    if (appModel.appPackage.isNotEmpty()) longPressMenu(appModel, bindingAdapterPosition)
+                    return@setOnLongClickListener true
+                }
                 if (appModel.appPackage.isNotEmpty()) {
                     appDelete.alpha = when (
                         appModel is AppModel.PinnedShortcut || !root.context.isSystemApp(appModel.appPackage, appModel.user)
