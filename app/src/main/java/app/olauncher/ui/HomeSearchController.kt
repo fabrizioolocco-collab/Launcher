@@ -149,7 +149,7 @@ class HomeSearchController(
     /** Clears the query and brings home back. */
     fun close() {
         job?.cancel()
-        tab = Tab.ALL
+        tab = null
         input.setText("")
         input.clearFocus()
         input.hideKeyboard()
@@ -242,15 +242,16 @@ class HomeSearchController(
             get() = mime != null && (mime.startsWith("text/") || DOCUMENT_MIMES.any { mime.contains(it) })
     }
 
-    /** Result tabs, each with its count; "All" previews every group. */
+    /** Result tabs, each with its count; only those with results are shown. */
     private enum class Tab(val label: Int) {
-        ALL(R.string.ml_search_tab_all), APPS(R.string.ml_search_group_apps), CONTACTS(R.string.ml_search_contacts),
+        APPS(R.string.ml_search_group_apps), CONTACTS(R.string.ml_search_contacts),
         FILES(R.string.ml_search_files), FOLDERS(R.string.ml_search_tab_folders), ALBUMS(R.string.ml_search_tab_albums),
         PHOTOS(R.string.ml_search_tab_photos), VIDEOS(R.string.ml_search_tab_videos), MUSIC(R.string.ml_search_tab_music),
         DOCUMENTS(R.string.ml_search_tab_documents), SETTINGS(R.string.ml_search_settings),
     }
 
-    private var tab = Tab.ALL
+    /** Tab chosen by the user; kept while typing as long as it has results. */
+    private var tab: Tab? = null
 
     private class Found(
         val apps: List<Row>,
@@ -261,7 +262,6 @@ class HomeSearchController(
         val settings: List<Row>,
     ) {
         fun rows(tab: Tab): List<Row> = when (tab) {
-            Tab.ALL -> emptyList()
             Tab.APPS -> apps
             Tab.CONTACTS -> contacts.orEmpty()
             Tab.FILES -> files.orEmpty()
@@ -297,23 +297,22 @@ class HomeSearchController(
 
     private fun render(q: String, found: Found) {
         results.removeAllViews()
-        // A tab left without results falls back to "All"
-        if (tab != Tab.ALL && found.rows(tab).isEmpty()) tab = Tab.ALL
-        tabBar(q, found)
-        if (tab != Tab.ALL) {
-            found.rows(tab).forEach { results.addView(rowView(it)) }
-            return
+        val missingContacts = found.contacts == null
+        val missingFiles = found.files == null
+        // Tabs with results, plus Contacts / Files when their permission is missing (to ask it)
+        val visible = Tab.entries.filter {
+            found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles)
         }
-        preview(q, found, Tab.APPS)
-        if (found.contacts == null) permissionRow(R.string.ml_search_allow_contacts) {
-            requestPermission(Manifest.permission.READ_CONTACTS)
-        } else preview(q, found, Tab.CONTACTS)
-        preview(q, found, Tab.FOLDERS)
-        preview(q, found, Tab.ALBUMS)
-        preview(q, found, Tab.FILES)
-        if (found.files == null) permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
-        preview(q, found, Tab.SETTINGS)
-        if (found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+        val current = tab?.takeIf { it in visible } ?: visible.firstOrNull { found.rows(it).isNotEmpty() } ?: visible.firstOrNull()
+        if (current != null) tabBar(q, found, visible, current)
+        when {
+            current == Tab.CONTACTS && missingContacts -> permissionRow(R.string.ml_search_allow_contacts) {
+                requestPermission(Manifest.permission.READ_CONTACTS)
+            }
+            current == Tab.FILES && missingFiles -> permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
+            current != null -> found.rows(current).forEach { results.addView(rowView(it)) }
+        }
+        if (current == null || found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
             setText(R.string.ml_search_no_results)
             alpha = 0.6f
             setPadding(0, 16.dpToPx(), 0, 4.dpToPx())
@@ -321,33 +320,16 @@ class HomeSearchController(
         footer(activity.getString(R.string.ml_search_on_google, q)) { openWeb(q) }
     }
 
-    /** "All" tab: the first rows of a group, then a link to its own tab. */
-    private fun preview(q: String, found: Found, t: Tab) {
-        val rows = found.rows(t)
-        group(t.label, rows.take(PREVIEW))
-        if (rows.size > PREVIEW) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-            text = activity.getString(R.string.ml_search_show_all, rows.size)
-            alpha = 0.7f
-            setPadding(36.dpToPx(), 4.dpToPx(), 0, 8.dpToPx())
-            isClickable = true
-            setOnClickListener {
-                tab = t
-                render(q, found)
-            }
-        })
-    }
-
-    /** Chips "All 23 · Apps 3 · Files 12 …", only for tabs with results. */
-    private fun tabBar(q: String, found: Found) {
+    /** Chips "Apps 3 · Files 12 …". */
+    private fun tabBar(q: String, found: Found, visible: List<Tab>, current: Tab) {
         val chips = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
-        Tab.entries.forEach { t ->
-            val count = if (t == Tab.ALL) found.total else found.rows(t).size
-            if (t != Tab.ALL && count == 0) return@forEach
+        visible.forEach { t ->
+            val count = found.rows(t).size
             chips.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
                 text = activity.getString(R.string.ml_search_tab_format, activity.getString(t.label), count)
-                setTypeface(typeface, if (t == tab) Typeface.BOLD else Typeface.NORMAL)
-                alpha = if (t == tab) 1f else 0.6f
-                if (t == tab) setBackgroundResource(R.drawable.rounded_rect_shade_color)
+                setTypeface(typeface, if (t == current) Typeface.BOLD else Typeface.NORMAL)
+                alpha = if (t == current) 1f else 0.6f
+                if (t == current) setBackgroundResource(R.drawable.rounded_rect_shade_color)
                 setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
                 isClickable = true
                 setOnClickListener {
@@ -510,7 +492,19 @@ class HomeSearchController(
             e.printStackTrace()
         }
         val target = uri ?: androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.files", first)
-        open(Intent(Intent.ACTION_VIEW).setDataAndType(target, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(target, mime)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Fossify Gallery shows the photo with the rest of its folder to swipe through
+        for (gallery in GALLERIES) {
+            try {
+                activity.startActivity(Intent(intent).setPackage(gallery))
+                close()
+                return
+            } catch (e: Exception) {
+                // not installed: try the next one
+            }
+        }
+        open(intent)
     }
 
     /** All folders on the phone storage (cached for a while; hidden folders and Android/ skipped). */
@@ -702,7 +696,7 @@ class HomeSearchController(
         private const val MAX_CONTACTS = 30
         private const val MAX_FILES = 300
         private const val MAX_FOLDERS = 80
-        private const val PREVIEW = 4
+        private val GALLERIES = listOf("org.fossify.gallery", "com.simplemobiletools.gallery.pro")
         private val DOCUMENT_MIMES = listOf(
             "pdf", "msword", "wordprocessing", "excel", "spreadsheet", "powerpoint", "presentation", "opendocument", "rtf",
         )

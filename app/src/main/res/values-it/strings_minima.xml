@@ -221,13 +221,11 @@
     <string name="ml_explorer_delete_confirm">Eliminare «%1$s»? Non si può annullare.</string>
     <string name="ml_explorer_into_itself">Una cartella non può andare dentro se stessa</string>
     <!-- Search result tabs -->
-    <string name="ml_search_tab_all">Tutto</string>
     <string name="ml_search_tab_folders">Cartelle</string>
     <string name="ml_search_tab_albums">Album</string>
     <string name="ml_search_tab_photos">Foto</string>
     <string name="ml_search_tab_videos">Video</string>
     <string name="ml_search_tab_music">Musica</string>
     <string name="ml_search_tab_documents">Documenti</string>
-    <string name="ml_search_show_all">Mostra tutti (%1$d) →</string>
     <string name="ml_search_album_info">%1$d foto e video · %2$s</string>
 </resources>
