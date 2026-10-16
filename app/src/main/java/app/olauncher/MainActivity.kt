@@ -192,6 +192,7 @@ class MainActivity : AppCompatActivity() {
         // Home button for recents feature disabled
         // val alreadyHome = navController.currentDestination?.id == R.id.mainFragment
         backToHomeScreen()
+        viewModel.homePressed.call()
         // if (alreadyHome && isResumed && prefs.homeButtonShowRecents)
         //     viewModel.showRecentApps.call()
         super.onNewIntent(intent)

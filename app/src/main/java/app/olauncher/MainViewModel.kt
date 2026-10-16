@@ -74,6 +74,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val checkForMessages = SingleLiveEvent<Unit?>()
     val resetLauncherLiveData = SingleLiveEvent<Unit?>()
     val showPermissions = SingleLiveEvent<Unit?>()
+    /** The Home button was pressed while the launcher was already open. */
+    val homePressed = SingleLiveEvent<Unit?>()
     // Home button for recents feature disabled
     // val showRecentApps = SingleLiveEvent<Unit?>()
 

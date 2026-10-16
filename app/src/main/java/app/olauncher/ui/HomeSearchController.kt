@@ -168,9 +168,19 @@ class HomeSearchController(
         homeViews.forEach { it.isVisible = true }
     }
 
-    fun onHomeStopped() {
-        if (!waitingPermission) close()
+    /**
+     * Something was opened from the search: keep the page (back from there returns to it), just
+     * drop the keyboard. Pressing Home closes the search instead, see [onHomePressed].
+     */
+    private fun leave() {
+        input.clearFocus()
+        input.hideKeyboard()
     }
+
+    fun onHomeStopped() = leave()
+
+    /** The Home button brings back the plain home screen. */
+    fun onHomePressed() = close()
 
     fun onHomeResumed() {
         if (waitingPermission) {
@@ -216,7 +226,7 @@ class HomeSearchController(
     private fun open(intent: Intent) {
         try {
             activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            close()
+            leave()
         } catch (e: Exception) {
             activity.showToast(activity.getString(R.string.ml_search_cannot_open))
         }
@@ -286,7 +296,7 @@ class HomeSearchController(
             .distinctBy { "${it.appPackage}|${it.activityClassName}|${it.user}" }
             .sortedWith(compareBy({ !normalize(it.appLabel).startsWith(key) }, { it.appLabel.lowercase() }))
             .take(MAX_APPS)
-            .map { app -> Row(Kind.APP, app.appLabel, app = app) { launchApp(app); close() } }
+            .map { app -> Row(Kind.APP, app.appLabel, app = app) { launchApp(app); leave() } }
         val contactRows = if (granted(Manifest.permission.READ_CONTACTS)) withContext(Dispatchers.IO) { contacts(q) } else null
         val filesOk = filesGranted()
         val fileRows = if (filesOk) withContext(Dispatchers.IO) { files(q) } else null
@@ -502,7 +512,7 @@ class HomeSearchController(
             try {
                 activity.getSystemService(android.content.pm.LauncherApps::class.java)
                     .startShortcut(shortcut, null, null)
-                close()
+                leave()
                 return
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -510,7 +520,7 @@ class HomeSearchController(
         }
         // Otherwise our own grid of the album
         AlbumActivity.open(activity, dir)
-        close()
+        leave()
     }
 
     /** All folders on the phone storage (cached for a while; hidden folders and Android/ skipped). */
@@ -538,7 +548,7 @@ class HomeSearchController(
     private fun openLocalFolder(dir: File) {
         if (prefs.phoneFoldersInExplorer) {
             FileExplorerActivity.openLocal(activity, dir)
-            close()
+            leave()
             return
         }
         val fileUri = Uri.fromFile(dir)
@@ -558,7 +568,7 @@ class HomeSearchController(
             for (intent in attempts) {
                 try {
                     activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                    close()
+                    leave()
                     return
                 } catch (e: Exception) {
                     // try the next variant

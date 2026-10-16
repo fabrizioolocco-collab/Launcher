@@ -324,6 +324,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
         DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }
         viewModel.showPermissions.observe(viewLifecycleOwner) { detox.showPermissions() }
+        viewModel.homePressed.observe(viewLifecycleOwner) { search.onHomePressed() }
         viewModel.isOlauncherDefault.observe(viewLifecycleOwner, Observer {
             if (it != true) {
                 if (prefs.dailyWallpaper && prefs.appTheme == AppCompatDelegate.MODE_NIGHT_YES) {
