@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Files shared with other apps: OneDrive downloads opened from the home search -->
+<paths>
+    <cache-path
+        name="onedrive"
+        path="onedrive/" />
+</paths>

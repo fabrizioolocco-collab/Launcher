@@ -213,4 +213,6 @@
     <string name="ml_onedrive_connect_hint">☁️ Connect OneDrive to search it too</string>
     <string name="ml_search_folder">Folder in %1$s</string>
     <string name="ml_search_open_folder">Open folder</string>
+    <string name="ml_onedrive_downloading">Downloading %1$s…</string>
+    <string name="ml_onedrive_download_failed">Download from OneDrive failed</string>
 </resources>

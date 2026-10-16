@@ -208,4 +208,6 @@
     <string name="ml_onedrive_connect_hint">☁️ Collega OneDrive per cercare anche lì</string>
     <string name="ml_search_folder">Cartella in %1$s</string>
     <string name="ml_search_open_folder">Apri cartella</string>
+    <string name="ml_onedrive_downloading">Scarico %1$s…</string>
+    <string name="ml_onedrive_download_failed">Download da OneDrive non riuscito</string>
 </resources>

@@ -456,17 +456,48 @@ class HomeSearchController(
     private fun cloudRow(item: OneDriveSearch.Item): Row {
         val where = item.path ?: activity.getString(R.string.ml_search_onedrive)
         return if (item.isFolder) Row(Kind.CLOUD_FOLDER, item.name, activity.getString(R.string.ml_search_folder, where)) {
-            open(Intent(Intent.ACTION_VIEW, Uri.parse(item.webUrl)))
+            openCloudUrl(item.webUrl)
         } else Row(
             Kind.CLOUD_FILE, item.name, where,
             openFolder = item.parentId?.let { parentId -> { openCloudFolder(parentId) } },
-        ) { open(Intent(Intent.ACTION_VIEW, Uri.parse(item.webUrl))) }
+        ) { openCloudFile(item) }
+    }
+
+    /** Downloads the file and opens it with the phone's app for its type, like a local file. */
+    private fun openCloudFile(item: OneDriveSearch.Item) {
+        if (item.size > MAX_DOWNLOAD) {
+            openCloudUrl(item.webUrl)
+            return
+        }
+        activity.showToast(activity.getString(R.string.ml_onedrive_downloading, item.name))
+        scope.launch {
+            val file = withContext(Dispatchers.IO) { oneDrive.download(item) }
+            if (file == null) {
+                activity.showToast(activity.getString(R.string.ml_onedrive_download_failed))
+                return@launch
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.files", file)
+            val mime = item.mimeType ?: android.webkit.MimeTypeMap.getSingleton()
+                .getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+            open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        }
+    }
+
+    /** OneDrive folders: in the OneDrive app when installed, otherwise the browser. */
+    private fun openCloudUrl(url: String) {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        try {
+            activity.startActivity(Intent(intent).setPackage(ONEDRIVE_APP).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            close()
+        } catch (e: Exception) {
+            open(intent)
+        }
     }
 
     private fun openCloudFolder(parentId: String) {
         scope.launch {
             val url = withContext(Dispatchers.IO) { oneDrive.webUrlOf(parentId) }
-            if (url != null) open(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            if (url != null) openCloudUrl(url)
             else activity.showToast(activity.getString(R.string.ml_search_cannot_open))
         }
     }
@@ -619,6 +650,8 @@ class HomeSearchController(
         private const val MAX_SCANNED = 30_000
         private const val FOLDER_CACHE_MS = 10 * 60_000L
         private const val SOLID_EXPLORER = "pl.solidexplorer2"
+        private const val ONEDRIVE_APP = "com.microsoft.skydrive"
+        private const val MAX_DOWNLOAD = 200L * 1024 * 1024
         private const val EXTERNAL_STORAGE_DOCS = "com.android.externalstorage.documents"
 
         @Volatile

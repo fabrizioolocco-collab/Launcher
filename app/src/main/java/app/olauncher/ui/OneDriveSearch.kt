@@ -24,7 +24,16 @@ import java.security.SecureRandom
  */
 class OneDriveSearch(private val context: Context) {
 
-    class Item(val name: String, val path: String?, val webUrl: String, val isFolder: Boolean, val parentId: String?)
+    class Item(
+        val id: String,
+        val name: String,
+        val path: String?,
+        val webUrl: String,
+        val isFolder: Boolean,
+        val parentId: String?,
+        val mimeType: String?,
+        val size: Long,
+    )
 
     private val prefs = context.getSharedPreferences("app.minimalauncher.onedrive", Context.MODE_PRIVATE)
 
@@ -89,7 +98,7 @@ class OneDriveSearch(private val context: Context) {
         val token = accessToken() ?: return null
         val q = URLEncoder.encode(query.replace("'", "''"), "UTF-8").replace("+", "%20")
         val url = "https://graph.microsoft.com/v1.0/me/drive/root/search(q='$q')" +
-                "?\$top=$MAX_RESULTS&\$select=name,webUrl,parentReference,folder"
+                "?\$top=$MAX_RESULTS&\$select=id,name,webUrl,parentReference,folder,file,size"
         return try {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 setRequestProperty("Authorization", "Bearer $token")
@@ -107,15 +116,47 @@ class OneDriveSearch(private val context: Context) {
                 val parent = o.optJSONObject("parentReference")
                 val path = parent?.optString("path")?.substringAfter("root:", "")?.trimStart('/')?.ifBlank { null }
                 Item(
+                    id = o.optString("id"),
                     name = o.optString("name"),
                     path = path?.let { Uri.decode(it) },
                     webUrl = o.optString("webUrl"),
                     isFolder = o.has("folder"),
                     parentId = parent?.optString("id")?.ifBlank { null },
+                    mimeType = o.optJSONObject("file")?.optString("mimeType")?.ifBlank { null },
+                    size = o.optLong("size"),
                 )
             }.filter { it.webUrl.isNotBlank() }
         } catch (e: Exception) {
             e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * Downloads [item] into the app cache (replacing earlier downloads) so a local app can open it.
+     * Returns the file, or null on errors. Network I/O.
+     */
+    fun download(item: Item): java.io.File? {
+        val token = accessToken() ?: return null
+        val dir = java.io.File(context.cacheDir, "onedrive").apply {
+            deleteRecursively()
+            mkdirs()
+        }
+        val target = java.io.File(dir, item.name.replace('/', '_'))
+        return try {
+            val conn = (URL("https://graph.microsoft.com/v1.0/me/drive/items/${Uri.encode(item.id)}/content")
+                .openConnection() as HttpURLConnection).apply {
+                setRequestProperty("Authorization", "Bearer $token")
+                instanceFollowRedirects = true
+                connectTimeout = 10_000
+                readTimeout = 30_000
+            }
+            if (conn.responseCode !in 200..299) return null
+            conn.inputStream.use { input -> target.outputStream().use { input.copyTo(it) } }
+            target
+        } catch (e: Exception) {
+            e.printStackTrace()
+            target.delete()
             null
         }
     }
