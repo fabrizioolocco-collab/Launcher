@@ -869,7 +869,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 minWidth = 40.dpToPx()
                 setText(a.text)
                 setSelection(length())
-                typeface = overlay.textTypeface()
+                typeface = this@PageView.overlay.textTypeface()
             }
             et.addTextChangedListener(object : android.text.TextWatcher {
                 override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
