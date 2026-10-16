@@ -138,4 +138,17 @@
     <string name="ml_add_to_home">Add to home</string>
     <string name="ml_added_to_home">Added to home</string>
     <string name="ml_already_on_home">Already on home</string>
+    <string name="ml_tab">Tab</string>
+    <string name="ml_tab_all">All</string>
+    <string name="ml_tab_new">New tab</string>
+    <string name="ml_tab_new_ellipsis">+ New tab…</string>
+    <string name="ml_tab_name_hint">Tab name</string>
+    <string name="ml_tab_edit_apps">Edit apps</string>
+    <string name="ml_move_left">Move left</string>
+    <string name="ml_move_right">Move right</string>
+    <string name="ml_tab_disable">Turn off</string>
+    <string name="ml_tab_delete">Delete tab</string>
+    <string name="ml_tab_delete_confirm">Delete the tab \"%1$s\"? The apps stay installed.</string>
+    <string name="ml_add_to_tab">Add to tab…</string>
+    <string name="ml_tabs_settings">App list tabs</string>
 </resources>

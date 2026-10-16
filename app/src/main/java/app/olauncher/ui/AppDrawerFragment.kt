@@ -71,6 +71,8 @@ class AppDrawerFragment : BaseFragment() {
     private var currentPrivateSpaceLocked: Boolean = true
     private var currentPrivateSpaceAvailable: Boolean = false
     private var uiScope = MainScope()
+    private var tabs: DrawerTabsController? = null
+    private var lastQueryBlank = true
     private var currentHiddenApps: List<AppModel> = emptyList()
     private var notifications: Map<String, AppNotifications> = emptyMap()
     private val hideIndexRunnable = Runnable { _binding?.letterIndex?.isVisible = false }
@@ -103,6 +105,16 @@ class AppDrawerFragment : BaseFragment() {
         initObservers()
         initClickListeners()
         initLetterIndex()
+        if (flag == Constants.FLAG_LAUNCH_APP) {
+            binding.tabsScroll.isVisible = true
+            tabs = DrawerTabsController(
+                context = requireContext(),
+                bar = binding.tabsBar,
+                allApps = { currentAppList.orEmpty().filterIsInstance<AppModel.App>() },
+                onSelectionChanged = { updateCombinedAppList() },
+            ).also { it.render() }
+            updateCombinedAppList()
+        }
     }
 
     private fun initViews() {
@@ -136,6 +148,11 @@ class AppDrawerFragment : BaseFragment() {
             override fun onQueryTextChange(newText: String): Boolean {
                 try {
                     adapter.allowAutoLaunch = prefs.autoLaunchSingleResult && !isSearchComposing()
+                    // Search looks through all apps: switch the base list when the query starts/ends
+                    if (newText.isBlank() != lastQueryBlank) {
+                        lastQueryBlank = newText.isBlank()
+                        updateCombinedAppList()
+                    }
                     adapter.filter.filter(newText)
                     updateLetterIndex()
                     binding.appRename.visibility =
@@ -324,6 +341,7 @@ class AppDrawerFragment : BaseFragment() {
                     ctx.showToast(getString(if (HomeSectionsController.addUngrouped(ctx, appModel)) R.string.ml_added_to_home else R.string.ml_already_on_home))
                 }
                 entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
+                tabs?.let { t -> entries += MenuEntry(getString(R.string.ml_add_to_tab)) { t.showAddToTab(appModel) } }
                 entries += MenuEntry(getString(R.string.ml_change_icon)) {
                     IconChooser.show(ctx, appModel, uiScope, { callback ->
                         onImagePicked = callback
@@ -450,7 +468,9 @@ class AppDrawerFragment : BaseFragment() {
         val ctx = context ?: return
         // During detox only allowed apps are listed (picking apps for settings is not affected)
         val detox = flag == Constants.FLAG_LAUNCH_APP && DetoxManager.isActive(ctx)
-        val apps = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
+        val allowed = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
+        val searching = !binding.search.query.isNullOrBlank()
+        val apps = if (searching) allowed else tabs?.filter(allowed) ?: allowed
         // "News" block removed: apps with notifications are shown on home instead
         val combined = apps.toMutableList()
 

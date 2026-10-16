@@ -192,6 +192,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
+            R.id.tabsSettings -> DrawerTabsController.showTabsSettings(requireContext())
             R.id.detoxWhitelist -> showDetoxWhitelist()
             R.id.bottomLabels -> {
                 prefs.bottomLabels = !prefs.bottomLabels
@@ -295,6 +296,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.notificationAccess.setOnClickListener(this)
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
+        binding.tabsSettings.setOnClickListener(this)
         binding.detoxWhitelist.setOnClickListener(this)
         binding.bottomLabels.setOnClickListener(this)
         binding.permissionsScreen.setOnClickListener(this)

@@ -136,4 +136,17 @@
     <string name="ml_add_to_home">Aggiungi alla home</string>
     <string name="ml_added_to_home">Aggiunta alla home</string>
     <string name="ml_already_on_home">Già presente in home</string>
+    <string name="ml_tab">Tab</string>
+    <string name="ml_tab_all">Tutte</string>
+    <string name="ml_tab_new">Nuovo tab</string>
+    <string name="ml_tab_new_ellipsis">+ Nuovo tab…</string>
+    <string name="ml_tab_name_hint">Nome del tab</string>
+    <string name="ml_tab_edit_apps">Modifica app</string>
+    <string name="ml_move_left">Sposta a sinistra</string>
+    <string name="ml_move_right">Sposta a destra</string>
+    <string name="ml_tab_disable">Disattiva</string>
+    <string name="ml_tab_delete">Elimina tab</string>
+    <string name="ml_tab_delete_confirm">Eliminare il tab \"%1$s\"? Le app restano installate.</string>
+    <string name="ml_add_to_tab">Aggiungi a tab…</string>
+    <string name="ml_tabs_settings">Tab della lista app</string>
 </resources>

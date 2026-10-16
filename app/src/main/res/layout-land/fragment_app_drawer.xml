@@ -53,6 +53,24 @@
 
     </LinearLayout>
 
+    <!-- Drawer tabs: All + user tabs, "+" to create -->
+    <HorizontalScrollView
+        android:id="@+id/tabsScroll"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:overScrollMode="never"
+        android:paddingHorizontal="12dp"
+        android:scrollbars="none"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:id="@+id/tabsBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </HorizontalScrollView>
+
     <Space
         android:layout_width="match_parent"
         android:layout_height="0dp"
