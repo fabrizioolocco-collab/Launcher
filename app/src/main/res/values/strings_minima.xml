@@ -151,4 +151,5 @@
     <string name="ml_tab_delete_confirm">Delete the tab \"%1$s\"? The apps stay installed.</string>
     <string name="ml_add_to_tab">Add to tab…</string>
     <string name="ml_tabs_settings">App list tabs</string>
+    <string name="ml_home" translatable="false">Home</string>
 </resources>

@@ -323,18 +323,10 @@ class HomeSectionsController(
         if (position > 0) entries += MenuEntry(context.getString(R.string.ml_move_up)) { moveUngrouped(position, -1) }
         if (position in 0 until ungrouped.lastIndex) entries += MenuEntry(context.getString(R.string.ml_move_down)) { moveUngrouped(position, 1) }
         entries += MenuEntry(context.getString(R.string.ml_app_move_to)) {
-            val targets = sections.mapIndexed { i, s ->
-                MenuEntry(s.name) {
-                    removeUngrouped(sectionApp)
-                    copyApp(sectionApp, i, removeFrom = null)
-                }
-            } + MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) {
-                createSection { i ->
-                    removeUngrouped(sectionApp)
-                    copyApp(sectionApp, i, removeFrom = null)
-                }
+            pickOtherSection(UNGROUPED) { target ->
+                removeUngrouped(sectionApp)
+                copyApp(sectionApp, target, removeFrom = null)
             }
-            context.showMenuDialog(context.getString(R.string.ml_section), targets)
         }
         entries += MenuEntry(context.getString(R.string.ml_remove_from_home)) {
             removeUngrouped(sectionApp)
@@ -366,16 +358,8 @@ class HomeSectionsController(
     private fun showLooseAppMenu(app: AppModel.App) {
         val sectionApp = SectionApp.from(app)
         val entries = mutableListOf(
-            MenuEntry(context.getString(R.string.ml_add_to_home)) {
-                if (addUngrouped(context, app)) ungrouped = repo.loadUngrouped()
-                render()
-            },
             MenuEntry(context.getString(R.string.ml_add_to_section)) {
-                val targets = sections.mapIndexed { i, s -> MenuEntry(s.name) { copyApp(sectionApp, i, removeFrom = null) } } +
-                        MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) {
-                            createSection { i -> copyApp(sectionApp, i, removeFrom = null) }
-                        }
-                context.showMenuDialog(context.getString(R.string.ml_section), targets)
+                pickOtherSection(LOOSE) { target -> copyApp(sectionApp, target, removeFrom = null) }
             },
             MenuEntry(context.getString(R.string.ml_change_icon)) {
                 IconChooser.show(context, app, scope, pickImage) { render() }
@@ -443,6 +427,19 @@ class HomeSectionsController(
     }
 
     private fun copyApp(sectionApp: SectionApp, targetIndex: Int, removeFrom: Int?) {
+        if (targetIndex == UNGROUPED) {
+            // "Home": the apps outside any group
+            if (ungrouped.none { it.samePackageAndUser(sectionApp) }) {
+                ungrouped.add(sectionApp)
+                repo.saveUngrouped(ungrouped)
+            } else if (removeFrom == null) {
+                context.showToast(context.getString(R.string.ml_already_on_home))
+                return
+            }
+            if (removeFrom != null) sections.getOrNull(removeFrom)?.apps?.removeAll { it.samePackageAndUser(sectionApp) }
+            save()
+            return
+        }
         val target = sections.getOrNull(targetIndex) ?: return
         if (target.contains(sectionApp)) {
             if (removeFrom == null) {
@@ -456,7 +453,9 @@ class HomeSectionsController(
 
     /** Lets the user pick a section other than [excludeIndex], or create a new one. */
     private fun pickOtherSection(excludeIndex: Int, onPicked: (Int) -> Unit) {
-        val entries = sections.mapIndexedNotNull { i, s ->
+        val home = if (excludeIndex == UNGROUPED) emptyList()
+        else listOf(MenuEntry(context.getString(R.string.ml_home)) { onPicked(UNGROUPED) })
+        val entries = home + sections.mapIndexedNotNull { i, s ->
             if (i == excludeIndex) null else MenuEntry(s.name) { onPicked(i) }
         } + MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) { createSection(onPicked) }
         context.showMenuDialog(context.getString(R.string.ml_section), entries)
@@ -546,7 +545,12 @@ class HomeSectionsController(
                 context.showToast(context.getString(R.string.ml_added_to_section, target.name))
             }
 
-            val entries = sections.mapIndexed { i, s -> MenuEntry(s.name) { addTo(i) } } +
+            val home = MenuEntry(context.getString(R.string.ml_home)) {
+                context.showToast(
+                    context.getString(if (addUngrouped(context, app)) R.string.ml_added_to_home else R.string.ml_already_on_home)
+                )
+            }
+            val entries = listOf(home) + sections.mapIndexed { i, s -> MenuEntry(s.name) { addTo(i) } } +
                     MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) {
                         context.showTextInputDialog(
                             title = context.getString(R.string.ml_section_new),
