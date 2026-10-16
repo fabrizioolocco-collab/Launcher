@@ -82,7 +82,16 @@ class HomeWidgetsController(
     init {
         grid.resizeListener = resizeListener()
         if (bottom) grid.minRows = 1
+        else {
+            grid.rowDivisions = TOP_ROW_DIVISIONS
+            if (repo.migrateRowDivisions(TOP_ROW_DIVISIONS)) widgets = repo.load()
+        }
     }
+
+    private val rowDivisions get() = if (bottom) 1 else TOP_ROW_DIVISIONS
+
+    /** Row height in px (cells are split vertically in the top grid). */
+    private fun rowPx(): Int = (cellPx() / rowDivisions).coerceAtLeast(1)
 
     private fun log(message: String) = WidgetLog.log(activity, message)
 
@@ -154,7 +163,7 @@ class HomeWidgetsController(
             if (widget.colSpan <= 0) {
                 // Saved by the older stacked layout: full width, same height, first free rows
                 widget.colSpan = columns
-                widget.rowSpan = ceilDiv(widget.legacyHeightDp.dpToPx(), cellPx()).coerceAtLeast(1)
+                widget.rowSpan = ceilDiv(widget.legacyHeightDp.dpToPx(), rowPx()).coerceAtLeast(1)
                 val (c, r) = findFreeSpot(widget.colSpan, widget.rowSpan, except = widget)
                 widget.col = c; widget.row = r
                 changed = true
@@ -223,7 +232,7 @@ class HomeWidgetsController(
         val density = activity.resources.displayMetrics.density
         val cellDp = (cellPx() / density).toInt()
         val w = widget.colSpan * cellDp
-        val h = widget.rowSpan * cellDp
+        val h = widget.rowSpan * cellDp / rowDivisions
         try {
             view.updateAppWidgetSize(Bundle(), w, h, w, h)
         } catch (e: Exception) {
@@ -514,7 +523,7 @@ class HomeWidgetsController(
         pendingInfo = null
         val cell = cellPx()
         val colSpan = ceilDiv(info.minWidth, cell).coerceIn(1, prefs.widgetColumns)
-        val rowSpan = ceilDiv(info.minHeight, cell).coerceAtLeast(1)
+        val rowSpan = ceilDiv(info.minHeight, rowPx()).coerceAtLeast(1)
         val (col, row) = placeFor(colSpan, rowSpan)
         widgets.add(HomeWidget(id, col, row, colSpan, rowSpan))
         repo.save(widgets)
@@ -609,6 +618,9 @@ class HomeWidgetsController(
     }
 
     companion object {
+        /** The top grid's rows are half a column tall, so widgets fit without large gaps. */
+        const val TOP_ROW_DIVISIONS = 2
+
         private const val HOST_ID = 2026
         private var sharedHostInstance: MinimaWidgetHost? = null
 

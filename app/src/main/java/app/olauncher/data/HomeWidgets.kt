@@ -65,6 +65,26 @@ class HomeWidgetsRepository(context: Context, private val key: String = KEY) {
         prefs.edit { putString(key, array.toString()) }
     }
 
+    /**
+     * Converts positions saved with square rows to rows split in [divisions] (once): row and
+     * height are multiplied so widgets keep their size. Returns true when something changed.
+     */
+    fun migrateRowDivisions(divisions: Int): Boolean {
+        val flag = "${key}_ROW_DIVISIONS"
+        val saved = prefs.getInt(flag, 1)
+        if (saved == divisions) return false
+        val widgets = load()
+        widgets.forEach {
+            if (it.colSpan > 0) {
+                it.row = it.row * divisions / saved
+                it.rowSpan = (it.rowSpan * divisions / saved).coerceAtLeast(1)
+            }
+        }
+        save(widgets)
+        prefs.edit { putInt(flag, divisions) }
+        return widgets.isNotEmpty()
+    }
+
     companion object {
         const val KEY = "WIDGETS"
         const val KEY_BOTTOM = "BOTTOM"

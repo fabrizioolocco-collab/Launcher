@@ -17,7 +17,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Grid of square cells holding widgets. Each child declares its cell rectangle through [CellParams].
+ * Grid of cells holding widgets (square, or rows split in [rowDivisions]). Each child declares its cell rectangle through [CellParams].
  * The grid is as tall as its lowest widget (one extra empty row while editing, so widgets can be
  * moved or stretched downwards).
  *
@@ -65,7 +65,7 @@ class WidgetGridLayout @JvmOverloads constructor(
             if (downOnChild || resizeTarget != null) return
             val cell = cellSize()
             val col = ((e.x - paddingLeft) / cell).toInt().coerceIn(0, columns - 1)
-            val row = ((e.y - paddingTop) / cell).toInt().coerceAtLeast(0)
+            val row = ((e.y - paddingTop) / rowSize()).toInt().coerceAtLeast(0)
             performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             homeGestures?.onEmptyLongPress(col, row)
         }
@@ -106,6 +106,15 @@ class WidgetGridLayout @JvmOverloads constructor(
         }
         return super.dispatchTouchEvent(ev) || true
     }
+
+    /** Rows per column width: 2 makes rows half as tall as wide, for a tighter vertical fit. */
+    var rowDivisions = 1
+        set(value) {
+            field = value.coerceAtLeast(1)
+            requestLayout()
+        }
+
+    fun rowSize(): Int = (cellSize() / rowDivisions).coerceAtLeast(1)
 
     var columns = 6
         set(value) {
@@ -174,16 +183,17 @@ class WidgetGridLayout @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val cell = ((width - paddingLeft - paddingRight) / columns).coerceAtLeast(1)
+        val rowH = (cell / rowDivisions).coerceAtLeast(1)
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             val p = child.layoutParams as CellParams
             child.measure(
                 MeasureSpec.makeMeasureSpec(p.colSpan * cell - 2 * gap, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(p.rowSpan * cell - 2 * gap, MeasureSpec.EXACTLY)
+                MeasureSpec.makeMeasureSpec(p.rowSpan * rowH - 2 * gap, MeasureSpec.EXACTLY)
             )
         }
         val rows = maxOf(usedRows() + if (editing) 1 else 0, minRows)
-        setMeasuredDimension(width, rows * cell + paddingTop + paddingBottom)
+        setMeasuredDimension(width, rows * rowH + paddingTop + paddingBottom)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -192,7 +202,7 @@ class WidgetGridLayout @JvmOverloads constructor(
             val child = getChildAt(i)
             val p = child.layoutParams as CellParams
             val left = paddingLeft + p.col * cell + gap
-            val top = paddingTop + p.row * cell + gap
+            val top = paddingTop + p.row * rowSize() + gap
             child.layout(left, top, left + child.measuredWidth, top + child.measuredHeight)
         }
     }
@@ -204,7 +214,8 @@ class WidgetGridLayout @JvmOverloads constructor(
         val cell = cellSize()
         val p = child.layoutParams as CellParams
         val col = ((p.col * cell + dx) / cell).roundToInt().coerceIn(0, columns - p.colSpan)
-        val row = ((p.row * cell + dy) / cell).roundToInt().coerceAtLeast(0)
+        val rowH = rowSize()
+        val row = ((p.row * rowH + dy) / rowH).roundToInt().coerceAtLeast(0)
         return col to row
     }
 
@@ -223,9 +234,9 @@ class WidgetGridLayout @JvmOverloads constructor(
         val cell = cellSize()
         return RectF(
             (paddingLeft + r.left * cell + gap).toFloat(),
-            (paddingTop + r.top * cell + gap).toFloat(),
+            (paddingTop + r.top * rowSize() + gap).toFloat(),
             (paddingLeft + r.right * cell - gap).toFloat(),
-            (paddingTop + r.bottom * cell - gap).toFloat(),
+            (paddingTop + r.bottom * rowSize() - gap).toFloat(),
         )
     }
 
@@ -288,7 +299,7 @@ class WidgetGridLayout @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 val x = ((event.x - paddingLeft) / cell).roundToInt()
-                val y = ((event.y - paddingTop) / cell).roundToInt()
+                val y = ((event.y - paddingTop) / rowSize()).roundToInt()
                 var col = s.col
                 var row = s.row
                 var colSpan = s.colSpan
