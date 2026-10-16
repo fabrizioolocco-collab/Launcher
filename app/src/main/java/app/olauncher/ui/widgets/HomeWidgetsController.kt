@@ -19,6 +19,7 @@ import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.ui.AppNotificationsView
 import app.olauncher.ui.DetoxController
+import app.olauncher.helper.SwipeActions
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
@@ -212,6 +213,7 @@ class HomeWidgetsController(
         val view = IconCellView(activity) { onLaunchApp(app) }
         view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
+        view.setTag(R.id.ml_swipe_app, app)
         view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, 1)
         val showLabel = prefs.bottomLabels
         val size = view.iconSizeFor(cellPx(), showLabel)
@@ -384,8 +386,7 @@ class HomeWidgetsController(
                 MenuEntry(activity.getString(R.string.ml_app_info)) {
                     openAppInfo(activity, app.user, app.appPackage)
                 },
-                DetoxController.whitelistEntry(activity, app.appPackage),
-            ),
+            ) + SwipeActions.menuEntries(activity, app) { apps } + DetoxController.whitelistEntry(activity, app.appPackage),
             header = AppNotificationsView.create(activity, app),
         )
     }

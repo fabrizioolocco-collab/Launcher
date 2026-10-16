@@ -230,4 +230,14 @@
     <string name="ml_search_open">Apri</string>
     <string name="ml_search_copy_path">Copia percorso</string>
     <string name="ml_search_path_copied">Percorso copiato</string>
+    <!-- App swipe actions -->
+    <string name="ml_swipe_up">Swipe su</string>
+    <string name="ml_swipe_down">Swipe giù</string>
+    <string name="ml_swipe_up_format">Swipe su: %1$s</string>
+    <string name="ml_swipe_down_format">Swipe giù: %1$s</string>
+    <string name="ml_swipe_none">Nessuna azione</string>
+    <string name="ml_swipe_open_app">Apri un\'app…</string>
+    <string name="ml_swipe_shortcut_of">Scorciatoia di %1$s…</string>
+    <string name="ml_swipe_shortcut_other">Scorciatoia di un\'altra app…</string>
+    <string name="ml_swipe_open_file">Apri un file…</string>
 </resources>

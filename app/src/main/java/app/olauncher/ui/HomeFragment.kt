@@ -32,6 +32,7 @@ import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentHomeBinding
 import app.olauncher.helper.DetoxManager
+import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.appUsagePermissionGranted
@@ -77,6 +78,12 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onImagePicked?.invoke(uri)
         onImagePicked = null
+    }
+
+    private var onFilePicked: ((Uri) -> Unit)? = null
+    private val filePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onFilePicked?.invoke(uri)
+        onFilePicked = null
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -139,6 +146,21 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onEmptyLongPress(col: Int, row: Int) = bottomArea.showAddMenu(col, row)
             override fun onSwipeUp() = showAppList(Constants.FLAG_LAUNCH_APP)
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
+            override fun onItemSwipe(child: View, up: Boolean): Boolean {
+                val app = child.getTag(R.id.ml_swipe_app) as? AppModel.App ?: return false
+                return SwipeActions.run(requireContext(), app, up)
+            }
+        }
+        // Swipe actions on home apps (set from their long-press menu)
+        binding.homeScroll.appSwipe = object : HomeScrollView.AppSwipeHandler {
+            override fun hasAction(app: AppModel.App, up: Boolean) = SwipeActions.get(requireContext(), app, up) != null
+            override fun run(app: AppModel.App, up: Boolean) {
+                SwipeActions.run(requireContext(), app, up)
+            }
+        }
+        SwipeActions.filePicker = { callback ->
+            onFilePicked = callback
+            filePicker.launch(arrayOf("*/*"))
         }
 
         search = HomeSearchController(

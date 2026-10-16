@@ -45,6 +45,8 @@ class WidgetGridLayout @JvmOverloads constructor(
         fun onEmptyLongPress(col: Int, row: Int)
         fun onSwipeUp()
         fun onSwipeDown()
+        /** Swipe on an item (e.g. an app icon with a swipe action); true when it was handled. */
+        fun onItemSwipe(child: View, up: Boolean): Boolean = false
     }
 
     var homeGestures: HomeGestures? = null
@@ -57,6 +59,7 @@ class WidgetGridLayout @JvmOverloads constructor(
         }
 
     private var downOnChild = false
+    private var downChild: View? = null
     private var flingHandled = false
     private val gestureDetector = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent) = true
@@ -76,6 +79,8 @@ class WidgetGridLayout @JvmOverloads constructor(
             val dx = e2.rawX - start.rawX
             if (abs(dy) > abs(dx) && abs(dy) > 100 && abs(velocityY) > 100) {
                 flingHandled = true
+                val child = downChild
+                if (child != null && homeGestures?.onItemSwipe(child, dy < 0) == true) return false
                 if (dy < 0) homeGestures?.onSwipeUp() else homeGestures?.onSwipeDown()
             }
             return false
@@ -94,7 +99,8 @@ class WidgetGridLayout @JvmOverloads constructor(
         if (homeGestures == null || resizeTarget != null || editing) return super.dispatchTouchEvent(ev)
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             flingHandled = false
-            downOnChild = childAt(ev.x, ev.y) != null
+            downChild = childAt(ev.x, ev.y)
+            downOnChild = downChild != null
         }
         gestureDetector.onTouchEvent(ev)
         if (flingHandled && ev.actionMasked == MotionEvent.ACTION_UP) {

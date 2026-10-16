@@ -2,4 +2,6 @@
 <resources>
     <item name="ml_widget_preview" type="id" />
     <item name="ml_widget_label" type="id" />
+    <!-- App shown by a home view, for its swipe actions -->
+    <item name="ml_swipe_app" type="id" />
 </resources>

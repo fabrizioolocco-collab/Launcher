@@ -28,6 +28,7 @@ import app.olauncher.helper.FontManager
 import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getUserHandleFromString
@@ -252,6 +253,7 @@ class HomeSectionsController(
             setPadding(0, padV, 0, padV)
             isClickable = true
             isLongClickable = true
+            setTag(R.id.ml_swipe_app, app)
             setOnClickListener {
                 if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
                 else onLaunch(app)
@@ -347,7 +349,7 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
-        context.showMenuDialog(app.appLabel, entries + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
     }
 
     /** Menu of an app pinned on home outside any group. */
@@ -372,7 +374,7 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, app.user, app.appPackage)
         }
-        context.showMenuDialog(app.appLabel, entries + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
     }
 
     private fun moveUngrouped(position: Int, delta: Int) {
@@ -402,7 +404,7 @@ class HomeSectionsController(
                 openAppInfo(context, app.user, app.appPackage)
             },
         )
-        context.showMenuDialog(app.appLabel, entries + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
     }
 
     // ---------------------------------------------------------------- operations

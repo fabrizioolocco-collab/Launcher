@@ -9,6 +9,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ScrollView
+import app.olauncher.R
+import app.olauncher.data.AppModel
 import kotlin.math.abs
 
 /**
@@ -19,6 +21,8 @@ import kotlin.math.abs
  * - Swipe down opens the notification shade only if the list was already at the top.
  * - Long press / double tap count only on empty space, not on app rows or section headers.
  * - A fling cancels the tap on the row under the finger, so swiping never launches an app.
+ * - A vertical swipe on an app with a swipe action (see [appSwipe]) runs it instead of scrolling;
+ *   on other apps, or in a direction without an action, the list scrolls as usual.
  */
 class HomeScrollView @JvmOverloads constructor(
     context: Context,
@@ -36,6 +40,20 @@ class HomeScrollView @JvmOverloads constructor(
     }
 
     var callbacks: GestureCallbacks? = null
+
+    interface AppSwipeHandler {
+        fun hasAction(app: AppModel.App, up: Boolean): Boolean
+        fun run(app: AppModel.App, up: Boolean)
+    }
+
+    var appSwipe: AppSwipeHandler? = null
+
+    private var swipeApp: AppModel.App? = null
+    private var swipeDecided = false
+    private var swipeCapturing = false
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+    private val touchSlop = android.view.ViewConfiguration.get(context).scaledTouchSlop
 
     /** Turned off while resizing a widget, so the drag isn't taken as a scroll or a swipe. */
     var gesturesEnabled = true
@@ -90,6 +108,7 @@ class HomeScrollView @JvmOverloads constructor(
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (!gesturesEnabled) return super.dispatchTouchEvent(ev)
+        if (handleAppSwipe(ev)) return true
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
             flingHandled = false
             atBottomOnDown = !canScrollVertically(1)
@@ -105,6 +124,63 @@ class HomeScrollView @JvmOverloads constructor(
             return true
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** App swipe actions; true while the gesture belongs to an app (no scrolling, no other gestures). */
+    private fun handleAppSwipe(ev: MotionEvent): Boolean {
+        val handler = appSwipe ?: return false
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeApp = findSwipeApp(this, ev.rawX.toInt(), ev.rawY.toInt())
+                swipeDecided = false
+                swipeCapturing = false
+                swipeDownX = ev.rawX
+                swipeDownY = ev.rawY
+                return false
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                val app = swipeApp
+                if (app != null && !swipeDecided) {
+                    val dx = ev.rawX - swipeDownX
+                    val dy = ev.rawY - swipeDownY
+                    if (abs(dx) > touchSlop || abs(dy) > touchSlop) {
+                        swipeDecided = true
+                        if (abs(dy) > abs(dx) && handler.hasAction(app, dy < 0)) {
+                            swipeCapturing = true
+                            // The row under the finger must not take it as a press or long press
+                            val cancel = MotionEvent.obtain(ev).apply { action = MotionEvent.ACTION_CANCEL }
+                            super.dispatchTouchEvent(cancel)
+                            cancel.recycle()
+                        }
+                    }
+                }
+            }
+
+            MotionEvent.ACTION_UP -> if (swipeCapturing) {
+                swipeCapturing = false
+                val dy = ev.rawY - swipeDownY
+                swipeApp?.let { if (abs(dy) > SWIPE_THRESHOLD) handler.run(it, dy < 0) }
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> if (swipeCapturing) {
+                swipeCapturing = false
+                return true
+            }
+        }
+        return swipeCapturing
+    }
+
+    private fun findSwipeApp(group: ViewGroup, x: Int, y: Int): AppModel.App? {
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            if (child.visibility != View.VISIBLE) continue
+            if (!child.getGlobalVisibleRect(tmpRect) || !tmpRect.contains(x, y)) continue
+            (child.getTag(R.id.ml_swipe_app) as? AppModel.App)?.let { return it }
+            if (child is ViewGroup) findSwipeApp(child, x, y)?.let { return it }
+        }
+        return null
     }
 
     private fun isOverInteractiveChild(group: ViewGroup, x: Int, y: Int): Boolean {

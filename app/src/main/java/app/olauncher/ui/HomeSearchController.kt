@@ -224,7 +224,14 @@ class HomeSearchController(
 
     private fun openWeb(q: String) {
         val url = "https://www.google.com/search?q=" + URLEncoder.encode(q, "UTF-8")
-        open(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        // Samsung Internet when installed, otherwise the default browser
+        try {
+            activity.startActivity(Intent(intent).setPackage(SAMSUNG_INTERNET).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            leave()
+        } catch (e: Exception) {
+            open(intent)
+        }
     }
 
     private fun open(intent: Intent) {
@@ -808,6 +815,7 @@ class HomeSearchController(
         private const val MAX_SCANNED = 30_000
         private const val FOLDER_CACHE_MS = 10 * 60_000L
         private const val SOLID_EXPLORER = "pl.solidexplorer2"
+        private const val SAMSUNG_INTERNET = "com.sec.android.app.sbrowser"
         private const val EXTERNAL_STORAGE_DOCS = "com.android.externalstorage.documents"
 
         @Volatile
