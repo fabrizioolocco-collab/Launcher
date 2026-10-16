@@ -49,6 +49,12 @@
             android:taskAffinity="app.minimalauncher.files"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- Album grid opened from the home search -->
+        <activity
+            android:name=".ui.AlbumActivity"
+            android:exported="false"
+            android:taskAffinity="app.minimalauncher.files" />
+
         <activity-alias
             android:name=".FilesAlias"
             android:exported="true"

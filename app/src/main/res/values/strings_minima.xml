@@ -234,5 +234,5 @@
     <string name="ml_search_tab_music">Music</string>
     <string name="ml_search_tab_documents">Documents</string>
     <string name="ml_search_album_info">%1$d photos and videos · %2$s</string>
-    <string name="ml_search_album_hint">Tip: to open albums as a grid, in Fossify long-press the album and choose "Create shortcut"</string>
+    <string name="ml_album_count">%1$d photos and videos</string>
 </resources>

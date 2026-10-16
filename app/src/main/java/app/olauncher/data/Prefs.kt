@@ -196,11 +196,6 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("PHONE_FOLDERS_IN_EXPLORER", true)
         set(value) = prefs.edit { putBoolean("PHONE_FOLDERS_IN_EXPLORER", value) }
 
-    /** True once the tip on Fossify album shortcuts has been shown. */
-    var albumShortcutHintShown: Boolean
-        get() = prefs.getBoolean("ALBUM_SHORTCUT_HINT", false)
-        set(value) = prefs.edit { putBoolean("ALBUM_SHORTCUT_HINT", value) }
-
     /** Home search bar target: 0 Google, 1 phone (2 was OneDrive, now phone). */
     var searchMode: Int
         get() = prefs.getInt("SEARCH_MODE", 0)

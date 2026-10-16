@@ -456,7 +456,7 @@ class HomeSearchController(
                 if (media != null) albums += Row(
                     Kind.ALBUM, dir.name, activity.getString(R.string.ml_search_album_info, media.size, where),
                     openFolder = { openLocalFolder(dir) },
-                ) { openAlbum(dir, media) }
+                ) { openAlbum(dir) }
                 else folders += Row(Kind.FOLDER, dir.name, where) { openLocalFolder(dir) }
             }
         return folders to albums
@@ -496,11 +496,8 @@ class HomeSearchController(
         }
     }
 
-    /**
-     * Opens an album: as a grid through its Fossify shortcut when there is one; otherwise the
-     * newest photo or video, which Fossify shows with the rest of the folder to swipe through.
-     */
-    private fun openAlbum(dir: File, media: List<File>) {
+    /** Opens an album: Fossify's own grid through its shortcut when there is one, else our grid. */
+    private fun openAlbum(dir: File) {
         albumShortcut(dir)?.let { shortcut ->
             try {
                 activity.getSystemService(android.content.pm.LauncherApps::class.java)
@@ -511,36 +508,9 @@ class HomeSearchController(
                 e.printStackTrace()
             }
         }
-        if (!prefs.albumShortcutHintShown) {
-            prefs.albumShortcutHintShown = true
-            activity.showToast(activity.getString(R.string.ml_search_album_hint), android.widget.Toast.LENGTH_LONG)
-        }
-        val first = media.first()
-        val mime = mimeOf(first.name) ?: "image/*"
-        var uri: Uri? = null
-        try {
-            @Suppress("DEPRECATION")
-            activity.contentResolver.query(
-                MediaStore.Files.getContentUri("external"), arrayOf(MediaStore.MediaColumns._ID),
-                "${MediaStore.MediaColumns.DATA} = ?", arrayOf(first.absolutePath), null,
-            )?.use { c -> if (c.moveToFirst()) uri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), c.getLong(0)) }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        val target = uri ?: androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.files", first)
-        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(target, mime)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-        // Fossify Gallery shows the photo with the rest of its folder to swipe through
-        for (gallery in GALLERIES) {
-            try {
-                activity.startActivity(Intent(intent).setPackage(gallery))
-                close()
-                return
-            } catch (e: Exception) {
-                // not installed: try the next one
-            }
-        }
-        open(intent)
+        // Otherwise our own grid of the album
+        AlbumActivity.open(activity, dir)
+        close()
     }
 
     /** All folders on the phone storage (cached for a while; hidden folders and Android/ skipped). */
