@@ -22,6 +22,7 @@ import app.olauncher.ui.AppNotificationsView
 import app.olauncher.ui.DetoxController
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.ParkingShortcut
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
@@ -458,6 +459,11 @@ class HomeWidgetsController(
         override fun onMenu(view: View) {
             finishDrag(view)
             val item = view.tag as HomeWidget
+            // The parking button: a long press opens the saved position (its menu until one is saved)
+            if (item.isApp && ParkingShortcut.isParking(item.packageName) && ParkingShortcut.saved(activity) != null) {
+                ParkingShortcut.openMaps(activity)
+                return
+            }
             if (info != null) showWidgetMenu(item, info, view as MinimaWidgetHostView) else showIconMenu(item)
         }
     }
@@ -568,6 +574,20 @@ class HomeWidgetsController(
 
     private fun showIconMenu(item: HomeWidget) {
         val app = findApp(item) ?: return
+        if (ParkingShortcut.isParking(app.appPackage)) {
+            activity.showMenuDialog(
+                ParkingShortcut.describe(activity),
+                ParkingShortcut.menuEntries(activity) + listOf(
+                    MenuEntry(activity.getString(R.string.ml_change_icon)) { IconChooser.show(activity, app, scope, pickImage) { render() } },
+                    MenuEntry(activity.getString(R.string.ml_remove_from_home)) {
+                        widgets.remove(item)
+                        save()
+                        render()
+                    },
+                )
+            )
+            return
+        }
         activity.showMenuDialog(
             app.appLabel,
             listOf(

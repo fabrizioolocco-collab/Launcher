@@ -102,6 +102,7 @@ object IconPackManager {
         val bitmap = try {
             loadCustom(context, CustomIcons.get(context, packageName, activityClassName, user), sizePx)
                 ?: if (FolderShortcuts.isFolder(packageName)) FolderShortcuts.icon(context, sizePx)
+                else if (ParkingShortcut.isParking(packageName)) ParkingShortcut.icon(context, sizePx)
                 else loadDefault(context, packageName, activityClassName, user, iconPackPackage, sizePx)
         } catch (e: Exception) {
             e.printStackTrace()

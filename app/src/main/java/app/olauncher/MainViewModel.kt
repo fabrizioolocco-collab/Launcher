@@ -22,6 +22,7 @@ import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.helper.SingleLiveEvent
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.WallpaperWorker
 import app.olauncher.helper.formattedTimeSpent
@@ -426,6 +427,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 .filterIsInstance<AppModel.App>()
             // Folder shortcuts (and the test app) live on home like apps
             val extra = FolderShortcuts.asApps(appContext) +
+                    (if (ParkingShortcut.isEnabled(appContext)) listOf(ParkingShortcut.app(appContext)) else emptyList()) +
                     if (TestNotifications.isEnabled(appContext)) listOf(TestNotifications.fakeApp(appContext)) else emptyList()
             homeApps.value = apps + extra
         }

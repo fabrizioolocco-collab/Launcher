@@ -34,6 +34,7 @@ import app.olauncher.databinding.FragmentHomeBinding
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showTextInputDialog
@@ -431,6 +432,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                     },
                     addToBottom = { bottomArea.showAddMenu() },
                     addFolder = { createFolderShortcut() },
+                    parking = { showParkingMenu() },
                 )
             }
 
@@ -706,6 +708,18 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
     }
 
+    /** Home menu > Parking: save or open the position, and put the button on home. */
+    private fun showParkingMenu() {
+        val ctx = requireContext()
+        val entries = ParkingShortcut.menuEntries(requireActivity()) +
+                MenuEntry(getString(R.string.ml_parking_add_button)) {
+                    ParkingShortcut.setEnabled(ctx, true)
+                    if (!widgets.addApp(ParkingShortcut.app(ctx))) ctx.showToast(getString(R.string.ml_parking_already))
+                    viewModel.loadHomeApps()
+                }
+        ctx.showMenuDialog(ParkingShortcut.describe(ctx), entries)
+    }
+
     /** Our own folder picker (the system one refuses Download and the storage root). */
     private fun pickFolder(onPicked: (String) -> Unit) {
         onFolderPicked = onPicked
@@ -715,6 +729,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
     private fun launchHomeApp(app: AppModel.App) {
         if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
+        else if (ParkingShortcut.isParking(app.appPackage)) ParkingShortcut.save(requireActivity())
         else if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
         else viewModel.launch(app)
     }

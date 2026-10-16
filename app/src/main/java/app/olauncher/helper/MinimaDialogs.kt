@@ -196,6 +196,33 @@ fun Context.showTextInputDialog(
     return dialog
 }
 
+/** A dialog whose message can be updated while something runs (e.g. waiting for a GPS fix). */
+class StatusDialog(private val dialog: OlDialog, private val binding: DialogBaseBinding) {
+    fun setMessage(message: String) {
+        binding.tvMessage.text = message
+    }
+
+    fun setActionEnabled(enabled: Boolean) {
+        binding.tvAction.isEnabled = enabled
+        binding.tvAction.alpha = if (enabled) 1f else 0.4f
+    }
+
+    fun setOnDismiss(onDismiss: () -> Unit) = dialog.setOnDismissListener { onDismiss() }
+
+    fun dismiss() = dialog.dismiss()
+}
+
+fun Context.showStatusDialog(title: String, message: String, action: String, onAction: () -> Unit): StatusDialog {
+    val (dialog, binding) = baseDialog(title)
+    binding.tvMessage.text = message
+    binding.tvMessage.isVisible = true
+    binding.tvAction.text = action
+    binding.tvAction.isVisible = true
+    binding.tvAction.setOnClickListener { onAction() }
+    dialog.showRespectingStatusBar()
+    return StatusDialog(dialog, binding)
+}
+
 /** Confirmation with a message and one action. */
 fun Context.showConfirmDialog(title: String, message: String, action: String, onConfirm: () -> Unit): OlDialog {
     val (dialog, binding) = baseDialog(title)

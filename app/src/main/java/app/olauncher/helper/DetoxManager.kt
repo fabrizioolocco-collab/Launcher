@@ -150,7 +150,7 @@ object DetoxManager {
         if (!isActive(context)) return true
         if (packageName.isBlank()) return true
         // Folder shortcuts on home are not apps
-        if (FolderShortcuts.isFolder(packageName)) return true
+        if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName)) return true
         if (isStrict(context) && packageName in STRICT_BLOCKED) return false
         if (packageName in ALWAYS_ALLOWED) return true
         if (packageName == TestNotifications.FAKE_PACKAGE) return packageName in whitelist(context)

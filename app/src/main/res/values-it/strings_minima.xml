@@ -376,4 +376,22 @@
     <string name="ml_drawer_font">Font menù app</string>
     <string name="ml_drawer_text_size">Dimensione testo menù app</string>
     <string name="ml_drawer_labels">Nome delle app nel menù</string>
+
+    <!-- Parking button -->
+    <string name="ml_parking">Parcheggio</string>
+    <string name="ml_parking_menu">Parcheggio…</string>
+    <string name="ml_parking_save">Salva posizione ora</string>
+    <string name="ml_parking_open_maps">Apri in Google Maps</string>
+    <string name="ml_parking_add_button">Aggiungi il tasto in home</string>
+    <string name="ml_parking_already">Il tasto è già in home</string>
+    <string name="ml_parking_searching">Aggancio dei satelliti…</string>
+    <string name="ml_parking_accuracy">Precisione: ±%1$d m. Si salva da solo sotto gli 8 m.</string>
+    <string name="ml_parking_save_now">Salva ora</string>
+    <string name="ml_parking_saved">Parcheggio salvato (±%1$d m)</string>
+    <string name="ml_parking_saved_at">Parcheggio salvato alle %1$s (±%2$d m)</string>
+    <string name="ml_parking_none">Nessun parcheggio salvato</string>
+    <string name="ml_parking_no_gps">Attiva il GPS per salvare il parcheggio</string>
+    <string name="ml_parking_no_signal">Nessun segnale GPS: esci all\'aperto e riprova</string>
+    <string name="ml_parking_no_maps">Nessuna app di mappe installata</string>
+    <string name="ml_parking_permission">Serve il permesso di posizione</string>
 </resources>

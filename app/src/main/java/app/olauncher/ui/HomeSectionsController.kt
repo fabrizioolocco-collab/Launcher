@@ -30,6 +30,7 @@ import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getUserHandleFromString
@@ -265,7 +266,8 @@ class HomeSectionsController(
                 else onLaunch(app)
             }
             setOnLongClickListener {
-                showAppMenu(sectionIndex, sectionApp, app)
+                if (ParkingShortcut.isParking(app.appPackage) && ParkingShortcut.saved(context) != null) ParkingShortcut.openMaps(context)
+                else showAppMenu(sectionIndex, sectionApp, app)
                 true
             }
             layoutParams = lp(gravity)
@@ -298,7 +300,7 @@ class HomeSectionsController(
     // ---------------------------------------------------------------- menus
 
     /** Long press on an empty cell of the home grid: what to put there (or elsewhere on home). */
-    fun showHomeMenu(row: Int?, openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit, addFolder: () -> Unit) {
+    fun showHomeMenu(row: Int?, openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit, addFolder: () -> Unit, parking: () -> Unit) {
         context.showMenuDialog(
             context.getString(R.string.app_name),
             listOf(
@@ -307,6 +309,7 @@ class HomeSectionsController(
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection(row = row) },
                 MenuEntry(context.getString(R.string.ml_add_to_bottom)) { addToBottom() },
                 MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
+                MenuEntry(context.getString(R.string.ml_parking_menu)) { parking() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },
                 MenuEntry(context.getString(R.string.ml_settings)) { openSettings() },
             )
@@ -357,6 +360,11 @@ class HomeSectionsController(
 
     /** Common end of the app menus: swipe actions and detox; folder shortcuts get their own entries instead. */
     private fun appMenuTail(app: AppModel.App, entries: List<MenuEntry>): List<MenuEntry> {
+        if (ParkingShortcut.isParking(app.appPackage)) {
+            val info = context.getString(R.string.ml_app_info)
+            val activity = context as? android.app.Activity ?: return entries.filter { it.label != info }
+            return ParkingShortcut.menuEntries(activity) + entries.filter { it.label != info }
+        }
         if (FolderShortcuts.isFolder(app.appPackage)) {
             val info = context.getString(R.string.ml_app_info)
             return entries.filter { it.label != info } +
