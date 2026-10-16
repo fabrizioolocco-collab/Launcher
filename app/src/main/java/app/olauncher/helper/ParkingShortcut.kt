@@ -38,7 +38,9 @@ object ParkingShortcut {
 
     /** A fix at least this precise is taken right away (metres); otherwise the best one at the timeout. */
     private const val GOOD_ACCURACY_M = 8f
-    private const val TIMEOUT_MS = 60_000L
+    private const val TIMEOUT_MS = 90_000L
+    /** A last known fix older than this is not shown as a starting point. */
+    private const val LAST_KNOWN_MAX_AGE_MS = 2 * 60_000L
 
     class Position(val latitude: Double, val longitude: Double, val accuracy: Float, val time: Long)
 
@@ -103,7 +105,7 @@ object ParkingShortcut {
             return
         }
         val manager = activity.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+        if (!manager.isProviderEnabled(LocationManager.GPS_PROVIDER) && !manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
             activity.showToast(activity.getString(R.string.ml_parking_no_gps))
             try {
                 activity.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
@@ -137,15 +139,18 @@ object ParkingShortcut {
             activity.showToast(activity.getString(R.string.ml_parking_saved, location.accuracy.toInt()))
         }
 
+        fun offer(location: Location) {
+            if (!location.hasAccuracy()) return
+            val current = best
+            if (current == null || location.accuracy <= current.accuracy) best = location
+            val shown = best ?: location
+            dialog.setMessage(activity.getString(R.string.ml_parking_accuracy, shown.accuracy.toInt()))
+            dialog.setActionEnabled(true)
+            if (location.accuracy <= GOOD_ACCURACY_M) finish(location)
+        }
+
         listener = object : LocationListener {
-            override fun onLocationChanged(location: Location) {
-                if (!location.hasAccuracy()) return
-                val current = best
-                if (current == null || location.accuracy <= current.accuracy) best = location
-                dialog.setMessage(activity.getString(R.string.ml_parking_accuracy, location.accuracy.toInt()))
-                dialog.setActionEnabled(true)
-                if (location.accuracy <= GOOD_ACCURACY_M) finish(location)
-            }
+            override fun onLocationChanged(location: Location) = offer(location)
 
             @Deprecated("Deprecated in Java")
             override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {
@@ -166,12 +171,29 @@ object ParkingShortcut {
         ) { best?.let { finish(it) } }
         dialog.setActionEnabled(false)
         dialog.setOnDismiss { stop() }
-        try {
-            manager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, listener, Looper.getMainLooper())
-        } catch (e: Exception) {
-            e.printStackTrace()
-            dialog.setMessage(activity.getString(R.string.ml_parking_no_signal))
+        // GPS for precision, network and fused for a quick first fix (indoors the GPS may never answer)
+        val providers = mutableListOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) providers += LocationManager.FUSED_PROVIDER
+        var started = 0
+        providers.forEach { provider ->
+            try {
+                if (!manager.isProviderEnabled(provider)) return@forEach
+                manager.requestLocationUpdates(provider, 1000L, 0f, listener, Looper.getMainLooper())
+                started++
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
+        if (started == 0) dialog.setMessage(activity.getString(R.string.ml_parking_no_signal))
+        // A recent last known fix is a starting point the user can save right away
+        providers.mapNotNull { provider ->
+            try {
+                manager.getLastKnownLocation(provider)
+            } catch (e: Exception) {
+                null
+            }
+        }.filter { System.currentTimeMillis() - it.time < LAST_KNOWN_MAX_AGE_MS && it.accuracy > GOOD_ACCURACY_M }
+            .minByOrNull { it.accuracy }?.let { offer(it) }
         handler.postDelayed(timeout, TIMEOUT_MS)
     }
 
