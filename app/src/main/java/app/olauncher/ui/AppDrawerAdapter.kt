@@ -85,7 +85,8 @@ class AppDrawerAdapter(
     var appFilteredList: MutableList<AppModel> = mutableListOf()
 
     override fun getItemViewType(position: Int): Int {
-        return when (appFilteredList.getOrNull(position)) {
+        // The differ's list is what is on screen: always read items from it, never from a list that may be ahead of it
+        return when (getItem(position)) {
             is AppModel.PrivateSpaceHeader -> VIEW_TYPE_PRIVATE_HEADER
             is AppModel.ListHeader -> VIEW_TYPE_LIST_HEADER
             else -> VIEW_TYPE_APP
@@ -124,8 +125,8 @@ class AppDrawerAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         try {
-            if (appFilteredList.isEmpty() || position == RecyclerView.NO_POSITION) return
-            val appModel = appFilteredList[holder.bindingAdapterPosition]
+            if (position == RecyclerView.NO_POSITION) return
+            val appModel = getItem(position)
             when (holder) {
                 is ListHeaderViewHolder -> holder.bind(appModel as AppModel.ListHeader, appLabelGravity)
 
@@ -185,7 +186,7 @@ class AppDrawerAdapter(
                 results?.values?.let {
                     val items = it as MutableList<AppModel>
                     appFilteredList = items
-                    submitList(appFilteredList) {
+                    submitList(items.toList()) {
                         autoLaunch()
                     }
                 }
@@ -232,7 +233,14 @@ class AppDrawerAdapter(
         )
         this.appsList = appsList
         this.appFilteredList = appsList
-        submitList(appsList)
+        submitList(appsList.toList())
+    }
+
+    /** Takes an app out of the list on screen (hidden or uninstalled) without touching the differ's list in place. */
+    fun remove(app: AppModel) {
+        appsList.remove(app)
+        appFilteredList = appFilteredList.filter { it !== app }.toMutableList()
+        submitList(appFilteredList.toList())
     }
 
     fun launchFirstInList() {

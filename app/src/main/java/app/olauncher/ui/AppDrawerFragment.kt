@@ -72,7 +72,8 @@ class AppDrawerFragment : BaseFragment() {
     private var currentPrivateSpaceAvailable: Boolean = false
     private var uiScope = MainScope()
     private var tabs: DrawerTabsController? = null
-    private var lastQueryBlank = true
+    /** Whether the adapter's base list holds every app (searching) or only the selected tab's. */
+    private var listBuiltForSearch = false
     private var currentHiddenApps: List<AppModel> = emptyList()
     private var notifications: Map<String, AppNotifications> = emptyMap()
     private val hideIndexRunnable = Runnable { _binding?.letterIndex?.isVisible = false }
@@ -149,11 +150,8 @@ class AppDrawerFragment : BaseFragment() {
             override fun onQueryTextChange(newText: String): Boolean {
                 try {
                     adapter.allowAutoLaunch = prefs.autoLaunchSingleResult && !isSearchComposing()
-                    // Search looks through all apps: switch the base list when the query starts/ends
-                    if (newText.isBlank() != lastQueryBlank) {
-                        lastQueryBlank = newText.isBlank()
-                        updateCombinedAppList()
-                    }
+                    // Search looks through all apps: rebuild the base list when it was built for the other state
+                    if (newText.isNotBlank() != listBuiltForSearch) updateCombinedAppList()
                     adapter.filter.filter(newText)
                     updateLetterIndex()
                     binding.appRename.visibility =
@@ -246,9 +244,7 @@ class AppDrawerFragment : BaseFragment() {
                     requireContext().showToast("Hiding pinned shortcuts is not supported")
                     return@AppDrawerAdapter
                 }
-                adapter.appFilteredList.removeAt(position)
-                adapter.notifyItemRemoved(position)
-                adapter.appsList.remove(appModel)
+                adapter.remove(appModel)
 
                 val newSet = mutableSetOf<String>()
                 newSet.addAll(prefs.hiddenApps)
@@ -492,6 +488,7 @@ class AppDrawerFragment : BaseFragment() {
         val detox = flag == Constants.FLAG_LAUNCH_APP && DetoxManager.isActive(ctx)
         val allowed = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         val searching = !binding.search.query.isNullOrBlank()
+        listBuiltForSearch = searching
         val apps = (if (searching) allowed else tabs?.filter(allowed) ?: allowed)
             .filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         // "News" block removed: apps with notifications are shown on home instead
