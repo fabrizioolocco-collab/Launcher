@@ -278,4 +278,5 @@
     <string name="ml_folder_opens_in">Opens in: %1$s</string>
     <string name="ml_folder_delete">Delete shortcut</string>
     <string name="ml_swipe_open_folder">Open a folder…</string>
+    <string name="ml_explorer_use_folder">Use this folder</string>
 </resources>

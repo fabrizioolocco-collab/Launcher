@@ -272,4 +272,5 @@
     <string name="ml_folder_opens_in">Si apre in: %1$s</string>
     <string name="ml_folder_delete">Elimina scorciatoia</string>
     <string name="ml_swipe_open_folder">Apri una cartella…</string>
+    <string name="ml_explorer_use_folder">Usa questa cartella</string>
 </resources>

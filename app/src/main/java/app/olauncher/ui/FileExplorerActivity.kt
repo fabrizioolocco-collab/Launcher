@@ -54,7 +54,11 @@ import java.io.File
  * Opened from the home search (a folder, or the folder of a file), the home menu or its own
  * "File" icon in the app list. [EXTRA_LOCAL_PATH] picks the starting folder (default: storage root).
  */
-class FileExplorerActivity : AppCompatActivity() {
+open class FileExplorerActivity : AppCompatActivity() {
+
+    /** Folder picker mode (see [FolderPickerActivity]): a bar returns the folder shown. */
+    protected open val pickMode = false
+
 
     /** The folder shown. */
     private data class Location(val dir: File)
@@ -215,6 +219,20 @@ class FileExplorerActivity : AppCompatActivity() {
             }
         })
         root.addView(pasteBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 8.dpToPx()
+        })
+        if (pickMode) root.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
+            setText(R.string.ml_explorer_use_folder)
+            textSize = 17f
+            gravity = Gravity.CENTER
+            setBackgroundResource(R.drawable.rounded_rect_shade_color)
+            setPadding(16.dpToPx(), 14.dpToPx(), 16.dpToPx(), 14.dpToPx())
+            isClickable = true
+            setOnClickListener {
+                setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, location.dir.absolutePath))
+                finish()
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 8.dpToPx()
         })
         return root
@@ -452,6 +470,7 @@ class FileExplorerActivity : AppCompatActivity() {
 
     private fun onTap(entry: Entry) {
         if (!entry.isFolder) return view(entry.file, entry.mime)
+        if (pickMode) return open(Location(entry.file))
         // A folder with only photos and videos opens as an album grid, like from the search
         lifecycleScope.launch {
             val album = albumCover(entry.file) != null
@@ -735,4 +754,12 @@ class FileExplorerActivity : AppCompatActivity() {
             Intent(context, FileExplorerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }
+}
+
+/**
+ * The explorer as a folder picker (any folder, Download and the storage root included, which the
+ * system picker refuses): browse, then "Use this folder"; the path comes back as [FileExplorerActivity.EXTRA_LOCAL_PATH].
+ */
+class FolderPickerActivity : FileExplorerActivity() {
+    override val pickMode = true
 }

@@ -4,9 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.net.Uri
-import android.os.Environment
 import android.os.Process
-import android.provider.DocumentsContract
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.graphics.drawable.DrawableCompat
@@ -106,16 +104,6 @@ object FolderShortcuts {
             android.os.StrictMode.setVmPolicy(policy)
         }
         FileExplorerActivity.openLocal(context, dir)
-    }
-
-    /** Path of a folder chosen with the system folder picker (phone storage only). */
-    fun pathFromTree(uri: Uri): String? = try {
-        val docId = DocumentsContract.getTreeDocumentId(uri)
-        val (volume, relative) = docId.split(":", limit = 2).let { it[0] to it.getOrElse(1) { "" } }
-        if (volume == "primary") File(Environment.getExternalStorageDirectory(), relative).absolutePath
-        else File("/storage/$volume", relative).absolutePath
-    } catch (e: Exception) {
-        null
     }
 
     /** Default icon: an outline folder in the theme's text colour. */

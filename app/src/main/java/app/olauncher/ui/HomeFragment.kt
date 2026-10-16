@@ -84,9 +84,9 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         onImagePicked = null
     }
 
-    private var onFolderPicked: ((Uri) -> Unit)? = null
-    private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) onFolderPicked?.invoke(uri)
+    private var onFolderPicked: ((String) -> Unit)? = null
+    private val folderPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        result.data?.getStringExtra(FileExplorerActivity.EXTRA_LOCAL_PATH)?.let { onFolderPicked?.invoke(it) }
         onFolderPicked = null
     }
 
@@ -687,12 +687,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
     }
 
+    /** Our own folder picker (the system one refuses Download and the storage root). */
     private fun pickFolder(onPicked: (String) -> Unit) {
-        onFolderPicked = { uri ->
-            val path = FolderShortcuts.pathFromTree(uri)
-            if (path == null) requireContext().showToast(getString(R.string.ml_search_cannot_open)) else onPicked(path)
-        }
-        folderPicker.launch(null)
+        onFolderPicked = onPicked
+        folderPicker.launch(Intent(requireContext(), FolderPickerActivity::class.java))
     }
 
     private fun launchHomeApp(app: AppModel.App) {

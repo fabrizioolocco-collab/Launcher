@@ -49,6 +49,12 @@
             android:taskAffinity="app.minimalauncher.files"
             android:windowSoftInputMode="adjustResize" />
 
+        <!-- The explorer as a folder picker (folder shortcuts, swipe actions) -->
+        <activity
+            android:name=".ui.FolderPickerActivity"
+            android:exported="false"
+            android:label="@string/ml_explorer" />
+
         <!-- Album grid opened from the home search -->
         <activity
             android:name=".ui.AlbumActivity"
