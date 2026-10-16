@@ -61,17 +61,27 @@ class OneDriveSearch(private val context: Context) {
         }
     }
 
-    /** Redirect back from Microsoft: exchanges the code for tokens. Runs network I/O: call off the main thread. */
-    fun completeSignIn(redirect: Uri): Boolean {
-        val code = redirect.getQueryParameter("code") ?: return false
-        if (redirect.getQueryParameter("state") != prefs.getString(KEY_STATE, null)) return false
-        val verifier = prefs.getString(KEY_VERIFIER, null) ?: return false
-        return requestToken(
+    /** Microsoft's reason for the last failed token request, shown to the user. */
+    private var lastError: String? = null
+
+    /**
+     * Redirect back from Microsoft: exchanges the code for tokens. Returns null when signed in,
+     * otherwise the reason. Runs network I/O: call off the main thread.
+     */
+    fun completeSignIn(redirect: Uri): String? {
+        redirect.getQueryParameter("error")?.let { error ->
+            return listOfNotNull(error, redirect.getQueryParameter("error_description")).joinToString(": ")
+        }
+        val code = redirect.getQueryParameter("code") ?: return "no code in $redirect"
+        if (redirect.getQueryParameter("state") != prefs.getString(KEY_STATE, null)) return "state mismatch"
+        val verifier = prefs.getString(KEY_VERIFIER, null) ?: return "missing verifier"
+        val ok = requestToken(
             "grant_type" to "authorization_code",
             "code" to code,
             "redirect_uri" to REDIRECT_URI,
             "code_verifier" to verifier,
         )
+        return if (ok) null else lastError ?: "token request failed"
     }
 
     /** Files and folders matching [query], or null on errors (e.g. expired sign-in). Network I/O. */
@@ -148,6 +158,13 @@ class OneDriveSearch(private val context: Context) {
         }
         conn.outputStream.use { it.write(body.toByteArray()) }
         if (conn.responseCode !in 200..299) {
+            lastError = "HTTP ${conn.responseCode}: " + try {
+                val err = JSONObject(conn.errorStream.bufferedReader().readText())
+                listOf(err.optString("error"), err.optString("error_description").substringBefore("\r").substringBefore("\n"))
+                    .filter { it.isNotBlank() }.joinToString(": ")
+            } catch (e: Exception) {
+                ""
+            }
             // A rejected refresh token means the user must sign in again
             if (params.any { it.first == "grant_type" && it.second == "refresh_token" }) prefs.edit { remove(KEY_REFRESH) }
             false
@@ -164,6 +181,7 @@ class OneDriveSearch(private val context: Context) {
         }
     } catch (e: Exception) {
         e.printStackTrace()
+        lastError = e.toString()
         false
     }
 
@@ -195,15 +213,29 @@ class OneDriveAuthActivity : Activity() {
         val data = intent?.data
         val ctx = applicationContext
         Thread {
-            val ok = data != null && OneDriveSearch(ctx).completeSignIn(data)
+            val error = if (data == null) "no data" else OneDriveSearch(ctx).completeSignIn(data)
             runOnUiThread {
-                ctx.showToast(ctx.getString(if (ok) R.string.ml_onedrive_connected else R.string.ml_onedrive_failed))
-                startActivity(
-                    Intent(ctx, app.olauncher.MainActivity::class.java)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                )
-                finish()
+                if (error == null) {
+                    ctx.showToast(ctx.getString(R.string.ml_onedrive_connected))
+                    goHome()
+                } else {
+                    // Show Microsoft's reason so it can be fixed (e.g. a wrong redirect URI)
+                    android.app.AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                        .setTitle(R.string.ml_onedrive_failed)
+                        .setMessage(error)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .setOnDismissListener { goHome() }
+                        .show()
+                }
             }
         }.start()
+    }
+
+    private fun goHome() {
+        startActivity(
+            Intent(applicationContext, app.olauncher.MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        )
+        finish()
     }
 }
