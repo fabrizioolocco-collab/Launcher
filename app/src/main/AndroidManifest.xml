@@ -40,6 +40,26 @@
         android:theme="@style/AppTheme"
         tools:ignore="UnusedAttribute">
 
+        <!-- OneDrive sign-in: Microsoft redirects here (see OneDriveSearch) -->
+        <activity
+            android:name=".ui.OneDriveAuthActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="auth"
+                    android:scheme="minimalauncher" />
+            </intent-filter>
+        </activity>
+
         <activity
             android:name=".MainActivity"
             android:configChanges="uiMode"

@@ -201,4 +201,7 @@
     <string name="ml_set_about">Info sul telefono</string>
     <string name="ml_set_all">Impostazioni</string>
     <string name="ml_set_data_usage">Utilizzo dati</string>
+    <string name="ml_onedrive_connected">OneDrive collegato</string>
+    <string name="ml_onedrive_failed">Accesso a OneDrive non riuscito</string>
+    <string name="ml_onedrive_disconnect">Scollega OneDrive</string>
 </resources>

@@ -108,9 +108,16 @@ class HomeSearchController(
     )
 
     private fun showModeMenu() {
+        val oneDrive = OneDriveSearch(activity)
         modeButton.showPopupMenu(configure = { menu ->
             Mode.entries.forEachIndexed { i, m -> menu.add(0, i, i, label(m)) }
+            if (oneDrive.isConnected()) menu.add(0, DISCONNECT, DISCONNECT, activity.getString(R.string.ml_onedrive_disconnect))
         }) { item ->
+            if (item.itemId == DISCONNECT) {
+                oneDrive.disconnect()
+                onQueryChanged()
+                return@showPopupMenu
+            }
             mode = Mode.entries[item.itemId]
             prefs.searchMode = mode.ordinal
             updateMode()
@@ -473,6 +480,7 @@ class HomeSearchController(
 
     companion object {
         private const val RESULT = "result"
+        private const val DISCONNECT = 100
         private const val MAX_APPS = 8
         private const val MAX_CONTACTS = 6
         private const val MAX_FILES = 12

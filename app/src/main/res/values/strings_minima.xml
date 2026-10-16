@@ -206,4 +206,7 @@
     <string name="ml_set_about">About phone</string>
     <string name="ml_set_all">Settings</string>
     <string name="ml_set_data_usage">Data usage</string>
+    <string name="ml_onedrive_connected">OneDrive connected</string>
+    <string name="ml_onedrive_failed">OneDrive sign-in failed</string>
+    <string name="ml_onedrive_disconnect">Disconnect OneDrive</string>
 </resources>
