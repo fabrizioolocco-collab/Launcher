@@ -47,9 +47,13 @@ class ZoomImageView @JvmOverloads constructor(context: Context, attrs: Attribute
         override fun onScaleEnd(d: ScaleGestureDetector) = settle()
     })
 
+    /** Set by a double tap: the zoom it starts must survive the onDown and the onUp of that same tap. */
+    private var doubleTapZooming = false
+
     private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent): Boolean {
-            stopAnimations()
+            // The detector reports the double tap before this onDown: don't cancel the zoom it just started
+            if (!doubleTapZooming) stopAnimations()
             return true
         }
 
@@ -59,7 +63,9 @@ class ZoomImageView @JvmOverloads constructor(context: Context, attrs: Attribute
         }
 
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            // Zoom in on the tapped point; a second double tap goes back to the fitted size
             val target = if (scale() > fitScale * 1.1f) fitScale else doubleTapScale()
+            doubleTapZooming = true
             animateScale(target, e.x, e.y)
             return true
         }
@@ -229,7 +235,8 @@ class ZoomImageView @JvmOverloads constructor(context: Context, attrs: Attribute
         scaleDetector.onTouchEvent(event)
         gestureDetector.onTouchEvent(event)
         if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
-            if (!scaleDetector.isInProgress && flinger?.isRunning != true) settle()
+            if (doubleTapZooming) doubleTapZooming = false
+            else if (!scaleDetector.isInProgress && flinger?.isRunning != true) settle()
         }
         // Zoomed: keep the touches (the pager must not swipe); fitted: let the pager take horizontal drags
         parent?.requestDisallowInterceptTouchEvent(isZoomed() || event.pointerCount > 1)
