@@ -314,4 +314,5 @@
     <string name="ml_edit_trim_saving">Salvo il video tagliato…</string>
     <string name="ml_edit_nothing">Niente da salvare: prima taglia o ritaglia</string>
     <string name="ml_edit_crop_saving">Ricomprimo il video ritagliato, ci vuole un po\'…</string>
+    <string name="ml_edit_hint">Si salva tutto insieme con ✓: ritaglia, ruota e disegna nell\'ordine che vuoi.</string>
 </resources>

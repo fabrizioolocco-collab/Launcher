@@ -70,7 +70,14 @@ class PhotoEditActivity : AppCompatActivity() {
             if (bitmap == null) {
                 showToast(getString(R.string.ml_search_cannot_open))
                 finish()
-            } else editor.setImage(bitmap)
+            } else {
+                editor.setImage(bitmap)
+                val prefs = getSharedPreferences("app.minimalauncher.hints", MODE_PRIVATE)
+                if (!prefs.getBoolean("edit_hint", false)) {
+                    prefs.edit().putBoolean("edit_hint", true).apply()
+                    showToast(getString(R.string.ml_edit_hint), android.widget.Toast.LENGTH_LONG)
+                }
+            }
         }
     }
 
@@ -174,7 +181,6 @@ class PhotoEditActivity : AppCompatActivity() {
 
     private fun setMode(crop: Boolean) {
         editor.cropMode = crop
-        editor.invalidate()
         cropTools.isVisible = crop
         drawTools.isVisible = !crop
         modeCrop.alpha = if (crop) 1f else 0.5f
@@ -288,7 +294,13 @@ class PhotoEditActivity : AppCompatActivity() {
         private var rotation = 0
         private val strokes = mutableListOf<Pair<Path, Paint>>()
         private var currentPath: Path? = null
+        /** Crop mode shows the whole picture with the frame; draw mode shows only the cropped part, filling the view. */
         var cropMode = true
+            set(value) {
+                field = value
+                computeFit()
+                invalidate()
+            }
         var brushColor = Color.RED
         var brushWidth = 8f * resources.displayMetrics.density
         val isModified get() = rotation != 0 || strokes.isNotEmpty() || image?.let { crop != RectF(0f, 0f, it.width.toFloat(), it.height.toFloat()) } == true
@@ -327,10 +339,13 @@ class PhotoEditActivity : AppCompatActivity() {
             val img = image ?: return
             if (width == 0 || height == 0) return
             val pad = 16f * resources.displayMetrics.density
-            val s = min((width - 2 * pad) / img.width, (height - 2 * pad) / img.height)
+            // What is shown: the whole picture while cropping, the cropped part while drawing
+            val area = if (cropMode) RectF(0f, 0f, img.width.toFloat(), img.height.toFloat()) else RectF(crop)
+            val s = min((width - 2 * pad) / area.width(), (height - 2 * pad) / area.height())
             fit.reset()
+            fit.postTranslate(-area.left, -area.top)
             fit.postScale(s, s)
-            fit.postTranslate((width - img.width * s) / 2f, (height - img.height * s) / 2f)
+            fit.postTranslate((width - area.width() * s) / 2f, (height - area.height() * s) / 2f)
             fit.invert(inverse)
         }
 
@@ -386,6 +401,8 @@ class PhotoEditActivity : AppCompatActivity() {
             val img = image ?: return
             canvas.save()
             canvas.concat(fit)
+            // While drawing, nothing outside the crop is shown (that's what will be saved)
+            if (!cropMode) canvas.clipRect(crop)
             canvas.drawBitmap(img, 0f, 0f, null)
             strokes.forEach { (path, paint) -> canvas.drawPath(path, paint) }
             currentPath?.let { canvas.drawPath(it, brushPaint()) }
@@ -436,12 +453,15 @@ class PhotoEditActivity : AppCompatActivity() {
             val ix = p[0]
             val iy = p[1]
             if (!cropMode) {
+                // Strokes are kept inside the cropped part
+                val cx = ix.coerceIn(crop.left, crop.right)
+                val cy = iy.coerceIn(crop.top, crop.bottom)
                 when (e.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> currentPath = Path().apply { moveTo(ix, iy) }
-                    MotionEvent.ACTION_MOVE -> currentPath?.lineTo(ix, iy)
+                    MotionEvent.ACTION_DOWN -> currentPath = Path().apply { moveTo(cx, cy) }
+                    MotionEvent.ACTION_MOVE -> currentPath?.lineTo(cx, cy)
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         currentPath?.let {
-                            it.lineTo(ix, iy)
+                            it.lineTo(cx, cy)
                             strokes += it to brushPaint()
                         }
                         currentPath = null

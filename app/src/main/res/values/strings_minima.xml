@@ -320,4 +320,5 @@
     <string name="ml_edit_trim_saving">Saving the trimmed video…</string>
     <string name="ml_edit_nothing">Nothing to save: trim or crop first</string>
     <string name="ml_edit_crop_saving">Re-encoding the cropped video, this takes a while…</string>
+    <string name="ml_edit_hint">Everything is saved together with ✓: crop, rotate and draw in any order.</string>
 </resources>
