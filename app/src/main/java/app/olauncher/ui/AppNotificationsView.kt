@@ -2,7 +2,9 @@ package app.olauncher.ui
 
 import android.annotation.SuppressLint
 import android.app.Notification
-import android.app.PendingIntent
+import android.app.ActivityOptions
+import android.content.Intent
+import android.os.Build
 import android.content.Context
 import android.graphics.Typeface
 import android.service.notification.StatusBarNotification
@@ -17,6 +19,7 @@ import app.olauncher.R
 import app.olauncher.data.AppModel
 import app.olauncher.helper.NotificationListener
 import app.olauncher.helper.OlDialog
+import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import kotlin.math.abs
@@ -32,10 +35,41 @@ object AppNotificationsView {
         val listener = NotificationListener.instance ?: return null
         val items = listener.activeFor(app.appPackage, app.user.toString())
         if (items.isEmpty()) return null
-        return { dialog -> build(dialog, items, listener) }
+        return { dialog -> build(dialog, app, items, listener) }
     }
 
-    private fun build(dialog: OlDialog, items: List<StatusBarNotification>, listener: NotificationListener): View {
+    /**
+     * Opens what the notification points to. Since Android 14 the launcher must explicitly allow
+     * the PendingIntent to start an activity on its behalf, otherwise the system silently blocks it.
+     * Without a content intent, the app itself is opened.
+     */
+    private fun open(context: Context, app: AppModel.App, sbn: StatusBarNotification) {
+        val pi = sbn.notification.contentIntent
+        if (pi != null) {
+            try {
+                val options = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                    @Suppress("DEPRECATION")
+                    ActivityOptions.makeBasic()
+                        .setPendingIntentBackgroundActivityStartMode(ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED)
+                        .toBundle()
+                } else null
+                pi.send(context, 0, null, null, null, null, options)
+                return
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        if (app.appPackage == TestNotifications.FAKE_PACKAGE) return
+        context.packageManager.getLaunchIntentForPackage(app.appPackage)?.let {
+            try {
+                context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    private fun build(dialog: OlDialog, app: AppModel.App, items: List<StatusBarNotification>, listener: NotificationListener): View {
         val ctx = dialog.context
         val primary = ctx.getColorFromAttr(R.attr.primaryColor)
         val list = LinearLayout(ctx).apply {
@@ -72,13 +106,11 @@ object AppNotificationsView {
             })
             attachSwipe(card,
                 onTap = {
-                    try {
-                        sbn.notification.contentIntent?.send()
-                    } catch (e: PendingIntent.CanceledException) {
-                        e.printStackTrace()
-                    }
-                    if (sbn.notification.flags and Notification.FLAG_AUTO_CANCEL != 0) listener.dismiss(sbn.key)
                     dialog.dismiss()
+                    open(ctx, app, sbn)
+                    // Like the shade: auto-cancel notifications go away once opened
+                    if (sbn.notification.flags and Notification.FLAG_AUTO_CANCEL != 0 || sbn.notification.contentIntent == null)
+                        listener.dismiss(sbn.key)
                 },
                 onDismissed = {
                     listener.dismiss(sbn.key)
