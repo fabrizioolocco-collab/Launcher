@@ -273,4 +273,11 @@
     <string name="ml_folder_delete">Elimina scorciatoia</string>
     <string name="ml_swipe_open_folder">Apri una cartella…</string>
     <string name="ml_explorer_use_folder">Usa questa cartella</string>
+    <string name="ml_explorer_selected">%1$d selezionati</string>
+    <string name="ml_explorer_select_all">Seleziona tutto</string>
+    <string name="ml_explorer_more">Altro</string>
+    <string name="ml_explorer_delete_many_confirm">Eliminare %1$d elementi? Non si può annullare.</string>
+    <string name="ml_explorer_copying_many">Copia: %1$d elementi</string>
+    <string name="ml_explorer_moving_many">Sposta: %1$d elementi</string>
+    <string name="ml_explorer_share_no_folders">Le cartelle non si possono condividere: seleziona dei file</string>
 </resources>

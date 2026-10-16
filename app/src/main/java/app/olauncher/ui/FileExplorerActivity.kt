@@ -72,7 +72,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         val mime: String? = null,
     )
 
-    private class Clip(val entry: Entry, val move: Boolean)
+    private class Clip(val files: List<File>, val move: Boolean)
 
     private lateinit var title: TextView
     private lateinit var subtitle: TextView
@@ -89,6 +89,14 @@ open class FileExplorerActivity : AppCompatActivity() {
     private var viewSource: File? = null
     private var entries: MutableList<Entry> = mutableListOf()
     private var clip: Clip? = null
+
+    /** Multiple selection (paths), started by a long press. */
+    private val selected = LinkedHashSet<String>()
+    private val selecting get() = selected.isNotEmpty()
+    private var loadedDir: String? = null
+    private lateinit var backButton: TextView
+    private lateinit var selectionBar: LinearLayout
+    private lateinit var headerButtons: List<View>
     private var waitingAccess = false
 
     private val storageRoot: File get() = Environment.getExternalStorageDirectory()
@@ -98,7 +106,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         views = FolderViewsRepository(this)
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = goUp()
+            override fun handleOnBackPressed() = if (selecting) clearSelection() else goUp()
         })
         location = startLocation(intent)
         load()
@@ -138,13 +146,14 @@ open class FileExplorerActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        header.addView(TextView(this, null, 0, R.style.TextLarge).apply {
+        backButton = TextView(this, null, 0, R.style.TextLarge).apply {
             text = "←"
             textSize = 26f
             setPadding(0, 4.dpToPx(), 16.dpToPx(), 4.dpToPx())
             isClickable = true
-            setOnClickListener { goUp() }
-        })
+            setOnClickListener { if (selecting) clearSelection() else goUp() }
+        }
+        header.addView(backButton)
         title = TextView(this, null, 0, R.style.TextLarge).apply {
             setTypeface(typeface, Typeface.BOLD)
             textSize = 22f
@@ -160,15 +169,17 @@ open class FileExplorerActivity : AppCompatActivity() {
             isClickable = true
             setOnClickListener { askNewFolder() }
         }
-        header.addView(TextView(this, null, 0, R.style.TextLarge).apply {
+        val viewButton = TextView(this, null, 0, R.style.TextLarge).apply {
             text = "☰"
             textSize = 22f
             contentDescription = getString(R.string.ml_explorer_view)
             setPadding(16.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
             isClickable = true
             setOnClickListener { showViewMenu() }
-        })
+        }
+        header.addView(viewButton)
         header.addView(newFolder)
+        headerButtons = listOf(viewButton, newFolder)
         root.addView(header)
         subtitle = TextView(this, null, 0, R.style.TextSmall).apply {
             alpha = 0.6f
@@ -190,6 +201,32 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
         dragHelper.attachToRecyclerView(list)
         root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        selectionBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundResource(R.drawable.rounded_rect_shade_color)
+            setPadding(4.dpToPx(), 2.dpToPx(), 4.dpToPx(), 2.dpToPx())
+            isVisible = false
+        }
+        listOf(
+            R.string.ml_explorer_share to { shareSelected() },
+            R.string.ml_explorer_copy to { clipSelected(move = false) },
+            R.string.ml_explorer_move to { clipSelected(move = true) },
+            R.string.ml_explorer_delete to { deleteSelected() },
+            R.string.ml_explorer_more to { showSelectionMenu() },
+        ).forEach { (label, action) ->
+            selectionBar.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
+                setText(label)
+                gravity = Gravity.CENTER
+                maxLines = 1
+                setPadding(2.dpToPx(), 14.dpToPx(), 2.dpToPx(), 14.dpToPx())
+                isClickable = true
+                setOnClickListener { action() }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        root.addView(selectionBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 8.dpToPx()
+        })
         pasteBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -202,6 +239,14 @@ open class FileExplorerActivity : AppCompatActivity() {
             ellipsize = TextUtils.TruncateAt.MIDDLE
         }
         pasteBar.addView(pasteText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        pasteBar.addView(TextView(this, null, 0, R.style.TextSmall).apply {
+            text = "＋"
+            textSize = 20f
+            contentDescription = getString(R.string.ml_explorer_new_folder)
+            setPadding(12.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
+            isClickable = true
+            setOnClickListener { askNewFolder() }
+        })
         pasteBar.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
             setText(R.string.ml_explorer_paste)
             setTextColor(primary)
@@ -255,8 +300,96 @@ open class FileExplorerActivity : AppCompatActivity() {
     }
 
     private fun load() {
+        // A selection belongs to the folder it was made in
+        if (loadedDir != location.dir.absolutePath) selected.clear()
+        loadedDir = location.dir.absolutePath
         updatePasteBar()
         loadLocal(location)
+        updateSelection()
+    }
+
+    // ---------------------------------------------------------------- multiple selection
+
+    private fun toggleSelect(entry: Entry) {
+        val path = entry.file.absolutePath
+        if (!selected.remove(path)) selected.add(path)
+        updateSelection()
+        list.adapter?.notifyDataSetChanged()
+    }
+
+    private fun clearSelection() {
+        selected.clear()
+        updateSelection()
+        list.adapter?.notifyDataSetChanged()
+    }
+
+    private fun selectedFiles() = entries.filter { it.file.absolutePath in selected }
+
+    private fun updateSelection() {
+        backButton.text = if (selecting) "✕" else "←"
+        selectionBar.isVisible = selecting
+        headerButtons.forEach { it.isVisible = !selecting }
+        if (selecting) {
+            title.text = getString(R.string.ml_explorer_selected, selected.size)
+            pasteBar.isVisible = false
+        } else {
+            title.text = if (location.dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else location.dir.name
+            updatePasteBar()
+        }
+    }
+
+    private fun shareSelected() {
+        val files = selectedFiles().filter { !it.isFolder }
+        if (files.isEmpty()) {
+            showToast(getString(R.string.ml_explorer_share_no_folders))
+            return
+        }
+        val intent = if (files.size == 1) Intent(Intent.ACTION_SEND).setType(files[0].mime ?: "*/*")
+            .putExtra(Intent.EXTRA_STREAM, uriFor(files[0].file))
+        else Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*")
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(files.map { uriFor(it.file) }))
+        startActivity(Intent.createChooser(intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
+    }
+
+    private fun clipSelected(move: Boolean) {
+        clip = Clip(selectedFiles().map { it.file }, move)
+        clearSelection()
+    }
+
+    private fun deleteSelected() {
+        val files = selectedFiles().map { it.file }
+        showConfirmDialog(
+            getString(R.string.ml_explorer_delete),
+            if (files.size == 1) getString(R.string.ml_explorer_delete_confirm, files[0].name)
+            else getString(R.string.ml_explorer_delete_many_confirm, files.size),
+            getString(R.string.ml_explorer_delete),
+        ) {
+            selected.clear()
+            run(getString(R.string.ml_explorer_delete)) { files.all { it.deleteRecursively() } }
+        }
+    }
+
+    /** "More": the single-item actions, plus select all. */
+    private fun showSelectionMenu() {
+        val chosen = selectedFiles()
+        val items = mutableListOf<MenuEntry>()
+        chosen.singleOrNull()?.let { entry ->
+            if (!entry.isFolder) items += MenuEntry(getString(R.string.ml_explorer_open_with)) { view(entry.file, entry.mime, chooser = true) }
+            items += MenuEntry(getString(R.string.rename)) {
+                clearSelection()
+                askRename(entry)
+            }
+        }
+        items += MenuEntry(getString(R.string.ml_explorer_select_all)) {
+            entries.forEach { selected.add(it.file.absolutePath) }
+            updateSelection()
+            list.adapter?.notifyDataSetChanged()
+        }
+        items += MenuEntry(getString(R.string.ml_explorer_new_folder)) {
+            clearSelection()
+            askNewFolder()
+        }
+        showMenuDialog(getString(R.string.ml_explorer_selected, chosen.size), items)
     }
 
     private fun showStatus(text: String?, onClick: (() -> Unit)? = null) {
@@ -469,6 +602,7 @@ open class FileExplorerActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- items
 
     private fun onTap(entry: Entry) {
+        if (selecting) return toggleSelect(entry)
         if (!entry.isFolder) return view(entry.file, entry.mime)
         if (pickMode) return open(Location(entry.file))
         // A folder with only photos and videos opens as an album grid, like from the search
@@ -488,18 +622,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         return cover
     }
 
-    private fun onLongPress(entry: Entry) {
-        val items = mutableListOf<MenuEntry>()
-        if (!entry.isFolder) {
-            items += MenuEntry(getString(R.string.ml_explorer_open_with)) { view(entry.file, entry.mime, chooser = true) }
-            items += MenuEntry(getString(R.string.ml_explorer_share)) { share(entry.file, entry.mime) }
-        }
-        items += MenuEntry(getString(R.string.ml_explorer_copy)) { setClip(entry, move = false) }
-        items += MenuEntry(getString(R.string.ml_explorer_move)) { setClip(entry, move = true) }
-        items += MenuEntry(getString(R.string.rename)) { askRename(entry) }
-        items += MenuEntry(getString(R.string.ml_explorer_delete)) { askDelete(entry) }
-        showMenuDialog(entry.name, items)
-    }
+    /** Long press: starts (or extends) the multiple selection. */
+    private fun onLongPress(entry: Entry) = toggleSelect(entry)
 
     private fun uriFor(file: File): Uri = FileProvider.getUriForFile(this, "$packageName.files", file)
 
@@ -557,29 +681,31 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- copy / move
 
-    private fun setClip(entry: Entry, move: Boolean) {
-        clip = Clip(entry, move)
+    private fun setClip(files: List<File>, move: Boolean) {
+        clip = Clip(files, move)
         updatePasteBar()
     }
 
     private fun updatePasteBar() {
         val c = clip
-        pasteBar.isVisible = c != null
-        if (c != null) pasteText.text = getString(if (c.move) R.string.ml_explorer_moving else R.string.ml_explorer_copying, c.entry.name)
+        pasteBar.isVisible = c != null && !selecting
+        if (c != null) pasteText.text = when (c.files.size) {
+            1 -> getString(if (c.move) R.string.ml_explorer_moving else R.string.ml_explorer_copying, c.files[0].name)
+            else -> getString(if (c.move) R.string.ml_explorer_moving_many else R.string.ml_explorer_copying_many, c.files.size)
+        }
     }
 
     private fun paste() {
         val c = clip ?: return
         val target = location.dir
-        val entry = c.entry
         // A folder can't go inside itself
-        if ((target.absolutePath + "/").startsWith(entry.file.absolutePath + "/")) {
+        if (c.files.any { (target.absolutePath + "/").startsWith(it.absolutePath + "/") }) {
             showToast(getString(R.string.ml_explorer_into_itself))
             return
         }
         clip = null
         val label = getString(if (c.move) R.string.ml_explorer_move else R.string.ml_explorer_copy)
-        run(label) { pasteTo(entry.file, target, c.move) }
+        run(label) { c.files.map { pasteTo(it, target, c.move) }.all { it } }
     }
 
     private fun uniqueTarget(dir: File, name: String): File {
@@ -732,6 +858,10 @@ open class FileExplorerActivity : AppCompatActivity() {
                 ).joinToString(" · ")
                 info.isVisible = info.text.isNotEmpty()
             }
+            // Selected items are highlighted
+            if (entry.file.absolutePath in selected) root.setBackgroundResource(R.drawable.rounded_rect_shade_color)
+            else root.background = null
+            root.alpha = if (selecting && entry.file.absolutePath !in selected) 0.6f else 1f
             root.setOnClickListener { onTap(entry) }
             // In manual order a long press drags the item (the menu opens if it isn't moved)
             if (view.sort == FolderView.SORT_MANUAL) root.setOnLongClickListener(null)
