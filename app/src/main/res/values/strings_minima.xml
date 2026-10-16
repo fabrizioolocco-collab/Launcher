@@ -331,7 +331,7 @@
     <string name="ml_pdf_check">Check</string>
     <string name="ml_pdf_draw">Draw</string>
     <string name="ml_pdf_sign">Sign</string>
-    <string name="ml_pdf_text_hint">Write the text, then tap where to put it</string>
+    <string name="ml_pdf_text_hint">Tap where to write; type, then tap elsewhere</string>
     <string name="ml_pdf_check_hint">Tap where to put a check mark</string>
     <string name="ml_pdf_sign_hint">Tap where to put the signature; then adjust it with the handles</string>
     <string name="ml_pdf_undo">Undo</string>

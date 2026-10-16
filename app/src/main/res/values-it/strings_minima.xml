@@ -325,7 +325,7 @@
     <string name="ml_pdf_check">Crocetta</string>
     <string name="ml_pdf_draw">Disegna</string>
     <string name="ml_pdf_sign">Firma</string>
-    <string name="ml_pdf_text_hint">Scrivi il testo, poi tocca dove metterlo</string>
+    <string name="ml_pdf_text_hint">Tocca dove scrivere; digita, poi tocca altrove</string>
     <string name="ml_pdf_check_hint">Tocca dove mettere la crocetta</string>
     <string name="ml_pdf_sign_hint">Tocca dove mettere la firma; poi sistemala con le maniglie</string>
     <string name="ml_pdf_undo">Annulla</string>

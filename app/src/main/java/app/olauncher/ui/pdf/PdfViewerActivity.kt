@@ -78,7 +78,8 @@ class PdfViewerActivity : AppCompatActivity() {
     private lateinit var palette: LinearLayout
     private var paletteOpen = true
     private var tool: Tool = Tool.NONE
-    private var pendingText = ""
+    /** The text being typed in place on its page, if any. */
+    private var editing: Annotation.Text? = null
     private var signature: Bitmap? = null
     private var selected: Annotation? = null
 
@@ -147,7 +148,8 @@ class PdfViewerActivity : AppCompatActivity() {
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (selected != null) select(null)
+                if (editing != null) stopEdit()
+                else if (selected != null) select(null)
                 else if (tool != Tool.NONE) setTool(Tool.NONE)
                 else if (annotations.isNotEmpty() || !layout.isIdentity(total)) showConfirmDialog(
                     getString(R.string.ml_edit_discard_title), getString(R.string.ml_pdf_discard), getString(R.string.ml_edit_discard_action),
@@ -312,17 +314,10 @@ class PdfViewerActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- tools
 
-    private fun askText() = showTextInputDialog(getString(R.string.ml_pdf_text), pendingText, getString(R.string.ml_pdf_text), getString(R.string.ml_done)) { text ->
-        if (text.isBlank()) return@showTextInputDialog
-        pendingText = text
-        setTool(Tool.TEXT)
-    }
-
     private fun onToolTapped(t: Tool) {
         select(null)
         if (tool == t) return setTool(Tool.NONE)
         when (t) {
-            Tool.TEXT -> askText()
             Tool.SIGN -> if (signature == null) signatureLauncher.launch(SignatureActivity.intent(this)) else setTool(Tool.SIGN)
             else -> setTool(t)
         }
@@ -357,7 +352,7 @@ class PdfViewerActivity : AppCompatActivity() {
         hint.isVisible = tool != Tool.NONE || sel != null
         hint.text = when {
             sel != null -> getString(R.string.ml_pdf_select_hint)
-            tool == Tool.TEXT -> getString(R.string.ml_pdf_text_hint) + "  «$pendingText»"
+            tool == Tool.TEXT -> getString(R.string.ml_pdf_text_hint)
             tool == Tool.CHECK -> getString(R.string.ml_pdf_check_hint)
             tool == Tool.DRAW -> getString(R.string.ml_pdf_draw_hint)
             tool == Tool.SIGN -> getString(R.string.ml_pdf_sign_hint)
@@ -367,6 +362,7 @@ class PdfViewerActivity : AppCompatActivity() {
 
     /** Selects (or deselects with null) an annotation: the frame with handles appears on its page. */
     private fun select(a: Annotation?) {
+        if (editing != null && editing !== a) stopEdit()
         selected = a
         updateHint()
         buildPalette()
@@ -456,7 +452,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 }
                 options.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
                 options.addView(optionButton(getString(R.string.ml_pdf_edit_text)) {
-                    if (sel is Annotation.Text) editText(sel) else askText()
+                    if (sel is Annotation.Text) editText(sel)
                 })
             }
 
@@ -540,13 +536,25 @@ class PdfViewerActivity : AppCompatActivity() {
         setOnClickListener { onClick() }
     }
 
+    /** Types the text in place: a text field sits on the annotation's box on the page. */
     private fun editText(a: Annotation.Text) {
-        showTextInputDialog(getString(R.string.ml_pdf_text), a.text, getString(R.string.ml_pdf_text), getString(R.string.ml_done)) { text ->
-            if (text.isBlank()) return@showTextInputDialog
-            a.text = text
-            pageViewOf(a.page)?.fitText(a)
-            invalidatePages()
+        if (selected !== a) select(a)
+        editing = a
+        updateHint()
+        pageViewOf(a.page)?.startEdit(a)
+    }
+
+    /** Ends in-place typing; an empty text is removed. */
+    private fun stopEdit() {
+        val a = editing ?: return
+        editing = null
+        pageViewOf(a.page)?.stopEdit()
+        if (a.text.isBlank()) {
+            annotations.remove(a)
+            if (selected === a) select(null)
         }
+        updateHint()
+        invalidatePages()
     }
 
     private fun delete(a: Annotation) {
@@ -813,6 +821,7 @@ class PdfViewerActivity : AppCompatActivity() {
         }
 
         fun bind(original: Int) {
+            if (editor != null) this@PdfViewerActivity.stopEdit()
             this.original = original
             image.setImageBitmap(null)
             overlay.invalidate()
@@ -839,6 +848,74 @@ class PdfViewerActivity : AppCompatActivity() {
 
         /** Recomputes the width of a text box from its text and height. */
         fun fitText(a: Annotation.Text) = overlay.fitText(pageRect(), a)
+
+        private var editor: android.widget.EditText? = null
+
+        /** Puts a text field over [a]'s box and opens the keyboard; typing updates the annotation. */
+        fun startEdit(a: Annotation.Text) {
+            stopEdit()
+            val r = pageRect()
+            if (r.isEmpty) return
+            val et = android.widget.EditText(context).apply {
+                background = null
+                setPadding(0, 0, 0, 0)
+                includeFontPadding = false
+                isSingleLine = true
+                imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_DONE or android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI
+                inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+                setTextColor(a.color)
+                highlightColor = 0x402979FF
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, a.box.height() * r.height() * TEXT_FACTOR)
+                minWidth = 40.dpToPx()
+                setText(a.text)
+                setSelection(length())
+                typeface = overlay.textTypeface()
+            }
+            et.addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    a.text = s?.toString() ?: ""
+                    overlay.fitText(pageRect(), a)
+                    place(et, a)
+                    overlay.invalidate()
+                }
+            })
+            et.setOnEditorActionListener { _, id, _ ->
+                if (id == android.view.inputmethod.EditorInfo.IME_ACTION_DONE) { this@PdfViewerActivity.stopEdit(); true } else false
+            }
+            addView(et, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            editor = et
+            place(et, a)
+            et.requestFocus()
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(et, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+            // Once the keyboard is up, bring the field into view
+            postDelayed({ et.requestRectangleOnScreen(android.graphics.Rect(0, -40.dpToPx(), et.width, et.height + 40.dpToPx()), false) }, 400)
+            overlay.invalidate()
+        }
+
+        /** Aligns the field's baseline with the drawn text's baseline, with the annotation's rotation. */
+        private fun place(et: android.widget.EditText, a: Annotation.Text) {
+            val r = pageRect()
+            val v = RectF(r.left + a.box.left * r.width(), r.top + a.box.top * r.height(), r.left + a.box.right * r.width(), r.top + a.box.bottom * r.height())
+            val lp = et.layoutParams as LayoutParams
+            lp.leftMargin = v.left.toInt()
+            lp.topMargin = (v.top + v.height() * TEXT_FACTOR + et.paint.fontMetrics.ascent).toInt()
+            et.layoutParams = lp
+            et.rotation = a.rotation
+            et.pivotX = v.width() / 2
+            et.pivotY = v.centerY() - lp.topMargin
+        }
+
+        fun stopEdit() {
+            val et = editor ?: return
+            editor = null
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.hideSoftInputFromWindow(et.windowToken, 0)
+            removeView(et)
+            overlay.invalidate()
+        }
 
         /** Gives a text box the height of [size] (a fraction of the page width), keeping its left-top corner. */
         fun resizeText(a: Annotation.Text, size: Float) {
@@ -933,7 +1010,7 @@ class PdfViewerActivity : AppCompatActivity() {
                         canvas.drawPath(p, ink)
                     }
 
-                    is Annotation.Text -> {
+                    is Annotation.Text -> if (editing !== a) {
                         textPaint.color = a.color
                         textPaint.textSize = v.height() * TEXT_FACTOR
                         canvas.drawText(a.text, v.left, v.top + v.height() * TEXT_FACTOR, textPaint)
@@ -963,6 +1040,8 @@ class PdfViewerActivity : AppCompatActivity() {
                 canvas.drawCircle(x, y, handleR, frame)
                 canvas.drawText(glyph, x, y + handleText.textSize * 0.36f, handleText)
             }
+
+            fun textTypeface(): android.graphics.Typeface = textPaint.typeface ?: android.graphics.Typeface.DEFAULT
 
             fun fitText(r: RectF, a: Annotation.Text) {
                 if (r.isEmpty) return
@@ -1062,13 +1141,13 @@ class PdfViewerActivity : AppCompatActivity() {
                         annotations += Annotation.Check(original, RectF(fx - w / 2, fy - h / 2, fx + w / 2, fy + h / 2), penColor, cross)
                     }
 
-                    Tool.TEXT -> if (e.actionMasked == MotionEvent.ACTION_UP && pendingText.isNotBlank()) {
+                    Tool.TEXT -> if (e.actionMasked == MotionEvent.ACTION_UP) {
                         val h = textSize * r.width() / r.height()
-                        val a = Annotation.Text(original, pendingText, RectF(fx, fy - h / 2, fx, fy + h / 2), penColor)
+                        val a = Annotation.Text(original, "", RectF(fx, fy - h / 2, fx, fy + h / 2), penColor)
                         fitText(r, a)
                         annotations += a
                         setTool(Tool.NONE)
-                        select(a)
+                        editText(a)
                     }
 
                     Tool.SIGN -> if (e.actionMasked == MotionEvent.ACTION_UP) signature?.let { sig ->
