@@ -371,4 +371,15 @@
     <string name="ml_pdf_choose_folder">Choose folder</string>
     <string name="ml_pdf_overwrite">«%1$s» already exists. Replace it?</string>
     <string name="ml_pdf_replace">Replace</string>
+
+    <!-- App drawer: list or grid -->
+    <string name="ml_drawer_layout">App list view</string>
+    <string name="ml_drawer_list">List</string>
+    <string name="ml_drawer_grid">Grid</string>
+    <string name="ml_drawer_columns">App grid columns</string>
+    <string name="ml_drawer_rows">App grid rows per screen</string>
+    <string name="ml_drawer_icon_size">App list icon size</string>
+    <string name="ml_drawer_font">App list font</string>
+    <string name="ml_drawer_text_size">App list text size</string>
+    <string name="ml_drawer_labels">App names in the list</string>
 </resources>

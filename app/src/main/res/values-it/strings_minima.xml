@@ -365,4 +365,15 @@
     <string name="ml_pdf_choose_folder">Scegli cartella</string>
     <string name="ml_pdf_overwrite">«%1$s» esiste già. Sostituirlo?</string>
     <string name="ml_pdf_replace">Sostituisci</string>
+
+    <!-- App drawer: list or grid -->
+    <string name="ml_drawer_layout">Vista menù app</string>
+    <string name="ml_drawer_list">Lista</string>
+    <string name="ml_drawer_grid">Griglia</string>
+    <string name="ml_drawer_columns">Colonne griglia menù app</string>
+    <string name="ml_drawer_rows">Righe griglia per schermata</string>
+    <string name="ml_drawer_icon_size">Dimensione icone menù app</string>
+    <string name="ml_drawer_font">Font menù app</string>
+    <string name="ml_drawer_text_size">Dimensione testo menù app</string>
+    <string name="ml_drawer_labels">Nome delle app nel menù</string>
 </resources>

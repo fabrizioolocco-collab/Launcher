@@ -47,6 +47,29 @@ class AppDrawerAdapter(
     private val badgeTap: ((AppModel) -> Unit)? = null,
 ) : ListAdapter<AppModel, RecyclerView.ViewHolder>(DIFF_CALLBACK), Filterable {
 
+    /**
+     * Grid mode: apps are cells with the icon above the name. [cellHeightPx] 0 lets cells wrap
+     * their content. [iconLoader] fills the cell's image.
+     */
+    class GridStyle(
+        val cellHeightPx: Int,
+        val iconSizePx: Int,
+        val showLabels: Boolean,
+        val iconLoader: (AppModel, android.widget.ImageView, Int) -> Unit,
+    )
+
+    /** Set before the adapter is attached: null shows the list, otherwise the grid. */
+    var grid: GridStyle? = null
+
+    /** List mode: show the app names (icons only otherwise). */
+    var showLabels = true
+
+    /** True for items that take a whole grid row (headers and the trailing spacer). */
+    fun spansRow(position: Int): Boolean {
+        val item = getItem(position)
+        return item is AppModel.ListHeader || item is AppModel.PrivateSpaceHeader || item.appPackage.isEmpty()
+    }
+
     companion object {
         const val VIEW_TYPE_APP = 0
         const val VIEW_TYPE_PRIVATE_HEADER = 1
@@ -113,7 +136,7 @@ class AppDrawerAdapter(
                 )
             )
 
-            else -> ViewHolder(
+            else -> if (grid != null) GridViewHolder(parent.context) else ViewHolder(
                 AdapterAppDrawerBinding.inflate(
                     LayoutInflater.from(parent.context),
                     parent,
@@ -138,7 +161,19 @@ class AppDrawerAdapter(
                     )
                 }
 
+                is GridViewHolder -> holder.bind(
+                    grid ?: return,
+                    myUserHandle,
+                    appModel,
+                    appClickListener,
+                    titleStyler,
+                    badgeCount?.invoke(appModel) ?: 0,
+                    longPressMenu,
+                    badgeTap,
+                )
+
                 is ViewHolder -> holder.bind(
+                    showLabels,
                     flag,
                     appLabelGravity,
                     myUserHandle,
@@ -282,11 +317,82 @@ class AppDrawerAdapter(
         }
     }
 
+    /** A grid cell: icon centered, name below (optional), a dot after the name for apps of another profile. */
+    class GridViewHolder(context: Context) : RecyclerView.ViewHolder(
+        android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setPadding(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 8.dpToPx())
+            isClickable = true
+            isLongClickable = true
+            addView(android.widget.ImageView(context).apply {
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            }, android.widget.LinearLayout.LayoutParams(1, 1))
+            addView(TextView(context, null, 0, R.style.TextSmall).apply {
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = android.view.Gravity.CENTER
+                setPadding(0, 4.dpToPx(), 0, 0)
+            }, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+    ) {
+        private val cell = itemView as android.widget.LinearLayout
+        private val icon = cell.getChildAt(0) as android.widget.ImageView
+        private val title = cell.getChildAt(1) as TextView
+        private val defaultTitleColors = title.textColors
+
+        /** The style is applied on every bind, so settings changes don't need new holders. */
+        private fun applyStyle(style: GridStyle) {
+            val cellHeight = if (style.cellHeightPx > 0) style.cellHeightPx else ViewGroup.LayoutParams.WRAP_CONTENT
+            if (cell.layoutParams.height != cellHeight) cell.layoutParams = cell.layoutParams.apply { height = cellHeight }
+            val lp = icon.layoutParams
+            if (lp.width != style.iconSizePx) icon.layoutParams = lp.apply { width = style.iconSizePx; height = style.iconSizePx }
+            title.isVisible = style.showLabels
+        }
+
+        fun bind(
+            style: GridStyle,
+            myUserHandle: UserHandle,
+            appModel: AppModel,
+            clickListener: (AppModel) -> Unit,
+            titleStyler: ((TextView) -> Unit)?,
+            notificationCount: Int,
+            longPressMenu: ((AppModel, Int) -> Unit)?,
+            badgeTap: ((AppModel) -> Unit)?,
+        ) {
+            applyStyle(style)
+            val spacer = appModel.appPackage.isEmpty()
+            cell.visibility = if (spacer) View.INVISIBLE else View.VISIBLE
+            val label = buildString {
+                append(appModel.appLabel)
+                if (appModel.isNew) append(" ✦")
+                if (appModel.user != myUserHandle) append(" ●")
+            }
+            title.text = if (notificationCount > 0) HomeSectionsController.badgeText(appModel.appLabel, -1) else label
+            title.setTextColor(if (notificationCount > 0) HomeSectionsController.NOTIFICATION_COLOR else defaultTitleColors)
+            titleStyler?.invoke(title)
+            cell.contentDescription = appModel.appLabel
+            icon.setImageDrawable(null)
+            icon.colorFilter = if (notificationCount > 0) NotificationBadge.redFilter else null
+            if (!spacer) style.iconLoader(appModel, icon, style.iconSizePx)
+            cell.setOnClickListener {
+                if (spacer) return@setOnClickListener
+                if (notificationCount > 0 && badgeTap != null) badgeTap(appModel) else clickListener(appModel)
+            }
+            cell.setOnLongClickListener {
+                if (!spacer && longPressMenu != null) longPressMenu(appModel, bindingAdapterPosition)
+                true
+            }
+        }
+    }
+
     class ViewHolder(private val binding: AdapterAppDrawerBinding) :
         RecyclerView.ViewHolder(binding.root) {
         private val defaultTitleColors = binding.appTitle.textColors
 
         fun bind(
+            showLabels: Boolean,
             flag: Int,
             appLabelGravity: Int,
             myUserHandle: UserHandle,
@@ -318,6 +424,7 @@ class AppDrawerAdapter(
                 }
                 appTitle.setTextColor(defaultTitleColors)
             }
+            if (!showLabels) appTitle.text = ""
             appTitle.gravity = appLabelGravity
             otherProfileIndicator.isVisible = appModel.user != myUserHandle
             titleStyler?.invoke(appTitle)

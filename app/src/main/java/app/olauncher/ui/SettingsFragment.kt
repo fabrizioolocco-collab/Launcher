@@ -192,6 +192,45 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
             R.id.letterIndex -> showLetterIndexMenu(view)
+            R.id.drawerLayout -> view.showPopupMenu(
+                configure = { menu ->
+                    menu.add(Menu.NONE, 0, 0, getString(R.string.ml_drawer_list))
+                    menu.add(Menu.NONE, 1, 1, getString(R.string.ml_drawer_grid))
+                }
+            ) { item ->
+                prefs.drawerGrid = item.itemId == 1
+                populateTextStyle()
+            }
+            R.id.drawerColumns -> view.showPopupMenu(
+                configure = { menu -> (2..8).forEach { menu.add(Menu.NONE, it, it, it.toString()) } }
+            ) { item ->
+                prefs.drawerColumns = item.itemId
+                populateTextStyle()
+            }
+            R.id.drawerRows -> view.showPopupMenu(
+                configure = { menu ->
+                    menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
+                    (3..12).forEach { menu.add(Menu.NONE, it, it, it.toString()) }
+                }
+            ) { item ->
+                prefs.drawerRows = item.itemId
+                populateTextStyle()
+            }
+            R.id.drawerIconSize -> view.showPopupMenu(
+                configure = { menu ->
+                    menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
+                    ICON_SIZES.forEachIndexed { i, size -> menu.add(Menu.NONE, size, i + 1, size.toString()) }
+                }
+            ) { item ->
+                prefs.drawerIconSize = item.itemId
+                populateTextStyle()
+            }
+            R.id.drawerFont -> showFontMenu(view, prefs.drawerFont) { prefs.drawerFont = it }
+            R.id.drawerTextSize -> showTextSizeMenu(view) { prefs.drawerTextSize = it }
+            R.id.drawerLabels -> {
+                prefs.drawerLabels = !prefs.drawerLabels
+                populateTextStyle()
+            }
             R.id.homeColumns -> view.showPopupMenu(
                 configure = { menu -> (1..6).forEach { menu.add(Menu.NONE, it, it, it.toString()) } }
             ) { item ->
@@ -205,7 +244,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.homeIconSize -> view.showPopupMenu(
                 configure = { menu ->
                     menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
-                    listOf(24, 32, 40, 48, 56, 64, 72, 80, 96).forEachIndexed { i, size -> menu.add(Menu.NONE, size, i + 1, size.toString()) }
+                    ICON_SIZES.forEachIndexed { i, size -> menu.add(Menu.NONE, size, i + 1, size.toString()) }
                 }
             ) { item ->
                 prefs.homeIconSize = item.itemId
@@ -327,6 +366,13 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.notificationAccess.setOnClickListener(this)
         binding.newsOrder.setOnClickListener(this)
         binding.letterIndex.setOnClickListener(this)
+        binding.drawerLayout.setOnClickListener(this)
+        binding.drawerColumns.setOnClickListener(this)
+        binding.drawerRows.setOnClickListener(this)
+        binding.drawerIconSize.setOnClickListener(this)
+        binding.drawerFont.setOnClickListener(this)
+        binding.drawerTextSize.setOnClickListener(this)
+        binding.drawerLabels.setOnClickListener(this)
         binding.homeColumns.setOnClickListener(this)
         binding.homeLabels.setOnClickListener(this)
         binding.homeIconSize.setOnClickListener(this)
@@ -414,6 +460,15 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
+        binding.drawerLayout.setText(if (prefs.drawerGrid) R.string.ml_drawer_grid else R.string.ml_drawer_list)
+        binding.drawerColumns.text = prefs.drawerColumns.toString()
+        binding.drawerRows.text = if (prefs.drawerRows > 0) prefs.drawerRows.toString() else getString(R.string.ml_default)
+        binding.drawerIconSize.text = if (prefs.drawerIconSize > 0) prefs.drawerIconSize.toString() else getString(R.string.ml_default)
+        binding.drawerFont.text = FontManager.label(ctx, prefs.drawerFont)
+        binding.drawerTextSize.text = sizeLabel(prefs.drawerTextSize)
+        binding.drawerLabels.setText(if (prefs.drawerLabels) R.string.on else R.string.off)
+        // Grid-only settings are dimmed while the drawer is a list
+        listOf(binding.drawerColumns, binding.drawerRows, binding.drawerIconSize).forEach { it.alpha = if (prefs.drawerGrid) 1f else 0.5f }
         binding.letterIndex.setText(
             when (prefs.letterIndexMode) {
                 Constants.LetterIndex.ON_SCROLL -> R.string.ml_index_on_scroll
@@ -1001,5 +1056,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     companion object {
         private const val LOAD_FONT_ID = 10_000
         private val TEXT_SIZES = listOf(12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 36, 40)
+        private val ICON_SIZES = listOf(24, 32, 40, 48, 56, 64, 72, 80, 96)
     }
 }

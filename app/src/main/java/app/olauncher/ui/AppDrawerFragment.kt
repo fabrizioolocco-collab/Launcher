@@ -12,11 +12,14 @@ import android.view.ViewGroup
 import android.view.animation.AnimationUtils
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.InputMethodManager
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
+import androidx.core.view.doOnLayout
 import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.Recycler
@@ -288,7 +291,7 @@ class AppDrawerFragment : BaseFragment() {
                 }
             },
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
-            titleStyler = { view -> FontManager.apply(view, prefs.appFont, prefs.appTextSize) },
+            titleStyler = { view -> FontManager.apply(view, prefs.drawerFont, prefs.drawerTextSize) },
             longPressMenu = { appModel, position -> showAppMenu(appModel, position) },
             badgeTap = { appModel ->
                 if (appModel is AppModel.App) NotificationBadge.showNotifications(requireContext(), appModel) {
@@ -301,19 +304,34 @@ class AppDrawerFragment : BaseFragment() {
             },
         )
 
-        linearLayoutManager = object : LinearLayoutManager(requireContext()) {
-            override fun scrollVerticallyBy(
-                dx: Int,
-                recycler: Recycler,
-                state: RecyclerView.State,
-            ): Int {
+        // Pulling the list down past its top closes the drawer
+        fun onOverScroll(dx: Int, scrollRange: Int) {
+            val overScroll = dx - scrollRange
+            if (overScroll < -10 && binding.recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING)
+                checkMessageAndExit()
+        }
+        linearLayoutManager = if (prefs.drawerGrid && flag == Constants.FLAG_LAUNCH_APP) {
+            val columns = prefs.drawerColumns
+            object : GridLayoutManager(requireContext(), columns) {
+                override fun scrollVerticallyBy(dx: Int, recycler: Recycler, state: RecyclerView.State): Int {
+                    val scrollRange = super.scrollVerticallyBy(dx, recycler, state)
+                    onOverScroll(dx, scrollRange)
+                    return scrollRange
+                }
+            }.apply {
+                spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
+                    override fun getSpanSize(position: Int): Int = if (adapter.spansRow(position)) columns else 1
+                }
+            }
+        } else object : LinearLayoutManager(requireContext()) {
+            override fun scrollVerticallyBy(dx: Int, recycler: Recycler, state: RecyclerView.State): Int {
                 val scrollRange = super.scrollVerticallyBy(dx, recycler, state)
-                val overScroll = dx - scrollRange
-                if (overScroll < -10 && binding.recyclerView.scrollState == RecyclerView.SCROLL_STATE_DRAGGING)
-                    checkMessageAndExit()
+                onOverScroll(dx, scrollRange)
                 return scrollRange
             }
         }
+        adapter.showLabels = prefs.drawerLabels
+        if (linearLayoutManager is GridLayoutManager) applyGridStyle()
 
         binding.recyclerView.layoutManager = linearLayoutManager
         binding.recyclerView.adapter = adapter
@@ -391,6 +409,47 @@ class AppDrawerFragment : BaseFragment() {
             hint = appModel.appLabel,
             action = getString(R.string.ml_save),
         ) { label -> adapter.rename(appModel, label) }
+    }
+
+    /**
+     * Grid cells: icon size from the setting or the cell width, cell height from the rows setting
+     * (so that many rows fill the screen) or the content.
+     */
+    private fun applyGridStyle() {
+        val columns = prefs.drawerColumns
+        val width = binding.recyclerView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        val cellWidth = (width - binding.recyclerView.paddingLeft - binding.recyclerView.paddingRight) / columns
+        val iconSize = if (prefs.drawerIconSize > 0) prefs.drawerIconSize.dpToPx()
+        else (cellWidth * if (prefs.drawerLabels) 0.5f else 0.62f).toInt().coerceAtLeast(24.dpToPx())
+        val rows = prefs.drawerRows
+        val height = binding.recyclerView.height
+        val cellHeight = if (rows > 0 && height > 0) (height - binding.recyclerView.paddingTop - binding.recyclerView.paddingBottom) / rows else 0
+        adapter.grid = AppDrawerAdapter.GridStyle(cellHeight, iconSize, prefs.drawerLabels) { appModel, view, size ->
+            loadGridIcon(appModel, view, size)
+        }
+        if (rows > 0 && height == 0) {
+            // Measure first, then size the cells to the rows
+            binding.recyclerView.doOnLayout { if (_binding != null) applyGridStyle() }
+            return
+        }
+        @Suppress("NotifyDataSetChanged")
+        adapter.notifyDataSetChanged()
+    }
+
+    private fun loadGridIcon(appModel: AppModel, view: ImageView, size: Int) {
+        val key = "${appModel.appPackage}|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
+        view.tag = key
+        val context = requireContext().applicationContext
+        val iconPack = prefs.iconPack
+        uiScope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                IconPackManager.getIcon(
+                    context, appModel.appPackage, (appModel as? AppModel.App)?.activityClassName,
+                    appModel.user, iconPack, size
+                )
+            } ?: return@launch
+            if (view.tag == key) view.setImageBitmap(bitmap)
+        }
     }
 
     private fun loadIcon(appModel: AppModel, view: TextView) {

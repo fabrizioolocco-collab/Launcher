@@ -220,6 +220,41 @@ class Prefs(context: Context) {
         get() = prefs.getInt(LETTER_INDEX_MODE, Constants.LetterIndex.ALWAYS)
         set(value) = prefs.edit { putInt(LETTER_INDEX_MODE, value) }
 
+    // ---- App drawer layout: list (default) or a grid of icons
+
+    var drawerGrid: Boolean
+        get() = prefs.getBoolean("DRAWER_GRID", false)
+        set(value) = prefs.edit { putBoolean("DRAWER_GRID", value) }
+
+    /** Grid columns (2-8). */
+    var drawerColumns: Int
+        get() = prefs.getInt("DRAWER_COLUMNS", 4).coerceIn(2, 8)
+        set(value) = prefs.edit { putInt("DRAWER_COLUMNS", value.coerceIn(2, 8)) }
+
+    /** Grid rows that fit the screen (cells are as tall as needed), 0 = automatic (as tall as their content). */
+    var drawerRows: Int
+        get() = prefs.getInt("DRAWER_ROWS", 0).coerceIn(0, 12)
+        set(value) = prefs.edit { putInt("DRAWER_ROWS", value.coerceIn(0, 12)) }
+
+    /** Icon size in dp in the grid, 0 = automatic (from the cell width). */
+    var drawerIconSize: Int
+        get() = prefs.getInt("DRAWER_ICON_SIZE", 0)
+        set(value) = prefs.edit { putInt("DRAWER_ICON_SIZE", value) }
+
+    /** Show app names in the drawer (grid and list). */
+    var drawerLabels: Boolean
+        get() = prefs.getBoolean("DRAWER_LABELS", true)
+        set(value) = prefs.edit { putBoolean("DRAWER_LABELS", value) }
+
+    /** Drawer font and size; until set, the drawer follows the home app names. */
+    var drawerFont: String
+        get() = prefs.getString("DRAWER_FONT", null) ?: appFont
+        set(value) = prefs.edit { putString("DRAWER_FONT", value) }
+
+    var drawerTextSize: Int
+        get() = prefs.getInt("DRAWER_TEXT_SIZE", -1).let { if (it < 0) appTextSize else it }
+        set(value) = prefs.edit { putInt("DRAWER_TEXT_SIZE", value) }
+
     /** Package of the selected icon pack, empty for the system icons. */
     var iconPack: String
         get() = prefs.getString(ICON_PACK, "").orEmpty()
