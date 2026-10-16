@@ -337,6 +337,16 @@ class AppDrawerFragment : BaseFragment() {
         onImagePicked = null
     }
 
+    private fun changeIconEntry(appModel: AppModel.App) = MenuEntry(getString(R.string.ml_change_icon)) {
+        IconChooser.show(requireContext(), appModel, uiScope, { callback ->
+            onImagePicked = callback
+            viewModel.keepCurrentScreen = true
+            imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        }) {
+            adapter.refreshBadges()
+        }
+    }
+
     /** Same long-press menu as on home: the app's notifications on top, then its actions. */
     private fun showAppMenu(appModel: AppModel, position: Int) {
         val ctx = requireContext()
@@ -345,6 +355,7 @@ class AppDrawerFragment : BaseFragment() {
         if (appModel is AppModel.App && tabs?.showingHidden == true && binding.search.query.isNullOrBlank()) {
             // "Hidden" tab: bring the app back
             entries += MenuEntry(getString(R.string.adapter_show)) { unhide(appModel) }
+            entries += changeIconEntry(appModel)
             entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
             ctx.showMenuDialog(appModel.appLabel, entries + DetoxController.whitelistEntry(ctx, appModel.appPackage), header = AppNotificationsView.create(ctx, appModel))
@@ -354,17 +365,9 @@ class AppDrawerFragment : BaseFragment() {
             if (!adapter.isHiddenList) {
                 entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
                 tabs?.let { t -> entries += MenuEntry(getString(R.string.ml_add_to_tab)) { t.showAddToTab(appModel) } }
-                entries += MenuEntry(getString(R.string.ml_change_icon)) {
-                    IconChooser.show(ctx, appModel, uiScope, { callback ->
-                        onImagePicked = callback
-                        viewModel.keepCurrentScreen = true
-                        imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                    }) {
-                        adapter.refreshBadges()
-                    }
-                }
+                entries += changeIconEntry(appModel)
                 entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
-            }
+            } else entries += changeIconEntry(appModel)
             entries += MenuEntry(getString(if (adapter.isHiddenList) R.string.adapter_show else R.string.adapter_hide)) {
                 adapter.toggleHidden(appModel, position)
             }
