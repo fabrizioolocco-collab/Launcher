@@ -51,7 +51,11 @@ class DrawerTabsController(
     /** Apps to list in the selected tab. */
     fun filter(apps: List<AppModel>): List<AppModel> {
         val id = selectedId()
-        if (id == DrawerTabsRepository.ALL_ID) return apps
+        // "All" lists what is in no other tab: an app is either hidden, in a tab, or here
+        if (id == DrawerTabsRepository.ALL_ID) {
+            val placed = tabs.flatMap { it.apps }.toHashSet()
+            return apps.filter { DrawerTabsRepository.key(it) !in placed }
+        }
         if (id == DrawerTabsRepository.HIDDEN_ID) return hiddenApps()
         val tab = tabs.firstOrNull { it.id == id } ?: return apps
         return apps.filter { DrawerTabsRepository.key(it) in tab.apps }
