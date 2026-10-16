@@ -25,6 +25,7 @@ import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.CustomIcons
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.FontManager
+import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.NotificationRepository
@@ -257,70 +258,13 @@ class HomeSectionsController(
             section.apps.removeAll { it.samePackageAndUser(sectionApp) }
             save()
         }
-        entries += MenuEntry(context.getString(R.string.ml_change_icon)) { showChangeIconMenu(app) }
+        entries += MenuEntry(context.getString(R.string.ml_change_icon)) {
+            IconChooser.show(context, app, scope, pickImage) { render() }
+        }
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
-        context.showMenuDialog(app.appLabel, entries)
-    }
-
-    private fun showChangeIconMenu(app: AppModel.App) {
-        val entries = mutableListOf(
-            MenuEntry(context.getString(R.string.ml_icon_from_pack)) { pickIconFromPack(app) },
-            MenuEntry(context.getString(R.string.ml_icon_from_gallery)) {
-                pickImage { uri ->
-                    scope.launch {
-                        val ok = withContext(Dispatchers.IO) {
-                            try {
-                                CustomIcons.setFromImage(context, app.appPackage, app.activityClassName, app.user, uri)
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                                false
-                            }
-                        }
-                        if (!ok) context.showToast(context.getString(R.string.ml_icon_image_error))
-                        render()
-                    }
-                }
-            },
-        )
-        if (CustomIcons.hasCustom(context, app.appPackage, app.activityClassName, app.user))
-            entries += MenuEntry(context.getString(R.string.ml_icon_reset)) {
-                CustomIcons.reset(context, app.appPackage, app.activityClassName, app.user)
-                render()
-            }
-        context.showMenuDialog(context.getString(R.string.ml_change_icon), entries)
-    }
-
-    private fun pickIconFromPack(app: AppModel.App) {
-        val packs = IconPackManager.installedPacks(context)
-        if (packs.isEmpty()) {
-            context.showToast(context.getString(R.string.ml_no_icon_packs))
-            return
-        }
-        fun openPack(pack: IconPackManager.IconPackInfo) {
-            scope.launch {
-                val names = withContext(Dispatchers.IO) { IconPackManager.packIconNames(context, pack.packageName) }
-                if (names.isEmpty()) {
-                    context.showToast(context.getString(R.string.ml_no_icons_in_pack))
-                    return@launch
-                }
-                context.showIconGridDialog(
-                    title = pack.label,
-                    names = names,
-                    scope = scope,
-                    loadIcon = { name, size -> IconPackManager.loadPackDrawable(context, pack.packageName, name, size) },
-                ) { name ->
-                    CustomIcons.setFromPack(context, app.appPackage, app.activityClassName, app.user, pack.packageName, name)
-                    render()
-                }
-            }
-        }
-        if (packs.size == 1) openPack(packs.first())
-        else context.showMenuDialog(
-            context.getString(R.string.ml_icon_pack),
-            packs.map { pack -> MenuEntry(pack.label) { openPack(pack) } }
-        )
+        context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
     }
 
     // ---------------------------------------------------------------- operations

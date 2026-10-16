@@ -15,7 +15,9 @@ import app.olauncher.data.HomeWidgetsRepository
 import app.olauncher.data.Prefs
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.DetoxManager
+import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
+import app.olauncher.ui.AppNotificationsView
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
 import app.olauncher.helper.MenuEntry
@@ -48,6 +50,7 @@ class HomeWidgetsController(
     /** Bottom area: holds app icons too and keeps a minimum height. */
     private val bottom: Boolean = false,
     private val onLaunchApp: (AppModel.App) -> Unit = {},
+    private val pickImage: ((android.net.Uri) -> Unit) -> Unit = {},
 ) {
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = sharedHost(activity)
@@ -359,10 +362,14 @@ class HomeWidgetsController(
                     repo.save(widgets)
                     render()
                 },
+                MenuEntry(activity.getString(R.string.ml_change_icon)) {
+                    IconChooser.show(activity, app, scope, pickImage) { render() }
+                },
                 MenuEntry(activity.getString(R.string.ml_app_info)) {
                     openAppInfo(activity, app.user, app.appPackage)
                 },
-            )
+            ),
+            header = AppNotificationsView.create(activity, app),
         )
     }
 

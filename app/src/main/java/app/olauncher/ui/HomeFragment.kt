@@ -123,6 +123,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             keepScreen = { viewModel.keepCurrentScreen = it },
             bottom = true,
             onLaunchApp = { app -> launchHomeApp(app) },
+            pickImage = { callback ->
+                onImagePicked = callback
+                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
         )
         viewModel.homeApps.value?.let { bottomArea.setApps(it) }
         bottomArea.render()

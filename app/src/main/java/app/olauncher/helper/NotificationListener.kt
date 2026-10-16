@@ -88,6 +88,25 @@ class NotificationListener : NotificationListenerService() {
         handler.postDelayed(recompute, 250)
     }
 
+    /** Visible notifications of one app (launcher package name, so the fake test app works too). */
+    fun activeFor(packageName: String, user: String): List<StatusBarNotification> {
+        val all = try {
+            activeNotifications
+        } catch (e: Exception) {
+            null
+        } ?: return emptyList()
+        val mine = all.filter { ownerOf(it) == packageName && it.user.toString() == user }
+        // Summaries only repeat their children: keep them only when alone
+        val children = mine.filter { it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
+        return (children.ifEmpty { mine }).sortedByDescending { it.postTime }
+    }
+
+    fun dismiss(key: String) = try {
+        cancelNotification(key)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+
     /** Re-applies the detox rules now (session started, whitelist changed). */
     fun applyDetox() = handler.post { publishCounts() }
 

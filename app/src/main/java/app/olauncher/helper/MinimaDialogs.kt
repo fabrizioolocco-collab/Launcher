@@ -63,7 +63,7 @@ private fun Context.limitedHeight(content: View, itemCount: Int): View {
 }
 
 /** Simple vertical list of actions. Tapping one closes the dialog and runs it. Long lists get a search field. */
-fun Context.showMenuDialog(title: String, entries: List<MenuEntry>): OlDialog {
+fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((OlDialog) -> View?)? = null): OlDialog {
     val (dialog, binding) = baseDialog(title)
     val ctx = dialog.context
     val primary = ctx.getColorFromAttr(R.attr.primaryColor)
@@ -108,6 +108,7 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>): OlDialog {
         })
         dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN)
     }
+    header?.invoke(dialog)?.let { container.addView(it, 0) }
     container.addView(ctx.limitedHeight(list, entries.size))
     binding.contentContainer.addView(container)
     binding.contentContainer.isVisible = true
