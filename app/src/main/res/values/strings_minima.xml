@@ -225,4 +225,15 @@
     <string name="ml_explorer_failed">%1$s failed</string>
     <string name="ml_explorer_delete_confirm">Delete «%1$s»? This cannot be undone.</string>
     <string name="ml_explorer_into_itself">A folder can\'t go inside itself</string>
+    <!-- Search result tabs -->
+    <string name="ml_search_tab_format" translatable="false">%1$s %2$d</string>
+    <string name="ml_search_tab_all">All</string>
+    <string name="ml_search_tab_folders">Folders</string>
+    <string name="ml_search_tab_albums">Albums</string>
+    <string name="ml_search_tab_photos">Photos</string>
+    <string name="ml_search_tab_videos">Videos</string>
+    <string name="ml_search_tab_music">Music</string>
+    <string name="ml_search_tab_documents">Documents</string>
+    <string name="ml_search_show_all">Show all (%1$d) →</string>
+    <string name="ml_search_album_info">%1$d photos and videos · %2$s</string>
 </resources>

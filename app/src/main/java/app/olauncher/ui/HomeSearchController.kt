@@ -149,6 +149,7 @@ class HomeSearchController(
     /** Clears the query and brings home back. */
     fun close() {
         job?.cancel()
+        tab = Tab.ALL
         input.setText("")
         input.clearFocus()
         input.hideKeyboard()
@@ -224,7 +225,7 @@ class HomeSearchController(
     // ---------------------------------------------------------------- phone
 
     private enum class Kind(val glyph: String) {
-        APP(""), CONTACT("👤"), SETTING("⚙️"), FILE("📄"), FOLDER("📁")
+        APP(""), CONTACT("👤"), SETTING("⚙️"), FILE("📄"), FOLDER("📁"), ALBUM("🌄"), PHOTO("🖼️"), VIDEO("🎬"), MUSIC("🎵")
     }
 
     private class Row(
@@ -232,17 +233,49 @@ class HomeSearchController(
         val title: String,
         val subtitle: String? = null,
         val app: AppModel.App? = null,
-        /** For files: opens the folder holding them. */
+        val mime: String? = null,
+        /** For files and albums: opens the folder holding them. */
         val openFolder: (() -> Unit)? = null,
         val onClick: () -> Unit,
-    )
+    ) {
+        val isDocument
+            get() = mime != null && (mime.startsWith("text/") || DOCUMENT_MIMES.any { mime.contains(it) })
+    }
+
+    /** Result tabs, each with its count; "All" previews every group. */
+    private enum class Tab(val label: Int) {
+        ALL(R.string.ml_search_tab_all), APPS(R.string.ml_search_group_apps), CONTACTS(R.string.ml_search_contacts),
+        FILES(R.string.ml_search_files), FOLDERS(R.string.ml_search_tab_folders), ALBUMS(R.string.ml_search_tab_albums),
+        PHOTOS(R.string.ml_search_tab_photos), VIDEOS(R.string.ml_search_tab_videos), MUSIC(R.string.ml_search_tab_music),
+        DOCUMENTS(R.string.ml_search_tab_documents), SETTINGS(R.string.ml_search_settings),
+    }
+
+    private var tab = Tab.ALL
 
     private class Found(
         val apps: List<Row>,
         val contacts: List<Row>?,
         val files: List<Row>?,
+        val folders: List<Row>,
+        val albums: List<Row>,
         val settings: List<Row>,
-    )
+    ) {
+        fun rows(tab: Tab): List<Row> = when (tab) {
+            Tab.ALL -> emptyList()
+            Tab.APPS -> apps
+            Tab.CONTACTS -> contacts.orEmpty()
+            Tab.FILES -> files.orEmpty()
+            Tab.FOLDERS -> folders
+            Tab.ALBUMS -> albums
+            Tab.PHOTOS -> files.orEmpty().filter { it.kind == Kind.PHOTO }
+            Tab.VIDEOS -> files.orEmpty().filter { it.kind == Kind.VIDEO }
+            Tab.MUSIC -> files.orEmpty().filter { it.kind == Kind.MUSIC }
+            Tab.DOCUMENTS -> files.orEmpty().filter { it.isDocument }
+            Tab.SETTINGS -> settings
+        }
+
+        val total get() = apps.size + contacts.orEmpty().size + files.orEmpty().size + folders.size + albums.size + settings.size
+    }
 
     private suspend fun searchPhone(q: String) {
         val ctx = activity.applicationContext
@@ -255,22 +288,84 @@ class HomeSearchController(
             .take(MAX_APPS)
             .map { app -> Row(Kind.APP, app.appLabel, app = app) { launchApp(app); close() } }
         val contactRows = if (granted(Manifest.permission.READ_CONTACTS)) withContext(Dispatchers.IO) { contacts(q) } else null
-        val fileRows = if (filesGranted()) withContext(Dispatchers.IO) { folders(key) + files(q) } else null
+        val filesOk = filesGranted()
+        val fileRows = if (filesOk) withContext(Dispatchers.IO) { files(q) } else null
+        val (folderRows, albumRows) = if (filesOk) withContext(Dispatchers.IO) { folders(key) } else emptyList<Row>() to emptyList()
         val settingRows = settings().filter { normalize(it.title).contains(key) }
-        val found = Found(appRows, contactRows, fileRows, settingRows)
-        render(q, found)
+        render(q, Found(appRows, contactRows, fileRows, folderRows, albumRows, settingRows))
     }
 
     private fun render(q: String, found: Found) {
         results.removeAllViews()
-        group(R.string.ml_search_group_apps, found.apps)
+        // A tab left without results falls back to "All"
+        if (tab != Tab.ALL && found.rows(tab).isEmpty()) tab = Tab.ALL
+        tabBar(q, found)
+        if (tab != Tab.ALL) {
+            found.rows(tab).forEach { results.addView(rowView(it)) }
+            return
+        }
+        preview(q, found, Tab.APPS)
         if (found.contacts == null) permissionRow(R.string.ml_search_allow_contacts) {
             requestPermission(Manifest.permission.READ_CONTACTS)
-        } else group(R.string.ml_search_contacts, found.contacts)
-        group(R.string.ml_search_files, found.files.orEmpty())
+        } else preview(q, found, Tab.CONTACTS)
+        preview(q, found, Tab.FOLDERS)
+        preview(q, found, Tab.ALBUMS)
+        preview(q, found, Tab.FILES)
         if (found.files == null) permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
-        group(R.string.ml_search_settings, found.settings)
+        preview(q, found, Tab.SETTINGS)
+        if (found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+            setText(R.string.ml_search_no_results)
+            alpha = 0.6f
+            setPadding(0, 16.dpToPx(), 0, 4.dpToPx())
+        })
         footer(activity.getString(R.string.ml_search_on_google, q)) { openWeb(q) }
+    }
+
+    /** "All" tab: the first rows of a group, then a link to its own tab. */
+    private fun preview(q: String, found: Found, t: Tab) {
+        val rows = found.rows(t)
+        group(t.label, rows.take(PREVIEW))
+        if (rows.size > PREVIEW) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+            text = activity.getString(R.string.ml_search_show_all, rows.size)
+            alpha = 0.7f
+            setPadding(36.dpToPx(), 4.dpToPx(), 0, 8.dpToPx())
+            isClickable = true
+            setOnClickListener {
+                tab = t
+                render(q, found)
+            }
+        })
+    }
+
+    /** Chips "All 23 · Apps 3 · Files 12 …", only for tabs with results. */
+    private fun tabBar(q: String, found: Found) {
+        val chips = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+        Tab.entries.forEach { t ->
+            val count = if (t == Tab.ALL) found.total else found.rows(t).size
+            if (t != Tab.ALL && count == 0) return@forEach
+            chips.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+                text = activity.getString(R.string.ml_search_tab_format, activity.getString(t.label), count)
+                setTypeface(typeface, if (t == tab) Typeface.BOLD else Typeface.NORMAL)
+                alpha = if (t == tab) 1f else 0.6f
+                if (t == tab) setBackgroundResource(R.drawable.rounded_rect_shade_color)
+                setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+                isClickable = true
+                setOnClickListener {
+                    tab = t
+                    render(q, found)
+                    resultsScroll.scrollTo(0, 0)
+                }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginEnd = 4.dpToPx()
+            })
+        }
+        results.addView(android.widget.HorizontalScrollView(activity).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(chips)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = 4.dpToPx()
+        })
     }
 
     private fun granted(permission: String) =
@@ -346,8 +441,14 @@ class HomeSearchController(
                     val mime = c.getString(2)
                     val dir = c.getString(3)?.let { File(it).parentFile }
                     val uri = ContentUris.withAppendedId(base, id)
+                    val kind = when {
+                        mime?.startsWith("image/") == true -> Kind.PHOTO
+                        mime?.startsWith("video/") == true -> Kind.VIDEO
+                        mime?.startsWith("audio/") == true -> Kind.MUSIC
+                        else -> Kind.FILE
+                    }
                     rows += Row(
-                        Kind.FILE, name, dir?.let { relative(it) },
+                        kind, name, dir?.let { relative(it) }, mime = mime,
                         openFolder = dir?.let { d -> { openLocalFolder(d) } },
                     ) {
                         open(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
@@ -360,15 +461,57 @@ class HomeSearchController(
         return rows
     }
 
-    private fun folders(key: String): List<Row> =
+    /** Matching folders, split into plain folders and albums (only photos and videos inside). */
+    private fun folders(key: String): Pair<List<Row>, List<Row>> {
+        val folders = mutableListOf<Row>()
+        val albums = mutableListOf<Row>()
         localFolders().asSequence()
             .filter { normalize(it.name).contains(key) }
             .take(MAX_FOLDERS)
-            .map { dir ->
-                Row(Kind.FOLDER, dir.name, activity.getString(R.string.ml_search_folder, relative(dir.parentFile ?: dir))) {
-                    openLocalFolder(dir)
-                }
-            }.toList()
+            .forEach { dir ->
+                val where = activity.getString(R.string.ml_search_folder, relative(dir.parentFile ?: dir))
+                val media = albumMedia(dir)
+                if (media != null) albums += Row(
+                    Kind.ALBUM, dir.name, activity.getString(R.string.ml_search_album_info, media.size, where),
+                    openFolder = { openLocalFolder(dir) },
+                ) { openAlbum(media) }
+                else folders += Row(Kind.FOLDER, dir.name, where) { openLocalFolder(dir) }
+            }
+        return folders to albums
+    }
+
+    /** Photos and videos of [dir], newest first, when it holds nothing else; null otherwise. */
+    private fun albumMedia(dir: File): List<File>? {
+        val files = dir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") } ?: return null
+        if (files.isEmpty() || !files.all { isMedia(mimeOf(it.name)) }) return null
+        return files.sortedByDescending { it.lastModified() }
+    }
+
+    private fun isMedia(mime: String?) = mime != null && (mime.startsWith("image/") || mime.startsWith("video/"))
+
+    private fun mimeOf(name: String) =
+        android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
+
+    /**
+     * Opens an album in the gallery: Android has no standard "open album" request, so the newest
+     * photo or video is opened; galleries usually let you swipe through the rest of the folder.
+     */
+    private fun openAlbum(media: List<File>) {
+        val first = media.first()
+        val mime = mimeOf(first.name) ?: "image/*"
+        var uri: Uri? = null
+        try {
+            @Suppress("DEPRECATION")
+            activity.contentResolver.query(
+                MediaStore.Files.getContentUri("external"), arrayOf(MediaStore.MediaColumns._ID),
+                "${MediaStore.MediaColumns.DATA} = ?", arrayOf(first.absolutePath), null,
+            )?.use { c -> if (c.moveToFirst()) uri = ContentUris.withAppendedId(MediaStore.Files.getContentUri("external"), c.getLong(0)) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        val target = uri ?: androidx.core.content.FileProvider.getUriForFile(activity, "${activity.packageName}.files", first)
+        open(Intent(Intent.ACTION_VIEW).setDataAndType(target, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+    }
 
     /** All folders on the phone storage (cached for a while; hidden folders and Android/ skipped). */
     private fun localFolders(): List<File> {
@@ -555,10 +698,14 @@ class HomeSearchController(
 
     companion object {
         private const val RESULT = "result"
-        private const val MAX_APPS = 8
-        private const val MAX_CONTACTS = 6
-        private const val MAX_FILES = 12
-        private const val MAX_FOLDERS = 6
+        private const val MAX_APPS = 30
+        private const val MAX_CONTACTS = 30
+        private const val MAX_FILES = 300
+        private const val MAX_FOLDERS = 80
+        private const val PREVIEW = 4
+        private val DOCUMENT_MIMES = listOf(
+            "pdf", "msword", "wordprocessing", "excel", "spreadsheet", "powerpoint", "presentation", "opendocument", "rtf",
+        )
         private const val MAX_DEPTH = 7
         private const val MAX_SCANNED = 30_000
         private const val FOLDER_CACHE_MS = 10 * 60_000L
