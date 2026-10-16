@@ -24,7 +24,7 @@ import java.security.SecureRandom
  */
 class OneDriveSearch(private val context: Context) {
 
-    class Item(val name: String, val path: String?, val webUrl: String)
+    class Item(val name: String, val path: String?, val webUrl: String, val isFolder: Boolean, val parentId: String?)
 
     private val prefs = context.getSharedPreferences("app.minimalauncher.onedrive", Context.MODE_PRIVATE)
 
@@ -79,7 +79,7 @@ class OneDriveSearch(private val context: Context) {
         val token = accessToken() ?: return null
         val q = URLEncoder.encode(query.replace("'", "''"), "UTF-8").replace("+", "%20")
         val url = "https://graph.microsoft.com/v1.0/me/drive/root/search(q='$q')" +
-                "?\$top=$MAX_RESULTS&\$select=name,webUrl,parentReference"
+                "?\$top=$MAX_RESULTS&\$select=name,webUrl,parentReference,folder"
         return try {
             val conn = (URL(url).openConnection() as HttpURLConnection).apply {
                 setRequestProperty("Authorization", "Bearer $token")
@@ -94,10 +94,34 @@ class OneDriveSearch(private val context: Context) {
             val items = JSONObject(conn.inputStream.bufferedReader().readText()).optJSONArray("value") ?: return emptyList()
             List(items.length()) { i ->
                 val o = items.getJSONObject(i)
-                val path = o.optJSONObject("parentReference")?.optString("path")
-                    ?.substringAfter("root:", "")?.trimStart('/')?.ifBlank { null }
-                Item(o.optString("name"), path, o.optString("webUrl"))
+                val parent = o.optJSONObject("parentReference")
+                val path = parent?.optString("path")?.substringAfter("root:", "")?.trimStart('/')?.ifBlank { null }
+                Item(
+                    name = o.optString("name"),
+                    path = path?.let { Uri.decode(it) },
+                    webUrl = o.optString("webUrl"),
+                    isFolder = o.has("folder"),
+                    parentId = parent?.optString("id")?.ifBlank { null },
+                )
             }.filter { it.webUrl.isNotBlank() }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /** Web address of a OneDrive item (e.g. the folder holding a file), or null. Network I/O. */
+    fun webUrlOf(itemId: String): String? {
+        val token = accessToken() ?: return null
+        return try {
+            val conn = (URL("https://graph.microsoft.com/v1.0/me/drive/items/${Uri.encode(itemId)}?\$select=webUrl")
+                .openConnection() as HttpURLConnection).apply {
+                setRequestProperty("Authorization", "Bearer $token")
+                connectTimeout = 10_000
+                readTimeout = 15_000
+            }
+            if (conn.responseCode !in 200..299) null
+            else JSONObject(conn.inputStream.bufferedReader().readText()).optString("webUrl").ifBlank { null }
         } catch (e: Exception) {
             e.printStackTrace()
             null

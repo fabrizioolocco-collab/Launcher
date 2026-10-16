@@ -143,6 +143,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
         search = HomeSearchController(
             activity = requireActivity(),
+            column = binding.homeColumn,
+            bar = binding.searchBar,
             input = binding.searchInput,
             clear = binding.searchClear,
             modeButton = binding.searchMode,

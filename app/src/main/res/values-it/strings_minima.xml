@@ -204,4 +204,8 @@
     <string name="ml_onedrive_connected">OneDrive collegato</string>
     <string name="ml_onedrive_failed">Accesso a OneDrive non riuscito</string>
     <string name="ml_onedrive_disconnect">Scollega OneDrive</string>
+    <string name="ml_onedrive_searching">Cerco in OneDrive…</string>
+    <string name="ml_onedrive_connect_hint">☁️ Collega OneDrive per cercare anche lì</string>
+    <string name="ml_search_folder">Cartella in %1$s</string>
+    <string name="ml_search_open_folder">Apri cartella</string>
 </resources>

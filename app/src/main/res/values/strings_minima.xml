@@ -164,7 +164,7 @@
     <string name="ml_open_app">Open app</string>
     <string name="ml_date_week" translatable="false">%1$s · W%2$d</string>
     <!-- Home search bar -->
-    <string name="ml_search_mode_format" translatable="false">%1$s ▾</string>
+    <string name="ml_search_mode_format" translatable="false">%1$s ⇄</string>
     <string name="ml_search_web">Google</string>
     <string name="ml_search_phone">Phone</string>
     <string name="ml_search_onedrive">OneDrive</string>
@@ -209,4 +209,8 @@
     <string name="ml_onedrive_connected">OneDrive connected</string>
     <string name="ml_onedrive_failed">OneDrive sign-in failed</string>
     <string name="ml_onedrive_disconnect">Disconnect OneDrive</string>
+    <string name="ml_onedrive_searching">Searching OneDrive…</string>
+    <string name="ml_onedrive_connect_hint">☁️ Connect OneDrive to search it too</string>
+    <string name="ml_search_folder">Folder in %1$s</string>
+    <string name="ml_search_open_folder">Open folder</string>
 </resources>
