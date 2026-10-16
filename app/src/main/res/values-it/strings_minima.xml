@@ -312,4 +312,6 @@
     <string name="ml_edit_trim_range">%1$s – %2$s  ·  %3$s</string>
     <string name="ml_edit_trim_too_short">Tieni almeno mezzo secondo</string>
     <string name="ml_edit_trim_saving">Salvo il video tagliato…</string>
+    <string name="ml_edit_nothing">Niente da salvare: prima taglia o ritaglia</string>
+    <string name="ml_edit_crop_saving">Ricomprimo il video ritagliato, ci vuole un po\'…</string>
 </resources>

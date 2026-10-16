@@ -54,6 +54,14 @@ class VideoEditActivity : AppCompatActivity() {
     private var durationMs = 0L
     private var startMs = 0L
     private var endMs = 0L
+
+    /** Crop frame over the preview; null = whole picture. In displayed (rotated) pixels. */
+    private lateinit var cropView: CropOverlay
+    private lateinit var cropButton: TextView
+    private var videoW = 0
+    private var videoH = 0
+    private var rotation = 0
+    private var progressText: TextView? = null
     private val ticker = object : Runnable {
         override fun run() {
             if (video.isPlaying) {
@@ -86,6 +94,18 @@ class VideoEditActivity : AppCompatActivity() {
             }
             durationMs = duration
             endMs = duration
+            withContext(Dispatchers.IO) {
+                try {
+                    val r = MediaMetadataRetriever()
+                    r.setDataSource(file.absolutePath)
+                    videoW = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                    videoH = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                    rotation = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                    r.release()
+                } catch (e: Exception) {
+                    // no size info: crop stays off
+                }
+            }
             trimmer.setup(duration, frames)
             updateRange()
             video.setVideoPath(file.absolutePath)
@@ -115,6 +135,8 @@ class VideoEditActivity : AppCompatActivity() {
             textSize = 18f
             gravity = Gravity.CENTER
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        cropButton = button(getString(R.string.ml_edit_crop), 15f) { toggleCrop() }
+        top.addView(cropButton)
         top.addView(button("✓", 26f) { save() })
         root.addView(top)
 
@@ -133,6 +155,8 @@ class VideoEditActivity : AppCompatActivity() {
             setOnClickListener { togglePlay() }
         }
         frame.addView(playButton, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        cropView = CropOverlay(this).apply { isVisible = false }
+        frame.addView(cropView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(frame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
         rangeText = TextView(this).apply {
@@ -157,6 +181,40 @@ class VideoEditActivity : AppCompatActivity() {
         setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
         isClickable = true
         setOnClickListener { onClick() }
+    }
+
+    private fun toggleCrop() {
+        if (videoW == 0 || videoH == 0) {
+            showToast(getString(R.string.ml_search_cannot_open))
+            return
+        }
+        val on = !cropView.isVisible
+        cropView.isVisible = on
+        cropButton.alpha = if (on) 1f else 0.6f
+        cropButton.setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        if (on) {
+            // Displayed size: rotated when the video is recorded in portrait
+            val dw = if (rotation % 180 == 0) videoW else videoH
+            val dh = if (rotation % 180 == 0) videoH else videoW
+            cropView.setVideoSize(dw, dh)
+        }
+    }
+
+    /** The crop in source pixels (before the rotation flag), or null when it covers everything. */
+    private fun sourceCrop(): VideoCropper.Crop? {
+        if (!cropView.isVisible) return null
+        val r = cropView.cropRect() ?: return null
+        val dw = if (rotation % 180 == 0) videoW else videoH
+        val dh = if (rotation % 180 == 0) videoH else videoW
+        if (r.left <= 0 && r.top <= 0 && r.right >= dw && r.bottom >= dh) return null
+        // Map the displayed rectangle back to the stored frame
+        val (l, t, w, h) = when (rotation) {
+            90 -> listOf(r.top, dh - r.right, r.height(), r.width())
+            180 -> listOf(dw - r.right, dh - r.bottom, r.width(), r.height())
+            270 -> listOf(dw - r.bottom, r.left, r.height(), r.width())
+            else -> listOf(r.left, r.top, r.width(), r.height())
+        }
+        return VideoCropper.Crop(l.coerceAtLeast(0), t.coerceAtLeast(0), w.coerceAtLeast(16), h.coerceAtLeast(16))
     }
 
     private fun togglePlay() {
@@ -222,11 +280,32 @@ class VideoEditActivity : AppCompatActivity() {
         }
         video.pause()
         playButton.text = "▶"
-        showToast(getString(R.string.ml_edit_trim_saving))
+        val crop = sourceCrop()
+        val trimmed = startMs > 0 || endMs < durationMs
+        if (crop == null && !trimmed) {
+            showToast(getString(R.string.ml_edit_nothing))
+            return
+        }
+        showToast(getString(if (crop != null) R.string.ml_edit_crop_saving else R.string.ml_edit_trim_saving))
+        val progress = progressText ?: TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setBackgroundColor(0xAA000000.toInt())
+            setPadding(24.dpToPx(), 16.dpToPx(), 24.dpToPx(), 16.dpToPx())
+            (video.parent as FrameLayout).addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            progressText = this
+        }
+        progress.isVisible = crop != null
+        progress.text = "0%"
         lifecycleScope.launch {
             val target = withContext(Dispatchers.IO) {
                 val out = uniqueCopy(file)
-                if (trim(file, out, startMs * 1000, endMs * 1000)) {
+                val ok = if (crop != null) VideoCropper(file, out).also { c ->
+                    c.onProgress = { p -> runOnUiThread { progress.text = "${(p * 100).toInt()}%" } }
+                }.run(crop, startMs * 1000, endMs * 1000)
+                else trim(file, out, startMs * 1000, endMs * 1000)
+                if (ok) {
                     MediaScannerConnection.scanFile(applicationContext, arrayOf(out.absolutePath), null, null)
                     out
                 } else {
@@ -234,6 +313,7 @@ class VideoEditActivity : AppCompatActivity() {
                     null
                 }
             }
+            progress.isVisible = false
             if (target == null) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_edit_trim)))
             else {
                 showToast(getString(R.string.ml_edit_saved, target.name))
@@ -391,6 +471,111 @@ class VideoEditActivity : AppCompatActivity() {
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragging = 0
+            }
+            return true
+        }
+    }
+
+    /** Draggable crop frame over the video preview (handles on the corners, drag inside to move). */
+    private inner class CropOverlay(context: Context) : View(context) {
+        private var vw = 0
+        private var vh = 0
+        /** Video display rectangle inside the view (letterboxed). */
+        private val shown = RectF()
+        /** Crop in video pixels. */
+        private val crop = RectF()
+        private val dim = Paint().apply { color = 0x99000000.toInt() }
+        private val frame = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            color = Color.WHITE
+            strokeWidth = 2f * resources.displayMetrics.density
+        }
+        private val handle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        private val handleRadius = 10f * resources.displayMetrics.density
+        private val touchRadius = 32f * resources.displayMetrics.density
+        private var dragCorner = -1
+        private var dragInside = false
+        private var lastX = 0f
+        private var lastY = 0f
+
+        fun setVideoSize(w: Int, h: Int) {
+            vw = w
+            vh = h
+            crop.set(0f, 0f, w.toFloat(), h.toFloat())
+            layoutShown()
+            invalidate()
+        }
+
+        fun cropRect(): android.graphics.Rect? = if (vw == 0) null else android.graphics.Rect(
+            crop.left.toInt(), crop.top.toInt(), crop.right.toInt(), crop.bottom.toInt()
+        )
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            super.onSizeChanged(w, h, oldw, oldh)
+            layoutShown()
+        }
+
+        private fun layoutShown() {
+            if (vw == 0 || vh == 0 || width == 0 || height == 0) return
+            val s = min(width.toFloat() / vw, height.toFloat() / vh)
+            val sw = vw * s
+            val sh = vh * s
+            shown.set((width - sw) / 2f, (height - sh) / 2f, (width + sw) / 2f, (height + sh) / 2f)
+        }
+
+        private fun scale() = if (vw == 0) 1f else shown.width() / vw
+        private fun toView(r: RectF) = RectF(shown.left + r.left * scale(), shown.top + r.top * scale(), shown.left + r.right * scale(), shown.top + r.bottom * scale())
+        private fun corners(r: RectF) = listOf(r.left to r.top, r.right to r.top, r.left to r.bottom, r.right to r.bottom)
+
+        override fun onDraw(canvas: Canvas) {
+            if (vw == 0) return
+            val v = toView(crop)
+            canvas.drawRect(shown.left, shown.top, shown.right, v.top, dim)
+            canvas.drawRect(shown.left, v.bottom, shown.right, shown.bottom, dim)
+            canvas.drawRect(shown.left, v.top, v.left, v.bottom, dim)
+            canvas.drawRect(v.right, v.top, shown.right, v.bottom, dim)
+            canvas.drawRect(v, frame)
+            corners(v).forEach { (x, y) -> canvas.drawCircle(x, y, handleRadius, handle) }
+        }
+
+        override fun onTouchEvent(e: MotionEvent): Boolean {
+            if (vw == 0) return false
+            val ix = (e.x - shown.left) / scale()
+            val iy = (e.y - shown.top) / scale()
+            val minSide = 64f
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    val v = toView(crop)
+                    dragCorner = corners(v).indexOfFirst { (x, y) -> abs(e.x - x) < touchRadius && abs(e.y - y) < touchRadius }
+                    dragInside = dragCorner < 0 && v.contains(e.x, e.y)
+                    if (dragCorner < 0 && !dragInside) return false
+                    lastX = ix
+                    lastY = iy
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = ix - lastX
+                    val dy = iy - lastY
+                    lastX = ix
+                    lastY = iy
+                    when {
+                        dragCorner >= 0 -> {
+                            if (dragCorner % 2 == 0) crop.left = (crop.left + dx).coerceIn(0f, crop.right - minSide)
+                            else crop.right = (crop.right + dx).coerceIn(crop.left + minSide, vw.toFloat())
+                            if (dragCorner < 2) crop.top = (crop.top + dy).coerceIn(0f, crop.bottom - minSide)
+                            else crop.bottom = (crop.bottom + dy).coerceIn(crop.top + minSide, vh.toFloat())
+                        }
+
+                        dragInside -> crop.offset(dx.coerceIn(-crop.left, vw - crop.right), dy.coerceIn(-crop.top, vh - crop.bottom))
+                    }
+                    invalidate()
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    dragCorner = -1
+                    dragInside = false
+                }
             }
             return true
         }

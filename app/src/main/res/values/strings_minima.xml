@@ -318,4 +318,6 @@
     <string name="ml_edit_trim_range">%1$s – %2$s  ·  %3$s</string>
     <string name="ml_edit_trim_too_short">Keep at least half a second</string>
     <string name="ml_edit_trim_saving">Saving the trimmed video…</string>
+    <string name="ml_edit_nothing">Nothing to save: trim or crop first</string>
+    <string name="ml_edit_crop_saving">Re-encoding the cropped video, this takes a while…</string>
 </resources>
