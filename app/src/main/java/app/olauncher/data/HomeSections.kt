@@ -31,6 +31,8 @@ data class HomeSection(
     var name: String,
     var collapsed: Boolean = false,
     val apps: MutableList<SectionApp> = mutableListOf(),
+    /** Logical row on the home grid; -1 until the grid places it. */
+    var row: Int = -1,
 ) {
     fun contains(app: SectionApp): Boolean = apps.any { it.samePackageAndUser(app) }
 
@@ -86,6 +88,7 @@ class HomeSectionsRepository(context: Context) {
         put("id", id)
         put("name", name)
         put("collapsed", collapsed)
+        put("row", row)
         put("apps", JSONArray().apply {
             apps.forEach { app ->
                 put(JSONObject().apply {
@@ -112,6 +115,7 @@ class HomeSectionsRepository(context: Context) {
             name = optString("name"),
             collapsed = optBoolean("collapsed", false),
             apps = apps,
+            row = optInt("row", -1),
         )
     }
 

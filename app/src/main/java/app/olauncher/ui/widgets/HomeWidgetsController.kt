@@ -12,6 +12,7 @@ import app.olauncher.R
 import app.olauncher.data.AppModel
 import app.olauncher.data.HomeWidget
 import app.olauncher.data.HomeWidgetsRepository
+import app.olauncher.data.HomeSectionsRepository
 import app.olauncher.data.Prefs
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.DetoxManager
@@ -37,7 +38,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * A home grid: the widget area at the top, or the fixed bottom area (widgets and app icons).
+ * A home grid: the main one under the clock (widgets, app icons and sections), or the fixed bottom
+ * area (widgets and app icons).
+ *
+ * Sections are rendered by HomeSectionsController and handed over as [Block]s: the grid places them
+ * (one logical row each, full width), lets the user drag them and reports their new row back.
  *
  * Adding a widget: pick a provider from our list -> bind (asks the user if needed) -> configure
  * (if the widget has a setup screen) -> saved. Bind/configure results come back through
@@ -56,10 +61,18 @@ class HomeWidgetsController(
     private val onLaunchApp: (AppModel.App) -> Unit = {},
     private val pickImage: ((android.net.Uri) -> Unit) -> Unit = {},
 ) {
+    /** A full-width block sharing the grid (a home section); its view is as tall as its content. */
+    class Block(val id: String, var row: Int, val view: SectionBlockView, val onMenu: () -> Unit)
+
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = sharedHost(activity)
     private val repo = HomeWidgetsRepository(activity, if (bottom) HomeWidgetsRepository.KEY_BOTTOM else HomeWidgetsRepository.KEY)
     private var widgets = repo.load()
+    private var loadedRaw = repo.raw()
+    private var blocks: List<Block> = emptyList()
+
+    /** A block landed on another row (dragged, or moved out of the way): persist it. */
+    var onBlockMoved: ((Block) -> Unit)? = null
     private var apps: List<AppModel.App> = emptyList()
     private var appsSignature = ""
     private var notifications: Map<String, AppNotifications> = emptyMap()
@@ -88,10 +101,71 @@ class HomeWidgetsController(
         else {
             grid.rowDivisions = TOP_ROW_DIVISIONS
             if (repo.migrateRowDivisions(TOP_ROW_DIVISIONS)) widgets = repo.load()
+            migrateUngroupedApps()
+        }
+    }
+
+    /** One-time move of the apps once pinned on home as a list: they become icons on the grid. */
+    private fun migrateUngroupedApps() {
+        val sectionsRepo = HomeSectionsRepository(activity)
+        val ungrouped = sectionsRepo.loadUngrouped()
+        if (ungrouped.isEmpty()) return
+        ungrouped.forEach { app ->
+            if (widgets.any { it.isApp && it.packageName == app.packageName && it.user == app.user }) return@forEach
+            val item = HomeWidget(
+                appWidgetId = -1, colSpan = 1, rowSpan = rowDivisions,
+                packageName = app.packageName, activityClassName = app.activityClassName, user = app.user,
+            )
+            val (c, r) = findFreeSpot(1, rowDivisions)
+            item.col = c; item.row = r
+            widgets.add(item)
+        }
+        save()
+        sectionsRepo.saveUngrouped(emptyList())
+    }
+
+    private fun save() {
+        repo.save(widgets)
+        loadedRaw = repo.raw()
+    }
+
+    /** Re-reads the items when they were changed elsewhere (app drawer, folder shortcuts). */
+    fun reloadIfChanged() {
+        val raw = repo.raw()
+        if (raw == loadedRaw) return
+        loadedRaw = raw
+        widgets = repo.load()
+        render()
+    }
+
+    /** Widgets and icons on this grid (sections excluded). */
+    fun itemCount(): Int = widgets.size
+
+    /** Shows [list] as the grid's sections, replacing the previous ones. */
+    fun setBlocks(list: List<Block>) {
+        blocks = list
+        for (i in grid.childCount - 1 downTo 0) if (grid.getChildAt(i).tag is Block) grid.removeViewAt(i)
+        placeBlocks()
+    }
+
+    private fun placeBlocks() {
+        val columns = prefs.widgetColumns
+        blocks.forEach { block ->
+            if (block.row < 0 || !isFree(0, block.row, columns, 1, block)) {
+                block.row = findFreeSpot(columns, 1, block).second
+                onBlockMoved?.invoke(block)
+            }
+            block.view.tag = block
+            block.view.layoutParams = WidgetGridLayout.CellParams(0, block.row, columns, 1).apply { autoHeight = true }
+            block.view.touch.listener = blockListener
+            grid.addView(block.view)
         }
     }
 
     private val rowDivisions get() = if (bottom) 1 else TOP_ROW_DIVISIONS
+
+    /** Names under the icons: separate settings for the two grids. */
+    private val showLabels get() = if (bottom) prefs.bottomLabels else prefs.homeShowLabels
 
     /** Row height in px (cells are split vertically in the top grid). */
     private fun rowPx(): Int = (cellPx() / rowDivisions).coerceAtLeast(1)
@@ -146,11 +220,20 @@ class HomeWidgetsController(
         val columns = prefs.widgetColumns
         grid.columns = columns
         renderedColumns = columns
-        renderedLabels = prefs.bottomLabels
+        renderedLabels = showLabels
         val removed = mutableListOf<HomeWidget>()
         var changed = false
         widgets.forEach { widget ->
             if (widget.isApp) {
+                if (widget.colSpan != 1 || widget.rowSpan != rowDivisions) {
+                    // Icons are one square cell, whatever the row split of this grid
+                    widget.colSpan = 1; widget.rowSpan = rowDivisions
+                    changed = true
+                }
+                if (widget.col >= columns) {
+                    widget.col = columns - 1
+                    changed = true
+                }
                 if (!DetoxManager.isAllowed(activity, widget.packageName.orEmpty())) return@forEach
                 // Apps not loaded yet, uninstalled or hidden: skip without deleting
                 val app = findApp(widget) ?: return@forEach
@@ -188,14 +271,14 @@ class HomeWidgetsController(
             widgets.removeAll(removed)
             changed = true
         }
-        if (changed) repo.save(widgets)
-        grid.visibility = if (grid.childCount == 0 && !bottom) View.GONE else View.VISIBLE
+        if (changed) save()
+        placeBlocks()
         updateBadges()
     }
 
-    /** Called on resume: rebuilds only if the column setting changed meanwhile. */
+    /** Called on resume: rebuilds only if the column or label setting changed meanwhile. */
     fun refreshIfNeeded() {
-        if (renderedColumns != prefs.widgetColumns || (bottom && renderedLabels != prefs.bottomLabels)) render()
+        if (renderedColumns != prefs.widgetColumns || renderedLabels != showLabels) render()
     }
 
     private fun ceilDiv(a: Int, b: Int) = (a + b - 1) / b
@@ -215,8 +298,8 @@ class HomeWidgetsController(
         view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
         view.setTag(R.id.ml_swipe_app, app)
-        view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, 1)
-        val showLabel = prefs.bottomLabels
+        view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, rowDivisions)
+        val showLabel = showLabels
         val size = view.iconSizeFor(cellPx(), showLabel)
         view.bind(app.appLabel, showLabel, size)
         view.touch.listener = dragListener(null)
@@ -247,11 +330,13 @@ class HomeWidgetsController(
     private fun overlaps(a: HomeWidget, col: Int, row: Int, colSpan: Int, rowSpan: Int) =
         col < a.col + a.colSpan && a.col < col + colSpan && row < a.row + a.rowSpan && a.row < row + rowSpan
 
-    private fun isFree(col: Int, row: Int, colSpan: Int, rowSpan: Int, except: HomeWidget?): Boolean =
+    /** [except] is the item being moved (a [HomeWidget] or a [Block]), which never blocks itself. */
+    private fun isFree(col: Int, row: Int, colSpan: Int, rowSpan: Int, except: Any?): Boolean =
         col >= 0 && row >= 0 && col + colSpan <= prefs.widgetColumns &&
-                widgets.none { it !== except && it.colSpan > 0 && overlaps(it, col, row, colSpan, rowSpan) }
+                widgets.none { it !== except && it.colSpan > 0 && overlaps(it, col, row, colSpan, rowSpan) } &&
+                blocks.none { it !== except && it.row >= 0 && it.row in row until row + rowSpan }
 
-    private fun findFreeSpot(colSpan: Int, rowSpan: Int, except: HomeWidget? = null): Pair<Int, Int> {
+    private fun findFreeSpot(colSpan: Int, rowSpan: Int, except: Any? = null): Pair<Int, Int> {
         val columns = prefs.widgetColumns
         var row = 0
         while (true) {
@@ -263,44 +348,140 @@ class HomeWidgetsController(
 
     // ---------------------------------------------------------------- move (drag) and resize
 
-    private fun dragListener(info: AppWidgetProviderInfo?) = object : GridItemListener {
-        override fun onLongPress(view: View) {
-            endEditing()
-            scrollView.gesturesEnabled = false
-            grid.editing = true
+    // The home scrolls while an item is dragged near its top or bottom edge; the drag offset is
+    // measured on screen, so the scrolled distance is added to land where the finger is.
+    private var scrollAtDragStart = 0
+    private var dragView: View? = null
+    private var dragDx = 0f
+    private var dragDy = 0f
+    private var autoScrollDirection = 0
+    private val autoScroll = object : Runnable {
+        override fun run() {
+            val view = dragView ?: return
+            if (autoScrollDirection == 0) return
+            val before = scrollView.scrollY
+            scrollView.scrollBy(0, autoScrollDirection * AUTO_SCROLL_STEP_DP.dpToPx())
+            if (scrollView.scrollY == before) {
+                autoScrollDirection = 0
+                return
+            }
+            applyDrag(view)
+            grid.postDelayed(this, AUTO_SCROLL_PERIOD_MS)
         }
+    }
 
-        override fun onDrag(view: View, dx: Float, dy: Float) {
-            val widget = view.tag as HomeWidget
-            view.translationX = dx
-            view.translationY = dy
-            view.alpha = 0.8f
-            val (col, row) = grid.dropCellFor(view, dx, dy)
-            grid.showDropPreview(col, row, widget.colSpan, widget.rowSpan, isFree(col, row, widget.colSpan, widget.rowSpan, widget))
+    private fun scrolledDy(): Float = dragDy + if (bottom) 0f else (scrollView.scrollY - scrollAtDragStart).toFloat()
+
+    private fun startDrag(view: View) {
+        endEditing()
+        scrollView.gesturesEnabled = false
+        grid.editing = true
+        scrollAtDragStart = scrollView.scrollY
+        dragView = view
+        dragDx = 0f
+        dragDy = 0f
+        autoScrollDirection = 0
+    }
+
+    private fun trackDrag(view: View, dx: Float, dy: Float, rawY: Float) {
+        dragDx = dx; dragDy = dy
+        applyDrag(view)
+        if (bottom) return
+        val location = IntArray(2)
+        scrollView.getLocationOnScreen(location)
+        val edge = AUTO_SCROLL_EDGE_DP.dpToPx()
+        val direction = when {
+            rawY < location[1] + edge -> -1
+            rawY > location[1] + scrollView.height - edge -> 1
+            else -> 0
         }
+        if (direction != autoScrollDirection) {
+            autoScrollDirection = direction
+            grid.removeCallbacks(autoScroll)
+            if (direction != 0) grid.post(autoScroll)
+        }
+    }
+
+    /** Moves the dragged view under the finger and previews where it would land. */
+    private fun applyDrag(view: View) {
+        val dy = scrolledDy()
+        view.translationX = dragDx
+        view.translationY = dy
+        view.alpha = 0.8f
+        when (val item = view.tag) {
+            is HomeWidget -> {
+                val (col, row) = grid.dropCellFor(view, dragDx, dy)
+                grid.showDropPreview(col, row, item.colSpan, item.rowSpan, isFree(col, row, item.colSpan, item.rowSpan, item))
+            }
+
+            is Block -> {
+                view.translationX = 0f
+                val row = grid.dropCellFor(view, 0f, dy).second
+                grid.showDropPreview(0, row, prefs.widgetColumns, 1, isFree(0, row, prefs.widgetColumns, 1, item))
+            }
+        }
+    }
+
+    /** Puts the dragged view back in flow; returns the cell it was dropped on. */
+    private fun finishDrag(view: View): Pair<Int, Int> {
+        grid.removeCallbacks(autoScroll)
+        autoScrollDirection = 0
+        dragView = null
+        val dy = scrolledDy()
+        val cell = grid.dropCellFor(view, if (view.tag is Block) 0f else dragDx, dy)
+        view.translationX = 0f
+        view.translationY = 0f
+        view.alpha = 1f
+        grid.hideDropPreview()
+        grid.editing = false
+        scrollView.gesturesEnabled = true
+        return cell
+    }
+
+    private fun dragListener(info: AppWidgetProviderInfo?) = object : GridItemListener {
+        override fun onLongPress(view: View) = startDrag(view)
+
+        override fun onDrag(view: View, dx: Float, dy: Float, rawY: Float) = trackDrag(view, dx, dy, rawY)
 
         override fun onDrop(view: View, dx: Float, dy: Float) {
             val widget = view.tag as HomeWidget
-            val (col, row) = grid.dropCellFor(view, dx, dy)
-            view.translationX = 0f
-            view.translationY = 0f
-            view.alpha = 1f
-            grid.hideDropPreview()
+            val (col, row) = finishDrag(view)
             if (isFree(col, row, widget.colSpan, widget.rowSpan, widget)) {
                 widget.col = col
                 widget.row = row
                 (view.layoutParams as WidgetGridLayout.CellParams).apply { this.col = col; this.row = row }
-                repo.save(widgets)
+                grid.requestLayout()
+                save()
             }
-            grid.editing = false
-            scrollView.gesturesEnabled = true
         }
 
         override fun onMenu(view: View) {
-            grid.editing = false
-            scrollView.gesturesEnabled = true
+            finishDrag(view)
             val item = view.tag as HomeWidget
             if (info != null) showWidgetMenu(item, info, view as MinimaWidgetHostView) else showIconMenu(item)
+        }
+    }
+
+    /** Sections move vertically only, one logical row at a time. */
+    private val blockListener = object : GridItemListener {
+        override fun onLongPress(view: View) = startDrag(view)
+
+        override fun onDrag(view: View, dx: Float, dy: Float, rawY: Float) = trackDrag(view, dx, dy, rawY)
+
+        override fun onDrop(view: View, dx: Float, dy: Float) {
+            val block = view.tag as Block
+            val row = finishDrag(view).second
+            if (row != block.row && isFree(0, row, prefs.widgetColumns, 1, block)) {
+                block.row = row
+                (view.layoutParams as WidgetGridLayout.CellParams).row = row
+                grid.requestLayout()
+                onBlockMoved?.invoke(block)
+            }
+        }
+
+        override fun onMenu(view: View) {
+            finishDrag(view)
+            (view.tag as Block).onMenu()
         }
     }
 
@@ -316,7 +497,7 @@ class HomeWidgetsController(
             val widget = view.tag as HomeWidget
             val p = view.layoutParams as WidgetGridLayout.CellParams
             widget.col = p.col; widget.row = p.row; widget.colSpan = p.colSpan; widget.rowSpan = p.rowSpan
-            repo.save(widgets)
+            save()
             updateSize(view as MinimaWidgetHostView, widget)
         }
 
@@ -331,9 +512,14 @@ class HomeWidgetsController(
 
     // ---------------------------------------------------------------- adding
 
+    /** The next added item goes on this cell when it fits there (long press on an empty cell). */
+    fun setPreferredCell(col: Int?, row: Int?) {
+        preferredCell = if (col != null && row != null) col to row else null
+    }
+
     /** Bottom area: long press on an empty cell offers adding an app or a widget there. */
     fun showAddMenu(col: Int? = null, row: Int? = null) {
-        preferredCell = if (col != null && row != null) col to row else null
+        setPreferredCell(col, row)
         activity.showMenuDialog(
             activity.getString(R.string.ml_bottom_area),
             listOf(
@@ -343,21 +529,30 @@ class HomeWidgetsController(
         )
     }
 
-    private fun showAddAppDialog() {
+    fun showAddAppDialog() {
         val entries = apps.sortedBy { it.appLabel.lowercase() }.map { app ->
-            MenuEntry(app.appLabel) {
-                val item = HomeWidget(
-                    appWidgetId = -1, colSpan = 1, rowSpan = 1,
-                    packageName = app.appPackage, activityClassName = app.activityClassName, user = app.user.toString(),
-                )
-                val (c, r) = placeFor(1, 1)
-                item.col = c; item.row = r
-                widgets.add(item)
-                repo.save(widgets)
-                render()
-            }
+            MenuEntry(app.appLabel) { if (!addApp(app)) activity.showToast(activity.getString(R.string.ml_already_on_home)) }
         }
         activity.showMenuDialog(activity.getString(R.string.ml_add_app), entries)
+    }
+
+    /** Puts an icon of [app] on the grid (on the preferred cell, else the first free one). False if it was already there. */
+    fun addApp(app: AppModel.App): Boolean {
+        val user = app.user.toString()
+        if (widgets.any { it.isApp && it.packageName == app.appPackage && it.user == user }) {
+            preferredCell = null
+            return false
+        }
+        val item = HomeWidget(
+            appWidgetId = -1, colSpan = 1, rowSpan = rowDivisions,
+            packageName = app.appPackage, activityClassName = app.activityClassName, user = app.user.toString(),
+        )
+        val (c, r) = placeFor(1, rowDivisions)
+        item.col = c; item.row = r
+        widgets.add(item)
+        save()
+        render()
+        return true
     }
 
     /** The long-pressed cell when the item fits there, otherwise the first free spot. */
@@ -378,7 +573,7 @@ class HomeWidgetsController(
             listOf(
                 MenuEntry(activity.getString(R.string.ml_remove_from_home)) {
                     widgets.remove(item)
-                    repo.save(widgets)
+                    save()
                     render()
                 },
                 MenuEntry(activity.getString(R.string.ml_change_icon)) {
@@ -535,7 +730,7 @@ class HomeWidgetsController(
         val rowSpan = ceilDiv(info.minHeight, rowPx()).coerceAtLeast(1)
         val (col, row) = placeFor(colSpan, rowSpan)
         widgets.add(HomeWidget(id, col, row, colSpan, rowSpan))
-        repo.save(widgets)
+        save()
         render()
     }
 
@@ -614,7 +809,7 @@ class HomeWidgetsController(
             ) {
                 host.deleteAppWidgetId(widget.appWidgetId)
                 widgets.remove(widget)
-                repo.save(widgets)
+                save()
                 render()
             }
         }
@@ -629,6 +824,42 @@ class HomeWidgetsController(
     companion object {
         /** The top grid's rows are half a column tall, so widgets fit without large gaps. */
         const val TOP_ROW_DIVISIONS = 2
+
+        private const val AUTO_SCROLL_EDGE_DP = 64
+        private const val AUTO_SCROLL_STEP_DP = 10
+        private const val AUTO_SCROLL_PERIOD_MS = 16L
+
+        /**
+         * Pins [app] on the main home grid from outside home (app drawer, folder shortcuts); the
+         * home picks the change up when it's shown again. Returns false if it was already there.
+         */
+        fun addAppToHome(context: android.content.Context, app: AppModel.App): Boolean {
+            val prefs = Prefs(context)
+            val repo = HomeWidgetsRepository(context, HomeWidgetsRepository.KEY)
+            val items = repo.load()
+            val user = app.user.toString()
+            if (items.any { it.isApp && it.packageName == app.appPackage && it.user == user }) return false
+            val columns = prefs.widgetColumns
+            val blockRows = HomeSectionsRepository(context).load().map { it.row }.filter { it >= 0 }.toSet()
+            fun free(col: Int, row: Int) = (row until row + TOP_ROW_DIVISIONS).none { it in blockRows } &&
+                    items.none { it.colSpan > 0 && col < it.col + it.colSpan && it.col < col + 1 && row < it.row + it.rowSpan && it.row < row + TOP_ROW_DIVISIONS }
+            fun firstFree(): Pair<Int, Int> {
+                var row = 0
+                while (true) {
+                    for (col in 0 until columns) if (free(col, row)) return col to row
+                    row++
+                }
+            }
+            val (col, row) = firstFree()
+            items.add(
+                HomeWidget(
+                    appWidgetId = -1, col = col, row = row, colSpan = 1, rowSpan = TOP_ROW_DIVISIONS,
+                    packageName = app.appPackage, activityClassName = app.activityClassName, user = user,
+                )
+            )
+            repo.save(items)
+            return true
+        }
 
         private const val HOST_ID = 2026
         private var sharedHostInstance: MinimaWidgetHost? = null

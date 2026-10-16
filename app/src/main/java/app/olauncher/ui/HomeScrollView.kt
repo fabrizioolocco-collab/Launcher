@@ -34,7 +34,8 @@ class HomeScrollView @JvmOverloads constructor(
         fun onSwipeDown()
         fun onSwipeLeft()
         fun onSwipeRight()
-        fun onEmptyLongPress()
+        /** Long press on empty space, with the finger's screen position. */
+        fun onEmptyLongPress(rawX: Float, rawY: Float)
         fun onEmptyDoubleTap()
         fun onEmptyTap()
     }
@@ -78,7 +79,7 @@ class HomeScrollView @JvmOverloads constructor(
         }
 
         override fun onLongPress(e: MotionEvent) {
-            if (!downOnInteractive) callbacks?.onEmptyLongPress()
+            if (!downOnInteractive) callbacks?.onEmptyLongPress(e.rawX, e.rawY)
         }
 
         override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {

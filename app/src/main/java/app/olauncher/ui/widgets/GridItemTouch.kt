@@ -10,7 +10,8 @@ import kotlin.math.hypot
 /** Callbacks of an item (widget or icon) placed on a [WidgetGridLayout]. */
 interface GridItemListener {
     fun onLongPress(view: View)
-    fun onDrag(view: View, dx: Float, dy: Float)
+    /** Finger moved by (dx, dy) since the touch began; [rawY] is the finger's screen position. */
+    fun onDrag(view: View, dx: Float, dy: Float, rawY: Float)
     fun onDrop(view: View, dx: Float, dy: Float)
     /** Long press released without dragging. */
     fun onMenu(view: View)
@@ -82,7 +83,7 @@ class GridItemTouch(private val view: View, private val onTap: (() -> Unit)? = n
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 if (!dragging && hypot(dx, dy) > touchSlop) dragging = true
-                if (dragging) listener?.onDrag(view, dx, dy)
+                if (dragging) listener?.onDrag(view, dx, dy, event.rawY)
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {

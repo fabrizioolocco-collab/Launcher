@@ -18,7 +18,7 @@
     <string name="ml_section_delete">Delete section</string>
     <string name="ml_section_delete_confirm">Delete the section \"%1$s\"? The apps stay installed.</string>
     <string name="ml_section_empty_hint">Empty: long press the title to add apps</string>
-    <string name="ml_home_no_sections_hint">Long press on empty space to create a section</string>
+    <string name="ml_home_no_sections_hint">Long press on empty space to add apps, widgets or sections</string>
     <string name="ml_default_section_name">Favourites</string>
     <string name="ml_section_header_format" translatable="false">%1$s  %2$s</string>
     <string name="ml_section">Section</string>
@@ -84,7 +84,7 @@
     <string name="ml_widget_remove">Remove widget</string>
     <string name="ml_widget_remove_confirm">Remove this widget from home?</string>
     <string name="ml_widget_drag_hint">↕ drag to change height</string>
-    <string name="ml_widget_columns">Widget grid columns</string>
+    <string name="ml_widget_columns">Home grid columns</string>
     <string name="ml_widget_label_size">%1$s · %2$d×%3$d</string>
     <string name="ml_widget_setup_failed">Could not open the widget setup</string>
     <string name="ml_widget_bind_denied">Widget not added: permission not granted</string>
@@ -133,7 +133,7 @@
     <string name="ml_add_app">Add app</string>
     <string name="ml_remove_from_home">Remove from home</string>
     <string name="ml_bottom_labels">Names under bottom icons</string>
-    <string name="ml_add_widget_top">Add widget at the top</string>
+    <string name="ml_add_widget_top">Add widget</string>
     <string name="ml_add_to_bottom">Add to the bottom area…</string>
     <string name="ml_search_apps">Search apps</string>
     <string name="ml_add_to_home">Add to home</string>
@@ -158,9 +158,9 @@
     <string name="ml_tab_hidden_off">Remove the Hidden tab</string>
     <string name="ml_choose_app">Choose app…</string>
     <string name="ml_no_app">No app</string>
-    <string name="ml_home_columns">App columns on home</string>
+    <string name="ml_home_columns">App columns in sections</string>
     <string name="ml_home_labels">App names on home</string>
-    <string name="ml_home_icon_size">Home icon size</string>
+    <string name="ml_home_icon_size">Icon size in sections</string>
     <string name="ml_open_app">Open app</string>
     <string name="ml_date_week" translatable="false">%1$s · W%2$d</string>
     <!-- Home search bar -->

@@ -54,6 +54,9 @@ class HomeWidgetsRepository(context: Context, private val key: String = KEY) {
         }
     }
 
+    /** The stored JSON as is, to detect changes made from elsewhere without parsing. */
+    fun raw(): String? = prefs.getString(key, null)
+
     fun save(widgets: List<HomeWidget>) {
         val array = JSONArray()
         widgets.forEach {

@@ -40,30 +40,34 @@ import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
+import app.olauncher.ui.widgets.HomeWidgetsController
+import app.olauncher.ui.widgets.SectionBlockView
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Renders the user's sections on the home screen and handles all section/app editing.
+ * Renders the user's sections on the home grid (one [SectionBlockView] each, handed to [grid] as
+ * blocks that the user can drag to another row) and handles all section/app editing. Apps with
+ * notifications are listed in [looseContainer] above the grid.
  * Data lives in [HomeSectionsRepository]; every change is saved immediately and re-rendered.
  */
 class HomeSectionsController(
     private val context: Context,
-    private val container: LinearLayout,
+    private val grid: HomeWidgetsController,
+    private val looseContainer: LinearLayout,
     private val emptyHint: View,
     private val prefs: Prefs,
     private val scope: CoroutineScope,
     private val onLaunch: (AppModel.App) -> Unit,
     /** Opens the system photo picker and calls back with the chosen image. */
     private val pickImage: ((Uri) -> Unit) -> Unit,
-    /** Keys (package|user) of apps already placed in the bottom area. */
-    private val bottomAppKeys: () -> Set<String> = { emptySet() },
+    /** Keys (package|user) of apps placed as icons on the home grids (they show their own badge). */
+    private val gridAppKeys: () -> Set<String> = { emptySet() },
 ) {
     private val repo = HomeSectionsRepository(context)
     private var sections: MutableList<HomeSection> = mutableListOf()
-    private var ungrouped: MutableList<SectionApp> = mutableListOf()
     private var apps: List<AppModel.App> = emptyList()
     private var appsLoaded = false
     private var notifications: Map<String, AppNotifications> = emptyMap()
@@ -71,7 +75,10 @@ class HomeSectionsController(
     init {
         migrateOlauncherHomeApps()
         sections = repo.load()
-        ungrouped = repo.loadUngrouped()
+        grid.onBlockMoved = { block ->
+            sections.firstOrNull { it.id == block.id }?.row = block.row
+            repo.save(sections)
+        }
     }
 
     fun setApps(list: List<AppModel.App>) {
@@ -81,16 +88,16 @@ class HomeSectionsController(
     }
 
     /**
-     * Apps with notifications (hidden apps included, bottom area excluded): shown in red at the top
-     * of home, newest first, until their notifications are gone. Apps from sections or pinned on
-     * home leave their place meanwhile and go back to it afterwards.
+     * Apps with notifications (hidden apps included, grid icons excluded): shown in red at the top
+     * of home, newest first, until their notifications are gone. Apps from sections leave their
+     * place meanwhile and go back to it afterwards.
      */
     private fun looseApps(): List<AppModel.App> {
         if (notifications.isEmpty()) return emptyList()
-        val bottom = bottomAppKeys()
+        val onGrid = gridAppKeys()
         return apps
             .filter { notificationCount(it) > 0 }
-            .filter { NotificationRepository.key(it.appPackage, it.user.toString()) !in bottom }
+            .filter { NotificationRepository.key(it.appPackage, it.user.toString()) !in onGrid }
             .filter { DetoxManager.isAllowed(context, it.appPackage) }
             .distinctBy { NotificationRepository.key(it.appPackage, it.user.toString()) }
             .sortedWith(
@@ -118,7 +125,6 @@ class HomeSectionsController(
     /** Re-reads sections from storage (they can change from the app drawer) and redraws. */
     fun reload() {
         sections = repo.load()
-        ungrouped = repo.loadUngrouped()
         render()
     }
 
@@ -137,31 +143,39 @@ class HomeSectionsController(
     // ---------------------------------------------------------------- rendering
 
     fun render() {
-        container.removeAllViews()
-        emptyHint.isVisible = sections.isEmpty()
-        if (!appsLoaded) return
+        looseContainer.removeAllViews()
+        if (!appsLoaded) {
+            emptyHint.isVisible = false
+            return
+        }
+        emptyHint.isVisible = sections.isEmpty() && grid.itemCount() == 0
         val gravity = prefs.homeAlignment
         val detox = DetoxManager.isActive(context)
-        // Apps with notifications first (newest first), then pinned apps outside groups (user order).
-        // Notified apps are shown only up there, not in their usual place.
+        // Apps with notifications first (newest first), above the grid. They are shown only up
+        // there, not in their section.
         val loose = looseApps()
         val notifiedKeys = loose.map { NotificationRepository.key(it.appPackage, it.user.toString()) }.toSet()
         fun atItsPlace(app: AppModel.App) = NotificationRepository.key(app.appPackage, app.user.toString()) !in notifiedKeys
-        val top = loose.map { app -> appView(LOOSE, SectionApp.from(app), app, gravity) } +
-                ungrouped.mapNotNull { sectionApp -> findApp(sectionApp)?.takeIf(::atItsPlace)?.let { appView(UNGROUPED, sectionApp, it, gravity) } }
-        addAppRows(top, gravity)
-        if (top.isNotEmpty()) container.addView(View(context), LinearLayout.LayoutParams(1, 12.dpToPx()))
-        sections.forEachIndexed { index, section ->
+        addAppRows(looseContainer, loose.map { app -> appView(LOOSE, SectionApp.from(app), app, gravity) }, gravity)
+        looseContainer.isVisible = loose.isNotEmpty()
+        val blocks = sections.mapIndexedNotNull { index, section ->
             // During detox, sections without allowed apps disappear
-            if (detox && section.apps.none { findApp(it) != null }) return@forEachIndexed
-            container.addView(headerView(index, section, gravity))
-            if (section.collapsed) return@forEachIndexed
-            val views = section.apps.mapNotNull { sectionApp ->
-                findApp(sectionApp)?.takeIf(::atItsPlace)?.let { appView(index, sectionApp, it, gravity) }
+            if (detox && section.apps.none { findApp(it) != null }) return@mapIndexedNotNull null
+            val block = SectionBlockView(context)
+            block.setPadding(BLOCK_PADDING_DP.dpToPx(), 0, BLOCK_PADDING_DP.dpToPx(), 6.dpToPx())
+            val header = headerView(section, gravity)
+            block.addView(header)
+            block.header = header
+            if (!section.collapsed) {
+                val views = section.apps.mapNotNull { sectionApp ->
+                    findApp(sectionApp)?.takeIf(::atItsPlace)?.let { appView(index, sectionApp, it, gravity) }
+                }
+                addAppRows(block, views, gravity)
+                if (section.apps.none { findApp(it) != null }) block.addView(hintView(gravity))
             }
-            addAppRows(views, gravity)
-            if (section.apps.none { findApp(it) != null }) container.addView(hintView(gravity))
+            HomeWidgetsController.Block(section.id, section.row, block) { showSectionMenu(index) }
         }
+        grid.setBlocks(blocks)
     }
 
     private fun lp(gravity: Int, topMargin: Int = 0) =
@@ -170,7 +184,7 @@ class HomeSectionsController(
             this.topMargin = topMargin
         }
 
-    private fun headerView(index: Int, section: HomeSection, gravity: Int): View =
+    private fun headerView(section: HomeSection, gravity: Int): View =
         TextView(context, null, 0, R.style.TextSmall).apply {
             val arrow = if (section.collapsed) "▸" else "▾"
             val header = context.getString(R.string.ml_section_header_format, section.name, arrow)
@@ -183,7 +197,8 @@ class HomeSectionsController(
             this.gravity = gravity
             setPadding(0, 10.dpToPx(), 0, 6.dpToPx())
             isClickable = true
-            isLongClickable = true
+            // The long press belongs to the block: it drags the section, or opens its menu
+            isLongClickable = false
             setOnClickListener {
                 // Accordion: opening a section closes the others
                 val open = section.collapsed
@@ -191,11 +206,7 @@ class HomeSectionsController(
                 section.collapsed = !open
                 save()
             }
-            setOnLongClickListener {
-                showSectionMenu(index)
-                true
-            }
-            layoutParams = lp(gravity, if (index == 0) 0 else 18.dpToPx())
+            layoutParams = lp(gravity)
         }
 
     private fun hintView(gravity: Int): View =
@@ -209,8 +220,8 @@ class HomeSectionsController(
     /** One column with names: icon beside the name. More columns or no names: icon above, centered. */
     private fun iconOnTop() = prefs.homeColumns > 1 || !prefs.homeShowLabels
 
-    /** Adds app views to the container, [Prefs.homeColumns] per row. */
-    private fun addAppRows(views: List<View>, gravity: Int) {
+    /** Adds app views to [container], [Prefs.homeColumns] per row. */
+    private fun addAppRows(container: LinearLayout, views: List<View>, gravity: Int) {
         val columns = prefs.homeColumns
         if (columns <= 1) {
             views.forEach { container.addView(it) }
@@ -286,12 +297,14 @@ class HomeSectionsController(
 
     // ---------------------------------------------------------------- menus
 
-    fun showHomeMenu(openSettings: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit, addFolder: () -> Unit) {
+    /** Long press on an empty cell of the home grid: what to put there (or elsewhere on home). */
+    fun showHomeMenu(row: Int?, openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit, addFolder: () -> Unit) {
         context.showMenuDialog(
             context.getString(R.string.app_name),
             listOf(
-                MenuEntry(context.getString(R.string.ml_section_new)) { createSection() },
-                MenuEntry(context.getString(R.string.ml_add_widget_top)) { addWidget() },
+                MenuEntry(context.getString(R.string.ml_add_app)) { addApp() },
+                MenuEntry(context.getString(R.string.ml_add_widget)) { addWidget() },
+                MenuEntry(context.getString(R.string.ml_section_new)) { createSection(row = row) },
                 MenuEntry(context.getString(R.string.ml_add_to_bottom)) { addToBottom() },
                 MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },
@@ -306,8 +319,6 @@ class HomeSectionsController(
             MenuEntry(context.getString(R.string.ml_section_rename)) { renameSection(index) },
             MenuEntry(context.getString(R.string.ml_section_edit_apps)) { editSectionApps(index) },
         )
-        if (index > 0) entries += MenuEntry(context.getString(R.string.ml_move_up)) { moveSection(index, -1) }
-        if (index < sections.lastIndex) entries += MenuEntry(context.getString(R.string.ml_move_down)) { moveSection(index, 1) }
         entries += MenuEntry(context.getString(R.string.ml_section_new)) { createSection() }
         entries += MenuEntry(context.getString(R.string.ml_section_delete)) { deleteSection(index) }
         context.showMenuDialog(section.name, entries)
@@ -316,10 +327,6 @@ class HomeSectionsController(
     private fun showAppMenu(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App) {
         if (sectionIndex == LOOSE) {
             showLooseAppMenu(app)
-            return
-        }
-        if (sectionIndex == UNGROUPED) {
-            showUngroupedAppMenu(sectionApp, app)
             return
         }
         val section = sections.getOrNull(sectionIndex) ?: return
@@ -359,44 +366,6 @@ class HomeSectionsController(
         return entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage)
     }
 
-    /** Menu of an app pinned on home outside any group. */
-    private fun showUngroupedAppMenu(sectionApp: SectionApp, app: AppModel.App) {
-        val position = ungrouped.indexOfFirst { it.samePackageAndUser(sectionApp) }
-        val entries = mutableListOf<MenuEntry>()
-        if (position > 0) entries += MenuEntry(context.getString(R.string.ml_move_up)) { moveUngrouped(position, -1) }
-        if (position in 0 until ungrouped.lastIndex) entries += MenuEntry(context.getString(R.string.ml_move_down)) { moveUngrouped(position, 1) }
-        entries += MenuEntry(context.getString(R.string.ml_app_move_to)) {
-            pickOtherSection(UNGROUPED) { target ->
-                removeUngrouped(sectionApp)
-                copyApp(sectionApp, target, removeFrom = null)
-            }
-        }
-        entries += MenuEntry(context.getString(R.string.ml_remove_from_home)) {
-            removeUngrouped(sectionApp)
-            render()
-        }
-        entries += MenuEntry(context.getString(R.string.ml_change_icon)) {
-            IconChooser.show(context, app, scope, pickImage) { render() }
-        }
-        entries += MenuEntry(context.getString(R.string.ml_app_info)) {
-            openAppInfo(context, app.user, app.appPackage)
-        }
-        context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
-    }
-
-    private fun moveUngrouped(position: Int, delta: Int) {
-        val target = position + delta
-        if (position !in ungrouped.indices || target !in ungrouped.indices) return
-        ungrouped.add(target, ungrouped.removeAt(position))
-        repo.saveUngrouped(ungrouped)
-        render()
-    }
-
-    private fun removeUngrouped(sectionApp: SectionApp) {
-        ungrouped.removeAll { it.samePackageAndUser(sectionApp) }
-        repo.saveUngrouped(ungrouped)
-    }
-
     /** Menu of an app shown only because of its notifications. */
     private fun showLooseAppMenu(app: AppModel.App) {
         val sectionApp = SectionApp.from(app)
@@ -416,14 +385,15 @@ class HomeSectionsController(
 
     // ---------------------------------------------------------------- operations
 
-    private fun createSection(onCreated: (Int) -> Unit = {}) {
+    /** [row]: the grid row the user long-pressed, if any; the grid moves the section if it doesn't fit there. */
+    private fun createSection(row: Int? = null, onCreated: (Int) -> Unit = {}) {
         context.showTextInputDialog(
             title = context.getString(R.string.ml_section_new),
             initial = "",
             hint = context.getString(R.string.ml_section_name_hint),
             action = context.getString(R.string.ml_save),
         ) { name ->
-            sections.add(HomeSection(name = name))
+            sections.add(HomeSection(name = name, row = row ?: -1))
             save()
             onCreated(sections.lastIndex)
         }
@@ -440,13 +410,6 @@ class HomeSectionsController(
             section.name = name
             save()
         }
-    }
-
-    private fun moveSection(index: Int, delta: Int) {
-        val target = index + delta
-        if (target !in sections.indices) return
-        sections.add(target, sections.removeAt(index))
-        save()
     }
 
     private fun deleteSection(index: Int) {
@@ -471,11 +434,9 @@ class HomeSectionsController(
 
     private fun copyApp(sectionApp: SectionApp, targetIndex: Int, removeFrom: Int?) {
         if (targetIndex == UNGROUPED) {
-            // "Home": the apps outside any group
-            if (ungrouped.none { it.samePackageAndUser(sectionApp) }) {
-                ungrouped.add(sectionApp)
-                repo.saveUngrouped(ungrouped)
-            } else if (removeFrom == null) {
+            // "Home": an icon on the home grid
+            val app = findApp(sectionApp) ?: return
+            if (!grid.addApp(app) && removeFrom == null) {
                 context.showToast(context.getString(R.string.ml_already_on_home))
                 return
             }
@@ -496,11 +457,10 @@ class HomeSectionsController(
 
     /** Lets the user pick a section other than [excludeIndex], or create a new one. */
     private fun pickOtherSection(excludeIndex: Int, onPicked: (Int) -> Unit) {
-        val home = if (excludeIndex == UNGROUPED) emptyList()
-        else listOf(MenuEntry(context.getString(R.string.ml_home)) { onPicked(UNGROUPED) })
+        val home = listOf(MenuEntry(context.getString(R.string.ml_home)) { onPicked(UNGROUPED) })
         val entries = home + sections.mapIndexedNotNull { i, s ->
             if (i == excludeIndex) null else MenuEntry(s.name) { onPicked(i) }
-        } + MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) { createSection(onPicked) }
+        } + MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) { createSection(onCreated = onPicked) }
         context.showMenuDialog(context.getString(R.string.ml_section), entries)
     }
 
@@ -545,18 +505,9 @@ class HomeSectionsController(
 
     companion object {
         private const val LOOSE = -1
+        /** Target "Home" in the move/copy menus: an icon on the home grid. */
         private const val UNGROUPED = -2
-
-        /** Pins [app] on home outside any group. Returns false if it was already there. */
-        fun addUngrouped(context: Context, app: AppModel.App): Boolean {
-            val repo = HomeSectionsRepository(context)
-            val list = repo.loadUngrouped()
-            val entry = SectionApp.from(app)
-            if (list.any { it.samePackageAndUser(entry) }) return false
-            list.add(entry)
-            repo.saveUngrouped(list)
-            return true
-        }
+        private const val BLOCK_PADDING_DP = 4
 
         /** Red used for apps and sections that have notifications. */
         const val NOTIFICATION_COLOR = 0xFFE53935.toInt()
@@ -594,7 +545,7 @@ class HomeSectionsController(
 
             val home = MenuEntry(context.getString(R.string.ml_home)) {
                 context.showToast(
-                    context.getString(if (addUngrouped(context, app)) R.string.ml_added_to_home else R.string.ml_already_on_home)
+                    context.getString(if (HomeWidgetsController.addAppToHome(context, app)) R.string.ml_added_to_home else R.string.ml_already_on_home)
                 )
             }
             val entries = listOf(home) + sections.mapIndexed { i, s -> MenuEntry(s.name) { addTo(i) } } +

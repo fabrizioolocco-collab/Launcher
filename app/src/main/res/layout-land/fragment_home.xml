@@ -126,16 +126,24 @@
                         android:textSize="22sp" />
                 </FrameLayout>
 
-                <!-- Widgets, below the clock -->
+                <!-- Apps with notifications, above everything else -->
+                <LinearLayout
+                    android:id="@+id/looseLayout"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingHorizontal="74dp"
+                    android:paddingTop="16dp"
+                    android:visibility="gone" />
+
+                <!-- The home grid: widgets, app icons and sections, all movable -->
                 <app.olauncher.ui.widgets.WidgetGridLayout
                     android:id="@+id/widgetsLayout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:paddingHorizontal="66dp"
-                    android:visibility="gone" />
-
-
+                    android:paddingTop="12dp" />
 
                 <Space
                     android:id="@+id/bottomAlignSpace"
@@ -166,14 +174,10 @@
                     android:text="@string/ml_home_no_sections_hint"
                     android:visibility="gone" />
 
-                <LinearLayout
-                    android:id="@+id/sectionsLayout"
+                <!-- Room to scroll the last row clear of the bottom area -->
+                <Space
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingHorizontal="74dp"
-                    android:paddingTop="24dp"
-                    android:paddingBottom="96dp" />
+                    android:layout_height="96dp" />
 
             </LinearLayout>
         </app.olauncher.ui.HomeScrollView>

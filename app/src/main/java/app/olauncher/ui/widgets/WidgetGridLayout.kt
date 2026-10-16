@@ -17,11 +17,16 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Grid of cells holding widgets (square, or rows split in [rowDivisions]). Each child declares its cell rectangle through [CellParams].
- * The grid is as tall as its lowest widget (one extra empty row while editing, so widgets can be
- * moved or stretched downwards).
+ * Grid of cells holding widgets, app icons and home sections (square cells, or rows split in
+ * [rowDivisions]). Each child declares its cell rectangle through [CellParams]. The grid is as tall
+ * as its lowest item (one extra empty row while editing, so items can be moved or stretched
+ * downwards).
  *
- * It also draws the drop preview while a widget is dragged and the resize frame with its four
+ * A child with [CellParams.autoHeight] (a section) takes its logical rows but is laid out as tall
+ * as its content: the rows it sits on grow, and everything below moves down with it. [rowTop] gives
+ * the pixel edge of every logical row, so cells can be converted to pixels and back.
+ *
+ * It also draws the drop preview while an item is dragged and the resize frame with its four
  * handles, and handles the handle drags itself.
  */
 class WidgetGridLayout @JvmOverloads constructor(
@@ -30,7 +35,10 @@ class WidgetGridLayout @JvmOverloads constructor(
 ) : ViewGroup(context, attrs) {
 
     class CellParams(var col: Int, var row: Int, var colSpan: Int, var rowSpan: Int) :
-        ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT)
+        ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT) {
+        /** Measured by its content: the rows it occupies stretch to fit it. */
+        var autoHeight = false
+    }
 
     interface ResizeListener {
         /** May the widget occupy these cells? */
@@ -68,7 +76,7 @@ class WidgetGridLayout @JvmOverloads constructor(
             if (downOnChild || resizeTarget != null) return
             val cell = cellSize()
             val col = ((e.x - paddingLeft) / cell).toInt().coerceIn(0, columns - 1)
-            val row = ((e.y - paddingTop) / rowSize()).toInt().coerceAtLeast(0)
+            val row = rowAt(e.y)
             performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             homeGestures?.onEmptyLongPress(col, row)
         }
@@ -186,20 +194,79 @@ class WidgetGridLayout @JvmOverloads constructor(
     override fun generateDefaultLayoutParams(): LayoutParams = CellParams(0, 0, 1, 1)
     override fun checkLayoutParams(p: LayoutParams?) = p is CellParams
 
+    /** Extra pixels of each logical row, from auto-height children taller than their rows. */
+    private var extras = IntArray(0)
+
+    private fun computeExtras(cell: Int, rowH: Int) {
+        val result = IntArray(usedRows() + 1)
+        for (i in 0 until childCount) {
+            val child = getChildAt(i)
+            val p = child.layoutParams as CellParams
+            if (!p.autoHeight) continue
+            child.measure(
+                MeasureSpec.makeMeasureSpec(p.colSpan * cell - 2 * gap, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            )
+            val need = child.measuredHeight + 2 * gap - p.rowSpan * rowH
+            if (p.row in result.indices && need > result[p.row]) result[p.row] = need
+        }
+        extras = result
+    }
+
+    private fun rowTopFor(row: Int, rowH: Int): Int {
+        var y = paddingTop + row * rowH
+        for (r in 0 until minOf(row, extras.size)) y += extras[r]
+        return y
+    }
+
+    /** Top edge (px, without the gap) of logical row [row]; rows holding a section are taller. */
+    fun rowTop(row: Int): Int = rowTopFor(row, rowSize())
+
+    /**
+     * Logical row at pixel [y]. With [nearest], the row whose top edge is closest to [y] (for
+     * dropping and resizing); otherwise the row containing [y].
+     */
+    fun rowAt(y: Float, nearest: Boolean = false): Int {
+        val rowH = rowSize().toFloat()
+        val n = extras.size
+        var r = 0
+        while (r < n && rowTop(r + 1) <= y) r++
+        if (r < n) {
+            if (nearest && y - rowTop(r) > (rowTop(r + 1) - rowTop(r)) / 2f) r++
+            return r
+        }
+        val rest = (y - rowTop(n)) / rowH
+        val k = if (nearest) rest.roundToInt() else rest.toInt()
+        return (n + k).coerceAtLeast(0)
+    }
+
+    /** Cell under a screen position, or null when it's outside the grid. */
+    fun cellAt(rawX: Float, rawY: Float): Pair<Int, Int>? {
+        val location = IntArray(2)
+        getLocationOnScreen(location)
+        val x = rawX - location[0]
+        val y = rawY - location[1]
+        if (x < paddingLeft || x >= width - paddingRight || y < paddingTop || y >= height) return null
+        val col = ((x - paddingLeft) / cellSize()).toInt().coerceIn(0, columns - 1)
+        return col to rowAt(y)
+    }
+
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val cell = ((width - paddingLeft - paddingRight) / columns).coerceAtLeast(1)
         val rowH = (cell / rowDivisions).coerceAtLeast(1)
+        computeExtras(cell, rowH)
         for (i in 0 until childCount) {
             val child = getChildAt(i)
             val p = child.layoutParams as CellParams
+            val height = rowTopFor(p.row + p.rowSpan, rowH) - rowTopFor(p.row, rowH) - 2 * gap
             child.measure(
                 MeasureSpec.makeMeasureSpec(p.colSpan * cell - 2 * gap, MeasureSpec.EXACTLY),
-                MeasureSpec.makeMeasureSpec(p.rowSpan * rowH - 2 * gap, MeasureSpec.EXACTLY)
+                MeasureSpec.makeMeasureSpec(height.coerceAtLeast(0), MeasureSpec.EXACTLY)
             )
         }
         val rows = maxOf(usedRows() + if (editing) 1 else 0, minRows)
-        setMeasuredDimension(width, rows * rowH + paddingTop + paddingBottom)
+        setMeasuredDimension(width, rowTopFor(rows, rowH) + paddingBottom)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
@@ -208,7 +275,7 @@ class WidgetGridLayout @JvmOverloads constructor(
             val child = getChildAt(i)
             val p = child.layoutParams as CellParams
             val left = paddingLeft + p.col * cell + gap
-            val top = paddingTop + p.row * rowSize() + gap
+            val top = rowTop(p.row) + gap
             child.layout(left, top, left + child.measuredWidth, top + child.measuredHeight)
         }
     }
@@ -220,8 +287,7 @@ class WidgetGridLayout @JvmOverloads constructor(
         val cell = cellSize()
         val p = child.layoutParams as CellParams
         val col = ((p.col * cell + dx) / cell).roundToInt().coerceIn(0, columns - p.colSpan)
-        val rowH = rowSize()
-        val row = ((p.row * rowH + dy) / rowH).roundToInt().coerceAtLeast(0)
+        val row = rowAt(rowTop(p.row) + dy, nearest = true)
         return col to row
     }
 
@@ -240,9 +306,9 @@ class WidgetGridLayout @JvmOverloads constructor(
         val cell = cellSize()
         return RectF(
             (paddingLeft + r.left * cell + gap).toFloat(),
-            (paddingTop + r.top * rowSize() + gap).toFloat(),
+            (rowTop(r.top) + gap).toFloat(),
             (paddingLeft + r.right * cell - gap).toFloat(),
-            (paddingTop + r.bottom * rowSize() - gap).toFloat(),
+            (rowTop(r.bottom) - gap).toFloat(),
         )
     }
 
@@ -305,7 +371,7 @@ class WidgetGridLayout @JvmOverloads constructor(
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 val x = ((event.x - paddingLeft) / cell).roundToInt()
-                val y = ((event.y - paddingTop) / rowSize()).roundToInt()
+                val y = rowAt(event.y, nearest = true)
                 var col = s.col
                 var row = s.row
                 var colSpan = s.colSpan

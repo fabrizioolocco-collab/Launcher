@@ -17,7 +17,7 @@
     <string name="ml_section_delete">Elimina sezione</string>
     <string name="ml_section_delete_confirm">Eliminare la sezione \"%1$s\"? Le app restano installate.</string>
     <string name="ml_section_empty_hint">Vuota: tieni premuto il titolo per aggiungere app</string>
-    <string name="ml_home_no_sections_hint">Tieni premuto su uno spazio vuoto per creare una sezione</string>
+    <string name="ml_home_no_sections_hint">Tieni premuto su uno spazio vuoto per aggiungere app, widget o sezioni</string>
     <string name="ml_default_section_name">Preferiti</string>
     <string name="ml_section">Sezione</string>
 
@@ -82,7 +82,7 @@
     <string name="ml_widget_remove">Rimuovi widget</string>
     <string name="ml_widget_remove_confirm">Rimuovere questo widget dalla home?</string>
     <string name="ml_widget_drag_hint">↕ trascina per cambiare altezza</string>
-    <string name="ml_widget_columns">Colonne griglia widget</string>
+    <string name="ml_widget_columns">Colonne della griglia home</string>
     <string name="ml_widget_label_size">%1$s · %2$d×%3$d</string>
     <string name="ml_widget_setup_failed">Impossibile aprire la configurazione del widget</string>
     <string name="ml_widget_bind_denied">Widget non aggiunto: permesso non concesso</string>
@@ -131,7 +131,7 @@
     <string name="ml_add_app">Aggiungi app</string>
     <string name="ml_remove_from_home">Rimuovi dalla home</string>
     <string name="ml_bottom_labels">Nome sotto le icone in basso</string>
-    <string name="ml_add_widget_top">Aggiungi widget in alto</string>
+    <string name="ml_add_widget_top">Aggiungi widget</string>
     <string name="ml_add_to_bottom">Aggiungi nella zona in basso…</string>
     <string name="ml_search_apps">Cerca app</string>
     <string name="ml_add_to_home">Aggiungi alla home</string>
@@ -155,9 +155,9 @@
     <string name="ml_tab_hidden_off">Togli tab Nascoste</string>
     <string name="ml_choose_app">Scegli app…</string>
     <string name="ml_no_app">Nessuna app</string>
-    <string name="ml_home_columns">Colonne di app in home</string>
+    <string name="ml_home_columns">Colonne di app nelle sezioni</string>
     <string name="ml_home_labels">Nome delle app in home</string>
-    <string name="ml_home_icon_size">Dimensione icone in home</string>
+    <string name="ml_home_icon_size">Dimensione icone nelle sezioni</string>
     <string name="ml_open_app">Apri app</string>
     <!-- Home search bar -->
     <string name="ml_search_web">Google</string>

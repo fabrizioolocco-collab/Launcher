@@ -111,21 +111,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
         deviceManager = context?.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
 
-        sections = HomeSectionsController(
-            context = requireContext(),
-            container = binding.sectionsLayout,
-            emptyHint = binding.noSectionsHint,
-            prefs = prefs,
-            scope = uiScope,
-            onLaunch = { app -> launchHomeApp(app) },
-            bottomAppKeys = { if (::bottomArea.isInitialized) bottomArea.appKeys() else emptySet() },
-            pickImage = { callback ->
-                onImagePicked = callback
-                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-            },
-        )
-        viewModel.homeApps.value?.let { sections.setApps(it) }
-
+        // The main grid: widgets, app icons and sections share its cells
         widgets = HomeWidgetsController(
             activity = requireActivity(),
             grid = binding.widgetsLayout,
@@ -133,8 +119,30 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             prefs = prefs,
             scope = uiScope,
             keepScreen = { viewModel.keepCurrentScreen = it },
+            onLaunchApp = { app -> launchHomeApp(app) },
+            pickImage = { callback ->
+                onImagePicked = callback
+                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
         )
+        viewModel.homeApps.value?.let { widgets.setApps(it) }
         widgets.render()
+
+        sections = HomeSectionsController(
+            context = requireContext(),
+            grid = widgets,
+            looseContainer = binding.looseLayout,
+            emptyHint = binding.noSectionsHint,
+            prefs = prefs,
+            scope = uiScope,
+            onLaunch = { app -> launchHomeApp(app) },
+            gridAppKeys = { widgets.appKeys() + if (::bottomArea.isInitialized) bottomArea.appKeys() else emptySet() },
+            pickImage = { callback ->
+                onImagePicked = callback
+                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+        )
+        viewModel.homeApps.value?.let { sections.setApps(it) }
 
         bottomArea = HomeWidgetsController(
             activity = requireActivity(),
@@ -239,6 +247,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     override fun onResume() {
         super.onResume()
         populateHomeScreen(false)
+        widgets.reloadIfChanged()
         widgets.refreshIfNeeded()
         widgets.onHomeResumed()
         bottomArea.refreshIfNeeded()
@@ -342,17 +351,19 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             populateHomeScreen(it)
         }
         viewModel.homeApps.observe(viewLifecycleOwner) {
-            sections.setApps(it)
+            widgets.setApps(it)
             bottomArea.setApps(it)
+            sections.setApps(it)
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
-            sections.setNotifications(it)
+            widgets.setNotifications(it)
             bottomArea.setNotifications(it)
+            sections.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {
-            sections.render()
             widgets.render()
-                bottomArea.render()
+            bottomArea.render()
+            sections.render()
             detox.updateBar()
         }
         DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }
@@ -397,8 +408,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 sections.collapseAll()
             }
 
-            override fun onEmptyLongPress() {
+            override fun onEmptyLongPress(rawX: Float, rawY: Float) {
+                // New items land on the pressed cell when they fit there
+                val cell = binding.widgetsLayout.cellAt(rawX, rawY)
                 sections.showHomeMenu(
+                    row = cell?.second,
                     openSettings = {
                         try {
                             findNavController().navigate(R.id.action_mainFragment_to_settingsFragment)
@@ -407,7 +421,14 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                             e.printStackTrace()
                         }
                     },
-                    addWidget = { widgets.showAddWidgetDialog() },
+                    addApp = {
+                        widgets.setPreferredCell(cell?.first, cell?.second)
+                        widgets.showAddAppDialog()
+                    },
+                    addWidget = {
+                        widgets.setPreferredCell(cell?.first, cell?.second)
+                        widgets.showAddWidgetDialog()
+                    },
                     addToBottom = { bottomArea.showAddMenu() },
                     addFolder = { createFolderShortcut() },
                 )
@@ -667,8 +688,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
     }
 
-    /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
-    /** Home menu > New folder: pick a folder, name it, choose what opens it; it lands on home outside groups. */
+    /** Home menu > New folder: pick a folder, name it, choose what opens it; it lands on the home grid. */
     private fun createFolderShortcut() {
         pickFolder { path ->
             val ctx = requireContext()
@@ -677,7 +697,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 ctx.showMenuDialog(getString(R.string.ml_folder_open_with), listOf(true, false).map { inExplorer ->
                     MenuEntry(getString(if (inExplorer) R.string.ml_explorer else R.string.ml_file_manager)) {
                         val folder = FolderShortcuts.add(ctx, path, name, inExplorer)
-                        HomeSectionsController.addUngrouped(ctx, FolderShortcuts.toApp(folder))
+                        widgets.addApp(FolderShortcuts.toApp(folder))
                         viewModel.loadHomeApps()
                         sections.reload()
                     }
@@ -692,6 +712,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         folderPicker.launch(Intent(requireContext(), FolderPickerActivity::class.java))
     }
 
+    /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
     private fun launchHomeApp(app: AppModel.App) {
         if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
         else if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
