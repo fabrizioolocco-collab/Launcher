@@ -448,7 +448,8 @@ class AppDrawerFragment : BaseFragment() {
         // During detox only allowed apps are listed (picking apps for settings is not affected)
         val detox = flag == Constants.FLAG_LAUNCH_APP && DetoxManager.isActive(ctx)
         val apps = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
-        val combined = (newsBlock(apps) + apps).toMutableList()
+        // "News" block removed: apps with notifications are shown on home instead
+        val combined = apps.toMutableList()
 
         if (flag == Constants.FLAG_LAUNCH_APP && currentPrivateSpaceAvailable && !detox) {
             combined.add(AppModel.PrivateSpaceHeader(isLocked = currentPrivateSpaceLocked))

@@ -97,6 +97,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             prefs = prefs,
             scope = uiScope,
             onLaunch = { app -> launchHomeApp(app) },
+            bottomAppKeys = { if (::bottomArea.isInitialized) bottomArea.appKeys() else emptySet() },
             pickImage = { callback ->
                 onImagePicked = callback
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -177,6 +178,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             detox.showPermissions()
         }
         viewModel.loadHomeApps()
+        viewModel.getHiddenApps()
         binding.notificationAccessHint.isVisible = !NotificationRepository.isAccessGranted(requireContext())
         viewModel.isOlauncherDefault()
         if (prefs.showStatusBar) showStatusBar()
@@ -266,6 +268,9 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         viewModel.homeApps.observe(viewLifecycleOwner) {
             sections.setApps(it)
             bottomArea.setApps(it)
+        }
+        viewModel.hiddenApps.observe(viewLifecycleOwner) {
+            sections.setHiddenApps(it.orEmpty().filterIsInstance<AppModel.App>())
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             sections.setNotifications(it)

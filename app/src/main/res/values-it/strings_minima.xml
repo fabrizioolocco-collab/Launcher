@@ -66,7 +66,7 @@
     <string name="ml_grant_access_first">Attiva anche l\'accesso alle notifiche, altrimenti i badge non si aggiornano</string>
     <string name="ml_news">Novità</string>
     <string name="ml_all_apps">Tutte le app</string>
-    <string name="ml_news_order">Ordine Novità</string>
+    <string name="ml_news_order">Ordine app con notifiche</string>
     <string name="ml_news_recent">Più recenti</string>
     <string name="ml_news_count">Più notifiche</string>
     <string name="ml_letter_index">Indice lettere</string>

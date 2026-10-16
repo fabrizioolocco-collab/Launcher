@@ -56,7 +56,10 @@ class HomeSectionsController(
     private val onLaunch: (AppModel.App) -> Unit,
     /** Opens the system photo picker and calls back with the chosen image. */
     private val pickImage: ((Uri) -> Unit) -> Unit,
+    /** Keys (package|user) of apps already placed in the bottom area. */
+    private val bottomAppKeys: () -> Set<String> = { emptySet() },
 ) {
+    private var hiddenApps: List<AppModel.App> = emptyList()
     private val repo = HomeSectionsRepository(context)
     private var sections: MutableList<HomeSection> = mutableListOf()
     private var apps: List<AppModel.App> = emptyList()
@@ -72,6 +75,30 @@ class HomeSectionsController(
         apps = list
         appsLoaded = true
         render()
+    }
+
+    fun setHiddenApps(list: List<AppModel.App>) {
+        hiddenApps = list
+        if (notifications.isNotEmpty()) render()
+    }
+
+    /**
+     * Apps with notifications that aren't in any section nor in the bottom area (hidden apps
+     * included): shown in red above the sections until their notifications are gone.
+     */
+    private fun looseApps(): List<AppModel.App> {
+        if (notifications.isEmpty()) return emptyList()
+        val placed = sections.flatMap { it.apps }.map { NotificationRepository.key(it.packageName, it.user) }.toSet() +
+                bottomAppKeys()
+        return (apps + hiddenApps)
+            .filter { notificationCount(it) > 0 }
+            .filter { NotificationRepository.key(it.appPackage, it.user.toString()) !in placed }
+            .filter { DetoxManager.isAllowed(context, it.appPackage) }
+            .distinctBy { NotificationRepository.key(it.appPackage, it.user.toString()) }
+            .sortedWith(
+                if (prefs.newsSortByCount) compareByDescending<AppModel.App> { notificationCount(it) }
+                else compareByDescending { notifications[NotificationRepository.key(it.appPackage, it.user.toString())]?.lastPostTime ?: 0L }
+            )
     }
 
     fun setNotifications(map: Map<String, AppNotifications>) {
@@ -116,6 +143,9 @@ class HomeSectionsController(
         if (!appsLoaded) return
         val gravity = prefs.homeAlignment
         val detox = DetoxManager.isActive(context)
+        val loose = looseApps()
+        loose.forEach { app -> container.addView(appView(LOOSE, SectionApp.from(app), app, gravity)) }
+        if (loose.isNotEmpty()) container.addView(View(context), LinearLayout.LayoutParams(1, 18.dpToPx()))
         sections.forEachIndexed { index, section ->
             // During detox, sections without allowed apps disappear
             if (detox && section.apps.none { findApp(it) != null }) return@forEachIndexed
@@ -241,6 +271,10 @@ class HomeSectionsController(
     }
 
     private fun showAppMenu(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App) {
+        if (sectionIndex == LOOSE) {
+            showLooseAppMenu(app)
+            return
+        }
         val section = sections.getOrNull(sectionIndex) ?: return
         val position = section.indexOf(sectionApp)
         val entries = mutableListOf<MenuEntry>()
@@ -264,6 +298,27 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
+        context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
+    }
+
+    /** Menu of an app shown only because of its notifications. */
+    private fun showLooseAppMenu(app: AppModel.App) {
+        val sectionApp = SectionApp.from(app)
+        val entries = mutableListOf(
+            MenuEntry(context.getString(R.string.ml_add_to_section)) {
+                val targets = sections.mapIndexed { i, s -> MenuEntry(s.name) { copyApp(sectionApp, i, removeFrom = null) } } +
+                        MenuEntry(context.getString(R.string.ml_section_new_ellipsis)) {
+                            createSection { i -> copyApp(sectionApp, i, removeFrom = null) }
+                        }
+                context.showMenuDialog(context.getString(R.string.ml_section), targets)
+            },
+            MenuEntry(context.getString(R.string.ml_change_icon)) {
+                IconChooser.show(context, app, scope, pickImage) { render() }
+            },
+            MenuEntry(context.getString(R.string.ml_app_info)) {
+                openAppInfo(context, app.user, app.appPackage)
+            },
+        )
         context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
     }
 
@@ -382,6 +437,8 @@ class HomeSectionsController(
     }
 
     companion object {
+        private const val LOOSE = -1
+
         /** Red used for apps and sections that have notifications. */
         const val NOTIFICATION_COLOR = 0xFFE53935.toInt()
 

@@ -98,6 +98,10 @@ class HomeWidgetsController(
         }
     }
 
+    /** Keys (package|user) of the app icons placed here. */
+    fun appKeys(): Set<String> =
+        widgets.filter { it.isApp }.map { NotificationRepository.key(it.packageName.orEmpty(), it.user.orEmpty()) }.toSet()
+
     fun setNotifications(map: Map<String, AppNotifications>) {
         notifications = map
         updateBadges()

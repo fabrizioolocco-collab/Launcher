@@ -68,7 +68,7 @@
     <string name="ml_grant_access_first">Turn on notification access too, or badges won\'t update</string>
     <string name="ml_news">News</string>
     <string name="ml_all_apps">All apps</string>
-    <string name="ml_news_order">News order</string>
+    <string name="ml_news_order">Order of apps with notifications</string>
     <string name="ml_news_recent">Most recent</string>
     <string name="ml_news_count">Most notifications</string>
     <string name="ml_letter_index">Letter index</string>
