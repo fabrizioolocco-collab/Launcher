@@ -171,7 +171,8 @@ class PdfViewerActivity : AppCompatActivity() {
     /** The file to open: a path from our explorer, or a content/file URI from another app (copied to the cache). */
     private fun resolveFile(intent: Intent): File? {
         intent.getStringExtra(EXTRA_PATH)?.let { return File(it).takeIf { f -> f.exists() } }
-        val uri = intent.data ?: return null
+        @Suppress("DEPRECATION")
+        val uri = intent.data ?: (intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri) ?: return null
         if (uri.scheme == "file") return uri.path?.let { File(it) }?.takeIf { it.exists() }
         return try {
             val name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
