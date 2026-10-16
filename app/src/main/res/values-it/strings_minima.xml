@@ -327,7 +327,7 @@
     <string name="ml_pdf_sign">Firma</string>
     <string name="ml_pdf_text_hint">Scrivi il testo, poi tocca dove metterlo</string>
     <string name="ml_pdf_check_hint">Tocca dove mettere la crocetta</string>
-    <string name="ml_pdf_sign_hint">Tocca dove mettere la firma; trascina l\'angolo per ridimensionarla</string>
+    <string name="ml_pdf_sign_hint">Tocca dove mettere la firma; poi sistemala con le maniglie</string>
     <string name="ml_pdf_undo">Annulla</string>
     <string name="ml_pdf_save">Salva copia firmata</string>
     <string name="ml_pdf_saving">Salvo…</string>
@@ -356,5 +356,13 @@
     <string name="ml_pdf_size">Dimensione</string>
     <string name="ml_pdf_edit_text">Modifica testo</string>
     <string name="ml_pdf_annotation">Annotazione</string>
-    <string name="ml_pdf_move_hint">Tieni premuta un\'annotazione per spostarla o eliminarla</string>
+    <string name="ml_pdf_move_hint">Tocca un\'annotazione per selezionarla: trascina per spostarla, ruotarla, ridimensionarla o eliminarla</string>
+    <string name="ml_pdf_select_hint">Trascina per spostare · ↻ ruota · ⤡ ridimensiona · ✕ elimina</string>
+    <string name="ml_pdf_pen">Penna</string>
+    <string name="ml_pdf_highlighter">Evidenziatore</string>
+    <string name="ml_pdf_save_as">Salva con nome</string>
+    <string name="ml_pdf_file_name">Nome del file</string>
+    <string name="ml_pdf_choose_folder">Scegli cartella</string>
+    <string name="ml_pdf_overwrite">«%1$s» esiste già. Sostituirlo?</string>
+    <string name="ml_pdf_replace">Sostituisci</string>
 </resources>

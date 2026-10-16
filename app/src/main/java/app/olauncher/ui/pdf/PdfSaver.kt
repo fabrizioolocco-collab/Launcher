@@ -2,38 +2,47 @@ package app.olauncher.ui.pdf
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
 import com.tom_roush.pdfbox.pdmodel.font.PDType1Font
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
+import com.tom_roush.pdfbox.pdmodel.graphics.state.PDExtendedGraphicsState
 import com.tom_roush.pdfbox.util.Matrix
-import java.io.ByteArrayOutputStream
 import java.io.File
+import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.sin
 
 /**
  * Writes the edited PDF: pages reordered, deleted or rotated, and the annotations drawn straight
  * into each page's content (so they can't be removed later), with the original text kept intact.
- * Annotation coordinates are fractions of the page as displayed (rotation applied).
+ *
+ * Every annotation is drawn in "displayed page" space: a coordinate system where the page as the
+ * user saw it (rotation applied) has its origin at the top-left, x to the right and y down, in
+ * PDF points. One matrix maps that space onto the real page, so moves, rotations and resizes done
+ * in the editor land exactly where they were seen.
  */
 object PdfSaver {
 
     fun save(context: Context, source: File, target: File, layout: PageLayout, annotations: List<Annotation>) {
         PDFBoxResourceLoader.init(context.applicationContext)
         PDDocument.load(source).use { doc ->
-            // Draw annotations into their original pages first (indexes refer to the original order)
             annotations.groupBy { it.page }.forEach { (pageIndex, items) ->
                 val page = doc.getPage(pageIndex)
                 val rotation = ((page.rotation + (layout.rotation[pageIndex] ?: 0)) % 360 + 360) % 360
                 PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true).use { cs ->
-                    items.forEach { draw(doc, cs, page, rotation, it) }
+                    cs.saveGraphicsState()
+                    cs.transform(displayedToPage(page, rotation))
+                    val dw = displayedWidth(page, rotation)
+                    val dh = displayedHeight(page, rotation)
+                    items.forEach { draw(doc, cs, dw, dh, it) }
+                    cs.restoreGraphicsState()
                 }
             }
-            // Apply rotation
             layout.rotation.forEach { (index, extra) -> if (extra % 360 != 0) doc.getPage(index).rotation = doc.getPage(index).rotation + extra }
-            // New document in the chosen order (import keeps the pages, so annotations come along)
             PDDocument().use { out ->
                 layout.order.forEach { index -> out.importPage(doc.getPage(index)) }
                 out.save(target)
@@ -41,86 +50,104 @@ object PdfSaver {
         }
     }
 
+    private fun displayedWidth(page: PDPage, rotation: Int) = if (rotation % 180 == 0) page.mediaBox.width else page.mediaBox.height
+    private fun displayedHeight(page: PDPage, rotation: Int) = if (rotation % 180 == 0) page.mediaBox.height else page.mediaBox.width
+
     /**
-     * Maps a point given as fractions of the displayed page (x right, y down, rotation applied) to
-     * PDF user space of the unrotated page (origin bottom-left).
+     * Matrix from displayed space (origin top-left, y down, rotation applied) to the page's user
+     * space (origin bottom-left, y up, unrotated). Built from the point mapping used by the viewer.
      */
-    private fun toPdf(page: PDPage, rotation: Int, fx: Float, fy: Float): Pair<Float, Float> {
+    private fun displayedToPage(page: PDPage, rotation: Int): Matrix {
         val box = page.mediaBox
         val w = box.width
         val h = box.height
+        // Displayed (dx, dy) in points → page (px, py)
         return when (rotation) {
-            90 -> Pair(box.lowerLeftX + fy * w, box.lowerLeftY + fx * h)
-            180 -> Pair(box.lowerLeftX + (1 - fx) * w, box.lowerLeftY + fy * h)
-            270 -> Pair(box.lowerLeftX + (1 - fy) * w, box.lowerLeftY + (1 - fx) * h)
-            else -> Pair(box.lowerLeftX + fx * w, box.lowerLeftY + (1 - fy) * h)
+            90 -> Matrix(0f, 1f, 1f, 0f, box.lowerLeftX, box.lowerLeftY)                     // px = dy, py = dx
+            180 -> Matrix(-1f, 0f, 0f, 1f, box.lowerLeftX + w, box.lowerLeftY)               // px = w - dx, py = dy
+            270 -> Matrix(0f, -1f, -1f, 0f, box.lowerLeftX + w, box.lowerLeftY + h)          // px = w - dy, py = h - dx
+            else -> Matrix(1f, 0f, 0f, -1f, box.lowerLeftX, box.lowerLeftY + h)              // px = dx, py = h - dy
         }
     }
 
-    /** Displayed page width in PDF points (after rotation), to turn size fractions into points. */
-    private fun displayedWidth(page: PDPage, rotation: Int) = if (rotation % 180 == 0) page.mediaBox.width else page.mediaBox.height
+    /** Rotation of [a] around its box centre, in displayed space (y down: angles flip sign). */
+    private fun rotate(cs: PDPageContentStream, a: Annotation, dw: Float, dh: Float) {
+        if (a.rotation == 0f) return
+        val cx = a.box.centerX() * dw
+        val cy = a.box.centerY() * dh
+        val rad = Math.toRadians(a.rotation.toDouble())
+        cs.transform(Matrix(cos(rad).toFloat(), sin(rad).toFloat(), -sin(rad).toFloat(), cos(rad).toFloat(),
+            (cx - cx * cos(rad) + cy * sin(rad)).toFloat(), (cy - cx * sin(rad) - cy * cos(rad)).toFloat()))
+    }
 
-    private fun draw(doc: PDDocument, cs: PDPageContentStream, page: PDPage, rotation: Int, a: Annotation) {
+    private fun draw(doc: PDDocument, cs: PDPageContentStream, dw: Float, dh: Float, a: Annotation) {
+        cs.saveGraphicsState()
+        rotate(cs, a, dw, dh)
         when (a) {
             is Annotation.Stroke -> {
-                if (a.points.size < 2) return
-                cs.setStrokingColor(a.color.r(), a.color.g(), a.color.b())
-                cs.setLineWidth(max(0.5f, a.widthFraction * displayedWidth(page, rotation)))
-                cs.setLineCapStyle(1)
-                cs.setLineJoinStyle(1)
-                val first = toPdf(page, rotation, a.points[0].first, a.points[0].second)
-                cs.moveTo(first.first, first.second)
-                a.points.drop(1).forEach { (x, y) ->
-                    val p = toPdf(page, rotation, x, y)
-                    cs.lineTo(p.first, p.second)
+                val pts = a.currentPoints()
+                if (pts.size >= 2) {
+                    if (a.highlighter) {
+                        val gs = PDExtendedGraphicsState().apply { strokingAlphaConstant = 0.35f }
+                        cs.setGraphicsStateParameters(gs)
+                    }
+                    cs.setStrokingColor(a.color.r(), a.color.g(), a.color.b())
+                    cs.setLineWidth(max(0.5f, a.widthFraction * dw))
+                    cs.setLineCapStyle(if (a.highlighter) 0 else 1)
+                    cs.setLineJoinStyle(1)
+                    cs.moveTo(pts[0].first * dw, pts[0].second * dh)
+                    pts.drop(1).forEach { (x, y) -> cs.lineTo(x * dw, y * dh) }
+                    cs.stroke()
                 }
-                cs.stroke()
             }
 
             is Annotation.Check -> {
-                val size = a.sizeFraction * displayedWidth(page, rotation)
+                val b = a.box
+                val w = b.width() * dw
+                val h = b.height() * dh
                 cs.setStrokingColor(a.color.r(), a.color.g(), a.color.b())
-                cs.setLineWidth(max(1f, size / 8f))
+                cs.setLineWidth(max(1f, minOf(w, h) / 8f))
                 cs.setLineCapStyle(1)
-                // A check mark drawn in displayed space (fractions), mapped point by point
-                val pts = listOf(-0.4f to 0.05f, -0.1f to 0.4f, 0.45f to -0.4f)
-                val sx = a.sizeFraction
-                val sy = a.sizeFraction * displayedWidth(page, rotation) / (if (rotation % 180 == 0) page.mediaBox.height else page.mediaBox.width)
-                val mapped = pts.map { (dx, dy) -> toPdf(page, rotation, a.x + dx * sx, a.y + dy * sy) }
-                cs.moveTo(mapped[0].first, mapped[0].second)
-                cs.lineTo(mapped[1].first, mapped[1].second)
-                cs.lineTo(mapped[2].first, mapped[2].second)
-                cs.stroke()
+                if (a.cross) {
+                    cs.moveTo(b.left * dw + w * 0.15f, b.top * dh + h * 0.15f)
+                    cs.lineTo(b.left * dw + w * 0.85f, b.top * dh + h * 0.85f)
+                    cs.stroke()
+                    cs.moveTo(b.left * dw + w * 0.85f, b.top * dh + h * 0.15f)
+                    cs.lineTo(b.left * dw + w * 0.15f, b.top * dh + h * 0.85f)
+                    cs.stroke()
+                } else {
+                    cs.moveTo(b.left * dw + w * 0.1f, b.top * dh + h * 0.55f)
+                    cs.lineTo(b.left * dw + w * 0.4f, b.top * dh + h * 0.9f)
+                    cs.lineTo(b.left * dw + w * 0.95f, b.top * dh + h * 0.1f)
+                    cs.stroke()
+                }
             }
 
             is Annotation.Text -> {
-                val fontSize = max(4f, a.sizeFraction * displayedWidth(page, rotation))
-                val (x, y) = toPdf(page, rotation, a.x, a.y)
+                val fontSize = max(4f, a.box.height() * dh * 0.8f)
                 cs.beginText()
                 cs.setFont(PDType1Font.HELVETICA, fontSize)
                 cs.setNonStrokingColor(a.color.r(), a.color.g(), a.color.b())
-                // Text runs along the displayed horizontal: rotate it with the page
-                cs.setTextMatrix(Matrix.getRotateInstance(Math.toRadians(rotation.toDouble()), x, y))
+                // Text is drawn with y up: flip it back inside our y-down space, at the box's baseline
+                cs.setTextMatrix(Matrix(1f, 0f, 0f, -1f, a.box.left * dw, a.box.top * dh + fontSize))
                 cs.showText(a.text.filter { it.code in 32..255 })
                 cs.endText()
             }
 
             is Annotation.Signature -> {
                 val image = LosslessFactory.createFromImage(doc, a.bitmap.ensureArgb())
-                val w = a.rect.width() * displayedWidth(page, rotation)
-                val h = a.rect.height() * (if (rotation % 180 == 0) page.mediaBox.height else page.mediaBox.width)
-                // Bottom-left corner of the displayed rectangle, then rotate the image with the page
-                val (x, y) = toPdf(page, rotation, a.rect.left, a.rect.bottom)
-                val m = Matrix.getRotateInstance(Math.toRadians(rotation.toDouble()), x, y)
-                m.concatenate(Matrix.getScaleInstance(w, h))
-                cs.drawImage(image, m)
+                val w = a.box.width() * dw
+                val h = a.box.height() * dh
+                // Images are drawn with their bottom-left at the origin, y up: flip inside y-down space
+                cs.drawImage(image, Matrix(w, 0f, 0f, -h, a.box.left * dw, a.box.top * dh + h))
             }
         }
+        cs.restoreGraphicsState()
     }
 
-    private fun Int.r() = android.graphics.Color.red(this) / 255f
-    private fun Int.g() = android.graphics.Color.green(this) / 255f
-    private fun Int.b() = android.graphics.Color.blue(this) / 255f
+    private fun Int.r() = Color.red(this) / 255f
+    private fun Int.g() = Color.green(this) / 255f
+    private fun Int.b() = Color.blue(this) / 255f
 
     private fun Bitmap.ensureArgb(): Bitmap = if (config == Bitmap.Config.ARGB_8888) this else copy(Bitmap.Config.ARGB_8888, false)
 
@@ -131,7 +158,4 @@ object PdfSaver {
     } catch (e: Throwable) {
         -1
     }
-
-    @Suppress("unused")
-    private fun Bitmap.toPng(): ByteArray = ByteArrayOutputStream().also { compress(Bitmap.CompressFormat.PNG, 100, it) }.toByteArray()
 }

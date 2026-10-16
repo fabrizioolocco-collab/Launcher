@@ -5,24 +5,36 @@ import android.graphics.RectF
 import java.io.File
 
 /**
- * What the user adds to a PDF before saving. Positions are fractions (0..1) of the displayed page
- * (width and height), so they don't depend on the zoom or the screen and map to PDF points on save.
+ * What the user adds to a PDF before saving. Every annotation has a box in fractions (0..1) of the
+ * displayed page (x, y, width, height relative to the page width/height) and a rotation in degrees
+ * around the box centre, so the editor's selection frame (move, rotate, resize) and the saver work
+ * on the same numbers, whatever the zoom or the screen.
  */
 sealed class Annotation(val page: Int) {
-    class Text(page: Int, var text: String, var x: Float, var y: Float, val sizeFraction: Float, val color: Int) : Annotation(page)
-    class Check(page: Int, var x: Float, var y: Float, val sizeFraction: Float, val color: Int) : Annotation(page)
-    class Stroke(page: Int, val points: List<Pair<Float, Float>>, val widthFraction: Float, val color: Int) : Annotation(page)
-    class Signature(page: Int, val bitmap: Bitmap, val rect: RectF) : Annotation(page)
+    /** Box in page fractions. */
+    abstract val box: RectF
+    var rotation = 0f
 
-    /** Moves the annotation by fractions of the page. */
-    fun offset(dx: Float, dy: Float) {
-        when (this) {
-            is Text -> { x += dx; y += dy }
-            is Check -> { x += dx; y += dy }
-            is Signature -> rect.offset(dx, dy)
-            is Stroke -> Unit
+    class Text(page: Int, var text: String, override val box: RectF, var color: Int) : Annotation(page)
+
+    /** A check mark, or a cross when [cross] is set. */
+    class Check(page: Int, override val box: RectF, var color: Int, var cross: Boolean = false) : Annotation(page)
+
+    /** Free drawing. [points] are fractions of the page; [highlighter] draws wide and translucent. */
+    class Stroke(page: Int, val points: List<Pair<Float, Float>>, var widthFraction: Float, var color: Int, val highlighter: Boolean) : Annotation(page) {
+        override val box: RectF = RectF(
+            points.minOf { it.first }, points.minOf { it.second }, points.maxOf { it.first }, points.maxOf { it.second },
+        )
+        /** Points relative to the box (0..1 inside it), so moving or scaling the box moves the stroke. */
+        val relative: List<Pair<Float, Float>> = points.map { (x, y) ->
+            Pair(if (box.width() > 0f) (x - box.left) / box.width() else 0.5f, if (box.height() > 0f) (y - box.top) / box.height() else 0.5f)
         }
+
+        /** Current points, after the box was moved or resized. */
+        fun currentPoints(): List<Pair<Float, Float>> = relative.map { (rx, ry) -> Pair(box.left + rx * box.width(), box.top + ry * box.height()) }
     }
+
+    class Signature(page: Int, val bitmap: Bitmap, override val box: RectF) : Annotation(page)
 }
 
 /** Page order and rotation changes: [order] lists original page indexes (0-based) in the new order; deleted pages are absent. */
