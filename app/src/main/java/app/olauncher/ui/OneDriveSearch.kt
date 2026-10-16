@@ -174,7 +174,7 @@ class OneDriveSearch(private val context: Context) {
 
     companion object {
         /** "Application (client) ID" of the app registered on Microsoft Entra (not a secret). */
-        const val CLIENT_ID = ""
+        const val CLIENT_ID = "583f7ca6-fa44-4333-a927-eb8f8580d3ab"
         const val REDIRECT_URI = "minimalauncher://auth"
         private const val AUTHORITY = "https://login.microsoftonline.com/consumers/oauth2/v2.0"
         private const val SCOPES = "Files.Read offline_access"
