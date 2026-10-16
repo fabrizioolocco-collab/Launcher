@@ -109,14 +109,21 @@ open class FileExplorerActivity : AppCompatActivity() {
             override fun handleOnBackPressed() = if (selecting) clearSelection() else goBack()
         })
         location = startLocation(intent)
+        entryDir = location.dir.absolutePath
         load()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        // The activity is reused (singleTask): the new launch sets a new entry folder for the back gesture
+        setIntent(intent)
         location = startLocation(intent)
+        entryDir = location.dir.absolutePath
         load()
     }
+
+    /** Folder the explorer was opened in: the back gesture leaves from there. */
+    private var entryDir = ""
 
     private var firstResume = true
 
@@ -299,7 +306,7 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     /** Back gesture: up one folder while inside the folder the explorer was opened in; past it, leave the explorer. */
     private fun goBack() {
-        val entry = startLocation(intent).dir.absolutePath
+        val entry = entryDir.ifEmpty { startLocation(intent).dir.absolutePath }
         val dir = location.dir.absolutePath
         if (dir == entry || !dir.startsWith("$entry/")) finish() else goUp()
     }
