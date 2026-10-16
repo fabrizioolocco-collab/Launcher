@@ -113,6 +113,9 @@ class AppDrawerFragment : BaseFragment() {
     }
 
     private fun initSearch() {
+        // The keyboard never opens by itself: a tap anywhere on the search box opens it
+        binding.search.setOnClickListener { binding.search.showKeyboard() }
+        searchTextView?.setOnClickListener { binding.search.showKeyboard() }
         binding.search.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
                 if (query?.startsWith("!") == true)

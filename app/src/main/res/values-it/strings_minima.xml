@@ -132,4 +132,5 @@
     <string name="ml_bottom_labels">Nome sotto le icone in basso</string>
     <string name="ml_add_widget_top">Aggiungi widget in alto</string>
     <string name="ml_add_to_bottom">Aggiungi nella zona in basso…</string>
+    <string name="ml_search_apps">Cerca app</string>
 </resources>

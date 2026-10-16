@@ -134,4 +134,5 @@
     <string name="ml_bottom_labels">Names under bottom icons</string>
     <string name="ml_add_widget_top">Add widget at the top</string>
     <string name="ml_add_to_bottom">Add to the bottom area…</string>
+    <string name="ml_search_apps">Search apps</string>
 </resources>

@@ -33,7 +33,9 @@
             app:closeIcon="@null"
             app:iconifiedByDefault="false"
             app:queryBackground="@null"
-            app:queryHint="___"
+            android:background="@drawable/rounded_rect_shade_color"
+            android:layout_marginStart="16dp"
+            app:queryHint="@string/ml_search_apps"
             app:searchIcon="@null"
             app:theme="@style/AppSearchText" />
 
