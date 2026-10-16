@@ -33,6 +33,10 @@ import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentHomeBinding
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.SwipeActions
+import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.appUsagePermissionGranted
@@ -78,6 +82,12 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) onImagePicked?.invoke(uri)
         onImagePicked = null
+    }
+
+    private var onFolderPicked: ((Uri) -> Unit)? = null
+    private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) onFolderPicked?.invoke(uri)
+        onFolderPicked = null
     }
 
     private var onFilePicked: ((Uri) -> Unit)? = null
@@ -158,6 +168,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 SwipeActions.run(requireContext(), app, up)
             }
         }
+        SwipeActions.folderPicker = { callback -> pickFolder(callback) }
+        SwipeActions.onFoldersChanged = { viewModel.loadHomeApps() }
         SwipeActions.filePicker = { callback ->
             onFilePicked = callback
             filePicker.launch(arrayOf("*/*"))
@@ -398,6 +410,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                     },
                     addWidget = { widgets.showAddWidgetDialog() },
                     addToBottom = { bottomArea.showAddMenu() },
+                    addFolder = { createFolderShortcut() },
                 )
             }
 
@@ -656,8 +669,35 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
+    /** Home menu > New folder: pick a folder, name it, choose what opens it; it lands on home outside groups. */
+    private fun createFolderShortcut() {
+        pickFolder { path ->
+            val ctx = requireContext()
+            val dir = java.io.File(path)
+            ctx.showTextInputDialog(getString(R.string.ml_folder_new), dir.name, getString(R.string.ml_explorer_folder_name), getString(R.string.ml_save)) { name ->
+                ctx.showMenuDialog(getString(R.string.ml_folder_open_with), listOf(true, false).map { inExplorer ->
+                    MenuEntry(getString(if (inExplorer) R.string.ml_explorer else R.string.ml_file_manager)) {
+                        val folder = FolderShortcuts.add(ctx, path, name, inExplorer)
+                        HomeSectionsController.addUngrouped(ctx, FolderShortcuts.toApp(folder))
+                        viewModel.loadHomeApps()
+                        sections.reload()
+                    }
+                })
+            }
+        }
+    }
+
+    private fun pickFolder(onPicked: (String) -> Unit) {
+        onFolderPicked = { uri ->
+            val path = FolderShortcuts.pathFromTree(uri)
+            if (path == null) requireContext().showToast(getString(R.string.ml_search_cannot_open)) else onPicked(path)
+        }
+        folderPicker.launch(null)
+    }
+
     private fun launchHomeApp(app: AppModel.App) {
-        if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
+        if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
+        else if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
         else viewModel.launch(app)
     }
 

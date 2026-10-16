@@ -265,4 +265,11 @@
     <string name="ml_explorer_view_own">Impostazioni di questa cartella (valgono anche per le sottocartelle)</string>
     <string name="ml_explorer_view_from">Impostazioni ereditate da «%1$s»: una modifica vale per questa cartella</string>
     <string name="ml_explorer_view_default">Impostazioni predefinite: una modifica vale per questa cartella e le sottocartelle</string>
+    <!-- Folder shortcuts -->
+    <string name="ml_folder_new">Nuova cartella sulla home</string>
+    <string name="ml_folder_new_ellipsis">Aggiungi una cartella…</string>
+    <string name="ml_folder_open_with">Aprila con</string>
+    <string name="ml_folder_opens_in">Si apre in: %1$s</string>
+    <string name="ml_folder_delete">Elimina scorciatoia</string>
+    <string name="ml_swipe_open_folder">Apri una cartella…</string>
 </resources>

@@ -29,6 +29,7 @@ import app.olauncher.helper.IconChooser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.SwipeActions
+import app.olauncher.helper.FolderShortcuts
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getUserHandleFromString
@@ -291,13 +292,14 @@ class HomeSectionsController(
 
     // ---------------------------------------------------------------- menus
 
-    fun showHomeMenu(openSettings: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit) {
+    fun showHomeMenu(openSettings: () -> Unit, addWidget: () -> Unit, addToBottom: () -> Unit, addFolder: () -> Unit) {
         context.showMenuDialog(
             context.getString(R.string.app_name),
             listOf(
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection() },
                 MenuEntry(context.getString(R.string.ml_add_widget_top)) { addWidget() },
                 MenuEntry(context.getString(R.string.ml_add_to_bottom)) { addToBottom() },
+                MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },
                 MenuEntry(context.getString(R.string.ml_settings)) { openSettings() },
             )
@@ -349,7 +351,18 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
-        context.showMenuDialog(app.appLabel, entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
+    }
+
+    /** Common end of the app menus: swipe actions and detox; folder shortcuts get their own entries instead. */
+    private fun appMenuTail(app: AppModel.App, entries: List<MenuEntry>): List<MenuEntry> {
+        if (FolderShortcuts.isFolder(app.appPackage)) {
+            val info = context.getString(R.string.ml_app_info)
+            return entries.filter { it.label != info } +
+                    FolderShortcuts.menuEntries(context, app) { SwipeActions.onFoldersChanged?.invoke() } +
+                    SwipeActions.menuEntries(context, app) { apps }
+        }
+        return entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage)
     }
 
     /** Menu of an app pinned on home outside any group. */
@@ -374,7 +387,7 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, app.user, app.appPackage)
         }
-        context.showMenuDialog(app.appLabel, entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
     }
 
     private fun moveUngrouped(position: Int, delta: Int) {
@@ -404,7 +417,7 @@ class HomeSectionsController(
                 openAppInfo(context, app.user, app.appPackage)
             },
         )
-        context.showMenuDialog(app.appLabel, entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage), header = AppNotificationsView.create(context, app))
+        context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
     }
 
     // ---------------------------------------------------------------- operations

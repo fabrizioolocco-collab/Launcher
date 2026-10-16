@@ -271,4 +271,11 @@
     <string name="ml_explorer_view_own">Settings of this folder (also used by its subfolders)</string>
     <string name="ml_explorer_view_from">Settings inherited from «%1$s»: a change applies to this folder</string>
     <string name="ml_explorer_view_default">Default settings: a change applies to this folder and its subfolders</string>
+    <!-- Folder shortcuts -->
+    <string name="ml_folder_new">New folder on home</string>
+    <string name="ml_folder_new_ellipsis">Add a folder…</string>
+    <string name="ml_folder_open_with">Open it with</string>
+    <string name="ml_folder_opens_in">Opens in: %1$s</string>
+    <string name="ml_folder_delete">Delete shortcut</string>
+    <string name="ml_swipe_open_folder">Open a folder…</string>
 </resources>

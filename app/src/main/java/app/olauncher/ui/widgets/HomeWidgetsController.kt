@@ -20,6 +20,7 @@ import app.olauncher.helper.IconPackManager
 import app.olauncher.ui.AppNotificationsView
 import app.olauncher.ui.DetoxController
 import app.olauncher.helper.SwipeActions
+import app.olauncher.helper.FolderShortcuts
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
@@ -386,7 +387,12 @@ class HomeWidgetsController(
                 MenuEntry(activity.getString(R.string.ml_app_info)) {
                     openAppInfo(activity, app.user, app.appPackage)
                 },
-            ) + SwipeActions.menuEntries(activity, app) { apps } + DetoxController.whitelistEntry(activity, app.appPackage),
+            ).let { base ->
+                if (FolderShortcuts.isFolder(app.appPackage))
+                    base.filter { it.label != activity.getString(R.string.ml_app_info) } +
+                            FolderShortcuts.menuEntries(activity, app) { SwipeActions.onFoldersChanged?.invoke() }
+                else base + DetoxController.whitelistEntry(activity, app.appPackage)
+            } + SwipeActions.menuEntries(activity, app) { apps },
             header = AppNotificationsView.create(activity, app),
         )
     }

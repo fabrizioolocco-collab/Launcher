@@ -49,9 +49,16 @@ object SwipeActions {
     const val TYPE_APP = "app"
     const val TYPE_SHORTCUT = "shortcut"
     const val TYPE_FILE = "file"
+    const val TYPE_FOLDER = "folder"
 
     /** Opens the system file picker and calls back with the chosen file (set by the home screen). */
     var filePicker: (((Uri) -> Unit) -> Unit)? = null
+
+    /** Opens the system folder picker and calls back with the folder's path (set by the home screen). */
+    var folderPicker: (((String) -> Unit) -> Unit)? = null
+
+    /** Reloads home after folder shortcuts change (set by the home screen). */
+    var onFoldersChanged: (() -> Unit)? = null
 
     private fun prefs(context: Context) = context.getSharedPreferences("app.minimalauncher.swipe", Context.MODE_PRIVATE)
 
@@ -72,8 +79,14 @@ object SwipeActions {
         val launcherApps = context.getSystemService(LauncherApps::class.java)
         try {
             when (action.type) {
+                TYPE_FOLDER -> FolderShortcuts.openPath(context, java.io.File(action.uri ?: return false))
+
                 TYPE_APP -> {
                     val pkg = action.packageName ?: return false
+                    if (FolderShortcuts.isFolder(pkg)) {
+                        FolderShortcuts.open(context, pkg)
+                        return true
+                    }
                     if (!DetoxManager.isAllowed(context, pkg)) {
                         context.showToast(context.getString(R.string.ml_detox_blocked))
                         return true
@@ -150,6 +163,11 @@ object SwipeActions {
         entries += MenuEntry(context.getString(R.string.ml_swipe_shortcut_other)) {
             val withShortcuts = apps().filter { shortcutsOf(context, it.appPackage, it.user).isNotEmpty() }
             pickApp(context, withShortcuts, context.getString(R.string.ml_swipe_shortcut_other)) { target -> pickShortcut(context, target, save) }
+        }
+        folderPicker?.let { picker ->
+            entries += MenuEntry(context.getString(R.string.ml_swipe_open_folder)) {
+                picker { path -> save(Action(TYPE_FOLDER, java.io.File(path).name, uri = path)) }
+            }
         }
         filePicker?.let { picker ->
             entries += MenuEntry(context.getString(R.string.ml_swipe_open_file)) {
