@@ -2,8 +2,6 @@ package app.olauncher.ui.widgets
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
@@ -15,17 +13,18 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
 import app.olauncher.R
-import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.ui.HomeSectionsController
 
 /**
  * An app icon placed on a [WidgetGridLayout] (bottom area): icon centered in its cell, optional
- * label, red badge with the notification count. Tap launches, long press drags or opens the menu.
+ * label; red icon while the app has notifications. Tap launches (or lists the notifications), long
+ * press drags or opens the menu.
  */
 class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
 
-    val touch = GridItemTouch(this, onTap)
+    /** With notifications a tap lists them ([onNotifiedTap]) instead of launching. */
+    val touch = GridItemTouch(this) { if (notified) onNotifiedTap?.invoke() ?: onTap() else onTap() }
 
     private val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
     private val label = TextView(context, null, 0, R.style.TextSmall).apply {
@@ -33,21 +32,6 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
         gravity = Gravity.CENTER
-    }
-    private val badge = TextView(context).apply {
-        setTextColor(0xFFFFFFFF.toInt())
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
-        setTypeface(typeface, Typeface.BOLD)
-        gravity = Gravity.CENTER
-        minWidth = 18.dpToPx()
-        minHeight = 18.dpToPx()
-        setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.RECTANGLE
-            cornerRadius = 9.dpToPx().toFloat()
-            setColor(HomeSectionsController.NOTIFICATION_COLOR)
-        }
-        isVisible = false
     }
     private val iconFrame = FrameLayout(context)
     private val column = LinearLayout(context).apply {
@@ -57,7 +41,6 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
 
     init {
         iconFrame.addView(icon)
-        iconFrame.addView(badge, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END))
         column.addView(iconFrame)
         column.addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         addView(column, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -74,21 +57,21 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         label.text = text
         label.isVisible = showLabel
         contentDescription = text
-        val badgeRoom = 6.dpToPx()
-        iconFrame.layoutParams = LinearLayout.LayoutParams(iconSize + badgeRoom, iconSize + badgeRoom)
-        icon.layoutParams = LayoutParams(iconSize, iconSize, Gravity.BOTTOM or Gravity.START)
+        iconFrame.layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
+        icon.layoutParams = LayoutParams(iconSize, iconSize, Gravity.CENTER)
     }
 
     fun setIcon(bitmap: Bitmap?) = icon.setImageBitmap(bitmap)
 
-    /** Tap on the red pill (instead of launching the app). */
-    var onBadgeTap: (() -> Unit)? = null
+    /** Tap while the app has notifications (instead of launching it). */
+    var onNotifiedTap: (() -> Unit)? = null
 
-    fun setBadge(count: Int) {
-        badge.isVisible = count > 0
-        badge.text = if (count > 99) "99+" else count.toString()
-        badge.isClickable = count > 0
-        badge.setOnClickListener { onBadgeTap?.invoke() }
+    private var notified = false
+
+    fun setNotified(value: Boolean) {
+        notified = value
+        icon.colorFilter = if (value) app.olauncher.ui.NotificationBadge.redFilter else null
+        label.setTextColor(if (value) HomeSectionsController.NOTIFICATION_COLOR else context.getColorFromAttr(R.attr.primaryColor))
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = touch.intercept(ev)

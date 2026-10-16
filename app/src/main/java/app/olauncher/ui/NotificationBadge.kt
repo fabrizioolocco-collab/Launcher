@@ -1,42 +1,36 @@
 package app.olauncher.ui
 
 import android.content.Context
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
-import android.view.Gravity
-import android.widget.TextView
-import androidx.core.view.isVisible
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.drawable.Drawable
 import app.olauncher.R
 import app.olauncher.data.AppModel
 import app.olauncher.helper.MenuEntry
-import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showMenuDialog
 
-/** Red pill with a notification count; tapping it lists the app's notifications. */
+/**
+ * Apps with notifications show their icon in red (instead of a count): tapping such an app lists
+ * its notifications, and the icon goes back to normal once they're all gone.
+ */
 object NotificationBadge {
 
-    fun create(context: Context, textSp: Float = 11f): TextView = TextView(context).apply {
-        setTextColor(0xFFFFFFFF.toInt())
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, textSp)
-        setTypeface(typeface, Typeface.BOLD)
-        gravity = Gravity.CENTER
-        includeFontPadding = false
-        minWidth = 20.dpToPx()
-        minHeight = 20.dpToPx()
-        setPadding(6.dpToPx(), 2.dpToPx(), 6.dpToPx(), 2.dpToPx())
-        background = GradientDrawable().apply {
-            cornerRadius = 10.dpToPx().toFloat()
-            setColor(HomeSectionsController.NOTIFICATION_COLOR)
-        }
-        isClickable = true
-        isVisible = false
+    /**
+     * Recolors by brightness: white parts become the notification red, black stays black
+     * (made for white-on-black icon packs; colored icons turn into red shades).
+     */
+    val redFilter: ColorMatrixColorFilter by lazy {
+        val c = HomeSectionsController.NOTIFICATION_COLOR
+        val r = ((c shr 16) and 0xFF) / 255f
+        val g = ((c shr 8) and 0xFF) / 255f
+        val b = (c and 0xFF) / 255f
+        fun row(k: Float) = floatArrayOf(0.299f * k, 0.587f * k, 0.114f * k, 0f, 0f)
+        ColorMatrixColorFilter(ColorMatrix(row(r) + row(g) + row(b) + floatArrayOf(0f, 0f, 0f, 1f, 0f)))
     }
 
-    fun bind(badge: TextView, count: Int, onTap: (() -> Unit)?) {
-        badge.isVisible = count > 0
-        badge.text = if (count > 99) "99+" else count.toString()
-        badge.setOnClickListener { onTap?.invoke() }
+    /** Red icon when [notified], normal otherwise. */
+    fun tint(drawable: Drawable, notified: Boolean): Drawable = drawable.mutate().apply {
+        colorFilter = if (notified) redFilter else null
     }
 
     /** Notifications of [app] (tap opens, swipe dismisses) plus "Open app". */

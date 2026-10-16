@@ -125,7 +125,7 @@ class HomeWidgetsController(
         for (i in 0 until grid.childCount) {
             val view = grid.getChildAt(i) as? IconCellView ?: continue
             val item = view.tag as HomeWidget
-            view.setBadge(notifications[NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty())]?.count ?: 0)
+            view.setNotified((notifications[NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty())]?.count ?: 0) > 0)
         }
     }
 
@@ -209,7 +209,7 @@ class HomeWidgetsController(
 
     private fun iconView(item: HomeWidget, app: AppModel.App): View {
         val view = IconCellView(activity) { onLaunchApp(app) }
-        view.onBadgeTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
+        view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
         view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, 1)
         val showLabel = prefs.bottomLabels

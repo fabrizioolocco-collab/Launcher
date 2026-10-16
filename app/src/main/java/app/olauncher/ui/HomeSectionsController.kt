@@ -227,41 +227,16 @@ class HomeSectionsController(
         }
     }
 
-    /** App row/cell: the label view plus a red pill with the count; tapping the pill lists the notifications. */
-    private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View {
-        val label = labelView(sectionIndex, sectionApp, app, gravity)
-        val count = notificationCount(app)
-        if (count <= 0) return label
-        val badge = NotificationBadge.create(context)
-        NotificationBadge.bind(badge, count) { NotificationBadge.showNotifications(context, app) { onLaunch(app) } }
-        return if (iconOnTop()) {
-            android.widget.FrameLayout(context).apply {
-                addView(label, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                addView(badge, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END).apply {
-                    marginEnd = 4.dpToPx()
-                    topMargin = 2.dpToPx()
-                })
-                layoutParams = lp(gravity)
-            }
-        } else {
-            LinearLayout(context).apply {
-                orientation = LinearLayout.HORIZONTAL
-                this.gravity = Gravity.CENTER_VERTICAL
-                addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f).apply { weight = 0f })
-                addView(badge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    marginStart = 10.dpToPx()
-                })
-                layoutParams = lp(gravity)
-            }
-        }
-    }
+    /** App row/cell. With notifications its name and icon are red, and a tap lists them instead of opening the app. */
+    private fun appView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): View =
+        labelView(sectionIndex, sectionApp, app, gravity)
 
     private fun labelView(sectionIndex: Int, sectionApp: SectionApp, app: AppModel.App, gravity: Int): TextView =
         TextView(context, null, 0, R.style.TextLarge).apply {
             FontManager.apply(this, prefs.appFont, prefs.appTextSize)
             val count = notificationCount(app)
             val onTop = iconOnTop()
-            // The count goes in a red pill next to the app (see withBadge)
+            // With notifications: bold red name (and red icon, see loadIcon)
             text = if (prefs.homeShowLabels) badgeText(app.appLabel, if (count > 0) -1 else 0) else ""
             if (onTop) setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
             if (count > 0) setTextColor(NOTIFICATION_COLOR)
@@ -273,7 +248,10 @@ class HomeSectionsController(
             setPadding(0, padV, 0, padV)
             isClickable = true
             isLongClickable = true
-            setOnClickListener { onLaunch(app) }
+            setOnClickListener {
+                if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
+                else onLaunch(app)
+            }
             setOnLongClickListener {
                 showAppMenu(sectionIndex, sectionApp, app)
                 true
@@ -301,7 +279,7 @@ class HomeSectionsController(
             val bitmap = withContext(Dispatchers.IO) {
                 IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size)
             } ?: return@launch
-            place(IconPackManager.toDrawable(context, bitmap, size))
+            place(NotificationBadge.tint(IconPackManager.toDrawable(context, bitmap, size), notificationCount(app) > 0))
         }
     }
 

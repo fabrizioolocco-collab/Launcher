@@ -277,12 +277,6 @@ class AppDrawerAdapter(
     class ViewHolder(private val binding: AdapterAppDrawerBinding) :
         RecyclerView.ViewHolder(binding.root) {
         private val defaultTitleColors = binding.appTitle.textColors
-        private val badge = NotificationBadge.create(binding.root.context).also {
-            binding.root.addView(it, android.widget.FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
-                android.view.Gravity.END or android.view.Gravity.CENTER_VERTICAL
-            ).apply { marginEnd = 72.dpToPx() })
-        }
 
         fun bind(
             flag: Int,
@@ -306,7 +300,6 @@ class AppDrawerAdapter(
             appTitle.visibility = View.VISIBLE
 
             // Show indicators in title based on app type and state
-            NotificationBadge.bind(badge, notificationCount) { badgeTap?.invoke(appModel) }
             if (notificationCount > 0) {
                 appTitle.text = HomeSectionsController.badgeText(appModel.appLabel, -1)
                 appTitle.setTextColor(HomeSectionsController.NOTIFICATION_COLOR)
@@ -323,7 +316,10 @@ class AppDrawerAdapter(
             appTitle.setCompoundDrawablesRelative(null, null, null, null)
             if (appModel.appPackage.isNotEmpty()) iconLoader?.invoke(appModel, appTitle)
 
-            appTitle.setOnClickListener { clickListener(appModel) }
+            // With notifications (red name and icon) a tap lists them instead of opening the app
+            appTitle.setOnClickListener {
+                if (notificationCount > 0 && badgeTap != null) badgeTap(appModel) else clickListener(appModel)
+            }
 
             appTitle.setOnLongClickListener {
                 if (longPressMenu != null) {

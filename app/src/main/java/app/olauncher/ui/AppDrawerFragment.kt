@@ -398,6 +398,7 @@ class AppDrawerFragment : BaseFragment() {
         val size = (view.textSize * 1.15f).toInt()
         val key = "${appModel.appPackage}|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
         view.tag = key
+        val notified = appModel is AppModel.App && (notifications[notificationKey(appModel)]?.count ?: 0) > 0
         view.compoundDrawablePadding = 14.dpToPx()
         view.setCompoundDrawablesRelative(ColorDrawable(0).apply { setBounds(0, 0, size, size) }, null, null, null)
         val context = requireContext().applicationContext
@@ -411,7 +412,7 @@ class AppDrawerFragment : BaseFragment() {
             } ?: return@launch
             // The row may have been recycled for another app meanwhile
             if (view.tag == key)
-                view.setCompoundDrawablesRelative(IconPackManager.toDrawable(context, bitmap, size), null, null, null)
+                view.setCompoundDrawablesRelative(NotificationBadge.tint(IconPackManager.toDrawable(context, bitmap, size), notified), null, null, null)
         }
     }
 
