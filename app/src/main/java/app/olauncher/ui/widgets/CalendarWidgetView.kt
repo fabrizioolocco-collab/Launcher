@@ -307,30 +307,37 @@ class CalendarWidgetView(
             })
             return
         }
-        val hours = WeatherRepository.cached(activity)?.upcoming()?.take(WEATHER_HOURS).orEmpty()
-        val line = activity.getColorFromAttr(R.attr.cardLineColor)
+        // Today: the next hours; another day: that day from 8 to 20 every two hours (if the forecast gets there)
+        val forecast = WeatherRepository.cached(activity)
+        val today = CalendarEvents.julianDay(System.currentTimeMillis())
+        val day = firstDay()
+        val hours = if (day == today) forecast?.upcoming()?.take(WEATHER_HOURS).orEmpty()
+        else forecast?.hours?.filter {
+            CalendarEvents.julianDay(it.time) == day && ((it.time - CalendarEvents.dayStart(day)) / 3_600_000L).toInt().let { h -> h in 8..20 && h % 2 == 0 }
+        }.orEmpty()
+        val now = day == today
         hours.forEachIndexed { i, h ->
+            val current = now && i == 0
             weatherRow.addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
-                setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
-                if (i == 0) background = GradientDrawable().apply {
-                    cornerRadius = 10.dpToPx().toFloat()
-                    setColor(line)
-                }
+                setPadding(0, 4.dpToPx(), 0, 4.dpToPx())
                 addView(text(CalendarText.STATUS).apply {
-                    text = WeatherIcons.hourLabel(h.time)
+                    text = if (current) activity.getString(R.string.ml_w_now) else WeatherIcons.hourLabel(h.time)
                     textSize = 11f
-                    alpha = 0.6f
+                    alpha = if (current) 0.9f else 0.55f
                     typeface = Typeface.DEFAULT
-                })
+                    gravity = Gravity.CENTER
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(ImageView(activity).apply { setImageResource(WeatherIcons.icon(h.code, h.isDay)) },
-                    LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { topMargin = 3.dpToPx(); bottomMargin = 3.dpToPx() })
-                addView(text(CalendarText.TIME, Typeface.BOLD).apply {
+                    LinearLayout.LayoutParams(22.dpToPx(), 22.dpToPx()).apply { topMargin = 4.dpToPx(); bottomMargin = 4.dpToPx() })
+                addView(text(CalendarText.TIME, if (current) Typeface.BOLD else Typeface.NORMAL).apply {
                     text = activity.getString(R.string.ml_w_degrees, Math.round(h.temp))
-                    textSize = 12f
-                })
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = 4.dpToPx() })
+                    textSize = 13f
+                    gravity = Gravity.CENTER
+                    if (!current) alpha = 0.85f
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         if (hours.isEmpty()) weatherRow.isVisible = false
     }
@@ -409,6 +416,7 @@ class CalendarWidgetView(
     fun reload() {
         val first = firstDay()
         updateHeader()
+        if (isAttachedToWindow) showWeather()
         hadPermission = CalendarEvents.hasPermission(activity)
         if (!hadPermission) {
             // The todos show anyway, under the request

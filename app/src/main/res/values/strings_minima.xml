@@ -669,4 +669,5 @@
     <string name="ml_w_sunrise">Sunrise %1$s · sunset %2$s</string>
     <string name="ml_cal_card">Card with a border</string>
     <string name="ml_w_degrees">%d°</string>
+    <string name="ml_w_now">Now</string>
 </resources>

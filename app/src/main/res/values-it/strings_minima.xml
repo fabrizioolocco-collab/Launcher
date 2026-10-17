@@ -663,4 +663,5 @@
     <string name="ml_w_sunrise">Alba %1$s · tramonto %2$s</string>
     <string name="ml_cal_card">Scheda con bordo</string>
     <string name="ml_w_degrees">%d°</string>
+    <string name="ml_w_now">Ora</string>
 </resources>
