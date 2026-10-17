@@ -62,6 +62,10 @@
     <string name="ml_test_remove">Rimuovi</string>
     <string name="ml_test_sent">Notifica di prova n. %1$d inviata</string>
     <string name="ml_test_removed">Prova rimossa</string>
+    <string name="ml_settings_test">Test</string>
+    <string name="ml_test_many">Notifiche da 10 app</string>
+    <string name="ml_test_fake_app_name">App fittizia %1$d</string>
+    <string name="ml_test_many_channel">Notifiche di prova (app fittizie)</string>
     <string name="ml_notifications_blocked">Le notifiche di MinimaLauncher sono bloccate: consentile per inviare le prove</string>
     <string name="ml_grant_access_first">Attiva anche l\'accesso alle notifiche, altrimenti i badge non si aggiornano</string>
     <string name="ml_news">Novità</string>

@@ -200,8 +200,8 @@ class AppDrawerFragment : BaseFragment() {
             flag,
             prefs.appLabelAlignment,
             appClickListener = { appModel ->
-                if (appModel.appPackage == TestNotifications.FAKE_PACKAGE)
-                    TestNotifications.clearNotifications(requireContext())
+                if (TestNotifications.isFake(appModel.appPackage))
+                    TestNotifications.clearNotifications(requireContext(), appModel.appPackage)
                 else
                     viewModel.selectedApp(appModel, flag)
                 if (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS)
@@ -526,7 +526,8 @@ class AppDrawerFragment : BaseFragment() {
     private fun newsBlock(apps: List<AppModel>): List<AppModel> {
         if (flag != Constants.FLAG_LAUNCH_APP || notifications.isEmpty()) return emptyList()
         val pool = apps + currentHiddenApps +
-                (if (TestNotifications.isEnabled(requireContext())) listOf(TestNotifications.fakeApp(requireContext())) else emptyList())
+                (if (TestNotifications.isEnabled(requireContext())) listOf(TestNotifications.fakeApp(requireContext())) else emptyList()) +
+                TestNotifications.fakeApps(requireContext())
         val news = pool.filterIsInstance<AppModel.App>()
             .filter { notifications.containsKey(notificationKey(it)) && DetoxManager.isAllowed(requireContext(), it.appPackage) }
             .distinctBy { notificationKey(it) }

@@ -110,11 +110,11 @@ class NotificationListener : NotificationListenerService() {
     /** Re-applies the detox rules now (session started, whitelist changed). */
     fun applyDetox() = handler.post { publishCounts() }
 
-    /** Package a notification belongs to for the launcher (test notifications map to the fake app). */
+    /** Package a notification belongs to for the launcher (test notifications map to the fake apps). */
     private fun ownerOf(sbn: StatusBarNotification): String? {
         val n = sbn.notification ?: return null
         if (sbn.packageName != BuildConfig.APPLICATION_ID) return sbn.packageName
-        return if (TestNotifications.isTestNotification(n)) TestNotifications.FAKE_PACKAGE else null
+        return TestNotifications.ownerOf(n)
     }
 
     /**

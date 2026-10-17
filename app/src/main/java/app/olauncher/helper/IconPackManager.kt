@@ -103,6 +103,7 @@ object IconPackManager {
             loadCustom(context, CustomIcons.get(context, packageName, activityClassName, user), sizePx)
                 ?: if (FolderShortcuts.isFolder(packageName)) FolderShortcuts.icon(context, sizePx)
                 else if (ParkingShortcut.isParking(packageName)) ParkingShortcut.icon(context, sizePx)
+                else if (TestNotifications.isFake(packageName)) fakeIcon(context, packageName, user, iconPackPackage, sizePx)
                 else loadDefault(context, packageName, activityClassName, user, iconPackPackage, sizePx)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -132,6 +133,14 @@ object IconPackManager {
             null
         }
         return bitmap
+    }
+
+    /** The random icon of a fake test app (see [TestNotifications.sendMany]). */
+    private fun fakeIcon(context: Context, packageName: String, user: UserHandle, iconPackPackage: String, sizePx: Int): Bitmap? {
+        val spec = TestNotifications.iconSpec(context, packageName) ?: return null
+        return if (spec.startsWith(TestNotifications.APP_ICON_PREFIX))
+            loadDefault(context, spec.removePrefix(TestNotifications.APP_ICON_PREFIX), null, user, iconPackPackage, sizePx)
+        else loadCustom(context, spec, sizePx)
     }
 
     /** Custom icon chosen by the user: "pack:<pack package>:<drawable>" or "file:<absolute path>". */

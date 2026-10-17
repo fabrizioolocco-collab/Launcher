@@ -62,7 +62,7 @@ object AppNotificationsView {
                 e.printStackTrace()
             }
         }
-        if (app.appPackage == TestNotifications.FAKE_PACKAGE) return
+        if (TestNotifications.isFake(app.appPackage)) return
         context.packageManager.getLaunchIntentForPackage(app.appPackage)?.let {
             try {
                 context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

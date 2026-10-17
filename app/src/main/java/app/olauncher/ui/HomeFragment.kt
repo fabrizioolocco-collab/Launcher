@@ -694,7 +694,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private fun launchHomeApp(app: AppModel.App) {
         if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
         else if (ParkingShortcut.isParking(app.appPackage)) ParkingShortcut.save(requireActivity())
-        else if (app.appPackage == TestNotifications.FAKE_PACKAGE) TestNotifications.clearNotifications(requireContext())
+        else if (TestNotifications.isFake(app.appPackage)) TestNotifications.clearNotifications(requireContext(), app.appPackage)
         else viewModel.launch(app)
     }
 

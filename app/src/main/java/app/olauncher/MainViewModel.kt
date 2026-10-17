@@ -428,7 +428,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // Folder shortcuts (and the test app) live on home like apps
             val extra = FolderShortcuts.asApps(appContext) +
                     (if (ParkingShortcut.isEnabled(appContext)) listOf(ParkingShortcut.app(appContext)) else emptyList()) +
-                    if (TestNotifications.isEnabled(appContext)) listOf(TestNotifications.fakeApp(appContext)) else emptyList()
+                    (if (TestNotifications.isEnabled(appContext)) listOf(TestNotifications.fakeApp(appContext)) else emptyList()) +
+                    TestNotifications.fakeApps(appContext)
             homeApps.value = apps + extra
         }
     }

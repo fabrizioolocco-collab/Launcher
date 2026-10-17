@@ -45,7 +45,9 @@ import app.olauncher.helper.getAppsList
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.data.AppModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import app.olauncher.helper.copyToClipboard
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.ui.widgets.WidgetLog
@@ -95,32 +97,56 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) sendTestNotification()
+        if (granted) sendTestNotification(pendingTestMany)
         else requireContext().showToast(getString(R.string.ml_notifications_blocked), Toast.LENGTH_LONG)
     }
 
-    private fun sendTestNotification() {
+    /** Which test the notification permission request was for. */
+    private var pendingTestMany = false
+
+    /** One more notification of the test app, or ([many]) one from each of ten fake apps. */
+    private fun sendTestNotification(many: Boolean = false) {
         val ctx = requireContext()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
+            pendingTestMany = many
             notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
             return
         }
-        if (!TestNotifications.send(ctx)) {
-            ctx.showToast(getString(R.string.ml_notifications_blocked), Toast.LENGTH_LONG)
-            try {
-                startActivity(
-                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
-                )
-            } catch (e: Exception) {
-                e.printStackTrace()
+        if (!NotificationRepository.isAccessGranted(ctx))
+            ctx.showToast(getString(R.string.ml_grant_access_first), Toast.LENGTH_LONG)
+        if (many) {
+            val appContext = ctx.applicationContext
+            val iconPack = prefs.iconPack
+            // In the view model scope: they keep arriving after going back to home to watch them
+            viewModel.viewModelScope.launch {
+                val sent = withContext(Dispatchers.IO) {
+                    TestNotifications.sendMany(appContext, iconPack) {
+                        withContext(Dispatchers.Main) { viewModel.loadHomeApps() }
+                    }
+                }
+                if (!sent && isAdded) testNotificationsBlocked()
             }
             return
         }
+        if (!TestNotifications.send(ctx)) {
+            testNotificationsBlocked()
+            return
+        }
         viewModel.loadHomeApps()
-        if (!NotificationRepository.isAccessGranted(ctx))
-            ctx.showToast(getString(R.string.ml_grant_access_first), Toast.LENGTH_LONG)
+    }
+
+    private fun testNotificationsBlocked() {
+        val ctx = requireContext()
+        ctx.showToast(getString(R.string.ml_notifications_blocked), Toast.LENGTH_LONG)
+        try {
+            startActivity(
+                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName)
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -291,6 +317,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 populateTextStyle()
             }
             R.id.testNotificationSend -> sendTestNotification()
+            R.id.testNotificationMany -> sendTestNotification(many = true)
             R.id.testNotificationRemove -> {
                 TestNotifications.disable(requireContext())
                 viewModel.loadHomeApps()
@@ -387,6 +414,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.widgetLog.setOnClickListener(this)
         binding.autoLaunchSingle.setOnClickListener(this)
         binding.testNotificationSend.setOnClickListener(this)
+        binding.testNotificationMany.setOnClickListener(this)
         binding.testNotificationRemove.setOnClickListener(this)
         binding.screenTimeOnOff.setOnClickListener(this)
         binding.dailyWallpaperUrl.setOnClickListener(this)

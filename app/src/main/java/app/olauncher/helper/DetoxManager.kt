@@ -153,7 +153,7 @@ object DetoxManager {
         if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName)) return true
         if (isStrict(context) && packageName in STRICT_BLOCKED) return false
         if (packageName in ALWAYS_ALLOWED) return true
-        if (packageName == TestNotifications.FAKE_PACKAGE) return packageName in whitelist(context)
+        if (TestNotifications.isFake(packageName)) return packageName in whitelist(context)
         if (packageName == defaultDialer(context)) return true
         if (packageName in inputMethods(context)) return true
         if (!isStrict(context) && packageName == "com.android.settings") return true
