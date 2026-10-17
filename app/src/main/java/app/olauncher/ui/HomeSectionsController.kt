@@ -30,6 +30,7 @@ import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.AppRename
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
@@ -361,7 +362,12 @@ class HomeSectionsController(
     }
 
     /** Common end of the app menus: swipe actions and detox; folder shortcuts get their own entries instead. */
-    private fun appMenuTail(app: AppModel.App, entries: List<MenuEntry>): List<MenuEntry> {
+    private fun appMenuTail(app: AppModel.App, menu: List<MenuEntry>): List<MenuEntry> {
+        // Rename goes right before "Change icon"
+        val entries = AppRename.menuEntry(context, app)?.let { rename ->
+            val at = menu.indexOfFirst { it.label == context.getString(R.string.ml_change_icon) }.takeIf { it >= 0 } ?: menu.size
+            menu.toMutableList().apply { add(at, rename) }
+        } ?: menu
         if (ParkingShortcut.isParking(app.appPackage)) {
             val info = context.getString(R.string.ml_app_info)
             val activity = context as? android.app.Activity ?: return entries.filter { it.label != info }

@@ -386,6 +386,8 @@ fun Context.showTextInputDialog(
     initial: String,
     hint: String,
     action: String,
+    /** Lets an empty text be saved (e.g. to go back to a default name). */
+    allowBlank: Boolean = false,
     onSave: (String) -> Unit,
 ): OlDialog {
     val (dialog, binding) = baseDialog(title)
@@ -407,7 +409,7 @@ fun Context.showTextInputDialog(
     }
     fun submit() {
         val text = input.text.toString().trim()
-        if (text.isBlank()) return
+        if (text.isBlank() && !allowBlank) return
         input.hideKeyboard()
         dialog.dismiss()
         onSave(text)

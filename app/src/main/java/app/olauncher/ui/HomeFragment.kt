@@ -34,6 +34,7 @@ import app.olauncher.databinding.FragmentHomeBinding
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.AppRename
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.showMenuDialog
@@ -171,6 +172,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
         SwipeActions.folderPicker = { callback -> pickFolder(callback) }
         SwipeActions.onFoldersChanged = { viewModel.loadHomeApps() }
+        AppRename.onRenamed = {
+            viewModel.loadHomeApps()
+            viewModel.getAppList()
+        }
         SwipeActions.filePicker = { callback ->
             onFilePicked = callback
             filePicker.launch(arrayOf("*/*"))

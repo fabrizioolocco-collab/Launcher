@@ -388,7 +388,7 @@
     <string name="ml_drawer_labels">App names in the list</string>
 
     <!-- Parking button -->
-    <string name="ml_parking">Parking</string>
+    <string name="ml_parking">Park</string>
     <string name="ml_parking_menu">Parking…</string>
     <string name="ml_parking_save">Save position now</string>
     <string name="ml_parking_open_maps">Open in Google Maps</string>

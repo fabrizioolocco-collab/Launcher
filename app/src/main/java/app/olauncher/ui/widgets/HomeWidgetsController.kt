@@ -26,6 +26,7 @@ import app.olauncher.ui.AppNotificationsView
 import app.olauncher.ui.DetoxController
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.AppRename
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
@@ -901,7 +902,8 @@ class HomeWidgetsController(
         if (ParkingShortcut.isParking(app.appPackage)) {
             activity.showMenuDialog(
                 ParkingShortcut.describe(activity),
-                ParkingShortcut.menuEntries(activity) + listOf(
+                ParkingShortcut.menuEntries(activity) + listOfNotNull(
+                    AppRename.menuEntry(activity, app),
                     MenuEntry(activity.getString(R.string.ml_change_icon)) { IconChooser.show(activity, app, scope, pickImage) { render() } },
                     MenuEntry(activity.getString(R.string.ml_remove_from_home)) {
                         widgets.remove(item)
@@ -914,12 +916,13 @@ class HomeWidgetsController(
         }
         activity.showMenuDialog(
             app.appLabel,
-            listOf(
+            listOfNotNull(
                 MenuEntry(activity.getString(R.string.ml_remove_from_home)) {
                     widgets.remove(item)
                     save()
                     render()
                 },
+                AppRename.menuEntry(activity, app),
                 MenuEntry(activity.getString(R.string.ml_change_icon)) {
                     IconChooser.show(activity, app, scope, pickImage) { render() }
                 },

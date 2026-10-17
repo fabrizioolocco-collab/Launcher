@@ -54,7 +54,7 @@ object ParkingShortcut {
     fun setEnabled(context: Context, enabled: Boolean) = prefs(context).edit { putBoolean("ENABLED", enabled) }
 
     fun app(context: Context) = AppModel.App(
-        appLabel = context.getString(R.string.ml_parking),
+        appLabel = app.olauncher.data.Prefs(context).getAppRenameLabel(PACKAGE).ifBlank { context.getString(R.string.ml_parking) },
         key = null,
         appPackage = PACKAGE,
         activityClassName = null,
@@ -226,7 +226,8 @@ object ParkingShortcut {
     fun icon(context: Context, sizePx: Int): Bitmap? {
         val drawable = ContextCompat.getDrawable(context, R.drawable.ic_parking)?.mutate() ?: return null
         val night = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
-        DrawableCompat.setTint(drawable, if (night) 0xFFFFFFFF.toInt() else 0xFF000000.toInt())
+        // Soft grey like the line icons around it, not pure white/black
+        DrawableCompat.setTint(drawable, if (night) 0xFFD6D6D6.toInt() else 0xFF2A2A2A.toInt())
         return drawable.toBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     }
 
