@@ -578,7 +578,15 @@
     <string name="ml_todo_fullscreen_permission">To show the alarm on the full screen, allow full screen notifications for MinimaLauncher.</string>
     <string name="ml_todo_channel_notify">ToDo reminders</string>
     <string name="ml_todo_channel_alarm">ToDo alarms</string>
-    <string name="ml_todo_snooze">Snooze %d min</string>
+    <string name="ml_todo_postpone">Postpone…</string>
+    <string name="ml_todo_postpone_minutes">%d minutes</string>
+    <plurals name="ml_todo_postpone_hours">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <string name="ml_todo_postpone_tomorrow">Tomorrow, same time</string>
+    <string name="ml_todo_postpone_custom">Custom…</string>
+    <string name="ml_todo_postponed">Postponed: %s</string>
     <string name="ml_todo_stop">Stop</string>
     <plurals name="ml_todo_unit_day">
         <item quantity="one">day</item>

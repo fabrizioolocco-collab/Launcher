@@ -34,11 +34,9 @@ object TodoAlarms {
     private const val CHANNEL_ALARM = "todo_alarm_v1"
     /** An alert missed by more than this (phone off) is not given any more. */
     private const val MAX_LATE = 30 * 60_000L
-    const val SNOOZE_MINUTES = 10
 
     const val ACTION_FIRE = "app.minimalauncher.todo.FIRE"
     const val ACTION_DONE = "app.minimalauncher.todo.DONE"
-    const val ACTION_SNOOZE = "app.minimalauncher.todo.SNOOZE"
     const val EXTRA_ID = "todo_id"
 
     /** Gives the alerts that are due, then schedules the next one. */
@@ -135,7 +133,14 @@ object TodoAlarms {
             .setCategory(if (alarm) NotificationCompat.CATEGORY_ALARM else NotificationCompat.CATEGORY_REMINDER)
             .addAction(0, ctx.getString(R.string.ml_todo_done), action(ctx, ACTION_DONE, todo.id))
         if (alarm) {
-            builder.addAction(0, ctx.getString(R.string.ml_todo_snooze, SNOOZE_MINUTES), action(ctx, ACTION_SNOOZE, todo.id))
+            // Postponing opens the alarm page on its choices (5 min ... tomorrow, custom)
+            val postpone = PendingIntent.getActivity(
+                ctx, notificationId(todo.id) * 4 + 2,
+                Intent(ctx, TodoAlarmActivity::class.java).putExtra(EXTRA_ID, todo.id).putExtra(TodoAlarmActivity.EXTRA_POSTPONE, true)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            builder.addAction(0, ctx.getString(R.string.ml_todo_postpone), postpone)
             val page = PendingIntent.getActivity(
                 ctx, notificationId(todo.id),
                 Intent(ctx, TodoAlarmActivity::class.java).putExtra(EXTRA_ID, todo.id)
@@ -155,7 +160,7 @@ object TodoAlarms {
     }
 
     private fun action(ctx: Context, action: String, id: Long): PendingIntent = PendingIntent.getBroadcast(
-        ctx, notificationId(id) * 4 + (if (action == ACTION_DONE) 1 else 2),
+        ctx, notificationId(id) * 4 + 1,
         Intent(ctx, TodoAlarmReceiver::class.java).setAction(action).putExtra(EXTRA_ID, id),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
@@ -173,11 +178,6 @@ class TodoAlarmReceiver : BroadcastReceiver() {
             TodoAlarms.ACTION_DONE -> {
                 TodoAlarms.dismiss(context, id)
                 TodoStore.complete(context, id)
-            }
-
-            TodoAlarms.ACTION_SNOOZE -> {
-                TodoAlarms.dismiss(context, id)
-                TodoStore.snooze(context, id, TodoAlarms.SNOOZE_MINUTES)
             }
 
             else -> TodoAlarms.schedule(context)

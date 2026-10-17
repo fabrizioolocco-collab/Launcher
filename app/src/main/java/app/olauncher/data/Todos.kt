@@ -282,12 +282,15 @@ object TodoStore {
         changed(context)
     }
 
-    /** Postpones the alarm of [id] by [minutes]. */
+    /** Moves [id] to [at]: the due date and time change, the alert rings again then. */
     @Synchronized
-    fun snooze(context: Context, id: Long, minutes: Int) {
+    fun postpone(context: Context, id: Long, at: Long) {
         ensure(context)
         todos.firstOrNull { it.id == id }?.let {
-            it.snooze = System.currentTimeMillis() + minutes * 60_000L
+            it.due = CalendarEvents.julianDay(at)
+            it.time = ((at - CalendarEvents.dayStart(it.due)) / 60_000L).toInt().coerceIn(0, 24 * 60 - 1)
+            it.snooze = 0L
+            it.notified = 0L
             changed(context)
         }
     }

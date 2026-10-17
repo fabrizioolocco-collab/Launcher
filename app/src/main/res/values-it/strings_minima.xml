@@ -572,7 +572,15 @@
     <string name="ml_todo_fullscreen_permission">Per mostrare la sveglia a schermo intero consenti a MinimaLauncher le notifiche a schermo intero.</string>
     <string name="ml_todo_channel_notify">Promemoria ToDo</string>
     <string name="ml_todo_channel_alarm">Sveglie ToDo</string>
-    <string name="ml_todo_snooze">Posticipa %d min</string>
+    <string name="ml_todo_postpone">Posticipa…</string>
+    <string name="ml_todo_postpone_minutes">%d minuti</string>
+    <plurals name="ml_todo_postpone_hours">
+        <item quantity="one">%d ora</item>
+        <item quantity="other">%d ore</item>
+    </plurals>
+    <string name="ml_todo_postpone_tomorrow">Domani, stessa ora</string>
+    <string name="ml_todo_postpone_custom">Personalizzata…</string>
+    <string name="ml_todo_postponed">Posticipato: %s</string>
     <string name="ml_todo_stop">Chiudi</string>
     <plurals name="ml_todo_unit_day">
         <item quantity="one">giorno</item>
