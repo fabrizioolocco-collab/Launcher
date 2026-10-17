@@ -12,7 +12,7 @@ import android.widget.LinearLayout
  * Only the title row grabs the block: a long press there drags the section to another row (or opens
  * its menu when released in place), while the apps below keep their own tap, long press and swipe.
  */
-class SectionBlockView(context: Context) : LinearLayout(context) {
+open class SectionBlockView(context: Context) : LinearLayout(context) {
 
     val touch = GridItemTouch(this)
 
