@@ -476,19 +476,11 @@
     <string name="ml_cal_show_week">Numero della settimana accanto alla data</string>
     <string name="ml_cal_swipe_days">Scorri di lato per cambiare giorno</string>
     <string name="ml_cal_show_arrows">Frecce giorno precedente / successivo</string>
-    <string-array name="ml_cal_color_names">
-        <item>Tema</item>
-        <item>Bianco</item>
-        <item>Grigio chiaro</item>
-        <item>Grigio</item>
-        <item>Nero</item>
-        <item>Giallo</item>
-        <item>Arancione</item>
-        <item>Rosso</item>
-        <item>Rosa</item>
-        <item>Verde</item>
-        <item>Azzurro</item>
-        <item>Blu</item>
-        <item>Viola</item>
-    </string-array>
+    <string name="ml_cal_text_clock">Ora</string>
+    <string name="ml_cal_show_clock">Ora davanti alla data</string>
+    <string name="ml_cal_short_date">Data abbreviata (SAB 17 OTT)</string>
+    <string name="ml_cal_progress_fill">Riempimento barra: %s</string>
+    <string name="ml_cal_progress_fill_title">Riempimento della barra</string>
+    <string name="ml_cal_progress_track">Resto della barra: %s</string>
+    <string name="ml_cal_progress_track_title">Resto della barra di avanzamento</string>
 </resources>

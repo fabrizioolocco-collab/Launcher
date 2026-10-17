@@ -482,19 +482,11 @@
     <string name="ml_cal_show_week">Week number next to the date</string>
     <string name="ml_cal_swipe_days">Swipe sideways to change day</string>
     <string name="ml_cal_show_arrows">Previous / next day arrows</string>
-    <string-array name="ml_cal_color_names">
-        <item>Theme</item>
-        <item>White</item>
-        <item>Light gray</item>
-        <item>Gray</item>
-        <item>Black</item>
-        <item>Yellow</item>
-        <item>Orange</item>
-        <item>Red</item>
-        <item>Pink</item>
-        <item>Green</item>
-        <item>Light blue</item>
-        <item>Blue</item>
-        <item>Purple</item>
-    </string-array>
+    <string name="ml_cal_text_clock">Time</string>
+    <string name="ml_cal_show_clock">Time before the date</string>
+    <string name="ml_cal_short_date">Short date (SAT 17 OCT)</string>
+    <string name="ml_cal_progress_fill">Progress bar fill: %s</string>
+    <string name="ml_cal_progress_fill_title">Progress bar fill</string>
+    <string name="ml_cal_progress_track">Progress bar rest: %s</string>
+    <string name="ml_cal_progress_track_title">Rest of the progress bar</string>
 </resources>

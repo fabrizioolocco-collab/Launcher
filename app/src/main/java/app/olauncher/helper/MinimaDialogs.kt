@@ -416,3 +416,148 @@ fun Context.showIconGridDialog(
     dialog.showRespectingStatusBar()
     return dialog
 }
+
+/** Quick choices at the top of [showColorPickerDialog]. */
+private val PRESET_COLORS = listOf(
+    0xFFFFFFFF, 0xFFBDBDBD, 0xFF757575, 0xFF000000, 0xFFFFC107, 0xFFFF9800, 0xFFF44336,
+    0xFFE91E63, 0xFF9C27B0, 0xFF3F51B5, 0xFF2196F3, 0xFF03A9F4, 0xFF009688, 0xFF4CAF50,
+).map { it.toInt() }
+
+/**
+ * Color picker: quick choices, hue / saturation / brightness sliders and a #RRGGBB field.
+ * [onPick] receives the color, or 0 when "default" ([defaultLabel]) is tapped.
+ */
+fun Context.showColorPickerDialog(title: String, initial: Int, defaultLabel: String, onPick: (Int) -> Unit): OlDialog {
+    val (dialog, binding) = baseDialog(title)
+    val ctx = dialog.context
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(if (initial != 0) initial else android.graphics.Color.WHITE, hsv)
+    var color = android.graphics.Color.HSVToColor(hsv)
+    var syncing = false
+
+    val container = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, 16.dpToPx(), 0, 8.dpToPx())
+    }
+    val swatch = android.graphics.drawable.GradientDrawable().apply { cornerRadius = 12.dpToPx().toFloat() }
+    container.addView(View(ctx).apply { background = swatch }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 44.dpToPx()))
+
+    val presets = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    container.addView(presets, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        topMargin = 12.dpToPx()
+    })
+
+    fun slider(max: Int, value: Int, track: android.graphics.drawable.Drawable?, onChange: (Int) -> Unit) =
+        android.widget.SeekBar(ctx).apply {
+            this.max = max
+            progress = value
+            thumbTintList = ColorStateList.valueOf(primary)
+            if (track != null) {
+                progressDrawable = track
+                minimumHeight = 10.dpToPx()
+            } else progressTintList = ColorStateList.valueOf(primary)
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (fromUser) onChange(progress)
+                }
+                override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            })
+        }
+
+    val rainbow = android.graphics.drawable.GradientDrawable(
+        android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,
+        intArrayOf(0xFFFF0000.toInt(), 0xFFFFFF00.toInt(), 0xFF00FF00.toInt(), 0xFF00FFFF.toInt(), 0xFF0000FF.toInt(), 0xFFFF00FF.toInt(), 0xFFFF0000.toInt())
+    ).apply { cornerRadius = 5.dpToPx().toFloat() }
+    val hex = EditText(ctx).apply {
+        setSingleLine(true)
+        textSize = 18f
+        setTextColor(primary)
+        backgroundTintList = ColorStateList.valueOf(primary)
+        imeOptions = EditorInfo.IME_ACTION_DONE
+        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+    }
+    lateinit var hue: android.widget.SeekBar
+    lateinit var sat: android.widget.SeekBar
+    lateinit var bright: android.widget.SeekBar
+
+    fun refresh(fromHex: Boolean = false) {
+        color = android.graphics.Color.HSVToColor(hsv)
+        swatch.setColor(color)
+        swatch.setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.primaryColorTrans50))
+        syncing = true
+        hue.progress = hsv[0].toInt()
+        sat.progress = (hsv[1] * 100).toInt()
+        bright.progress = (hsv[2] * 100).toInt()
+        if (!fromHex) hex.setText("#%06X".format(color and 0xFFFFFF))
+        syncing = false
+    }
+
+    hue = slider(360, hsv[0].toInt(), rainbow) { hsv[0] = it.toFloat(); refresh() }
+    sat = slider(100, (hsv[1] * 100).toInt(), null) { hsv[1] = it / 100f; refresh() }
+    bright = slider(100, (hsv[2] * 100).toInt(), null) { hsv[2] = it / 100f; refresh() }
+    listOf(hue, sat, bright).forEach {
+        container.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 36.dpToPx()).apply { topMargin = 8.dpToPx() })
+    }
+    container.addView(hex, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        topMargin = 8.dpToPx()
+    })
+    hex.addTextChangedListener(object : TextWatcher {
+        override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+        override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        override fun afterTextChanged(s: Editable?) {
+            if (syncing) return
+            val text = s?.toString()?.trim()?.removePrefix("#") ?: return
+            if (text.length != 6) return
+            val parsed = text.toLongOrNull(16) ?: return
+            android.graphics.Color.colorToHSV((parsed or 0xFF000000).toInt(), hsv)
+            refresh(fromHex = true)
+        }
+    })
+
+    PRESET_COLORS.chunked(7).forEach { rowColors ->
+        val row = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        rowColors.forEach { c ->
+            row.addView(View(ctx).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(c)
+                    setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.primaryColorTrans50))
+                }
+                isClickable = true
+                setOnClickListener {
+                    android.graphics.Color.colorToHSV(c, hsv)
+                    refresh()
+                }
+            }, LinearLayout.LayoutParams(0, 30.dpToPx(), 1f).apply { setMargins(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx()) })
+        }
+        presets.addView(row)
+    }
+
+    container.addView(ctx.dialogTextView(R.style.TextSmall).apply {
+        text = defaultLabel
+        textSize = 16f
+        setPadding(0, 14.dpToPx(), 0, 6.dpToPx())
+        isClickable = true
+        setOnClickListener {
+            hex.hideKeyboard()
+            dialog.dismiss()
+            onPick(0)
+        }
+    })
+    refresh()
+
+    binding.contentContainer.addView(ScrollView(ctx).apply { addView(container) })
+    binding.contentContainer.isVisible = true
+    binding.tvAction.text = ctx.getString(R.string.ml_done)
+    binding.tvAction.isVisible = true
+    binding.tvAction.setOnClickListener {
+        hex.hideKeyboard()
+        dialog.dismiss()
+        onPick(color)
+    }
+    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+    dialog.showRespectingStatusBar()
+    return dialog
+}

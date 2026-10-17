@@ -85,6 +85,10 @@ class CalendarWidgetView(
         reload()
     }
     private val weekText = text(CalendarText.WEEK).apply { maxLines = 1 }
+    private val clockText = text(CalendarText.CLOCK).apply {
+        maxLines = 1
+        setOnClickListener { openClock() }
+    }
     private val addButton = iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { CalendarEvents.addEvent(activity, firstDay()) }
     private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
     private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
@@ -112,6 +116,9 @@ class CalendarWidgetView(
     }
 
     init {
+        header.addView(clockText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginEnd = 10.dpToPx()
+        })
         header.addView(dateText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         header.addView(weekText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             marginStart = 10.dpToPx()
@@ -143,7 +150,7 @@ class CalendarWidgetView(
             else lp.width.coerceAtLeast(0)
             return w + lp.marginStart + lp.marginEnd
         }
-        val others = need(weekText) + need(todayButton) + buttons.sumOf { need(it) }
+        val others = need(clockText) + need(weekText) + need(todayButton) + buttons.sumOf { need(it) }
         val max = (header.width - header.paddingLeft - header.paddingRight - others).coerceAtLeast(0)
         if (dateText.maxWidth != max) header.post { dateText.maxWidth = max }
     }
@@ -335,6 +342,8 @@ class CalendarWidgetView(
         }
         prevButton.isVisible = config.showArrows
         nextButton.isVisible = config.showArrows
+        styleText(clockText, CalendarText.CLOCK)
+        clockText.isVisible = config.showClock
         styleText(weekText, CalendarText.WEEK)
         if (config.text(CalendarText.WEEK).color == 0) weekText.alpha = 0.6f else weekText.alpha = 1f
         weekText.isVisible = config.showWeek
@@ -348,8 +357,16 @@ class CalendarWidgetView(
         val first = firstDay()
         val start = CalendarEvents.dayStart(first)
         val sameYear = SimpleDateFormat("yyyy", Locale.getDefault()).let { it.format(Date(start)) == it.format(Date()) }
-        val pattern = if (sameYear) "EEEE, d MMMM" else "EEEE, d MMMM yyyy"
+        val pattern = when {
+            config.shortDate && sameYear -> "EEE d MMM"
+            config.shortDate -> "EEE d MMM yyyy"
+            sameYear -> "EEEE, d MMMM"
+            else -> "EEEE, d MMMM yyyy"
+        }
+        // Some languages abbreviate with a dot ("sab." / "ott."): not in the short header
         dateText.text = SimpleDateFormat(pattern, Locale.getDefault()).format(Date(start)).uppercase(Locale.getDefault())
+            .let { if (config.shortDate) it.replace(".", "") else it }
+        clockText.text = android.text.format.DateFormat.getTimeFormat(activity).format(Date())
         todayButton.isVisible = offset != 0
         weekText.text = activity.getString(R.string.ml_cal_week, isoWeek(start))
         fitDate()
@@ -374,8 +391,8 @@ class CalendarWidgetView(
     }
 
     private fun showEvents() {
-        if (!CalendarEvents.hasPermission(activity)) return
         updateHeader()
+        if (!CalendarEvents.hasPermission(activity)) return
         list.removeAllViews()
         val now = System.currentTimeMillis()
         val first = loadedDay
@@ -453,12 +470,23 @@ class CalendarWidgetView(
         column.addView(line)
         if (ongoing && config.showProgress) {
             val fraction = (now - event.begin).toFloat() / (event.end - event.begin).coerceAtLeast(1)
-            column.addView(ProgressBarView(activity, primary, fraction), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 6.dpToPx()).apply {
+            val fill = config.progressFill.takeIf { it != 0 } ?: ColorUtils.blendARGB(primary, 0xFF808080.toInt(), 0.6f)
+            val track = config.progressTrack.takeIf { it != 0 } ?: primary
+            column.addView(ProgressBarView(activity, fill, track, fraction), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 6.dpToPx()).apply {
                 topMargin = 6.dpToPx(); bottomMargin = 4.dpToPx(); marginStart = 4.dpToPx()
             })
         }
         row.addView(column, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         return row
+    }
+
+    /** The clock app (alarms), else nothing. */
+    private fun openClock() {
+        try {
+            activity.startActivity(android.content.Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS))
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     /** All-day events are over once their last day is; timed ones at their end. */
@@ -510,18 +538,18 @@ class CalendarWidgetView(
         setOnClickListener { onClick() }
     }
 
-    /** Rounded bar: the elapsed part dimmed, the part left bright. */
-    private class ProgressBarView(context: Context, private val color: Int, private val fraction: Float) : View(context) {
+    /** Rounded bar: the elapsed part in [fill] (dimmed by default), the part left in [track]. */
+    private class ProgressBarView(context: Context, private val fill: Int, private val track: Int, private val fraction: Float) : View(context) {
         private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         private val rect = RectF()
 
         override fun onDraw(canvas: Canvas) {
             val r = height / 2f
             val split = width * fraction.coerceIn(0f, 1f)
-            paint.color = color
+            paint.color = track
             rect.set(0f, 0f, width.toFloat(), height.toFloat())
             canvas.drawRoundRect(rect, r, r, paint)
-            paint.color = ColorUtils.setAlphaComponent(ColorUtils.blendARGB(color, 0xFF808080.toInt(), 0.6f), 0xFF)
+            paint.color = fill
             canvas.save()
             canvas.clipRect(0f, 0f, split, height.toFloat())
             canvas.drawRoundRect(rect, r, r, paint)

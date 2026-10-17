@@ -9,6 +9,7 @@ import app.olauncher.data.CalendarWidgetConfig
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.showColorPickerDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.helper.showToast
@@ -25,11 +26,6 @@ object CalendarWidgetSettings {
     private val BACKGROUNDS = listOf(0, 15, 25, 40, 50, 65, 80, 100)
     private val STYLES = listOf(Typeface.NORMAL, Typeface.BOLD, Typeface.ITALIC, Typeface.BOLD_ITALIC)
 
-    /** Same order as R.array.ml_cal_color_names; 0 = the theme's color. */
-    private val COLORS = listOf(
-        0L, 0xFFFFFFFF, 0xFFBDBDBD, 0xFF8A8A8A, 0xFF000000, 0xFFFFC107, 0xFFFF9800,
-        0xFFF44336, 0xFFE91E63, 0xFF4CAF50, 0xFF03A9F4, 0xFF2196F3, 0xFF9C27B0,
-    ).map { it.toInt() }
 
     fun show(activity: Activity, view: CalendarWidgetView, scope: CoroutineScope) {
         val c = view.config
@@ -65,8 +61,22 @@ object CalendarWidgetSettings {
                         reopen()
                     }
                 },
+                MenuEntry(activity.getString(R.string.ml_cal_progress_fill, colorLabel(activity, c.progressFill))) {
+                    activity.showColorPickerDialog(activity.getString(R.string.ml_cal_progress_fill_title), c.progressFill, activity.getString(R.string.ml_default)) { color ->
+                        view.updateConfig { it.progressFill = color }
+                        reopen()
+                    }
+                },
+                MenuEntry(activity.getString(R.string.ml_cal_progress_track, colorLabel(activity, c.progressTrack))) {
+                    activity.showColorPickerDialog(activity.getString(R.string.ml_cal_progress_track_title), c.progressTrack, activity.getString(R.string.ml_default)) { color ->
+                        view.updateConfig { it.progressTrack = color }
+                        reopen()
+                    }
+                },
                 MenuEntry(activity.getString(R.string.ml_cal_texts)) { showTexts(activity, view, reopen) },
                 toggle(R.string.ml_cal_show_header, c.showHeader) { cfg, v -> cfg.showHeader = v },
+                toggle(R.string.ml_cal_show_clock, c.showClock) { cfg, v -> cfg.showClock = v },
+                toggle(R.string.ml_cal_short_date, c.shortDate) { cfg, v -> cfg.shortDate = v },
                 toggle(R.string.ml_cal_show_week, c.showWeek) { cfg, v -> cfg.showWeek = v },
                 toggle(R.string.ml_cal_swipe_days, c.swipeDays) { cfg, v -> cfg.swipeDays = v },
                 toggle(R.string.ml_cal_show_arrows, c.showArrows) { cfg, v -> cfg.showArrows = v },
@@ -77,6 +87,9 @@ object CalendarWidgetSettings {
             )
         )
     }
+
+    private fun colorLabel(activity: Activity, color: Int) =
+        if (color == 0) activity.getString(R.string.ml_default) else "#%06X".format(color and 0xFFFFFF)
 
     private fun calendarsLabel(activity: Activity, c: CalendarWidgetConfig) =
         if (c.calendars.isEmpty()) activity.getString(R.string.ml_cal_calendars_all)
@@ -116,6 +129,7 @@ object CalendarWidgetSettings {
     }
 
     private fun textName(t: CalendarText) = when (t) {
+        CalendarText.CLOCK -> R.string.ml_cal_text_clock
         CalendarText.HEADER -> R.string.ml_cal_text_header
         CalendarText.WEEK -> R.string.ml_cal_text_week
         CalendarText.DAY -> R.string.ml_cal_text_day
@@ -141,8 +155,6 @@ object CalendarWidgetSettings {
         val reopen = { showText(activity, view, t, back) }
         val styleNames = listOf(R.string.ml_cal_style_normal, R.string.ml_cal_style_bold, R.string.ml_cal_style_italic, R.string.ml_cal_style_bold_italic)
             .map { activity.getString(it) }
-        val colorNames = activity.resources.getStringArray(R.array.ml_cal_color_names).toList()
-        val colorIndex = COLORS.indexOf(s.color)
         activity.showMenuDialog(
             activity.getString(textName(t)),
             listOf(
@@ -167,9 +179,9 @@ object CalendarWidgetSettings {
                         reopen()
                     }
                 },
-                MenuEntry(activity.getString(R.string.ml_cal_color, if (colorIndex >= 0) colorNames[colorIndex] else "#%06X".format(s.color and 0xFFFFFF))) {
-                    choose(activity, activity.getString(R.string.ml_cal_color_title), colorNames, colorIndex) { i ->
-                        view.updateConfig { it.text(t).color = COLORS[i] }
+                MenuEntry(activity.getString(R.string.ml_cal_color, colorLabel(activity, s.color))) {
+                    activity.showColorPickerDialog(activity.getString(R.string.ml_cal_color_title), s.color, activity.getString(R.string.ml_default)) { color ->
+                        view.updateConfig { it.text(t).color = color }
                         reopen()
                     }
                 },
