@@ -263,6 +263,17 @@ class DrawerTabsController(
         }
     }
 
+    /** The tabs [app] is in (then it isn't in "All"). */
+    fun tabsOf(app: AppModel): List<DrawerTab> = tabs.filter { DrawerTabsRepository.key(app) in it.apps }
+
+    /** From the app menu: takes [app] out of every tab, so it's back in "All". */
+    fun backToAll(app: AppModel) {
+        val key = DrawerTabsRepository.key(app)
+        tabs.forEach { it.apps.remove(key) }
+        save()
+        context.showToast(context.getString(R.string.ml_tab_back_to_all_done, app.appLabel))
+    }
+
     /** From the app menu: add [app] to a tab (or a new one). */
     fun showAddToTab(app: AppModel.App) {
         val key = DrawerTabsRepository.key(app)

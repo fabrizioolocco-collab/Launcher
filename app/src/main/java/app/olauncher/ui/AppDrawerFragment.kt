@@ -381,7 +381,11 @@ class AppDrawerFragment : BaseFragment() {
         if (appModel is AppModel.App) {
             entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
             if (!adapter.isHiddenList) {
-                tabs?.let { t -> entries += MenuEntry(getString(R.string.ml_add_to_tab)) { t.showAddToTab(appModel) } }
+                tabs?.let { t ->
+                    entries += MenuEntry(getString(R.string.ml_add_to_tab)) { t.showAddToTab(appModel) }
+                    if (t.tabsOf(appModel).isNotEmpty())
+                        entries += MenuEntry(getString(R.string.ml_tab_back_to_all)) { t.backToAll(appModel) }
+                }
                 entries += changeIconEntry(appModel)
                 entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
             } else entries += changeIconEntry(appModel)

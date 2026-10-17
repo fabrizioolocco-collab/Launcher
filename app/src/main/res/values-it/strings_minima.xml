@@ -622,4 +622,6 @@
     <string name="ml_pdf_default_already">È già l\'app per i PDF</string>
     <string name="ml_pdf_default_clear">Un\'altra app apre i PDF: nella sua pagina tocca \"Apri per impostazione predefinita\" → \"Cancella impostazioni predefinite\", poi apri un PDF e scegli MinimaLauncher → Sempre</string>
     <string name="ml_pdf_default_pick">Scegli MinimaLauncher e tocca \"Sempre\"</string>
+    <string name="ml_tab_back_to_all">Riporta in Tutte (togli dalla tab)</string>
+    <string name="ml_tab_back_to_all_done">%s è di nuovo in Tutte</string>
 </resources>

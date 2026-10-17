@@ -628,4 +628,6 @@
     <string name="ml_pdf_default_already">Already the app for PDFs</string>
     <string name="ml_pdf_default_clear">Another app opens the PDFs: in its page tap \"Open by default\" → \"Clear defaults\", then open a PDF and choose MinimaLauncher → Always</string>
     <string name="ml_pdf_default_pick">Choose MinimaLauncher and tap \"Always\"</string>
+    <string name="ml_tab_back_to_all">Back to All (out of the tab)</string>
+    <string name="ml_tab_back_to_all_done">%s is back in All</string>
 </resources>
