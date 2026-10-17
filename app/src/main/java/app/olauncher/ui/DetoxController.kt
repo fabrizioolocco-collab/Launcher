@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -75,15 +76,14 @@ class DetoxController(
         updateBar()
     }
 
-    /** Header icon: "◐" when idle; "◐ 1h 20m" (remaining) while a session runs. */
+    /** Header indicator: hidden when idle (detox starts from the home menu); "◐ 1h 20m" while a session runs. */
     fun updateBar() {
         val ctx = activity
         if (!DetoxManager.isActive(ctx)) {
-            bar.text = ctx.getString(R.string.ml_detox_start_label)
-            bar.textSize = 22f
-            bar.alpha = 0.6f
+            bar.visibility = View.GONE
             return
         }
+        bar.visibility = View.VISIBLE
         bar.alpha = 1f
         bar.textSize = 16f
         bar.text = ctx.getString(R.string.ml_detox_start_label) + " " + DetoxManager.formatDuration(DetoxManager.remainingMs(ctx))
@@ -100,6 +100,9 @@ class DetoxController(
         }
         return parts.joinToString("  ·  ")
     }
+
+    /** Home menu entry: start dialog when idle, session menu while a session runs. */
+    fun open() = onBarClick()
 
     private fun onBarClick() {
         if (DetoxManager.isActive(activity)) showSessionMenu() else showStartDialog()

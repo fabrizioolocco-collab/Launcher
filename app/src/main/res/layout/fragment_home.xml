@@ -115,7 +115,7 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- Detox: icon at the top right; remaining time while a session runs -->
+                    <!-- Detox: remaining time at the top right while a session runs; started from the home menu -->
                     <TextView
                         android:id="@+id/detoxBar"
                         style="@style/TextDefault"
@@ -127,7 +127,8 @@
                         android:contentDescription="Detox"
                         android:padding="6dp"
                         android:text="@string/ml_detox_start_label"
-                        android:textSize="22sp" />
+                        android:textSize="16sp"
+                        android:visibility="gone" />
                 </FrameLayout>
 
 

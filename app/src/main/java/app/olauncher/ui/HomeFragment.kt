@@ -400,6 +400,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                     },
                     addFolder = { createFolderShortcut() },
                     parking = { showParkingMenu() },
+                    detox = { detox.open() },
                 )
             }
 
