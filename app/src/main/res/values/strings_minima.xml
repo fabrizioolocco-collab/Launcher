@@ -671,6 +671,6 @@
     <string name="ml_w_degrees">%d°</string>
     <string name="ml_w_now">Now</string>
     <string name="ml_w_customize">Values shown</string>
-    <string name="ml_w_customize_hint">Drag by the handle to reorder, switch off what you don't need.</string>
+    <string name="ml_w_customize_hint">Drag by the handle to reorder, switch off what you don\'t need.</string>
     <string name="ml_w_drag">Drag</string>
 </resources>
