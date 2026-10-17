@@ -142,7 +142,7 @@ object CalendarWidgetSettings {
     /** A list of options; the current one is marked. */
     private fun choose(activity: Activity, title: String, options: List<String>, current: Int, onPick: (Int) -> Unit) {
         activity.showMenuDialog(title, options.mapIndexed { i, label ->
-            MenuEntry(if (i == current) "✓  $label" else label) { onPick(i) }
+            MenuEntry(label, icon = if (i == current) R.drawable.ic_m_check else 0) { onPick(i) }
         })
     }
 

@@ -504,7 +504,7 @@
     <string name="ml_todo_edit">Modifica</string>
     <string name="ml_todo_all">Tutte</string>
     <string name="ml_todo_none">Nessuna</string>
-    <string name="ml_todo_empty">Niente da fare. Tocca ＋ per aggiungere un ToDo.</string>
+    <string name="ml_todo_empty">Niente da fare. Tocca + per aggiungere un ToDo.</string>
     <string name="ml_todo_section_late">In ritardo</string>
     <string name="ml_todo_section_later">Prossimi</string>
     <string name="ml_todo_section_done">Completati (%d)</string>

@@ -519,8 +519,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             configure = { menu ->
                 menu.add(Menu.NONE, 0, 0, getString(R.string.ml_default))
                 options.forEachIndexed { i, font ->
-                    val label = if (font.id == current) "✓ ${font.label}" else font.label
-                    menu.add(Menu.NONE, i + 1, i + 1, FontManager.preview(ctx, font.id, label))
+                    // The current font is marked by the menu's own check
+                    menu.add(Menu.NONE, i + 1, i + 1, FontManager.preview(ctx, font.id, font.label)).apply {
+                        if (font.id == current) setCheckable(true).setChecked(true)
+                    }
                 }
                 menu.add(Menu.NONE, LOAD_FONT_ID, options.size + 1, getString(R.string.ml_load_font))
             }

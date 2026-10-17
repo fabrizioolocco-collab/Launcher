@@ -17,9 +17,7 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.core.view.isVisible
-import androidx.core.widget.CompoundButtonCompat
 import app.olauncher.R
 import app.olauncher.data.Constants
 import app.olauncher.databinding.DialogBaseBinding
@@ -27,6 +25,7 @@ import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.OlDialog
+import app.olauncher.helper.PillSwitch
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.isAccessServiceEnabled
@@ -76,7 +75,7 @@ class DetoxController(
         updateBar()
     }
 
-    /** Header indicator: hidden when idle (detox starts from the home menu); "◐ 1h 20m" while a session runs. */
+    /** Header indicator: hidden when idle (detox starts from the home menu); a timer icon and "1h 20m" while a session runs. */
     fun updateBar() {
         val ctx = activity
         if (!DetoxManager.isActive(ctx)) {
@@ -86,7 +85,14 @@ class DetoxController(
         bar.visibility = View.VISIBLE
         bar.alpha = 1f
         bar.textSize = 16f
-        bar.text = ctx.getString(R.string.ml_detox_start_label) + " " + DetoxManager.formatDuration(DetoxManager.remainingMs(ctx))
+        bar.text = DetoxManager.formatDuration(DetoxManager.remainingMs(ctx))
+        val size = (bar.textSize * 1.1f).toInt()
+        val icon = androidx.core.content.ContextCompat.getDrawable(ctx, R.drawable.ic_m_timer)?.mutate()?.apply {
+            setTint(bar.currentTextColor)
+            setBounds(0, 0, size, size)
+        }
+        bar.compoundDrawablePadding = 6.dpToPx()
+        bar.setCompoundDrawablesRelative(icon, null, null, null)
     }
 
     /** Full session status: remaining time, paused notifications, exit countdown. */
@@ -132,10 +138,8 @@ class DetoxController(
             hint = ctx.getString(R.string.ml_detox_custom_minutes)
             inputType = InputType.TYPE_CLASS_NUMBER
             setSingleLine(true)
-            textSize = 18f
-            setTextColor(primary)
-            setHintTextColor(dctx.getColorFromAttr(R.attr.primaryColorTrans50))
-            backgroundTintList = ColorStateList.valueOf(primary)
+            UiKit.styleInput(this)
+            textSize = 17f
             if (minutes !in presets) setText(minutes.toString())
         }
         val chips = presets.map { value ->
@@ -174,14 +178,22 @@ class DetoxController(
         content.addView(custom, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 8.dpToPx()
         })
-        val strict = AppCompatCheckBox(dctx).apply {
-            text = ctx.getString(R.string.ml_detox_strict)
-            textSize = 17f
-            setTextColor(primary)
-            isChecked = true
-            CompoundButtonCompat.setButtonTintList(this, ColorStateList.valueOf(primary))
+        // Strict mode: a switch like the menus'
+        val strict = PillSwitch(dctx).apply { checked = true }
+        val strictRow = LinearLayout(dctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = 48.dpToPx()
+            isClickable = true
+            setOnClickListener { strict.toggle() }
+            addView(TextView(dctx).apply {
+                text = ctx.getString(R.string.ml_detox_strict)
+                textSize = 17f
+                setTextColor(primary)
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(strict, LinearLayout.LayoutParams(46.dpToPx(), 28.dpToPx()).apply { marginStart = 10.dpToPx() })
         }
-        content.addView(strict, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        content.addView(strictRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 12.dpToPx()
         })
         content.addView(TextView(dctx, null, 0, R.style.TextSmall).apply {
@@ -197,7 +209,7 @@ class DetoxController(
         binding.tvAction.isVisible = true
         binding.tvAction.setOnClickListener {
             val chosen = minutes.coerceIn(1, 24 * 60)
-            val missing = missingPermissions(strict.isChecked)
+            val missing = missingPermissions(strict.checked)
             if (missing.isNotEmpty()) {
                 ctx.showToast(ctx.getString(R.string.ml_detox_missing_permissions))
                 dialog.dismiss()
@@ -205,7 +217,7 @@ class DetoxController(
                 return@setOnClickListener
             }
             dialog.dismiss()
-            DetoxManager.start(ctx, chosen, strict.isChecked)
+            DetoxManager.start(ctx, chosen, strict.checked)
             updateBar()
         }
         dialog.setView(binding.root)
@@ -287,21 +299,49 @@ class DetoxController(
                 ctx.startActivityForResult(intent, Constants.REQUEST_CODE_ENABLE_ADMIN)
             },
         )
+        val secondary = dctx.getColorFromAttr(R.attr.secondaryTextColor)
+        // Each permission: a check when granted (an empty ring when not), its name and what it's for
+        class PermissionRow(val view: View, val mark: android.widget.ImageView, val text: TextView)
         val rows = items.map { item ->
-            TextView(dctx, null, 0, R.style.TextSmall).apply {
+            val mark = android.widget.ImageView(dctx).apply {
+                imageTintList = ColorStateList.valueOf(primary)
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                val p = 2.dpToPx()
+                setPadding(p, p, p, p)
+            }
+            val text = TextView(dctx, null, 0, R.style.TextSmall).apply {
                 setTextColor(primary)
                 textSize = 16f
+            }
+            val row = LinearLayout(dctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
                 setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
                 isClickable = true
                 setOnClickListener {
                     if (!item.granted()) item.open()
                 }
-            }.also { list.addView(it) }
+                addView(mark, LinearLayout.LayoutParams(22.dpToPx(), 22.dpToPx()).apply { marginEnd = 12.dpToPx() })
+                addView(text, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }
+            list.addView(row)
+            PermissionRow(row, mark, text)
         }
         fun refresh() = items.forEachIndexed { i, item ->
             val ok = item.granted()
-            rows[i].text = (if (ok) "✓  " else "○  ") + ctx.getString(item.title) + "\n" + ctx.getString(item.desc)
-            rows[i].alpha = if (ok) 0.55f else 1f
+            val r = rows[i]
+            r.text.text = ctx.getString(item.title) + "\n" + ctx.getString(item.desc)
+            if (ok) {
+                r.mark.setImageResource(R.drawable.ic_m_check)
+                r.mark.background = null
+            } else {
+                r.mark.setImageDrawable(null)
+                r.mark.background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setStroke(2.dpToPx(), secondary)
+                }
+            }
+            r.view.alpha = if (ok) 0.55f else 1f
         }
         refresh()
         permissionsRefresh = { if (dialog.isShowing) refresh() }

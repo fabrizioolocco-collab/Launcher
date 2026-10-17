@@ -245,8 +245,11 @@ class HomeSearchController(
 
     // ---------------------------------------------------------------- phone
 
-    private enum class Kind(val glyph: String) {
-        APP(""), CONTACT("👤"), SETTING("⚙️"), FILE("📄"), FOLDER("📁"), ALBUM("🌄"), PHOTO("🖼️"), VIDEO("🎬"), MUSIC("🎵")
+    /** What a result is, with the tile shown before it (apps show their own icon). */
+    private enum class Kind(val tile: UiKit.FileKind?) {
+        APP(null), CONTACT(UiKit.FileKind.CONTACT), SETTING(UiKit.FileKind.SETTINGS), FILE(UiKit.FileKind.DOC),
+        FOLDER(UiKit.FileKind.FOLDER), ALBUM(UiKit.FileKind.WALLPAPER), PHOTO(UiKit.FileKind.IMAGE),
+        VIDEO(UiKit.FileKind.VIDEO), MUSIC(UiKit.FileKind.AUDIO)
     }
 
     private class Row(
@@ -630,10 +633,12 @@ class HomeSearchController(
     private fun group(title: Int, rows: List<Row>) {
         if (rows.isEmpty()) return
         results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-            setText(title)
+            text = activity.getString(title).uppercase()
+            textSize = 12f
+            letterSpacing = 0.08f
             setTypeface(typeface, Typeface.BOLD)
-            alpha = 0.6f
-            setPadding(0, 16.dpToPx(), 0, 4.dpToPx())
+            setTextColor(UiKit.secondary(activity))
+            setPadding(0, 16.dpToPx(), 0, 6.dpToPx())
         })
         rows.forEach { results.addView(rowView(it)) }
     }
@@ -656,11 +661,14 @@ class HomeSearchController(
                 MediaThumbnails.load(scope, it, thumb, 44.dpToPx(), row.uri)
             }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply { marginEnd = 12.dpToPx() })
 
-            row.kind != Kind.APP -> addView(TextView(activity, null, 0, R.style.TextLarge).apply {
-                text = row.kind.glyph
-                textSize = 18f
-                gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(44.dpToPx(), ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 12.dpToPx() })
+            row.kind != Kind.APP -> {
+                // Files: the tile of their type (PDF, document, ...)
+                val tile = if (row.kind == Kind.FILE) UiKit.kindOf(row.title, row.mime, false) else row.kind.tile ?: UiKit.FileKind.DOC
+                addView(UiKit.fileTile(activity, tile, 40), LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply {
+                    marginStart = 2.dpToPx()
+                    marginEnd = 14.dpToPx()
+                })
+            }
         }
         val texts = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         val title = TextView(activity, null, 0, R.style.TextLarge).apply {

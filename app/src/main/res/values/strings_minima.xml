@@ -510,7 +510,7 @@
     <string name="ml_todo_edit">Edit</string>
     <string name="ml_todo_all">All</string>
     <string name="ml_todo_none">None</string>
-    <string name="ml_todo_empty">Nothing to do. Tap ＋ to add a ToDo.</string>
+    <string name="ml_todo_empty">Nothing to do. Tap + to add a ToDo.</string>
     <string name="ml_todo_section_late">Late</string>
     <string name="ml_todo_section_later">Later</string>
     <string name="ml_todo_section_done">Done (%d)</string>

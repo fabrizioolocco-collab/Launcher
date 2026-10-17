@@ -316,7 +316,7 @@ object NotificationsPopup {
             maxLines = 4
             background = GradientDrawable().apply {
                 cornerRadius = 22.dpToPx().toFloat()
-                setStroke(1.dpToPx(), ColorUtils.setAlphaComponent(primary, 0x40))
+                setStroke(1.dpToPx(), line)
             }
             setPadding(16.dpToPx(), 10.dpToPx(), 16.dpToPx(), 10.dpToPx())
             minHeight = 44.dpToPx()
