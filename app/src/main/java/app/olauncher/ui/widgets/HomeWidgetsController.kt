@@ -468,7 +468,10 @@ class HomeWidgetsController(
                 return@forEach
             }
             if (widget.isBuiltin) {
-                if (widget.builtin == CalendarWidgetView.KIND) free.addView(calendarView(widget))
+                when (widget.builtin) {
+                    CalendarWidgetView.KIND -> free.addView(calendarView(widget))
+                    BatteryWidgetView.KIND -> free.addView(batteryView(widget))
+                }
                 return@forEach
             }
             val info = manager.getAppWidgetInfo(widget.appWidgetId)
@@ -580,6 +583,17 @@ class HomeWidgetsController(
 
     private fun calendarView(widget: HomeWidget): View {
         val view = CalendarWidgetView(activity, widget.appWidgetId, scope)
+        view.tag = widget
+        view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
+            leftMargin = widget.x.dpToPx()
+            topMargin = widget.y.dpToPx()
+        }
+        view.touch.listener = dragListener(null)
+        return view
+    }
+
+    private fun batteryView(widget: HomeWidget): View {
+        val view = BatteryWidgetView(activity, widget.appWidgetId)
         view.tag = widget
         view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
             leftMargin = widget.x.dpToPx()
@@ -769,6 +783,7 @@ class HomeWidgetsController(
             }
             when {
                 view is CalendarWidgetView -> showCalendarMenu(item, view)
+                view is BatteryWidgetView -> showBatteryMenu(item, view)
                 info != null -> showWidgetMenu(item, info, view as MinimaWidgetHostView)
                 else -> showIconMenu(item)
             }
@@ -975,6 +990,7 @@ class HomeWidgetsController(
         }.sortedWith(compareBy({ it.app.lowercase() }, { it.label.lowercase() }))
         val builtIns = listOf(
             WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_cal_widget), R.drawable.ic_calendar) { addCalendarWidget() },
+            WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_battery_widget), R.drawable.ic_m_battery) { addBatteryWidget() },
         )
         WidgetPickerDialog.show(activity, items, scope, builtIns) { startAdding(it) }
     }
@@ -991,6 +1007,36 @@ class HomeWidgetsController(
         render()
         if (!CalendarEvents.hasPermission(activity))
             ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.READ_CALENDAR), CalendarWidgetView.REQUEST_CALENDAR)
+    }
+
+    /** Adds the battery widget: small (two cells by half a cell), to be resized at will. */
+    private fun addBatteryWidget() {
+        val id = (widgets.filter { it.isBuiltin }.minOfOrNull { it.appWidgetId } ?: BUILTIN_FIRST_ID) - 1
+        val cellDp = cellPx().toDp()
+        val w = 2 * cellDp
+        val h = (cellDp / 2).coerceAtLeast(BatteryWidgetView.MIN_SIZE_DP)
+        val (x, y) = freePositionFor(w, h)
+        widgets.add(HomeWidget(id, x = x, y = y, w = w, h = h, builtin = BatteryWidgetView.KIND))
+        save()
+        render()
+    }
+
+    private fun showBatteryMenu(widget: HomeWidget, view: BatteryWidgetView) {
+        activity.showMenuDialog(
+            activity.getString(R.string.ml_battery_widget),
+            listOf(
+                MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
+                MenuEntry(activity.getString(if (view.framed) R.string.ml_battery_frame_off else R.string.ml_battery_frame_on)) {
+                    view.framed = !view.framed
+                },
+                MenuEntry(activity.getString(R.string.ml_widget_remove)) {
+                    view.forget()
+                    widgets.remove(widget)
+                    save()
+                    render()
+                },
+            )
+        )
     }
 
     private fun showCalendarMenu(widget: HomeWidget, view: CalendarWidgetView) {

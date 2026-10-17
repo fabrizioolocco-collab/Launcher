@@ -123,11 +123,13 @@ class FreeWidgetLayout @JvmOverloads constructor(
                 val dx = (event.x - downX).toInt()
                 val dy = (event.y - downY).toInt()
                 var left = startLeft; var top = startTop; var right = startRight; var bottom = startBottom
+                // The battery widget is meant to be tiny
+                val min = if (target is BatteryWidgetView) BatteryWidgetView.MIN_SIZE_DP.dpToPx() else minSize
                 when (activeHandle) {
-                    0 -> left = (startLeft + dx).coerceIn(0, startRight - minSize)
-                    1 -> top = (startTop + dy).coerceIn(0, startBottom - minSize)
-                    2 -> right = (startRight + dx).coerceIn(startLeft + minSize, width)
-                    3 -> bottom = (startBottom + dy).coerceIn(startTop + minSize, height)
+                    0 -> left = (startLeft + dx).coerceIn(0, startRight - min)
+                    1 -> top = (startTop + dy).coerceIn(0, startBottom - min)
+                    2 -> right = (startRight + dx).coerceIn(startLeft + min, width)
+                    3 -> bottom = (startBottom + dy).coerceIn(startTop + min, height)
                 }
                 val p = target.layoutParams as LayoutParams
                 if (p.leftMargin != left || p.topMargin != top || p.width != right - left || p.height != bottom - top) {
