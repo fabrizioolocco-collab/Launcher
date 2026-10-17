@@ -26,6 +26,7 @@ import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -37,12 +38,14 @@ import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
+import app.olauncher.helper.pillButton
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.FileExplorerActivity
 import app.olauncher.ui.FolderPickerActivity
+import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,7 +76,7 @@ class PdfViewerActivity : AppCompatActivity() {
     private val renders = HashMap<Int, Bitmap>()
 
     private lateinit var pager: RecyclerView
-    private lateinit var title: TextView
+    private lateinit var appBar: UiKit.AppBar
     private lateinit var toolbar: LinearLayout
     private lateinit var hint: TextView
     private lateinit var palette: LinearLayout
@@ -149,7 +152,7 @@ class PdfViewerActivity : AppCompatActivity() {
         if (link != null) {
             setContentView(TextView(this).apply {
                 setText(R.string.ml_pdf_downloading)
-                setTextColor(Color.WHITE)
+                setTextColor(UiKit.primary(this@PdfViewerActivity))
                 textSize = 16f
                 gravity = Gravity.CENTER
                 setBackgroundColor(0xFF202020.toInt())
@@ -288,29 +291,24 @@ class PdfViewerActivity : AppCompatActivity() {
             v.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.BLACK)
-            setPadding(12.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
-        }
-        top.addView(button("←", 26f) { onBackPressedDispatcher.onBackPressed() })
-        title = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            textSize = 15f
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-        }
-        top.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 8.dpToPx() })
-        top.addView(button("🔍", 18f) { toggleSearch() })
-        top.addView(button(getString(R.string.ml_pdf_pages), 14f) { openPages() })
-        top.addView(button("⤴", 22f) { share(file) })
-        top.addView(button("✓", 26f) { save() })
-        root.addView(top)
+        appBar = UiKit.appBar(
+            this, file.name, { onBackPressedDispatcher.onBackPressed() },
+            listOf(
+                UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_search)) { toggleSearch() },
+                UiKit.iconButton(this, R.drawable.ic_m_pages, getString(R.string.ml_pdf_pages)) { openPages() },
+                UiKit.iconButton(this, R.drawable.ic_m_share, getString(R.string.ml_explorer_share)) { share(file) },
+                UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_pdf_save)) { save() },
+            ),
+        )
+        appBar.title.ellipsize = TextUtils.TruncateAt.MIDDLE
+        appBar.view.setBackgroundColor(UiKit.card(this))
+        appBar.view.setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
+        root.addView(appBar.view)
+        root.addView(divider())
         root.addView(buildSearchBar())
 
         hint = TextView(this).apply {
-            setTextColor(0xB3FFFFFF.toInt())
+            setTextColor(UiKit.secondary(this@PdfViewerActivity))
             textSize = 12f
             gravity = Gravity.CENTER
             setPadding(12.dpToPx(), 4.dpToPx(), 12.dpToPx(), 2.dpToPx())
@@ -333,61 +331,54 @@ class PdfViewerActivity : AppCompatActivity() {
         // The tool palette: colours, sizes and modes; folds to one row
         palette = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(0xFF101010.toInt())
-            setPadding(8.dpToPx(), 4.dpToPx(), 8.dpToPx(), 4.dpToPx())
+            background = UiKit.cardBackground(this@PdfViewerActivity, 18)
+            setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
             isVisible = false
         }
-        root.addView(palette)
+        root.addView(palette, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(8.dpToPx(), 6.dpToPx(), 8.dpToPx(), 0)
+        })
 
-        toolbar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.BLACK)
-            setPadding(4.dpToPx(), 2.dpToPx(), 4.dpToPx(), 2.dpToPx())
-        }
+        toolbar = UiKit.toolBar(this)
         listOf(
-            Tool.TEXT to R.string.ml_pdf_text, Tool.CHECK to R.string.ml_pdf_check,
-            Tool.DRAW to R.string.ml_pdf_draw, Tool.SIGN to R.string.ml_pdf_sign, Tool.SELECT to R.string.ml_pdf_select_text,
-        ).forEach { (t, label) ->
-            toolbar.addView(TextView(this).apply {
-                setText(label)
-                setTextColor(Color.WHITE)
-                textSize = 13f
-                gravity = Gravity.CENTER
-                maxLines = 1
-                setPadding(2.dpToPx(), 12.dpToPx(), 2.dpToPx(), 12.dpToPx())
-                isClickable = true
+            Triple(Tool.TEXT, R.string.ml_pdf_text, R.drawable.ic_m_text),
+            Triple(Tool.CHECK, R.string.ml_pdf_check, R.drawable.ic_m_check),
+            Triple(Tool.DRAW, R.string.ml_pdf_draw, R.drawable.ic_m_draw),
+            Triple(Tool.SIGN, R.string.ml_pdf_sign, R.drawable.ic_m_signature),
+            Triple(Tool.SELECT, R.string.ml_pdf_select_text, R.drawable.ic_m_select),
+        ).forEach { (t, label, icon) ->
+            toolbar.addView(UiKit.toolButton(this, icon, getString(label)) { onToolTapped(t) }.apply {
                 tag = t
-                setOnClickListener { onToolTapped(t) }
                 setOnLongClickListener {
                     if (t == Tool.SIGN) signatureMenu()
                     t == Tool.SIGN
                 }
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
-        toolbar.addView(TextView(this).apply {
-            setText(R.string.ml_pdf_undo)
-            setTextColor(Color.WHITE)
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setPadding(2.dpToPx(), 12.dpToPx(), 2.dpToPx(), 12.dpToPx())
-            isClickable = true
-            setOnClickListener { undo() }
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        root.addView(toolbar)
+        toolbar.addView(
+            UiKit.toolButton(this, R.drawable.ic_m_undo, getString(R.string.ml_pdf_undo)) { undo() },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
+        )
+        root.addView(toolbar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(8.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
+        })
         updateTitle()
         return root
     }
 
-    private fun button(label: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
-        text = label
-        textSize = size
-        setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER
-        setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
+    /** A thin line under a bar. */
+    private fun divider() = View(this).apply {
+        setBackgroundColor(UiKit.stroke(this@PdfViewerActivity))
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1.dpToPx())
     }
+
+    /** A bar under the app bar (search, selection): the card color, a line under it. */
+    private fun barBackground() = android.graphics.drawable.LayerDrawable(
+        arrayOf<android.graphics.drawable.Drawable>(
+            android.graphics.drawable.ColorDrawable(UiKit.stroke(this)),
+            android.graphics.drawable.ColorDrawable(UiKit.card(this)),
+        )
+    ).apply { setLayerInset(1, 0, 0, 0, 1.dpToPx()) }
 
     // ---------------------------------------------------------------- text selection
 
@@ -395,19 +386,24 @@ class PdfViewerActivity : AppCompatActivity() {
         selectionBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(0xFF101010.toInt())
-            setPadding(12.dpToPx(), 0, 4.dpToPx(), 0)
+            background = barBackground()
+            setPadding(16.dpToPx(), 6.dpToPx(), 4.dpToPx(), 6.dpToPx())
             isVisible = false
         }
         selectionText = TextView(this).apply {
-            setTextColor(0xB3FFFFFF.toInt())
+            setTextColor(UiKit.secondary(this@PdfViewerActivity))
             textSize = 13f
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
         }
         selectionBar.addView(selectionText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        selectionBar.addView(button(getString(R.string.ml_pdf_copy), 15f) { copySelection() })
-        selectionBar.addView(button("✕", 18f) { clearTextSelection() })
+        selectionBar.addView(
+            pillButton(this, getString(R.string.ml_pdf_copy), filled = true, color = UiKit.primary(this)) { copySelection() }.apply {
+                setPadding(18.dpToPx(), 0, 18.dpToPx(), 0)
+            },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 36.dpToPx()).apply { marginStart = 10.dpToPx() },
+        )
+        selectionBar.addView(UiKit.iconButton(this, R.drawable.ic_m_close, getString(R.string.close)) { clearTextSelection() })
         return selectionBar
     }
 
@@ -469,17 +465,15 @@ class PdfViewerActivity : AppCompatActivity() {
         searchBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(0xFF101010.toInt())
-            setPadding(12.dpToPx(), 0, 4.dpToPx(), 0)
+            background = barBackground()
+            setPadding(12.dpToPx(), 6.dpToPx(), 4.dpToPx(), 6.dpToPx())
             isVisible = false
         }
         searchInput = android.widget.EditText(this).apply {
             setSingleLine(true)
-            setTextColor(Color.WHITE)
-            setHintTextColor(0x80FFFFFF.toInt())
+            UiKit.styleInput(this)
             setHint(R.string.ml_pdf_search_hint)
             textSize = 16f
-            background = null
             imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
             setOnEditorActionListener { _, _, _ ->
                 if (hits.isNotEmpty() && searchJob?.isActive != true) moveHit(1) else runSearch()
@@ -496,14 +490,14 @@ class PdfViewerActivity : AppCompatActivity() {
         }
         searchBar.addView(searchInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         searchCount = TextView(this).apply {
-            setTextColor(0xB3FFFFFF.toInt())
+            setTextColor(UiKit.secondary(this@PdfViewerActivity))
             textSize = 13f
             setPadding(8.dpToPx(), 0, 4.dpToPx(), 0)
         }
         searchBar.addView(searchCount)
-        searchBar.addView(button("▲", 16f) { moveHit(-1) })
-        searchBar.addView(button("▼", 16f) { moveHit(1) })
-        searchBar.addView(button("✕", 18f) { toggleSearch() })
+        searchBar.addView(UiKit.iconButton(this, R.drawable.ic_m_chevron_up, getString(R.string.ml_cal_prev)) { moveHit(-1) })
+        searchBar.addView(UiKit.iconButton(this, R.drawable.ic_m_chevron_down, getString(R.string.ml_cal_next)) { moveHit(1) })
+        searchBar.addView(UiKit.iconButton(this, R.drawable.ic_m_close, getString(R.string.close)) { toggleSearch() })
         return searchBar
     }
 
@@ -624,7 +618,8 @@ class PdfViewerActivity : AppCompatActivity() {
     private fun updateTitle() {
         val lm = pager.layoutManager as? LinearLayoutManager
         val pos = lm?.findFirstVisibleItemPosition()?.takeIf { it >= 0 } ?: 0
-        title.text = file.name + "  ·  " + getString(R.string.ml_pdf_page_of, pos + 1, layout.order.size)
+        appBar.title.text = file.name
+        UiKit.setSubtitle(appBar, getString(R.string.ml_pdf_page_of, pos + 1, layout.order.size))
     }
 
     // ---------------------------------------------------------------- tools
@@ -652,10 +647,8 @@ class PdfViewerActivity : AppCompatActivity() {
         if (t != Tool.SELECT) clearTextSelection()
         tool = t
         for (i in 0 until toolbar.childCount) {
-            val v = toolbar.getChildAt(i) as TextView
-            val active = v.tag == t
-            v.alpha = if (t == Tool.NONE || active) 1f else 0.5f
-            v.setTypeface(null, if (active) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            val v = toolbar.getChildAt(i)
+            UiKit.setToolActive(v, v.tag == t)
         }
         if (t == Tool.NONE) drawMode = if (drawMode == DrawMode.ERASER) DrawMode.PEN else drawMode
         updateHint()
@@ -711,11 +704,11 @@ class PdfViewerActivity : AppCompatActivity() {
             row.addView(swatch(current, true, 24) { paletteOpen = true; buildPalette() })
             row.addView(TextView(this).apply {
                 text = modeLabel()
-                setTextColor(0xB3FFFFFF.toInt())
+                setTextColor(UiKit.secondary(this@PdfViewerActivity))
                 textSize = 13f
                 setPadding(8.dpToPx(), 0, 0, 0)
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(optionButton("▴") { paletteOpen = true; buildPalette() })
+            row.addView(foldButton(R.drawable.ic_m_chevron_up) { paletteOpen = true; buildPalette() })
             palette.addView(row)
             return
         }
@@ -751,7 +744,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 } else {
                     options.addView(TextView(this).apply {
                         text = getString(if ((sel as Annotation.Stroke).highlighter) R.string.ml_pdf_highlighter else R.string.ml_pdf_pen)
-                        setTextColor(0xB3FFFFFF.toInt())
+                        setTextColor(UiKit.secondary(this@PdfViewerActivity))
                         textSize = 13f
                         setPadding(8.dpToPx(), 0, 0, 0)
                     }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -775,15 +768,15 @@ class PdfViewerActivity : AppCompatActivity() {
 
             sel is Annotation.Check || (sel == null && tool == Tool.CHECK) -> {
                 val isCross = (sel as? Annotation.Check)?.cross ?: cross
-                options.addView(optionButton("✓", !isCross, 18f) { setCross(sel, false) })
-                options.addView(optionButton("✕", isCross, 18f) { setCross(sel, true) })
+                options.addView(optionIcon(R.drawable.ic_m_check, !isCross, getString(R.string.ml_pdf_check)) { setCross(sel, false) })
+                options.addView(optionIcon(R.drawable.ic_m_close, isCross, getString(R.string.ml_pdf_check)) { setCross(sel, true) })
                 options.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
                 if (sel == null) CHECK_SIZES.forEachIndexed { i, size ->
                     options.addView(dot(8 + i * 5, size == checkSize) { checkSize = size; buildPalette() })
                 }
             }
         }
-        options.addView(optionButton("▾") { paletteOpen = false; buildPalette() })
+        options.addView(foldButton(R.drawable.ic_m_chevron_down) { paletteOpen = false; buildPalette() })
         palette.addView(options)
     }
 
@@ -803,7 +796,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 DrawMode.PEN -> getString(R.string.ml_pdf_pen)
                 DrawMode.HIGHLIGHTER -> getString(R.string.ml_pdf_highlighter)
                 DrawMode.ERASER -> getString(R.string.ml_pdf_eraser)
-            } + "  " + "●".repeat(widthIndex + 1)
+            } + "  ·  " + getString(R.string.ml_pdf_width) + " " + (widthIndex + 1)
             tool == Tool.TEXT -> getString(R.string.ml_pdf_text)
             tool == Tool.CHECK -> getString(R.string.ml_pdf_check)
             else -> ""
@@ -821,36 +814,70 @@ class PdfViewerActivity : AppCompatActivity() {
             background = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(color)
-                setStroke(if (active) 3.dpToPx() else 1.dpToPx(), if (active) Color.WHITE else 0x66FFFFFF)
+                setStroke(if (active) 3.dpToPx() else 1.dpToPx(), if (active) UiKit.primary(context) else UiKit.stroke(context))
             }
         }, FrameLayout.LayoutParams(sizeDp.dpToPx(), sizeDp.dpToPx(), Gravity.CENTER))
+        background = UiKit.roundRipple(context)
         isClickable = true
         setOnClickListener { onClick() }
     }
 
     private fun dot(sizeDp: Int, active: Boolean, onClick: () -> Unit) = FrameLayout(this).apply {
+        val ink = UiKit.primary(context)
         addView(View(context).apply {
             background = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(if (active) Color.WHITE else 0x88FFFFFF.toInt())
+                setColor(if (active) ink else androidx.core.graphics.ColorUtils.setAlphaComponent(ink, 0x88))
             }
         }, FrameLayout.LayoutParams(sizeDp.dpToPx(), sizeDp.dpToPx(), Gravity.CENTER))
-        setBackgroundColor(if (active) 0x33FFFFFF else 0)
+        background = if (active) optionBackground(true) else UiKit.roundRipple(context)
         isClickable = true
         setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(32.dpToPx(), 36.dpToPx())
+    }
+
+    /** The chevron that folds or opens the palette. */
+    private fun foldButton(res: Int, onClick: () -> Unit) = UiKit.iconButton(this, res, getString(R.string.ml_pdf_tool), onClick = onClick).apply {
+        val p = 6.dpToPx()
+        setPadding(p, p, p, p)
         layoutParams = LinearLayout.LayoutParams(36.dpToPx(), 36.dpToPx())
+    }
+
+    /** A bordered pill; [active] fills it lightly with the text color. */
+    private fun optionBackground(active: Boolean) = android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = 18.dpToPx().toFloat()
+        if (active) {
+            setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.primary(this@PdfViewerActivity), 0x26))
+            setStroke(1.dpToPx(), UiKit.primary(this@PdfViewerActivity))
+        } else setStroke(1.dpToPx(), UiKit.stroke(this@PdfViewerActivity))
     }
 
     private fun optionButton(label: String, bold: Boolean = false, size: Float = 13f, onClick: () -> Unit) = TextView(this).apply {
         text = label
         textSize = size
-        setTextColor(Color.WHITE)
+        setTextColor(UiKit.primary(this@PdfViewerActivity))
         setTypeface(null, if (bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-        setBackgroundColor(if (bold) 0x33FFFFFF else 0)
-        setPadding(10.dpToPx(), 8.dpToPx(), 10.dpToPx(), 8.dpToPx())
+        background = optionBackground(bold)
+        setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
         gravity = Gravity.CENTER
+        minHeight = 36.dpToPx()
         isClickable = true
         setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 4.dpToPx() }
+    }
+
+    /** Like [optionButton], with a line icon. */
+    private fun optionIcon(res: Int, active: Boolean, description: String, onClick: () -> Unit) = android.widget.ImageView(this).apply {
+        setImageResource(res)
+        imageTintList = android.content.res.ColorStateList.valueOf(UiKit.primary(this@PdfViewerActivity))
+        scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+        contentDescription = description
+        background = optionBackground(active)
+        val p = 7.dpToPx()
+        setPadding(p, p, p, p)
+        isClickable = true
+        setOnClickListener { onClick() }
+        layoutParams = LinearLayout.LayoutParams(46.dpToPx(), 36.dpToPx()).apply { marginEnd = 4.dpToPx() }
     }
 
     /** Types the text in place: a text field sits on the annotation's box on the page. */
@@ -1315,6 +1342,8 @@ class PdfViewerActivity : AppCompatActivity() {
                 isFakeBoldText = true
             }
             private val handleR = 12f * density
+            /** The handles' line icons, tinted like the frame. */
+            private val handleIcons = HashMap<Int, android.graphics.drawable.Drawable>()
             private val rotateGap = 30f * density
 
             private var current: MutableList<Pair<Float, Float>>? = null
@@ -1408,24 +1437,29 @@ class PdfViewerActivity : AppCompatActivity() {
                 canvas.restore()
             }
 
-            /** The selection frame, drawn in the annotation's rotated frame: ✕ top-left, ✎ top-right (text), ↻ above, ◢ bottom-right. */
+            /** The selection frame, drawn in the annotation's rotated frame: delete top-left, edit top-right (text), rotate above, resize bottom-right. */
             private fun drawSelection(canvas: Canvas, r: RectF, a: Annotation) {
                 val v = toView(r, a.box)
                 canvas.save()
                 if (a.rotation != 0f) canvas.rotate(a.rotation, v.centerX(), v.centerY())
                 canvas.drawRect(v, frame)
                 canvas.drawLine(v.centerX(), v.top, v.centerX(), v.top - rotateGap, frame)
-                handle(canvas, v.left, v.top, "✕")
-                if (a is Annotation.Text) handle(canvas, v.right, v.top, "✎")
-                handle(canvas, v.centerX(), v.top - rotateGap, "↻")
-                handle(canvas, v.right, v.bottom, "⤡")
+                handle(canvas, v.left, v.top, R.drawable.ic_m_close)
+                if (a is Annotation.Text) handle(canvas, v.right, v.top, R.drawable.ic_m_edit)
+                handle(canvas, v.centerX(), v.top - rotateGap, R.drawable.ic_m_rotate)
+                handle(canvas, v.right, v.bottom, R.drawable.ic_m_resize)
                 canvas.restore()
             }
 
-            private fun handle(canvas: Canvas, x: Float, y: Float, glyph: String) {
+            private fun handle(canvas: Canvas, x: Float, y: Float, icon: Int) {
                 canvas.drawCircle(x, y, handleR, handleFill)
                 canvas.drawCircle(x, y, handleR, frame)
-                canvas.drawText(glyph, x, y + handleText.textSize * 0.36f, handleText)
+                val d = handleIcons.getOrPut(icon) {
+                    ContextCompat.getDrawable(context, icon)?.mutate()?.apply { setTint(handleText.color) } ?: return
+                }
+                val half = (handleR * 0.62f).toInt()
+                d.setBounds(x.toInt() - half, y.toInt() - half, x.toInt() + half, y.toInt() + half)
+                d.draw(canvas)
             }
 
             fun textTypeface(): android.graphics.Typeface = textPaint.typeface ?: android.graphics.Typeface.DEFAULT

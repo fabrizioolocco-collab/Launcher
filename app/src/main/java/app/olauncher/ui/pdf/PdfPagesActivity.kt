@@ -26,8 +26,10 @@ import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
+import app.olauncher.helper.pillButton
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
+import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,24 +88,23 @@ class PdfPagesActivity : AppCompatActivity() {
             v.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(12.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
+        restoreButton = pillButton(this, getString(R.string.ml_pdf_restore_page), filled = false, color = UiKit.primary(this)) { restore() }.apply {
+            textSize = 13f
+            setPadding(14.dpToPx(), 0, 14.dpToPx(), 0)
+            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 34.dpToPx()).apply { marginEnd = 4.dpToPx() }
         }
-        top.addView(button("←", 26f) { finish() })
-        top.addView(TextView(this).apply {
-            setText(R.string.ml_pdf_pages)
-            setTextColor(Color.WHITE)
-            textSize = 18f
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 8.dpToPx() })
-        restoreButton = button(getString(R.string.ml_pdf_restore_page), 14f) { restore() }
-        top.addView(restoreButton)
-        top.addView(button("✓", 26f) { done() })
-        root.addView(top)
+        val appBar = UiKit.appBar(
+            this, getString(R.string.ml_pdf_pages), { finish() },
+            listOf(
+                restoreButton,
+                UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_done)) { done() },
+            ),
+        )
+        appBar.view.setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
+        root.addView(appBar.view)
         root.addView(TextView(this).apply {
             setText(R.string.ml_pdf_pages_hint)
-            setTextColor(0xB3FFFFFF.toInt())
+            setTextColor(UiKit.secondary(this@PdfPagesActivity))
             textSize = 13f
             setPadding(20.dpToPx(), 0, 20.dpToPx(), 8.dpToPx())
         })
@@ -118,16 +119,6 @@ class PdfPagesActivity : AppCompatActivity() {
         root.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         updateRestore()
         return root
-    }
-
-    private fun button(label: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
-        text = label
-        textSize = size
-        setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER
-        setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
     }
 
     private fun updateRestore() {
@@ -250,18 +241,33 @@ class PdfPagesActivity : AppCompatActivity() {
                 isClickable = true
                 layoutParams = RecyclerView.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
-            val box = FrameLayout(parent.context).apply { setBackgroundColor(0xFF333333.toInt()) }
+            val box = FrameLayout(parent.context).apply { background = UiKit.border(parent.context, 6, 0xFF333333.toInt()) }
             box.addView(ImageView(parent.context).apply { scaleType = ImageView.ScaleType.FIT_CENTER },
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             val inner = side - 12.dpToPx()
             cell.addView(box, LinearLayout.LayoutParams(inner, inner * 4 / 3))
-            cell.addView(TextView(parent.context).apply {
-                setTextColor(Color.WHITE)
+            // Page number, then (when turned) a rotate icon with the degrees
+            val label = LinearLayout(parent.context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 4.dpToPx(), 0, 0)
+            }
+            label.addView(TextView(parent.context).apply {
+                setTextColor(UiKit.primary(parent.context))
                 textSize = 12f
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
-                setPadding(0, 4.dpToPx(), 0, 0)
             })
+            label.addView(UiKit.icon(parent.context, R.drawable.ic_m_rotate, UiKit.secondary(parent.context), 14).apply {
+                (layoutParams as LinearLayout.LayoutParams).marginStart = 8.dpToPx()
+            })
+            label.addView(TextView(parent.context).apply {
+                setTextColor(UiKit.secondary(parent.context))
+                textSize = 12f
+                maxLines = 1
+                setPadding(3.dpToPx(), 0, 0, 0)
+            })
+            cell.addView(label)
             return object : RecyclerView.ViewHolder(cell) {}
         }
 
@@ -270,9 +276,14 @@ class PdfPagesActivity : AppCompatActivity() {
             val cell = holder.itemView as LinearLayout
             val box = cell.getChildAt(0) as FrameLayout
             val image = box.getChildAt(0) as ImageView
-            val label = cell.getChildAt(1) as TextView
+            val label = cell.getChildAt(1) as LinearLayout
             val rot = rotation[index] ?: 0
-            label.text = "${index + 1}" + if (rot != 0) "  ↻$rot°" else ""
+            (label.getChildAt(0) as TextView).text = "${index + 1}"
+            label.getChildAt(1).isVisible = rot != 0
+            (label.getChildAt(2) as TextView).apply {
+                isVisible = rot != 0
+                text = "$rot\u00B0"
+            }
             image.rotation = rot.toFloat()
             image.tag = index
             image.setImageBitmap(null)

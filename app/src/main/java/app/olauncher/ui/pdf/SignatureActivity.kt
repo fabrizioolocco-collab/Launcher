@@ -9,7 +9,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.os.Bundle
-import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -24,6 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showToast
+import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,53 +61,32 @@ class SignatureActivity : AppCompatActivity() {
             v.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(12.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
-        }
-        top.addView(button("←") { finish() })
-        top.addView(TextView(this).apply {
-            setText(R.string.ml_signature)
-            setTextColor(Color.WHITE)
-            textSize = 18f
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 8.dpToPx() })
-        top.addView(button(getString(R.string.ml_signature_image), 15f) {
-            imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        })
-        root.addView(top)
+        val appBar = UiKit.appBar(
+            this, getString(R.string.ml_signature), { finish() },
+            listOf(
+                UiKit.iconButton(this, R.drawable.ic_m_image, getString(R.string.ml_signature_image)) {
+                    imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                },
+                UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_signature_clear)) { pad.clear() },
+                UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_signature_use)) {
+                    val bitmap = pad.result()
+                    if (bitmap == null) showToast(getString(R.string.ml_signature_hint)) else finishWith(bitmap)
+                },
+            ),
+        )
+        appBar.view.setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
+        root.addView(appBar.view)
         root.addView(TextView(this).apply {
             setText(R.string.ml_signature_hint)
-            setTextColor(0xB3FFFFFF.toInt())
+            setTextColor(UiKit.secondary(this@SignatureActivity))
             textSize = 14f
             setPadding(20.dpToPx(), 4.dpToPx(), 20.dpToPx(), 8.dpToPx())
         })
         pad = PadView(this)
         root.addView(pad, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
-            setMargins(16.dpToPx(), 0, 16.dpToPx(), 0)
+            setMargins(16.dpToPx(), 0, 16.dpToPx(), 16.dpToPx())
         })
-        val bottom = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(8.dpToPx(), 12.dpToPx(), 8.dpToPx(), 16.dpToPx())
-        }
-        bottom.addView(button(getString(R.string.ml_signature_clear), 16f) { pad.clear() })
-        bottom.addView(button(getString(R.string.ml_signature_use), 16f) {
-            val bitmap = pad.result()
-            if (bitmap == null) showToast(getString(R.string.ml_signature_hint)) else finishWith(bitmap)
-        })
-        root.addView(bottom)
         setContentView(root)
-    }
-
-    private fun button(label: String, size: Float = 26f, onClick: () -> Unit) = TextView(this).apply {
-        text = label
-        textSize = size
-        setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER
-        setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
     }
 
     private fun finishWith(bitmap: Bitmap) {
@@ -149,7 +128,10 @@ class SignatureActivity : AppCompatActivity() {
         }
 
         init {
-            setBackgroundColor(Color.WHITE)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 16.dpToPx().toFloat()
+                setColor(Color.WHITE)
+            }
         }
 
         fun clear() {
