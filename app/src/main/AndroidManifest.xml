@@ -219,6 +219,12 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:taskAffinity="app.minimalauncher.todoalarm" />
+        <activity
+            android:name=".ui.weather.WeatherActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.weather"
+            android:theme="@style/ViewerTheme" />
 
         <activity-alias
             android:name=".TodoAlias"

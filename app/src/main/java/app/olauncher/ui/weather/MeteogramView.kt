@@ -54,7 +54,6 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
         strokeJoin = Paint.Join.ROUND
     }
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
-    private val rect = RectF()
     private val path = Path()
     private val icons = HashMap<Int, Drawable?>()
 
@@ -109,20 +108,20 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
         val dew = arr { it.dewPoint }
         val uv = arr { it.uv }
         return listOf(
-            Section(R.drawable.ic_w_sun, context.getString(R.string.ml_w_temp), "°C", amber, temp, { "${temp[it].roundToInt()}°" }, minRange = 4f),
-            Section(R.drawable.ic_w_sun_cloud, context.getString(R.string.ml_w_feels), "°C", amber, feels, { "${feels[it].roundToInt()}°" }, minRange = 4f),
-            Section(R.drawable.ic_w_rain, context.getString(R.string.ml_w_precip), "mm", blue, precip, { String.format(loc, "%.1f", precip[it]) },
+            Section(R.drawable.ic_m_thermo, context.getString(R.string.ml_w_temp), "°C", amber, temp, { "${temp[it].roundToInt()}°" }, minRange = 4f),
+            Section(R.drawable.ic_m_feels, context.getString(R.string.ml_w_feels), "°C", amber, feels, { "${feels[it].roundToInt()}°" }, minRange = 4f),
+            Section(R.drawable.ic_m_rain_line, context.getString(R.string.ml_w_precip), "mm", blue, precip, { String.format(loc, "%.1f", precip[it]) },
                 fixedMin = 0f, minRange = 2f),
-            Section(R.drawable.ic_w_fog, context.getString(R.string.ml_w_wind), "m/s", grey, wind, { String.format(loc, "%.1f", wind[it]) },
+            Section(R.drawable.ic_m_wind, context.getString(R.string.ml_w_wind), "m/s", grey, wind, { String.format(loc, "%.1f", wind[it]) },
                 fixedMin = 0f, minRange = 4f, arrows = true),
-            Section(R.drawable.ic_w_cloud, context.getString(R.string.ml_w_pressure), "hPa", teal, pressure, { pressure[it].roundToInt().toString() },
+            Section(R.drawable.ic_m_gauge, context.getString(R.string.ml_w_pressure), "hPa", teal, pressure, { pressure[it].roundToInt().toString() },
                 minRange = 6f, labelEvery = 2),
-            Section(R.drawable.ic_w_cloud, context.getString(R.string.ml_w_cloud), "%", grey, cloud, { cloud[it].roundToInt().toString() },
+            Section(R.drawable.ic_m_cloud_line, context.getString(R.string.ml_w_cloud), "%", grey, cloud, { cloud[it].roundToInt().toString() },
                 fixedMin = 0f, fixedMax = 100f, strongFill = true),
-            Section(R.drawable.ic_w_drizzle, context.getString(R.string.ml_w_humidity), "%", blue, humidity, { humidity[it].roundToInt().toString() },
+            Section(R.drawable.ic_m_drop, context.getString(R.string.ml_w_humidity), "%", blue, humidity, { humidity[it].roundToInt().toString() },
                 fixedMin = 0f, fixedMax = 100f),
-            Section(R.drawable.ic_w_drizzle, context.getString(R.string.ml_w_dew), "°C", blue, dew, { "${dew[it].roundToInt()}°" }, minRange = 4f),
-            Section(R.drawable.ic_w_sun, context.getString(R.string.ml_w_uv), "/11", purple, uv, { uv[it].roundToInt().toString() },
+            Section(R.drawable.ic_m_dew, context.getString(R.string.ml_w_dew), "°C", blue, dew, { "${dew[it].roundToInt()}°" }, minRange = 4f),
+            Section(R.drawable.ic_m_uv, context.getString(R.string.ml_w_uv), "/11", purple, uv, { uv[it].roundToInt().toString() },
                 fixedMin = 0f, minRange = 8f),
         )
     }
@@ -229,7 +228,7 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
             }
             drawTitle(canvas, s, top)
             drawChart(canvas, s, top + titleH, top + titleH + chartH)
-            if (s.arrows) drawArrows(canvas, top + titleH + chartH, s.color)
+            if (s.arrows) drawArrows(canvas, top + titleH + chartH)
             top += sectionHeight(s)
         }
     }
@@ -315,7 +314,7 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
     }
 
     /** Arrows showing where the wind goes (it comes from windDir). */
-    private fun drawArrows(canvas: Canvas, top: Float, color: Int) {
+    private fun drawArrows(canvas: Canvas, top: Float) {
         strokePaint.shader = null
         strokePaint.color = ColorUtils.setAlphaComponent(primary, 0xCC)
         strokePaint.strokeWidth = 1.5f * resources.displayMetrics.density
@@ -344,7 +343,7 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
 }
 
 /** The min–max bar of a day, placed on the range of the whole week. */
-class TempRangeBar(context: Context, private val min: Float, private val max: Float, private val weekMin: Float, private val weekMax: Float) :
+class TempRangeBar(context: Context, private val dayMin: Float, private val dayMax: Float, private val weekMin: Float, private val weekMax: Float) :
     View(context) {
 
     private val track = ColorUtils.setAlphaComponent(context.getColorFromAttr(R.attr.secondaryTextColor), 0x40)
@@ -361,8 +360,8 @@ class TempRangeBar(context: Context, private val min: Float, private val max: Fl
         rect.set(0f, top, w, top + h)
         canvas.drawRoundRect(rect, h / 2, h / 2, paint)
         val span = (weekMax - weekMin).takeIf { it > 0.01f } ?: 1f
-        val l = ((min - weekMin) / span).coerceIn(0f, 1f) * w
-        val r = max(l + h, ((max - weekMin) / span).coerceIn(0f, 1f) * w).coerceAtMost(w)
+        val l = ((dayMin - weekMin) / span).coerceIn(0f, 1f) * w
+        val r = max(l + h, ((dayMax - weekMin) / span).coerceIn(0f, 1f) * w).coerceAtMost(w)
         val left = min(l, r - h).coerceAtLeast(0f)
         paint.shader = LinearGradient(0f, 0f, w, 0f, 0xFF4FA3F7.toInt(), 0xFFC9A227.toInt(), Shader.TileMode.CLAMP)
         rect.set(left, top, r, top + h)
