@@ -553,7 +553,11 @@ class AppDrawerFragment : BaseFragment() {
         val searching = !binding.search.query.isNullOrBlank()
         listBuiltForSearch = searching
         tabs?.setApps(allowed)
-        val apps = (if (searching) allowed else tabs?.filter(allowed) ?: allowed)
+        // Search looks through every app, the hidden ones included
+        val searchPool = if (flag == Constants.FLAG_LAUNCH_APP)
+            (allowed + currentHiddenApps).distinctBy { "${it.appPackage}|${it.user}|${(it as? AppModel.App)?.activityClassName}" }
+        else allowed
+        val apps = (if (searching) searchPool else tabs?.filter(allowed) ?: allowed)
             .filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         // "News" block removed: apps with notifications are shown on home instead
         val combined = apps.toMutableList()
