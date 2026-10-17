@@ -92,6 +92,15 @@ class PdfViewerActivity : AppCompatActivity() {
     private var cross = false
     private var pendingSaveName = ""
 
+    // Text search: the bar, the document's text (read the first time) and the matches
+    private lateinit var searchBar: LinearLayout
+    private lateinit var searchInput: android.widget.EditText
+    private lateinit var searchCount: TextView
+    private var search: PdfSearch? = null
+    private var hits: List<PdfSearch.Hit> = emptyList()
+    private var hitIndex = -1
+    private var searchJob: kotlinx.coroutines.Job? = null
+
     private enum class Tool { NONE, TEXT, CHECK, DRAW, SIGN }
     private enum class DrawMode { PEN, HIGHLIGHTER, ERASER }
 
@@ -124,11 +133,71 @@ class PdfViewerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A link from the browser: download it first
+        val link = intent.data?.takeIf { it.scheme == "http" || it.scheme == "https" }
+        if (link != null) {
+            setContentView(TextView(this).apply {
+                setText(R.string.ml_pdf_downloading)
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setBackgroundColor(0xFF202020.toInt())
+            })
+            lifecycleScope.launch {
+                val downloaded = withContext(Dispatchers.IO) { download(link) }
+                if (downloaded == null) {
+                    showToast(getString(R.string.ml_pdf_cannot_open))
+                    finish()
+                } else start(downloaded)
+            }
+            return
+        }
         val opened = resolveFile(intent) ?: run {
             showToast(getString(R.string.ml_pdf_cannot_open))
             finish()
             return
         }
+        start(opened)
+    }
+
+    /** Downloads the PDF at [uri] into the cache (following redirects); null if it fails or isn't a PDF. */
+    private fun download(uri: Uri): File? = try {
+        fun open(u: java.net.URL) = (u.openConnection() as java.net.HttpURLConnection).apply {
+            instanceFollowRedirects = true
+            connectTimeout = 15_000
+            readTimeout = 30_000
+        }
+        var url = java.net.URL(uri.toString())
+        var connection = open(url)
+        var redirects = 0
+        // Redirects between http and https aren't followed by HttpURLConnection
+        while (connection.responseCode in 300..399 && redirects++ < 5) {
+            val next = connection.getHeaderField("Location") ?: break
+            connection.disconnect()
+            url = java.net.URL(url, next)
+            connection = open(url)
+        }
+        if (connection.responseCode !in 200..299) null
+        else {
+            val fromHeader = connection.getHeaderField("Content-Disposition")
+                ?.let { Regex("filename\\*?=(?:UTF-8'')?\"?([^\";]+)", RegexOption.IGNORE_CASE).find(it)?.groupValues?.get(1) }
+                ?.let { Uri.decode(it) }
+            val name = (fromHeader ?: uri.lastPathSegment)?.substringAfterLast('/')
+                ?.takeIf { it.isNotBlank() }?.let { if (it.endsWith(".pdf", true)) it else "$it.pdf" } ?: "documento.pdf"
+            val dir = File(cacheDir, "pdf").apply { mkdirs() }
+            val target = File(dir, name.replace(Regex("[\\\\/:*?\"<>|]"), "_"))
+            connection.inputStream.use { input -> target.outputStream().use { input.copyTo(it) } }
+            connection.disconnect()
+            // A PDF starts with "%PDF"
+            val head = target.inputStream().use { s -> ByteArray(4).also { s.read(it) } }
+            if (String(head) == "%PDF") target else null
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+
+    private fun start(opened: File) {
         file = opened
         if (!openRenderer()) {
             showToast(getString(R.string.ml_pdf_cannot_open))
@@ -222,10 +291,12 @@ class PdfViewerActivity : AppCompatActivity() {
             ellipsize = TextUtils.TruncateAt.MIDDLE
         }
         top.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 8.dpToPx() })
+        top.addView(button("🔍", 18f) { toggleSearch() })
         top.addView(button(getString(R.string.ml_pdf_pages), 14f) { openPages() })
         top.addView(button("⤴", 22f) { share(file) })
         top.addView(button("✓", 26f) { save() })
         root.addView(top)
+        root.addView(buildSearchBar())
 
         hint = TextView(this).apply {
             setTextColor(0xB3FFFFFF.toInt())
@@ -304,6 +375,134 @@ class PdfViewerActivity : AppCompatActivity() {
         setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
         isClickable = true
         setOnClickListener { onClick() }
+    }
+
+    // ---------------------------------------------------------------- search
+
+    private fun buildSearchBar(): View {
+        searchBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(0xFF101010.toInt())
+            setPadding(12.dpToPx(), 0, 4.dpToPx(), 0)
+            isVisible = false
+        }
+        searchInput = android.widget.EditText(this).apply {
+            setSingleLine(true)
+            setTextColor(Color.WHITE)
+            setHintTextColor(0x80FFFFFF.toInt())
+            setHint(R.string.ml_pdf_search_hint)
+            textSize = 16f
+            background = null
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setOnEditorActionListener { _, _, _ ->
+                if (hits.isNotEmpty() && searchJob?.isActive != true) moveHit(1) else runSearch()
+                true
+            }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    removeCallbacks(searchSoon)
+                    postDelayed(searchSoon, 400)
+                }
+            })
+        }
+        searchBar.addView(searchInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        searchCount = TextView(this).apply {
+            setTextColor(0xB3FFFFFF.toInt())
+            textSize = 13f
+            setPadding(8.dpToPx(), 0, 4.dpToPx(), 0)
+        }
+        searchBar.addView(searchCount)
+        searchBar.addView(button("▲", 16f) { moveHit(-1) })
+        searchBar.addView(button("▼", 16f) { moveHit(1) })
+        searchBar.addView(button("✕", 18f) { toggleSearch() })
+        return searchBar
+    }
+
+    private val searchSoon = Runnable { runSearch() }
+
+    private fun toggleSearch() {
+        if (searchBar.isVisible) {
+            searchBar.isVisible = false
+            searchInput.removeCallbacks(searchSoon)
+            searchJob?.cancel()
+            hideKeyboard(searchInput)
+            hits = emptyList()
+            hitIndex = -1
+            invalidatePages()
+            return
+        }
+        searchBar.isVisible = true
+        searchCount.text = ""
+        searchInput.requestFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+            .showSoftInput(searchInput, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    private fun hideKeyboard(v: View) {
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0)
+    }
+
+    /** Finds the text typed (reading the document's text the first time), then goes to the first match. */
+    private fun runSearch() {
+        searchInput.removeCallbacks(searchSoon)
+        val query = searchInput.text.toString()
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            hits = emptyList()
+            hitIndex = -1
+            searchCount.text = ""
+            invalidatePages()
+            return
+        }
+        if (search == null) searchCount.setText(R.string.ml_pdf_searching)
+        searchJob = lifecycleScope.launch {
+            val found = withContext(Dispatchers.Default) {
+                val s = search ?: PdfSearch.load(this@PdfViewerActivity, file)?.also { search = it }
+                s?.find(query)
+            }
+            if (found == null) {
+                searchCount.setText(R.string.ml_pdf_search_no_text)
+                return@launch
+            }
+            // In the order the pages are shown (after any reordering), deleted pages left out
+            hits = found.filter { it.page in layout.order }.sortedBy { layout.order.indexOf(it.page) }
+            hitIndex = -1
+            if (hits.isEmpty()) {
+                searchCount.setText(R.string.ml_pdf_search_none)
+                invalidatePages()
+            } else moveHit(1)
+        }
+    }
+
+    private fun moveHit(delta: Int) {
+        if (hits.isEmpty()) return
+        hitIndex = if (hitIndex < 0) 0 else (hitIndex + delta).mod(hits.size)
+        searchCount.text = "${hitIndex + 1}/${hits.size}"
+        hideKeyboard(searchInput)
+        invalidatePages()
+        val hit = hits[hitIndex]
+        val position = layout.order.indexOf(hit.page)
+        val lm = pager.layoutManager as LinearLayoutManager
+        lm.scrollToPositionWithOffset(position, 0)
+        // Once laid out, bring the match to a third of the screen
+        pager.post {
+            val view = lm.findViewByPosition(position) as? PageView ?: return@post
+            val box = hitBox(hit.page, hit.rects.first())
+            val y = view.top + view.paddingTop + box.top * (view.height - view.paddingTop - view.paddingBottom)
+            pager.scrollBy(0, (y - pager.height / 3f).toInt())
+            updateTitle()
+        }
+    }
+
+    /** A match's box on the page as shown, turned with the page if it was rotated in "Pages". */
+    private fun hitBox(page: Int, f: RectF): RectF = when ((layout.rotation[page] ?: 0).mod(360)) {
+        90 -> RectF(1f - f.bottom, f.left, 1f - f.top, f.right)
+        180 -> RectF(1f - f.right, 1f - f.bottom, 1f - f.left, 1f - f.top)
+        270 -> RectF(f.top, 1f - f.right, f.bottom, 1f - f.left)
+        else -> RectF(f)
     }
 
     private fun updateTitle() {
@@ -966,11 +1165,25 @@ class PdfViewerActivity : AppCompatActivity() {
             override fun onDraw(canvas: Canvas) {
                 val r = pageRect()
                 if (r.isEmpty) return
+                drawHits(canvas, r)
                 annotations.filter { it.page == original }.forEach { draw(canvas, r, it) }
                 current?.let { pts ->
                     drawStroke(canvas, r, pts, WIDTHS[widthIndex] * (if (drawMode == DrawMode.HIGHLIGHTER) HIGHLIGHT_FACTOR else 1f), inkColor, drawMode == DrawMode.HIGHLIGHTER)
                 }
                 selected?.takeIf { it.page == original }?.let { drawSelection(canvas, r, it) }
+            }
+
+            private val hitPaint = Paint().apply { color = 0x66FFEB3B }
+            private val currentHitPaint = Paint().apply { color = 0x88FF9800.toInt() }
+
+            /** The search matches on this page; the current one stronger. */
+            private fun drawHits(canvas: Canvas, r: RectF) {
+                val current = hits.getOrNull(hitIndex)
+                hits.forEach { hit ->
+                    if (hit.page != original) return@forEach
+                    val paint = if (hit === current) currentHitPaint else hitPaint
+                    hit.rects.forEach { canvas.drawRect(toView(r, hitBox(original, it)), paint) }
+                }
             }
 
             private fun toView(r: RectF, f: RectF) = RectF(r.left + f.left * r.width(), r.top + f.top * r.height(), r.left + f.right * r.width(), r.top + f.bottom * r.height())

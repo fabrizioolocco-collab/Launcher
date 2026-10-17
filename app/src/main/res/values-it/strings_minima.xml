@@ -604,4 +604,9 @@
     <string name="ml_cal_open_todo">Apri ToDo</string>
     <string name="ml_todo_by_category">Raggruppa per categoria</string>
     <string name="ml_todo_no_category">Senza categoria</string>
+    <string name="ml_pdf_search_hint">Cerca nel PDF</string>
+    <string name="ml_pdf_searching">Lettura…</string>
+    <string name="ml_pdf_search_no_text">Nessun testo da cercare</string>
+    <string name="ml_pdf_search_none">Non trovato</string>
+    <string name="ml_pdf_downloading">Scarico il PDF…</string>
 </resources>

@@ -610,4 +610,9 @@
     <string name="ml_cal_open_todo">Open ToDo</string>
     <string name="ml_todo_by_category">Group by category</string>
     <string name="ml_todo_no_category">No category</string>
+    <string name="ml_pdf_search_hint">Search in the PDF</string>
+    <string name="ml_pdf_searching">Reading…</string>
+    <string name="ml_pdf_search_no_text">No text to search</string>
+    <string name="ml_pdf_search_none">Not found</string>
+    <string name="ml_pdf_downloading">Downloading the PDF…</string>
 </resources>
