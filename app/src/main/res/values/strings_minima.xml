@@ -630,4 +630,11 @@
     <string name="ml_pdf_default_pick">Choose MinimaLauncher and tap \"Always\"</string>
     <string name="ml_tab_back_to_all">Back to All (out of the tab)</string>
     <string name="ml_tab_back_to_all_done">%s is back in All</string>
+    <string name="ml_notif_clear_all">Clear all</string>
+    <string name="ml_notif_clear">Clear</string>
+    <string name="ml_notif_reply">Reply</string>
+    <string name="ml_notif_reply_to">Reply to %s…</string>
+    <string name="ml_notif_send">Send</string>
+    <string name="ml_notif_sent">Reply sent</string>
+    <string name="ml_notif_send_failed">The reply could not be sent</string>
 </resources>

@@ -44,6 +44,9 @@ class OlDialog(context: Context) : AlertDialog(context) {
 
     private var blur: WindowBlur? = null
 
+    /** Stronger blur of what's behind (px); null = the usual light one. */
+    var blurRadius: Int? = null
+
     fun showRespectingStatusBar() {
         val window = window
         if (window == null || Prefs(context).showStatusBar) {
@@ -54,7 +57,7 @@ class OlDialog(context: Context) : AlertDialog(context) {
             window.hideStatusBar()
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
-        blur = window?.let { WindowBlur(it).apply { fadeIn() } }
+        blur = window?.let { WindowBlur(it, blurRadius).apply { fadeIn() } }
     }
 
     override fun dismiss() {

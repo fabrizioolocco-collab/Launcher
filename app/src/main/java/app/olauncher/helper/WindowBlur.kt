@@ -21,11 +21,11 @@ private const val DIM_WITH_BLUR = 0.3f
  * keeps the dim its theme asked for. Not used on e-ink displays, where the blur
  * would only smear the screen.
  */
-class WindowBlur(private val window: Window) {
+class WindowBlur(private val window: Window, radiusPx: Int? = null) {
 
     private val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !window.context.isEinkDisplay()
     private val duration = window.context.resources.getInteger(R.integer.dialog_anim_duration).toLong()
-    private val radius = window.context.resources.getDimensionPixelSize(R.dimen.dialog_blur_behind_radius)
+    private val radius = radiusPx ?: window.context.resources.getDimensionPixelSize(R.dimen.dialog_blur_behind_radius)
     private val dimWithoutBlur = window.attributes.dimAmount
     private val interpolator = DecelerateInterpolator()
     private var blurAvailable = false

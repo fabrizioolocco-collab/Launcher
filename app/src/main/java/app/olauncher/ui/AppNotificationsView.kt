@@ -46,7 +46,7 @@ object AppNotificationsView {
      * the PendingIntent to start an activity on its behalf, otherwise the system silently blocks it.
      * Without a content intent, the app itself is opened.
      */
-    private fun open(context: Context, app: AppModel.App, sbn: StatusBarNotification) {
+    fun openNotification(context: Context, app: AppModel.App, sbn: StatusBarNotification) {
         val pi = sbn.notification.contentIntent
         if (pi != null) {
             try {
@@ -110,7 +110,7 @@ object AppNotificationsView {
             attachSwipe(card,
                 onTap = {
                     dialog.dismiss()
-                    open(ctx, app, sbn)
+                    openNotification(ctx, app, sbn)
                     // Like the shade: auto-cancel notifications go away once opened
                     if (sbn.notification.flags and Notification.FLAG_AUTO_CANCEL != 0 || sbn.notification.contentIntent == null)
                         listener.dismiss(sbn.key)

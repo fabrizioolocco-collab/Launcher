@@ -50,6 +50,7 @@ object NotificationBadge {
 
     /** Notifications of [app] (tap opens, swipe dismisses) plus "Open app". */
     fun showNotifications(context: Context, app: AppModel.App, openApp: () -> Unit) {
+        if (NotificationsPopup.show(context, app, openApp)) return
         context.showMenuDialog(
             app.appLabel,
             listOf(MenuEntry(context.getString(R.string.ml_open_app)) { openApp() }),

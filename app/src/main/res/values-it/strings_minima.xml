@@ -624,4 +624,11 @@
     <string name="ml_pdf_default_pick">Scegli MinimaLauncher e tocca \"Sempre\"</string>
     <string name="ml_tab_back_to_all">Riporta in Tutte (togli dalla tab)</string>
     <string name="ml_tab_back_to_all_done">%s è di nuovo in Tutte</string>
+    <string name="ml_notif_clear_all">Cancella tutte</string>
+    <string name="ml_notif_clear">Cancella</string>
+    <string name="ml_notif_reply">Rispondi</string>
+    <string name="ml_notif_reply_to">Rispondi a %s…</string>
+    <string name="ml_notif_send">Invia</string>
+    <string name="ml_notif_sent">Risposta inviata</string>
+    <string name="ml_notif_send_failed">Impossibile inviare la risposta</string>
 </resources>
