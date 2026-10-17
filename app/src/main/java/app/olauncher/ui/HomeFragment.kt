@@ -132,7 +132,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         sections = HomeSectionsController(
             context = requireContext(),
             grid = widgets,
-            looseContainer = binding.looseLayout,
             emptyHint = binding.noSectionsHint,
             prefs = prefs,
             scope = uiScope,

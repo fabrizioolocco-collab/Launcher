@@ -51,13 +51,12 @@ import kotlinx.coroutines.withContext
 /**
  * Renders the user's sections on the home grid (one [SectionBlockView] each, handed to [grid] as
  * blocks that the user can drag to another row) and handles all section/app editing. Apps with
- * notifications are listed in [looseContainer] above the grid.
+ * notifications are handed to the grid's news strip.
  * Data lives in [HomeSectionsRepository]; every change is saved immediately and re-rendered.
  */
 class HomeSectionsController(
     private val context: Context,
     private val grid: HomeWidgetsController,
-    private val looseContainer: LinearLayout,
     private val emptyHint: View,
     private val prefs: Prefs,
     private val scope: CoroutineScope,
@@ -144,7 +143,6 @@ class HomeSectionsController(
     // ---------------------------------------------------------------- rendering
 
     fun render() {
-        looseContainer.removeAllViews()
         if (!appsLoaded) {
             emptyHint.isVisible = false
             return
@@ -157,8 +155,7 @@ class HomeSectionsController(
         val loose = looseApps()
         val notifiedKeys = loose.map { NotificationRepository.key(it.appPackage, it.user.toString()) }.toSet()
         fun atItsPlace(app: AppModel.App) = NotificationRepository.key(app.appPackage, app.user.toString()) !in notifiedKeys
-        addAppRows(looseContainer, loose.map { app -> appView(LOOSE, SectionApp.from(app), app, gravity) }, gravity)
-        looseContainer.isVisible = loose.isNotEmpty()
+        grid.setNews(loose) { app -> showLooseAppMenu(app) }
         val blocks = sections.mapIndexedNotNull { index, section ->
             // During detox, sections without allowed apps disappear
             if (detox && section.apps.none { findApp(it) != null }) return@mapIndexedNotNull null
@@ -309,6 +306,7 @@ class HomeSectionsController(
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection(row = row) },
                 MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
                 MenuEntry(context.getString(R.string.ml_parking_menu)) { parking() },
+                MenuEntry(context.getString(R.string.ml_news_zone_show)) { grid.showNewsStrip() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },
                 MenuEntry(context.getString(R.string.ml_settings)) { openSettings() },
             )

@@ -61,8 +61,23 @@ class HomeWidgetsController(
     private val onLaunchApp: (AppModel.App) -> Unit = {},
     private val pickImage: ((android.net.Uri) -> Unit) -> Unit = {},
 ) {
-    /** A full-width block sharing the grid (a home section); its view is as tall as its content. */
-    class Block(val id: String, var row: Int, val view: SectionBlockView, val onMenu: () -> Unit)
+    /**
+     * A full-width block sharing the grid: a home section (as tall as its content, [autoHeight]) or
+     * the news strip ([rowSpan] logical rows).
+     */
+    class Block(
+        val id: String,
+        var row: Int,
+        val view: SectionBlockView,
+        val rowSpan: Int = 1,
+        val autoHeight: Boolean = true,
+        val onMenu: () -> Unit,
+    )
+
+    /** The news strip: apps with notifications, on a reserved and movable row of the grid. */
+    private val newsView = NewsStripView(activity)
+    private val newsBlock = Block(NEWS_ID, prefs.newsRow, newsView, rowSpan = TOP_ROW_DIVISIONS, autoHeight = false) { newsView.flashOutline() }
+    private var sectionBlocks: List<Block> = emptyList()
 
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = sharedHost(activity)
@@ -169,26 +184,101 @@ class HomeWidgetsController(
     /** Widgets and icons on home (sections excluded). */
     fun itemCount(): Int = widgets.size
 
-    /** Shows [list] as the grid's sections, replacing the previous ones. */
+    /** Shows [list] as the grid's sections, replacing the previous ones (the news strip stays). */
     fun setBlocks(list: List<Block>) {
-        blocks = list
+        sectionBlocks = list
+        blocks = list + newsBlock
         for (i in grid.childCount - 1 downTo 0) if (grid.getChildAt(i).tag is Block) grid.removeViewAt(i)
         placeBlocks()
     }
 
     private fun placeBlocks() {
         val columns = prefs.widgetColumns
+        if (newsBlock.row < 0 && grid.height == 0) {
+            // The strip's first place is the lowest row: it needs the grid's height
+            grid.post { if (newsBlock.row < 0) setBlocks(sectionBlocks) }
+        }
         blocks.forEach { block ->
-            if (block.row < 0 || !isFree(0, block.row, columns, 1, block)) {
+            if (block === newsBlock && block.row < 0) {
+                if (grid.height == 0) return@forEach
+                block.row = findFreeSpotFromBottom(block.rowSpan, block) ?: findFreeSpot(columns, block.rowSpan, block)?.second ?: 0
+                prefs.newsRow = block.row
+            } else if (block.row < 0 || !isFree(0, block.row, columns, block.rowSpan, block)) {
                 // No visible row left: the section goes below the others (clipped) rather than lost
-                block.row = findFreeSpot(columns, 1, block)?.second ?: usedRows()
-                onBlockMoved?.invoke(block)
+                block.row = findFreeSpot(columns, block.rowSpan, block)?.second ?: usedRows()
+                blockMoved(block)
             }
             block.view.tag = block
-            block.view.layoutParams = WidgetGridLayout.CellParams(0, block.row, columns, 1).apply { autoHeight = true }
+            block.view.layoutParams = WidgetGridLayout.CellParams(0, block.row, columns, block.rowSpan).apply { autoHeight = block.autoHeight }
             block.view.touch.listener = blockListener
             grid.addView(block.view)
         }
+    }
+
+    private fun blockMoved(block: Block) {
+        if (block === newsBlock) prefs.newsRow = block.row else onBlockMoved?.invoke(block)
+    }
+
+    /** The lowest visible row where a full-width block of [rowSpan] rows is free. */
+    private fun findFreeSpotFromBottom(rowSpan: Int, except: Any?): Int? {
+        var row = 0
+        while (grid.fits(row + 1, rowSpan)) row++
+        while (row >= 0) {
+            if (isFree(0, row, prefs.widgetColumns, rowSpan, except)) return row
+            row--
+        }
+        return null
+    }
+
+    /** Fills the news strip with the apps that have notifications (red tiles). */
+    fun setNews(apps: List<AppModel.App>, onMenu: (AppModel.App) -> Unit) {
+        newsView.row.removeAllViews()
+        val cell = cellPx()
+        val size = (cell - 8.dpToPx()).coerceAtLeast(24.dpToPx())
+        val tile = prefs.iconTiles
+        val iconPack = prefs.iconPack
+        val context = activity.applicationContext
+        apps.forEach { app ->
+            val view = IconCellView(activity) { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
+            view.bind(app.appLabel, false, size, tile)
+            view.setNotified(true)
+            view.setTag(R.id.ml_swipe_app, app)
+            view.touch.listener = object : GridItemListener {
+                override fun onLongPress(view: View) {}
+                override fun onDrag(view: View, dx: Float, dy: Float, rawY: Float) {}
+                override fun onDrop(view: View, dx: Float, dy: Float) {}
+                override fun onMenu(view: View) = onMenu(app)
+            }
+            newsView.row.addView(view, android.widget.LinearLayout.LayoutParams(cell, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+            val bitmapSize = view.bitmapSizeFor(size, tile)
+            scope.launch {
+                val bitmap = withContext(Dispatchers.IO) {
+                    IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, bitmapSize)
+                }
+                view.setIcon(bitmap)
+            }
+        }
+    }
+
+    /** Home menu: shows where the (possibly empty) news strip is. */
+    fun showNewsStrip() = newsView.flashOutline()
+
+    /** The strip's rectangle in the free widget layer's coordinates (px), or null before layout. */
+    private fun newsRectInFree(): android.graphics.Rect? {
+        if (newsBlock.row < 0 || grid.height == 0) return null
+        val g = IntArray(2)
+        val f = IntArray(2)
+        grid.getLocationOnScreen(g)
+        free.getLocationOnScreen(f)
+        val top = g[1] - f[1] + grid.rowTop(newsBlock.row)
+        val bottom = g[1] - f[1] + grid.rowTop(newsBlock.row + newsBlock.rowSpan)
+        return android.graphics.Rect(0, top, free.width, bottom)
+    }
+
+    /** True when a widget placed at these px bounds would cover the news strip. */
+    private fun coversNews(left: Int, top: Int, width: Int, height: Int): Boolean {
+        val r = newsRectInFree() ?: return false
+        return android.graphics.Rect(left, top, left + width, top + height).intersect(r)
     }
 
     private val rowDivisions get() = TOP_ROW_DIVISIONS
@@ -230,7 +320,7 @@ class HomeWidgetsController(
     /** First row after everything on the grid. */
     private fun usedRows(): Int = maxOf(
         widgets.filter { it.isApp }.maxOfOrNull { it.row + it.rowSpan } ?: 0,
-        blocks.filter { it.row >= 0 }.maxOfOrNull { it.row + 1 } ?: 0,
+        blocks.filter { it.row >= 0 }.maxOfOrNull { it.row + it.rowSpan } ?: 0,
     )
 
     private fun updateBadges() {
@@ -383,7 +473,7 @@ class HomeWidgetsController(
     private fun isFree(col: Int, row: Int, colSpan: Int, rowSpan: Int, except: Any?): Boolean =
         col >= 0 && row >= 0 && col + colSpan <= prefs.widgetColumns && grid.fits(row, rowSpan) &&
                 widgets.none { it !== except && it.isApp && overlaps(it, col, row, colSpan, rowSpan) } &&
-                blocks.none { it !== except && it.row >= 0 && it.row in row until row + rowSpan }
+                blocks.none { it !== except && it.row >= 0 && row < it.row + it.rowSpan && it.row < row + rowSpan }
 
     /** First free cell for an item of that size, or null when the home is full. */
     private fun findFreeSpot(colSpan: Int, rowSpan: Int, except: Any? = null): Pair<Int, Int>? {
@@ -408,6 +498,7 @@ class HomeWidgetsController(
         if (view.tag is HomeWidget && !(view.tag as HomeWidget).isApp) {
             view.bringToFront()
         } else grid.editing = true
+        newsView.setOutlined(true)
         dragDx = 0f
         dragDy = 0f
     }
@@ -427,7 +518,7 @@ class HomeWidgetsController(
             is Block -> {
                 view.translationX = 0f
                 val row = grid.dropCellFor(view, 0f, dy).second
-                grid.showDropPreview(0, row, prefs.widgetColumns, 1, isFree(0, row, prefs.widgetColumns, 1, item))
+                grid.showDropPreview(0, row, prefs.widgetColumns, item.rowSpan, isFree(0, row, prefs.widgetColumns, item.rowSpan, item))
             }
         }
     }
@@ -440,6 +531,7 @@ class HomeWidgetsController(
         view.alpha = 1f
         grid.hideDropPreview()
         grid.editing = false
+        newsView.setOutlined(false)
         scrollView.gesturesEnabled = true
         return cell
     }
@@ -453,10 +545,16 @@ class HomeWidgetsController(
             val widget = view.tag as HomeWidget
             val (col, row) = finishDrag(view)
             if (!widget.isApp) {
-                // Free widget: lands where it was left, kept inside the home
+                // Free widget: lands where it was left, kept inside the home and off the news strip
                 val p = view.layoutParams as android.widget.FrameLayout.LayoutParams
-                p.leftMargin = free.clampX(p.leftMargin + dx.toInt(), p.width)
-                p.topMargin = free.clampY(p.topMargin + dy.toInt(), p.height)
+                val left = free.clampX(p.leftMargin + dx.toInt(), p.width)
+                val top = free.clampY(p.topMargin + dy.toInt(), p.height)
+                if (coversNews(left, top, p.width, p.height)) {
+                    activity.showToast(activity.getString(R.string.ml_news_zone_blocked))
+                    return
+                }
+                p.leftMargin = left
+                p.topMargin = top
                 view.layoutParams = p
                 widget.x = p.leftMargin.toDp(); widget.y = p.topMargin.toDp()
                 save()
@@ -492,11 +590,11 @@ class HomeWidgetsController(
         override fun onDrop(view: View, dx: Float, dy: Float) {
             val block = view.tag as Block
             val row = finishDrag(view).second
-            if (row != block.row && isFree(0, row, prefs.widgetColumns, 1, block)) {
+            if (row != block.row && isFree(0, row, prefs.widgetColumns, block.rowSpan, block)) {
                 block.row = row
                 (view.layoutParams as WidgetGridLayout.CellParams).row = row
                 grid.requestLayout()
-                onBlockMoved?.invoke(block)
+                blockMoved(block)
             }
         }
 
@@ -509,11 +607,20 @@ class HomeWidgetsController(
     private fun resizeListener() = object : FreeWidgetLayout.ResizeListener {
         override fun onResizeDragging(active: Boolean) {
             scrollView.gesturesEnabled = !active
+            newsView.setOutlined(active)
         }
 
         override fun onResized(view: View) {
             val widget = view.tag as HomeWidget
             val p = view.layoutParams as android.widget.FrameLayout.LayoutParams
+            if (coversNews(p.leftMargin, p.topMargin, p.width, p.height)) {
+                // Back to the saved bounds: the news strip stays clear
+                activity.showToast(activity.getString(R.string.ml_news_zone_blocked))
+                p.leftMargin = widget.x.dpToPx(); p.topMargin = widget.y.dpToPx()
+                p.width = widget.w.dpToPx(); p.height = widget.h.dpToPx()
+                view.layoutParams = p
+                return
+            }
             widget.x = p.leftMargin.toDp(); widget.y = p.topMargin.toDp()
             widget.w = p.width.toDp(); widget.h = p.height.toDp()
             save()
@@ -879,6 +986,8 @@ class HomeWidgetsController(
 
         /** Where widgets from older layouts land (dp from the top of home, below the clock). */
         private const val LEGACY_TOP_DP = 140
+
+        private const val NEWS_ID = "news"
 
         /**
          * Pins [app] on the main home grid from outside home (app drawer, folder shortcuts); the

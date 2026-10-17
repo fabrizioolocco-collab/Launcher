@@ -406,4 +406,7 @@
     <string name="ml_settings_files">Files and media</string>
     <string name="ml_settings_system">System</string>
     <string name="ml_icon_tiles">Rounded tiles behind icons</string>
+    <string name="ml_news_zone">News row</string>
+    <string name="ml_news_zone_show">Show the news row</string>
+    <string name="ml_news_zone_blocked">The news row is there: widgets cannot cover it</string>
 </resources>

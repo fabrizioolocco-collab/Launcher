@@ -104,6 +104,16 @@ class HomeScrollView @JvmOverloads constructor(
         }
     })
 
+    /** The home is one fixed screen: its content is measured exactly as tall as the view, so nothing scrolls. */
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+        val child = getChildAt(0) ?: return
+        child.measure(
+            MeasureSpec.makeMeasureSpec((measuredWidth - paddingLeft - paddingRight).coerceAtLeast(0), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec((measuredHeight - paddingTop - paddingBottom).coerceAtLeast(0), MeasureSpec.EXACTLY),
+        )
+    }
+
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean =
         gesturesEnabled && super.onInterceptTouchEvent(ev)
 

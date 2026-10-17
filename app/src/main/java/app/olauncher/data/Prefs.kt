@@ -220,6 +220,11 @@ class Prefs(context: Context) {
         get() = prefs.getInt(LETTER_INDEX_MODE, Constants.LetterIndex.ALWAYS)
         set(value) = prefs.edit { putInt(LETTER_INDEX_MODE, value) }
 
+    /** Grid row of the "news" strip (apps with notifications), -1 until placed. */
+    var newsRow: Int
+        get() = prefs.getInt("NEWS_ROW", -1)
+        set(value) = prefs.edit { putInt("NEWS_ROW", value) }
+
     /** Rounded squares behind the icons (home grid and app list grid). */
     var iconTiles: Boolean
         get() = prefs.getBoolean("ICON_TILES", true)

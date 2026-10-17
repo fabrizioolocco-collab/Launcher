@@ -400,4 +400,7 @@
     <string name="ml_settings_files">File e contenuti</string>
     <string name="ml_settings_system">Sistema</string>
     <string name="ml_icon_tiles">Riquadri dietro le icone</string>
+    <string name="ml_news_zone">Zona novità</string>
+    <string name="ml_news_zone_show">Mostra la zona novità</string>
+    <string name="ml_news_zone_blocked">Lì c\u2019è la zona novità: i widget non possono coprirla</string>
 </resources>
