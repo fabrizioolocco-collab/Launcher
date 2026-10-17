@@ -32,7 +32,7 @@ class AlphabetIndexView @JvmOverloads constructor(
     var onTouchStateChanged: ((Boolean) -> Unit)? = null
 
     private var selected = -1
-    private val normalSize = sp(12f)
+    private val normalSize = sp(10f)
     private val selectedSize = sp(26f)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
@@ -50,9 +50,10 @@ class AlphabetIndexView @JvmOverloads constructor(
         letters.forEachIndexed { i, letter ->
             val isSelected = i == selected
             paint.textSize = if (isSelected) selectedSize else minOf(normalSize, slot * 0.8f)
-            paint.alpha = if (isSelected) 255 else 170
+            paint.alpha = if (isSelected) 255 else 120
             // Selected letter floats to the left of the strip so the finger doesn't cover it
-            val column = width - sp(12f)
+            // (the parent doesn't clip it)
+            val column = width - sp(8f)
             val x = if (isSelected) column - sp(36f) else column
             val y = slot * i + slot / 2 - (paint.descent() + paint.ascent()) / 2
             canvas.drawText(letter, x, y, paint)

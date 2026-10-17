@@ -14,30 +14,54 @@
         android:layout_weight="0.1" />
 
     <LinearLayout
+        android:id="@+id/searchRow"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginHorizontal="56dp"
         android:animateLayoutChanges="true"
         android:orientation="horizontal">
 
-        <androidx.appcompat.widget.SearchView
-            android:id="@+id/search"
+        <LinearLayout
+            android:id="@+id/searchPill"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:gravity="end"
-            android:imeOptions="actionSearch"
-            android:paddingHorizontal="8dp"
-            android:paddingVertical="0dp"
-            android:textCursorDrawable="@null"
-            app:closeIcon="@null"
-            app:iconifiedByDefault="false"
-            app:queryBackground="@null"
-            android:background="@drawable/rounded_rect_shade_color"
             android:layout_marginStart="16dp"
-            app:queryHint="@string/ml_search_apps"
-            app:searchIcon="@null"
-            app:theme="@style/AppSearchText" />
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_pill"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="6dp"
+            android:paddingEnd="4dp">
+
+            <androidx.appcompat.widget.SearchView
+                android:id="@+id/search"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="end"
+                android:imeOptions="actionSearch"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="0dp"
+                android:textCursorDrawable="@null"
+                app:closeIcon="@null"
+                app:iconifiedByDefault="false"
+                app:queryBackground="@null"
+                android:background="@null"
+                app:queryHint="@string/ml_search_apps"
+                app:searchIcon="@null"
+                app:theme="@style/AppSearchText" />
+
+            <ImageView
+                android:id="@+id/drawerOptions"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ml_drawer_options"
+                android:padding="10dp"
+                android:alpha="0.6"
+                android:src="@drawable/ic_m_sliders"
+                app:tint="?attr/primaryColor" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/appRename"
@@ -76,7 +100,23 @@
         android:layout_height="0dp"
         android:layout_weight="0.06" />
 
+    <TextView
+        android:id="@+id/drawerHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="76dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginBottom="4dp"
+        android:alpha="0.55"
+        android:letterSpacing="0.07"
+        android:textAllCaps="true"
+        android:textColor="?attr/primaryColor"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
     <FrameLayout
+        android:clipChildren="false"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
@@ -94,7 +134,7 @@
 
         <app.olauncher.ui.AlphabetIndexView
             android:id="@+id/letterIndex"
-            android:layout_width="64dp"
+            android:layout_width="24dp"
             android:layout_height="match_parent"
             android:layout_gravity="end"
             android:paddingVertical="8dp"

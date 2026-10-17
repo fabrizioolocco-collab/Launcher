@@ -674,4 +674,10 @@
     <string name="ml_dock_move_right">Sposta a destra</string>
     <string name="ml_dock_already">Già nella dock</string>
     <string name="ml_dock_full">La dock contiene al massimo %d app</string>
+    <string name="ml_drawer_cards">Schede</string>
+    <string name="ml_drawer_view">Vista</string>
+    <string name="ml_drawer_columns_short">Colonne</string>
+    <string name="ml_drawer_labels_short">Nomi delle app</string>
+    <string name="ml_drawer_options">Opzioni griglia</string>
+    <string name="ml_drawer_header">%1$s · A–Z · %2$d</string>
 </resources>

@@ -104,6 +104,7 @@ class AppDrawerFragment : BaseFragment() {
             canRename = it.getBoolean(Constants.Key.RENAME, false)
         }
 
+        if (flag == Constants.FLAG_LAUNCH_APP) prefs.applyDrawerCardsOnce()
         initViews()
         initSearch()
         initAdapter()
@@ -115,7 +116,7 @@ class AppDrawerFragment : BaseFragment() {
                 context = requireContext(),
                 bar = binding.tabsBar,
                 barContainer = binding.tabsScroll,
-                searchRow = binding.search.parent as LinearLayout,
+                searchRow = binding.searchRow,
                 allApps = { currentAppList.orEmpty().filterIsInstance<AppModel.App>() },
                 hiddenApps = { currentHiddenApps },
                 onSelectionChanged = { updateCombinedAppList() },
@@ -306,6 +307,19 @@ class AppDrawerFragment : BaseFragment() {
             },
         )
 
+        setupLayout()
+        binding.recyclerView.adapter = adapter
+        binding.recyclerView.addOnScrollListener(getRecyclerViewOnScrollListener())
+        binding.recyclerView.itemAnimator = null
+        if (requireContext().isEinkDisplay())
+            binding.recyclerView.overScrollMode = View.OVER_SCROLL_NEVER
+        else if (requireContext().isSystemAnimationsDisabled().not())
+            binding.recyclerView.layoutAnimation =
+                AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_anim_from_bottom)
+    }
+
+    /** List or grid (of icons or of cards), per settings; again when they change from the options. */
+    private fun setupLayout() {
         // Pulling the list down past its top closes the drawer
         fun onOverScroll(dx: Int, scrollRange: Int) {
             val overScroll = dx - scrollRange
@@ -333,17 +347,54 @@ class AppDrawerFragment : BaseFragment() {
             }
         }
         adapter.showLabels = prefs.drawerLabels
+        if (linearLayoutManager !is GridLayoutManager) adapter.grid = null
+        val cards = linearLayoutManager is GridLayoutManager && prefs.drawerCards
+        val side = if (cards) (16 - AppDrawerAdapter.GridViewHolder.CARD_GAP_DP / 2).dpToPx() else 0
+        binding.recyclerView.setPadding(side, binding.recyclerView.paddingTop, side + indexRoom(), binding.recyclerView.paddingBottom)
         if (linearLayoutManager is GridLayoutManager) applyGridStyle()
 
         binding.recyclerView.layoutManager = linearLayoutManager
-        binding.recyclerView.adapter = adapter
-        binding.recyclerView.addOnScrollListener(getRecyclerViewOnScrollListener())
-        binding.recyclerView.itemAnimator = null
-        if (requireContext().isEinkDisplay())
-            binding.recyclerView.overScrollMode = View.OVER_SCROLL_NEVER
-        else if (requireContext().isSystemAnimationsDisabled().not())
-            binding.recyclerView.layoutAnimation =
-                AnimationUtils.loadLayoutAnimation(requireContext(), R.anim.layout_anim_from_bottom)
+    }
+
+    /** Room on the right for the letter index, when it's always there next to the cards. */
+    private fun indexRoom(): Int =
+        if (prefs.drawerGrid && prefs.drawerCards && flag == Constants.FLAG_LAUNCH_APP && prefs.letterIndexMode == Constants.LetterIndex.ALWAYS) 14.dpToPx() else 0
+
+    /** The grid's options, from the sliders in the search pill. */
+    private fun showDrawerOptions() {
+        binding.search.hideKeyboard()
+        fun reload() {
+            binding.recyclerView.adapter = null
+            setupLayout()
+            binding.recyclerView.adapter = adapter
+            updateCombinedAppList()
+        }
+        val view = when {
+            !prefs.drawerGrid -> getString(R.string.ml_drawer_list)
+            prefs.drawerCards -> getString(R.string.ml_drawer_cards)
+            else -> getString(R.string.ml_drawer_grid)
+        }
+        val entries = mutableListOf(
+            MenuEntry("${getString(R.string.ml_drawer_view)}: $view") {
+                requireContext().showMenuDialog(getString(R.string.ml_drawer_view), listOf(
+                    MenuEntry(getString(R.string.ml_drawer_cards)) { prefs.drawerGrid = true; prefs.drawerCards = true; reload() },
+                    MenuEntry(getString(R.string.ml_drawer_grid)) { prefs.drawerGrid = true; prefs.drawerCards = false; reload() },
+                    MenuEntry(getString(R.string.ml_drawer_list)) { prefs.drawerGrid = false; reload() },
+                ))
+            },
+        )
+        if (prefs.drawerGrid) entries += MenuEntry("${getString(R.string.ml_drawer_columns_short)}: ${prefs.drawerColumns}") {
+            requireContext().showMenuDialog(getString(R.string.ml_drawer_columns_short), (3..6).map { n ->
+                MenuEntry(n.toString()) { prefs.drawerColumns = n; reload() }
+            })
+        }
+        entries += MenuEntry(getString(R.string.ml_drawer_labels_short), checked = prefs.drawerLabels, onToggle = { v ->
+            prefs.drawerLabels = v
+            reload()
+            true
+        })
+        entries += MenuEntry(getString(R.string.ml_tab_new)) { tabs?.newTab() }
+        requireContext().showMenuDialog(getString(R.string.ml_drawer_options), entries)
     }
 
     private var onImagePicked: ((android.net.Uri) -> Unit)? = null
@@ -425,14 +476,19 @@ class AppDrawerFragment : BaseFragment() {
         val columns = prefs.drawerColumns
         val width = binding.recyclerView.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
         val cellWidth = (width - binding.recyclerView.paddingLeft - binding.recyclerView.paddingRight) / columns
-        val iconSize = if (prefs.drawerIconSize > 0) prefs.drawerIconSize.dpToPx()
-        else (cellWidth * if (prefs.drawerLabels) 0.62f else 0.74f).toInt().coerceAtLeast(24.dpToPx())
+        val cards = prefs.drawerCards
+        val iconSize = when {
+            prefs.drawerIconSize > 0 -> prefs.drawerIconSize.dpToPx()
+            cards -> (if (prefs.drawerLabels) 30 else 34).dpToPx()
+            else -> (cellWidth * if (prefs.drawerLabels) 0.62f else 0.74f).toInt().coerceAtLeast(24.dpToPx())
+        }
         val rows = prefs.drawerRows
         val height = binding.recyclerView.height
-        val cellHeight = if (rows > 0 && height > 0) (height - binding.recyclerView.paddingTop - binding.recyclerView.paddingBottom) / rows else 0
-        adapter.grid = AppDrawerAdapter.GridStyle(cellHeight, iconSize, prefs.drawerLabels, prefs.iconTiles) { appModel, view, size ->
+        val cellHeight = if (rows > 0 && height > 0) ((height - binding.recyclerView.paddingTop - binding.recyclerView.paddingBottom) / rows -
+                (if (cards) AppDrawerAdapter.GridViewHolder.CARD_GAP_DP.dpToPx() else 0)).coerceAtLeast(48.dpToPx()) else 0
+        adapter.grid = AppDrawerAdapter.GridStyle(cellHeight, iconSize, prefs.drawerLabels, prefs.iconTiles, { appModel, view, size ->
             loadGridIcon(appModel, view, size)
-        }
+        }, cards = cards)
         if (rows > 0 && height == 0) {
             // Measure first, then size the cells to the rows
             binding.recyclerView.doOnLayout { if (_binding != null) applyGridStyle() }
@@ -576,6 +632,16 @@ class AppDrawerFragment : BaseFragment() {
         adapter.setAppList(combined)
         adapter.filter.filter(binding.search.query)
         updateLetterIndex()
+        updateHeader(apps, searching)
+    }
+
+    /** "ALL · A-Z · 142" above the apps of a tab (not while searching or picking an app). */
+    private fun updateHeader(apps: List<AppModel>, searching: Boolean) {
+        val show = flag == Constants.FLAG_LAUNCH_APP && !searching
+        binding.drawerHeader.isVisible = show
+        if (!show) return
+        val count = apps.count { it is AppModel.App || it is AppModel.PinnedShortcut }
+        binding.drawerHeader.text = getString(R.string.ml_drawer_header, tabs?.selectedName() ?: getString(R.string.ml_tab_all), count)
     }
 
     // ---------------------------------------------------------------- letter index
@@ -621,6 +687,8 @@ class AppDrawerFragment : BaseFragment() {
     }
 
     private fun initClickListeners() {
+        binding.drawerOptions.isVisible = flag == Constants.FLAG_LAUNCH_APP
+        binding.drawerOptions.setOnClickListener { showDrawerOptions() }
         binding.appRename.setOnClickListener {
             val name = binding.search.query.toString().trim()
             if (name.isEmpty()) {

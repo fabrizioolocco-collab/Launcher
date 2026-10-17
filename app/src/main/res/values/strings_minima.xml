@@ -680,4 +680,10 @@
     <string name="ml_dock_move_right">Move right</string>
     <string name="ml_dock_already">Already in the dock</string>
     <string name="ml_dock_full">The dock holds up to %d apps</string>
+    <string name="ml_drawer_cards">Cards</string>
+    <string name="ml_drawer_view">View</string>
+    <string name="ml_drawer_columns_short">Columns</string>
+    <string name="ml_drawer_labels_short">App names</string>
+    <string name="ml_drawer_options">Grid options</string>
+    <string name="ml_drawer_header">%1$s · A–Z · %2$d</string>
 </resources>

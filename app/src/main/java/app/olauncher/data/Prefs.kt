@@ -236,6 +236,21 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean("DRAWER_GRID", false)
         set(value) = prefs.edit { putBoolean("DRAWER_GRID", value) }
 
+    /** In the grid, each app on its own card (with the name inside). */
+    var drawerCards: Boolean
+        get() = prefs.getBoolean("DRAWER_CARDS", true)
+        set(value) = prefs.edit { putBoolean("DRAWER_CARDS", value) }
+
+    /** The app grid on cards became the drawer's look: switched on once, then up to the user. */
+    fun applyDrawerCardsOnce() {
+        if (prefs.getBoolean("DRAWER_CARDS_APPLIED", false)) return
+        prefs.edit {
+            putBoolean("DRAWER_CARDS_APPLIED", true)
+            putBoolean("DRAWER_GRID", true)
+            putBoolean("DRAWER_CARDS", true)
+        }
+    }
+
     /** Grid columns (2-8). */
     var drawerColumns: Int
         get() = prefs.getInt("DRAWER_COLUMNS", 4).coerceIn(2, 8)

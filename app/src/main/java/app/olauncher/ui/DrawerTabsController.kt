@@ -73,6 +73,16 @@ class DrawerTabsController(
         return if (sel in visible) sel else visible.firstOrNull() ?: DrawerTabsRepository.ALL_ID
     }
 
+    /** Name of the tab shown. */
+    fun selectedName(): String = when (val id = selectedId()) {
+        DrawerTabsRepository.ALL_ID -> context.getString(R.string.ml_tab_all)
+        DrawerTabsRepository.HIDDEN_ID -> context.getString(R.string.ml_tab_hidden)
+        else -> tabs.firstOrNull { it.id == id }?.name ?: context.getString(R.string.ml_tab_all)
+    }
+
+    /** A new tab, as from "+". */
+    fun newTab() = createTab()
+
     /** Apps to list in the selected tab. */
     fun filter(apps: List<AppModel>): List<AppModel> = appsOf(selectedId(), apps)
 
@@ -97,9 +107,10 @@ class DrawerTabsController(
         searchPlus = null
         if (single) {
             searchPlus = chip("+", false).apply {
-                minWidth = 52.dpToPx()
-                minHeight = 52.dpToPx()
+                minWidth = 48.dpToPx()
+                minHeight = 48.dpToPx()
                 setPadding(0, 0, 0, 0)
+                (background as? android.graphics.drawable.GradientDrawable)?.cornerRadius = 24.dpToPx().toFloat()
                 setOnClickListener { createTab() }
                 setOnLongClickListener {
                     visible.firstOrNull()?.let { showTabMenu(it) }
@@ -137,23 +148,31 @@ class DrawerTabsController(
         })
     }
 
-    /** A pill: the selected tab in the accent colour, the others on a tile. Tabs share the width, scrolling when many. */
+    /**
+     * A pill as wide as its name: the selected tab filled with the text colour, the others with a
+     * thin border. "+" is a round one.
+     */
     private fun chip(text: String, selected: Boolean) = TextView(context, null, 0, R.style.TextSmall).apply {
         this.text = text
-        textSize = 16f
+        textSize = 13f
         maxLines = 1
         ellipsize = android.text.TextUtils.TruncateAt.END
         gravity = android.view.Gravity.CENTER
-        setTypeface(typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
-        setBackgroundResource(if (selected) R.drawable.bg_pill_accent else R.drawable.bg_pill_tile)
-        setTextColor(if (selected) 0xFFFFFFFF.toInt() else context.getColorFromAttr(R.attr.primaryColor))
-        if (!selected) alpha = 0.75f
-        setPadding(20.dpToPx(), 11.dpToPx(), 20.dpToPx(), 11.dpToPx())
+        setTypeface(typeface, Typeface.BOLD)
+        val primary = context.getColorFromAttr(R.attr.primaryColor)
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 17.dpToPx().toFloat()
+            if (selected) setColor(primary)
+            else setStroke(1.dpToPx(), context.getColorFromAttr(R.attr.cardStrokeColor))
+        }
+        setTextColor(if (selected) context.getColorFromAttr(R.attr.cardColor) else primary)
+        if (!selected) alpha = 0.85f
+        val plus = text == "+"
+        setPadding(if (plus) 0 else 14.dpToPx(), 0, if (plus) 0 else 14.dpToPx(), 0)
+        minWidth = if (plus) 34.dpToPx() else 0
         isClickable = true
         isLongClickable = true
-        val plus = text == "+"
-        minWidth = if (plus) 0 else 96.dpToPx()
-        layoutParams = LinearLayout.LayoutParams(if (plus) ViewGroup.LayoutParams.WRAP_CONTENT else 0, ViewGroup.LayoutParams.WRAP_CONTENT, if (plus) 0f else 1f).apply {
+        layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 34.dpToPx()).apply {
             marginStart = 4.dpToPx(); marginEnd = 4.dpToPx()
         }
     }

@@ -22,6 +22,7 @@ import app.olauncher.data.Constants
 import app.olauncher.databinding.AdapterAppDrawerBinding
 import app.olauncher.databinding.AdapterPrivateSpaceHeaderBinding
 import app.olauncher.helper.dpToPx
+import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.isSystemApp
 import app.olauncher.helper.showKeyboard
@@ -58,6 +59,8 @@ class AppDrawerAdapter(
         /** Rounded square behind the icon ([iconSizePx] is then the tile's edge). */
         val tiles: Boolean,
         val iconLoader: (AppModel, android.widget.ImageView, Int) -> Unit,
+        /** Each app on its own card (icon and name inside, red with a count when it has notifications). */
+        val cards: Boolean = false,
     )
 
     /** Set before the adapter is attached: null shows the list, otherwise the grid. */
@@ -319,46 +322,93 @@ class AppDrawerAdapter(
         }
     }
 
-    /** A grid cell: icon centered, name below (optional), a dot after the name for apps of another profile. */
+    /**
+     * A grid cell: icon centered, name below (optional), a dot after the name for apps of another
+     * profile. As a card the whole cell has the card's background and a count on the top right.
+     */
     class GridViewHolder(context: Context) : RecyclerView.ViewHolder(
-        android.widget.LinearLayout(context).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            gravity = android.view.Gravity.CENTER
+        android.widget.FrameLayout(context).apply {
             layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            setPadding(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 8.dpToPx())
             isClickable = true
             isLongClickable = true
-            addView(android.widget.FrameLayout(context).apply {
-                addView(android.widget.ImageView(context).apply {
-                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                }, android.widget.FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
-            }, android.widget.LinearLayout.LayoutParams(1, 1))
-            addView(TextView(context, null, 0, R.style.TextSmall).apply {
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
+            addView(android.widget.LinearLayout(context).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
                 gravity = android.view.Gravity.CENTER
-                setPadding(0, 4.dpToPx(), 0, 0)
-            }, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                setPadding(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 8.dpToPx())
+                addView(android.widget.FrameLayout(context).apply {
+                    addView(android.widget.ImageView(context).apply {
+                        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    }, android.widget.FrameLayout.LayoutParams(1, 1, android.view.Gravity.CENTER))
+                }, android.widget.LinearLayout.LayoutParams(1, 1))
+                addView(TextView(context, null, 0, R.style.TextSmall).apply {
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    gravity = android.view.Gravity.CENTER
+                    setPadding(0, 4.dpToPx(), 0, 0)
+                }, android.widget.LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            // The count of a card with notifications
+            addView(TextView(context).apply {
+                textSize = 10.5f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(0xFFFFFFFF.toInt())
+                gravity = android.view.Gravity.CENTER
+                minWidth = 18.dpToPx()
+                setPadding(5.dpToPx(), 0, 5.dpToPx(), 0)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    cornerRadius = 9.dpToPx().toFloat()
+                    setColor(BADGE_COLOR)
+                }
+                visibility = View.GONE
+            }, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 18.dpToPx(), android.view.Gravity.TOP or android.view.Gravity.END).apply {
+                topMargin = 6.dpToPx(); marginEnd = 6.dpToPx()
+            })
         }
     ) {
-        private val cell = itemView as android.widget.LinearLayout
+        private val root = itemView as android.widget.FrameLayout
+        private val cell = root.getChildAt(0) as android.widget.LinearLayout
         private val tile = cell.getChildAt(0) as android.widget.FrameLayout
         private val icon = tile.getChildAt(0) as android.widget.ImageView
         private val title = cell.getChildAt(1) as TextView
+        private val badge = root.getChildAt(1) as TextView
         private val defaultTitleColors = title.textColors
+        private var cards: Boolean? = null
 
         /** The style is applied on every bind, so settings changes don't need new holders. */
         private fun applyStyle(style: GridStyle) {
-            val cellHeight = if (style.cellHeightPx > 0) style.cellHeightPx else ViewGroup.LayoutParams.WRAP_CONTENT
-            if (cell.layoutParams.height != cellHeight) cell.layoutParams = cell.layoutParams.apply { height = cellHeight }
+            val cellHeight = when {
+                style.cellHeightPx > 0 -> style.cellHeightPx
+                style.cards -> (if (style.showLabels) 92 else 72).dpToPx()
+                else -> ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+            val margin = if (style.cards) CARD_GAP_DP.dpToPx() / 2 else 0
+            val lp = root.layoutParams as RecyclerView.LayoutParams
+            if (lp.height != cellHeight || lp.topMargin != margin) root.layoutParams = lp.apply {
+                height = cellHeight
+                setMargins(margin, margin, margin, margin)
+            }
             val tp = tile.layoutParams
-            if (tp.width != style.iconSizePx) {
+            if (tp.width != style.iconSizePx || cards != style.cards) {
+                cards = style.cards
                 tile.layoutParams = tp.apply { width = style.iconSizePx; height = style.iconSizePx }
-                tile.background = if (style.tiles) app.olauncher.ui.widgets.IconTiles.drawable(cell.context, style.iconSizePx) else null
-                val inner = if (style.tiles) (style.iconSizePx * app.olauncher.ui.widgets.IconTiles.ICON_FRACTION).toInt() else style.iconSizePx
+                val inner = if (style.tiles && !style.cards) (style.iconSizePx * app.olauncher.ui.widgets.IconTiles.ICON_FRACTION).toInt() else style.iconSizePx
                 icon.layoutParams = icon.layoutParams.apply { width = inner; height = inner }
+                if (style.cards) {
+                    title.textSize = 11.5f
+                    title.setPadding(0, 8.dpToPx(), 0, 0)
+                } else {
+                    title.setTextAppearance(R.style.TextSmall)
+                    title.setPadding(0, 4.dpToPx(), 0, 0)
+                }
             }
             title.isVisible = style.showLabels
+        }
+
+        private fun cardBackground(notified: Boolean) = android.graphics.drawable.GradientDrawable().apply {
+            val ctx = root.context
+            cornerRadius = 18.dpToPx().toFloat()
+            setColor(if (notified) CARD_RED else ctx.getColorFromAttr(R.attr.cardColor))
+            setStroke(1.dpToPx(), if (notified) CARD_RED_STROKE else ctx.getColorFromAttr(R.attr.cardStrokeColor))
         }
 
         fun bind(
@@ -373,32 +423,65 @@ class AppDrawerAdapter(
         ) {
             applyStyle(style)
             val spacer = appModel.appPackage.isEmpty()
-            cell.visibility = if (spacer) View.INVISIBLE else View.VISIBLE
+            root.visibility = if (spacer) View.INVISIBLE else View.VISIBLE
+            val notified = notificationCount > 0
             val label = buildString {
                 append(appModel.appLabel)
                 if (appModel.isNew) append(" ✦")
                 if (appModel.user != myUserHandle) append(" ●")
             }
-            title.text = if (notificationCount > 0) HomeSectionsController.badgeText(appModel.appLabel, -1) else label
-            if (notificationCount > 0) title.setTextColor(HomeSectionsController.NOTIFICATION_COLOR) else title.setTextColor(defaultTitleColors)
+            title.text = if (notified && !style.cards) HomeSectionsController.badgeText(appModel.appLabel, -1) else label
+            if (notified && !style.cards) title.setTextColor(HomeSectionsController.NOTIFICATION_COLOR) else title.setTextColor(defaultTitleColors)
             titleStyler?.invoke(title)
-            cell.contentDescription = appModel.appLabel
+            // A card's name is a little quieter than the icon
+            if (style.cards) {
+                title.textSize = 11.5f
+                title.alpha = 0.85f
+            } else title.alpha = 1f
+            root.contentDescription = appModel.appLabel
             icon.setImageDrawable(null)
-            icon.colorFilter = if (notificationCount > 0) NotificationBadge.redFilter else null
-            tile.background = when {
-                notificationCount > 0 -> NotificationBadge.background(style.iconSizePx)
-                style.tiles -> app.olauncher.ui.widgets.IconTiles.drawable(cell.context, style.iconSizePx)
-                else -> null
+            if (style.cards) {
+                // The card turns red, the icon stays as it is
+                icon.colorFilter = null
+                tile.background = null
+                root.background = if (spacer) null else cardBackground(notified)
+                root.foreground = rippleOf(root.context)
+                badge.isVisible = notified
+                badge.text = if (notificationCount > 99) "99+" else notificationCount.toString()
+            } else {
+                icon.colorFilter = if (notified) NotificationBadge.redFilter else null
+                tile.background = when {
+                    notified -> NotificationBadge.background(style.iconSizePx)
+                    style.tiles -> app.olauncher.ui.widgets.IconTiles.drawable(cell.context, style.iconSizePx)
+                    else -> null
+                }
+                root.background = null
+                root.foreground = null
+                badge.isVisible = false
             }
             if (!spacer) style.iconLoader(appModel, icon, icon.layoutParams.width)
-            cell.setOnClickListener {
+            root.setOnClickListener {
                 if (spacer) return@setOnClickListener
-                if (notificationCount > 0 && badgeTap != null) badgeTap(appModel) else clickListener(appModel)
+                if (notified && badgeTap != null) badgeTap(appModel) else clickListener(appModel)
             }
-            cell.setOnLongClickListener {
+            root.setOnLongClickListener {
                 if (!spacer && longPressMenu != null) longPressMenu(appModel, bindingAdapterPosition)
                 true
             }
+        }
+
+        private fun rippleOf(ctx: Context): android.graphics.drawable.Drawable? {
+            val tv = android.util.TypedValue()
+            return if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true))
+                androidx.core.content.ContextCompat.getDrawable(ctx, tv.resourceId) else null
+        }
+
+        companion object {
+            /** Space between two cards. */
+            const val CARD_GAP_DP = 10
+            private const val CARD_RED = 0xFF3A1715.toInt()
+            private const val CARD_RED_STROKE = 0xFFB3261E.toInt()
+            private const val BADGE_COLOR = 0xFFC62828.toInt()
         }
     }
 

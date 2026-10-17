@@ -227,9 +227,11 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 configure = { menu ->
                     menu.add(Menu.NONE, 0, 0, getString(R.string.ml_drawer_list))
                     menu.add(Menu.NONE, 1, 1, getString(R.string.ml_drawer_grid))
+                    menu.add(Menu.NONE, 2, 2, getString(R.string.ml_drawer_cards))
                 }
             ) { item ->
-                prefs.drawerGrid = item.itemId == 1
+                prefs.drawerGrid = item.itemId != 0
+                prefs.drawerCards = item.itemId == 2
                 populateTextStyle()
             }
             R.id.drawerColumns -> view.showPopupMenu(
@@ -489,7 +491,13 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
         binding.iconTiles.setText(if (prefs.iconTiles) R.string.on else R.string.off)
-        binding.drawerLayout.setText(if (prefs.drawerGrid) R.string.ml_drawer_grid else R.string.ml_drawer_list)
+        binding.drawerLayout.setText(
+            when {
+                !prefs.drawerGrid -> R.string.ml_drawer_list
+                prefs.drawerCards -> R.string.ml_drawer_cards
+                else -> R.string.ml_drawer_grid
+            }
+        )
         binding.drawerColumns.text = prefs.drawerColumns.toString()
         binding.drawerRows.text = if (prefs.drawerRows > 0) prefs.drawerRows.toString() else getString(R.string.ml_default)
         binding.drawerIconSize.text = if (prefs.drawerIconSize > 0) prefs.drawerIconSize.toString() else getString(R.string.ml_default)
