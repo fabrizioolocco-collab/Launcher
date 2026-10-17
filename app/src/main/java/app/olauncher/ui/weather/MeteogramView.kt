@@ -107,7 +107,7 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
         val humidity = arr { it.humidity.toFloat() }
         val dew = arr { it.dewPoint }
         val uv = arr { it.uv }
-        return listOf(
+        val all = listOf(
             Section(R.drawable.ic_m_thermo, context.getString(R.string.ml_w_temp), "°C", amber, temp, { "${temp[it].roundToInt()}°" }, minRange = 4f),
             Section(R.drawable.ic_m_feels, context.getString(R.string.ml_w_feels), "°C", amber, feels, { "${feels[it].roundToInt()}°" }, minRange = 4f),
             Section(R.drawable.ic_m_rain_line, context.getString(R.string.ml_w_precip), "mm", blue, precip, { String.format(loc, "%.1f", precip[it]) },
@@ -124,6 +124,9 @@ class MeteogramView(context: Context, private val hours: List<WeatherHour>, priv
             Section(R.drawable.ic_m_uv, context.getString(R.string.ml_w_uv), "/11", purple, uv, { uv[it].roundToInt().toString() },
                 fixedMin = 0f, minRange = 8f),
         )
+        // In the order chosen in the editor, the hidden ones left out
+        val byKey = WeatherSections.ALL.zip(all).toMap()
+        return WeatherSections.shown(context).mapNotNull { byKey[it] }
     }
 
     private val titleH = TITLE_DP.dpToPx()

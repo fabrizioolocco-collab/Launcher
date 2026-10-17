@@ -81,7 +81,10 @@ class WeatherActivity : AppCompatActivity() {
             insets
         }
         refreshButton = UiKit.iconButton(this, R.drawable.ic_m_rotate, getString(R.string.ml_w_app)) { load(force = true) }
-        bar = UiKit.appBar(this, getString(R.string.ml_w_app), onBack = { finish() }, actions = listOf(refreshButton))
+        val customize = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_w_customize)) {
+            WeatherSections.edit(this) { render() }
+        }
+        bar = UiKit.appBar(this, getString(R.string.ml_w_app), onBack = { finish() }, actions = listOf(customize, refreshButton))
         bar.view.setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
         root.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 

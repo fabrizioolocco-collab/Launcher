@@ -664,4 +664,7 @@
     <string name="ml_cal_card">Scheda con bordo</string>
     <string name="ml_w_degrees">%d°</string>
     <string name="ml_w_now">Ora</string>
+    <string name="ml_w_customize">Valori da mostrare</string>
+    <string name="ml_w_customize_hint">Trascina dalla maniglia per riordinare, spegni quelli che non ti servono.</string>
+    <string name="ml_w_drag">Trascina</string>
 </resources>
