@@ -97,9 +97,10 @@ suspend fun getAppsList(
                     )
 
                     // if the current app is not OLauncher
-                    // Our own entries are skipped, except the "File" explorer
+                    // Our own entries are skipped, except the "File" explorer and the ToDo app
                     if (app.applicationInfo.packageName != BuildConfig.APPLICATION_ID ||
-                        app.componentName.className == "app.olauncher.FilesAlias"
+                        app.componentName.className == "app.olauncher.FilesAlias" ||
+                        app.componentName.className == "app.olauncher.TodoAlias"
                     ) {
                         // is this a hidden app?
                         if (hiddenApps.contains(app.applicationInfo.packageName + "|" + profile.toString())) {

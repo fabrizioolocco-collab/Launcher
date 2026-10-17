@@ -1,5 +1,8 @@
 package app.olauncher.ui.widgets
 
+import androidx.core.app.ActivityCompat
+import androidx.core.graphics.ColorUtils
+import androidx.core.view.isVisible
 import android.app.Activity
 import android.content.Context
 import android.database.ContentObserver
@@ -23,17 +26,26 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.core.app.ActivityCompat
-import androidx.core.graphics.ColorUtils
-import androidx.core.view.isVisible
 import app.olauncher.R
 import app.olauncher.data.CalendarText
 import app.olauncher.data.CalendarWidgetConfig
 import app.olauncher.data.CalendarWidgetRepository
+import app.olauncher.data.NO_DAY
+import app.olauncher.data.NO_TIME
+import app.olauncher.data.Todo
+import app.olauncher.data.TodoDone
+import app.olauncher.data.TodoStore
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
+import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
+import app.olauncher.helper.showMenuDialog
+import app.olauncher.ui.todo.TODO_LATE_COLOR
+import app.olauncher.ui.todo.TodoActivity
+import app.olauncher.ui.todo.TodoCheckView
+import app.olauncher.ui.todo.TodoEditActivity
+import app.olauncher.ui.todo.TodoLabels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -48,8 +60,11 @@ import kotlin.math.abs
  * The launcher's own calendar widget: the events of the selected day (or of a few days from it)
  * with a colored mark for their calendar, the time left / to the start and a progress bar for the
  * ones in progress. A side swipe (or the optional arrows) moves between days, the header adds
- * events; tapping an event opens it in the calendar app. Long press moves it or opens its menu
- * (with the settings), like any widget on home.
+ * events or todos; tapping an event opens it in the calendar app. Long press moves it or opens its
+ * menu (with the settings), like any widget on home.
+ *
+ * The todos of the ToDo app show on their due date (the late ones on today, in red) with a circle
+ * to mark them done; where they go among the events and what happens once done is in the settings.
  */
 class CalendarWidgetView(
     private val activity: Activity,
@@ -89,7 +104,7 @@ class CalendarWidgetView(
         maxLines = 1
         setOnClickListener { openClock() }
     }
-    private val addButton = iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { CalendarEvents.addEvent(activity, firstDay()) }
+    private val addButton = iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { showAddMenu() }
     private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
     private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
     private val buttons = listOf(addButton, prevButton, nextButton)
@@ -240,14 +255,18 @@ class CalendarWidgetView(
 
     // ---------------------------------------------------------------- lifecycle
 
+    private val todoListener: () -> Unit = { if (isAttachedToWindow) showEvents() }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        TodoStore.addListener(todoListener)
         observe()
         reload()
         scheduleTick()
     }
 
     override fun onDetachedFromWindow() {
+        TodoStore.removeListener(todoListener)
         handler.removeCallbacks(tick)
         if (observing) {
             activity.contentResolver.unregisterContentObserver(observer)
@@ -311,8 +330,11 @@ class CalendarWidgetView(
         updateHeader()
         hadPermission = CalendarEvents.hasPermission(activity)
         if (!hadPermission) {
+            // The todos show anyway, under the request
+            loadJob?.cancel()
+            events = emptyList()
             loadedDay = first
-            showPermissionRequest()
+            showEvents()
             return
         }
         val last = first + config.days - 1
@@ -378,38 +400,210 @@ class CalendarWidgetView(
         timeInMillis = millis
     }.get(java.util.Calendar.WEEK_OF_YEAR)
 
-    private fun showPermissionRequest() {
-        list.removeAllViews()
-        list.addView(text(CalendarText.TITLE).apply {
-            setText(R.string.ml_cal_permission)
-            alpha = 0.7f
-            setPadding(0, 8.dpToPx(), 0, 8.dpToPx())
-            setOnClickListener {
-                ActivityCompat.requestPermissions(activity, arrayOf(android.Manifest.permission.READ_CALENDAR), REQUEST_CALENDAR)
-            }
-        })
+    private fun permissionRow() = text(CalendarText.TITLE).apply {
+        setText(R.string.ml_cal_permission)
+        alpha = 0.7f
+        setPadding(0, 8.dpToPx(), 0, 8.dpToPx())
+        setOnClickListener {
+            ActivityCompat.requestPermissions(activity, arrayOf(android.Manifest.permission.READ_CALENDAR), REQUEST_CALENDAR)
+        }
     }
+
+    /** One line of a day: an event, a todo to do or a todo done, with where it goes in the day. */
+    private sealed class Item(val group: Int, val minute: Int)
+    private class EventItem(val event: CalendarEvents.Event, group: Int, minute: Int) : Item(group, minute)
+    private class TodoItem(val todo: Todo, val lateDays: Int, group: Int, minute: Int) : Item(group, minute)
+    private class DoneItem(val done: TodoDone, group: Int, minute: Int) : Item(group, minute)
+
+    /** Completions just made with "disappear at once": shown with an undo for a few seconds. */
+    private val undoable = mutableSetOf<Long>()
+
+    private fun todoVisible(category: Long) = config.todoCategories.isEmpty() || category in config.todoCategories
 
     private fun showEvents() {
         updateHeader()
-        if (!CalendarEvents.hasPermission(activity)) return
         list.removeAllViews()
+        if (!CalendarEvents.hasPermission(activity)) list.addView(permissionRow())
         val now = System.currentTimeMillis()
+        val today = CalendarEvents.julianDay(now)
+        val nowMinute = ((now - CalendarEvents.dayStart(today)) / 60_000L).toInt()
         val first = loadedDay
+        val todos = if (config.showTodos) TodoStore.todos(activity).filter { !it.done && it.due != NO_DAY && todoVisible(it.category) } else emptyList()
+        val history = if (config.showTodos) TodoStore.history(activity).filter {
+            todoVisible(it.category) && (config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_STRIKE || it.at in undoable)
+        } else emptyList()
         for (day in first until first + config.days) {
             var dayEvents = events.filter { day in it.startDay..it.endDay }
             if (config.pastMode == CalendarWidgetConfig.PAST_HIDE) dayEvents = dayEvents.filter { !isPast(it, now) }
+            // A todo not done on its day moves on to today, late
+            val dayTodos = todos.filter { (it.due == day && day >= today) || (day == today && it.due < today) }
+            val dayDone = history.filter { it.day == day }
             list.addView(text(CalendarText.DAY).apply {
                 text = dayLabel(day)
                 setPadding(0, if (list.childCount == 0) 0 else 10.dpToPx(), 0, 4.dpToPx())
             })
-            if (dayEvents.isEmpty()) list.addView(text(CalendarText.TITLE).apply {
+            val eventItems = dayEvents.map { e ->
+                if (e.allDay || e.startDay < day) EventItem(e, 0, 0)
+                else EventItem(e, 3, ((e.begin - CalendarEvents.dayStart(day)) / 60_000L).toInt())
+            }
+            val todoItems = dayTodos.map { t ->
+                val late = if (t.due < today) today - t.due else if (t.due == today && t.time != NO_TIME && t.time < nowMinute) 0 else -1
+                when {
+                    t.due < today -> TodoItem(t, late, 1, t.time)
+                    t.time == NO_TIME -> TodoItem(t, late, 2, 0)
+                    else -> TodoItem(t, late, 3, t.time)
+                }
+            } + dayDone.map { d -> if (d.time == NO_TIME) DoneItem(d, 2, 0) else DoneItem(d, 3, d.time) }
+            val order = compareBy<Item>({ it.group }, { it.minute })
+            val items = when (config.todoPlace) {
+                CalendarWidgetConfig.TODO_MIXED -> (eventItems + todoItems).sortedWith(order)
+                CalendarWidgetConfig.TODO_ABOVE -> todoItems.sortedWith(order) + eventItems
+                else -> eventItems + todoItems.sortedWith(order)
+            }
+            if (items.isEmpty()) list.addView(text(CalendarText.TITLE).apply {
                 setText(R.string.ml_cal_no_events)
                 alpha = 0.5f
                 setPadding(12.dpToPx(), 2.dpToPx(), 0, 2.dpToPx())
             })
-            dayEvents.forEach { list.addView(eventRow(it, now)) }
+            items.forEach { item ->
+                list.addView(
+                    when (item) {
+                        is EventItem -> eventRow(item.event, now)
+                        is TodoItem -> todoRow(item.todo, item.lateDays, now)
+                        is DoneItem -> doneRow(item.done)
+                    }
+                )
+            }
         }
+    }
+
+    // ---------------------------------------------------------------- todos
+
+    private fun showAddMenu() {
+        val day = firstDay()
+        if (!config.showTodos) {
+            CalendarEvents.addEvent(activity, day)
+            return
+        }
+        activity.showMenuDialog(
+            activity.getString(R.string.ml_cal_add_title),
+            listOf(
+                MenuEntry(activity.getString(R.string.ml_cal_add_event)) { CalendarEvents.addEvent(activity, day) },
+                MenuEntry(activity.getString(R.string.ml_cal_add_todo)) {
+                    TodoEditActivity.create(activity, maxOf(day, CalendarEvents.julianDay(System.currentTimeMillis())))
+                },
+            )
+        )
+    }
+
+    private fun todoColor(category: Long) =
+        TodoStore.category(activity, category)?.color?.or(0xFF000000.toInt()) ?: ColorUtils.setAlphaComponent(primary, 0x80)
+
+    /** The bar of the category, the circle to tick, the time, the title and how late it is. */
+    private fun todoFrame(color: Int, checked: Boolean, onCheck: () -> Unit): Pair<LinearLayout, LinearLayout> {
+        val row = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 3.dpToPx(), 0, 3.dpToPx())
+            isClickable = true
+            isFocusable = true
+        }
+        row.addView(View(activity).apply {
+            background = GradientDrawable().apply {
+                cornerRadius = 2.dpToPx().toFloat()
+                setColor(color)
+            }
+        }, LinearLayout.LayoutParams(4.dpToPx(), ViewGroup.LayoutParams.MATCH_PARENT).apply { marginEnd = 10.dpToPx() })
+        val line = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val size = (config.text(CalendarText.TITLE).sizeSp * 1.15f).toInt().dpToPx()
+        line.addView(TodoCheckView(activity).apply {
+            this.color = color
+            this.checked = checked
+            isClickable = true
+            contentDescription = activity.getString(if (checked) R.string.ml_todo_undo else R.string.ml_todo_done)
+            setOnClickListener {
+                this.checked = !checked
+                postDelayed({ onCheck() }, 200)
+            }
+        }, LinearLayout.LayoutParams(size, size).apply { marginEnd = 10.dpToPx() })
+        row.addView(line, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        return row to line
+    }
+
+    private fun todoRow(todo: Todo, lateDays: Int, now: Long): View {
+        val (row, line) = todoFrame(todoColor(todo.category), false) { complete(todo) }
+        row.setOnClickListener { TodoEditActivity.edit(activity, todo.id) }
+        if (todo.time != NO_TIME) line.addView(text(CalendarText.TIME).apply {
+            text = TodoLabels.time(activity, todo.time)
+            maxLines = 1
+            if (config.text(CalendarText.TIME).color == 0) alpha = 0.7f
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 12.dpToPx() })
+        line.addView(text(CalendarText.TITLE).apply {
+            text = todo.title
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        val status = when {
+            lateDays >= 0 -> TodoLabels.late(activity, lateDays)
+            config.showStatus && todo.time != NO_TIME && todo.due == CalendarEvents.julianDay(now) ->
+                activity.getString(R.string.ml_cal_in, duration(CalendarEvents.dayStart(todo.due) + todo.time * 60_000L - now))
+            else -> null
+        }
+        status?.let {
+            line.addView(text(CalendarText.STATUS).apply {
+                text = it
+                maxLines = 1
+                if (lateDays >= 0) setTextColor(TODO_LATE_COLOR)
+                else if (config.text(CalendarText.STATUS).color == 0) alpha = 0.7f
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 8.dpToPx() })
+        }
+        return row
+    }
+
+    private fun doneRow(done: TodoDone): View {
+        val (row, line) = todoFrame(todoColor(done.category), true) { undo(done) }
+        row.setOnClickListener {
+            if (TodoStore.get(activity, done.todoId) != null) TodoEditActivity.edit(activity, done.todoId) else TodoActivity.open(activity)
+        }
+        val hideMode = config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_HIDE
+        if (!hideMode && done.time != NO_TIME) line.addView(text(CalendarText.TIME).apply {
+            text = TodoLabels.time(activity, done.time)
+            maxLines = 1
+            alpha = 0.5f
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 12.dpToPx() })
+        line.addView(text(CalendarText.TITLE).apply {
+            text = done.title
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
+            alpha = 0.5f
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (hideMode) line.addView(text(CalendarText.STATUS, Typeface.BOLD).apply {
+            setText(R.string.ml_todo_undo)
+            maxLines = 1
+            setPadding(8.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+            isClickable = true
+            setOnClickListener { undo(done) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 8.dpToPx() })
+        return row
+    }
+
+    private fun complete(todo: Todo) {
+        val record = TodoStore.complete(activity, todo.id) ?: return
+        if (config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_HIDE) {
+            undoable += record.at
+            showEvents()
+            handler.postDelayed({
+                if (undoable.remove(record.at) && isAttachedToWindow) showEvents()
+            }, UNDO_MS)
+        }
+    }
+
+    private fun undo(done: TodoDone) {
+        undoable.remove(done.at)
+        TodoStore.undo(activity, done)
     }
 
     private fun dayLabel(day: Int): String {
@@ -560,5 +754,6 @@ class CalendarWidgetView(
     companion object {
         const val KIND = "calendar"
         const val REQUEST_CALENDAR = 7110
+        private const val UNDO_MS = 4_000L
     }
 }

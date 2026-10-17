@@ -6,6 +6,7 @@ import app.olauncher.R
 import app.olauncher.data.CalendarText
 import app.olauncher.data.CalendarTextStyle
 import app.olauncher.data.CalendarWidgetConfig
+import app.olauncher.data.TodoStore
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.MenuEntry
@@ -36,12 +37,30 @@ object CalendarWidgetSettings {
                 true
             })
 
+        val placeNames = listOf(R.string.ml_cal_todo_below, R.string.ml_cal_todo_mixed, R.string.ml_cal_todo_above).map { activity.getString(it) }
+        val doneNames = listOf(R.string.ml_cal_todo_done_strike, R.string.ml_cal_todo_done_hide).map { activity.getString(it) }
         val pastNames = listOf(R.string.ml_cal_past_show, R.string.ml_cal_past_dim, R.string.ml_cal_past_hide).map { activity.getString(it) }
         activity.showMenuDialog(
             activity.getString(R.string.ml_cal_settings),
             listOf(
                 MenuEntry(activity.getString(R.string.ml_cal_calendars, calendarsLabel(activity, c))) {
                     pickCalendars(activity, view, scope, reopen)
+                },
+                toggle(R.string.ml_cal_show_todos, c.showTodos) { cfg, v -> cfg.showTodos = v },
+                MenuEntry(activity.getString(R.string.ml_cal_todo_place, placeNames[c.todoPlace])) {
+                    choose(activity, activity.getString(R.string.ml_cal_todo_place_title), placeNames, c.todoPlace) { i ->
+                        view.updateConfig { it.todoPlace = i }
+                        reopen()
+                    }
+                },
+                MenuEntry(activity.getString(R.string.ml_cal_todo_done, doneNames[c.todoDoneMode])) {
+                    choose(activity, activity.getString(R.string.ml_cal_todo_done_title), doneNames, c.todoDoneMode) { i ->
+                        view.updateConfig { it.todoDoneMode = i }
+                        reopen()
+                    }
+                },
+                MenuEntry(activity.getString(R.string.ml_cal_todo_categories, todoCategoriesLabel(activity, c))) {
+                    pickTodoCategories(activity, view, reopen)
                 },
                 MenuEntry(activity.getString(R.string.ml_cal_past, pastNames[c.pastMode.coerceIn(0, 2)])) {
                     choose(activity, activity.getString(R.string.ml_cal_past_title), pastNames, c.pastMode) { i ->
@@ -94,6 +113,25 @@ object CalendarWidgetSettings {
     private fun calendarsLabel(activity: Activity, c: CalendarWidgetConfig) =
         if (c.calendars.isEmpty()) activity.getString(R.string.ml_cal_calendars_all)
         else activity.getString(R.string.ml_cal_calendars_count, c.calendars.size)
+
+    private fun todoCategoriesLabel(activity: Activity, c: CalendarWidgetConfig) =
+        if (c.todoCategories.isEmpty()) activity.getString(R.string.ml_cal_calendars_all)
+        else activity.getString(R.string.ml_cal_calendars_count, c.todoCategories.size)
+
+    /** Which ToDo categories the widget shows; none ticked = all of them. */
+    private fun pickTodoCategories(activity: Activity, view: CalendarWidgetView, then: () -> Unit) {
+        val categories = TodoStore.categories(activity)
+        val labels = listOf(activity.getString(R.string.ml_todo_none)) + categories.map { it.name }
+        val ids = listOf(0L) + categories.map { it.id }
+        val chosen = view.config.todoCategories
+        val checked = ids.indices.filter { chosen.isEmpty() || ids[it] in chosen }.toSet()
+        activity.showMultiSelectDialog(activity.getString(R.string.ml_cal_todo_categories_title), labels, checked, activity.getString(R.string.ml_done)) { selected ->
+            view.updateConfig { cfg ->
+                cfg.todoCategories = if (selected.size == ids.size) emptySet() else selected.map { ids[it] }.toSet()
+            }
+            then()
+        }
+    }
 
     /** A list of options; the current one is marked. */
     private fun choose(activity: Activity, title: String, options: List<String>, current: Int, onPick: (Int) -> Unit) {

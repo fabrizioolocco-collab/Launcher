@@ -17,6 +17,14 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!--Used only for opening alarm app-->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- ToDo alerts: on time (notification or alarm), again after a reboot -->
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
@@ -151,6 +159,50 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+
+        <!-- ToDo app, also listed as "ToDo" in the app list -->
+        <activity
+            android:name=".ui.todo.TodoActivity"
+            android:exported="false"
+            android:label="@string/ml_todo_app"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.todo" />
+        <activity
+            android:name=".ui.todo.TodoEditActivity"
+            android:exported="false"
+            android:label="@string/ml_todo_app"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name=".ui.todo.TodoAlarmActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.todoalarm" />
+
+        <activity-alias
+            android:name=".TodoAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_todo_launcher"
+            android:label="@string/ml_todo_app"
+            android:targetActivity=".ui.todo.TodoActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <receiver
+            android:name=".helper.TodoAlarmReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Shares phone files with the app that opens them -->
         <provider

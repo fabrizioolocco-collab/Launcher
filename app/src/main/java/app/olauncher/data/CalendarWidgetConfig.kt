@@ -52,6 +52,12 @@ class CalendarWidgetConfig {
     var showDeclined = false
     /** Background opacity in percent (0 = none). */
     var background = 0
+    /** The ToDos of the launcher's ToDo app in the widget. */
+    var showTodos = true
+    var todoPlace = TODO_MIXED
+    var todoDoneMode = TODO_DONE_STRIKE
+    /** ToDo categories to show; empty = all (and the todos without a category). */
+    var todoCategories: Set<Long> = emptySet()
     val texts: MutableMap<CalendarText, CalendarTextStyle> =
         CalendarText.entries.associateWith { CalendarTextStyle(sizeSp = it.defaultSize, style = it.defaultStyle) }.toMutableMap()
 
@@ -74,6 +80,10 @@ class CalendarWidgetConfig {
         .put("all", showAllDay)
         .put("dec", showDeclined)
         .put("bg", background)
+        .put("td", showTodos)
+        .put("tdp", todoPlace)
+        .put("tdd", todoDoneMode)
+        .put("tdc", JSONArray(todoCategories.toList()))
         .put("txt", JSONObject().also { o ->
             texts.forEach { (t, s) ->
                 o.put(t.key, JSONObject().put("f", s.font).put("s", s.sizeSp).put("y", s.style).put("c", s.color))
@@ -84,6 +94,15 @@ class CalendarWidgetConfig {
         const val PAST_SHOW = 0
         const val PAST_DIM = 1
         const val PAST_HIDE = 2
+
+        /** ToDos in their own block under the events, among them by time, or above them. */
+        const val TODO_BELOW = 0
+        const val TODO_MIXED = 1
+        const val TODO_ABOVE = 2
+
+        /** A todo done stays crossed out until the end of the day, or goes at once (with an undo). */
+        const val TODO_DONE_STRIKE = 0
+        const val TODO_DONE_HIDE = 1
 
         fun fromJson(o: JSONObject): CalendarWidgetConfig = CalendarWidgetConfig().apply {
             val cal = o.optJSONArray("cal")
@@ -103,6 +122,11 @@ class CalendarWidgetConfig {
             showAllDay = o.optBoolean("all", true)
             showDeclined = o.optBoolean("dec", false)
             background = o.optInt("bg", 0)
+            showTodos = o.optBoolean("td", true)
+            todoPlace = o.optInt("tdp", TODO_MIXED).coerceIn(0, 2)
+            todoDoneMode = o.optInt("tdd", TODO_DONE_STRIKE).coerceIn(0, 1)
+            val tdc = o.optJSONArray("tdc")
+            todoCategories = if (tdc == null) emptySet() else (0 until tdc.length()).map { tdc.getLong(it) }.toSet()
             val txt = o.optJSONObject("txt")
             CalendarText.entries.forEach { t ->
                 val s = txt?.optJSONObject(t.key) ?: return@forEach
