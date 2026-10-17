@@ -1204,12 +1204,15 @@ class PdfViewerActivity : AppCompatActivity() {
             overlay.invalidate()
         }
 
-        /** Page rectangle in this view's coordinates (the image fills the width). */
+        /**
+         * Page rectangle in the coordinates of the children (overlay, text field): they are laid
+         * out inside this view's padding, so the page starts at their 0, 0 (the image fills the width).
+         */
         private fun pageRect(): RectF {
             val d = image.drawable ?: return RectF()
             val w = (width - paddingLeft - paddingRight).toFloat()
             val h = w * d.intrinsicHeight / d.intrinsicWidth
-            return RectF(paddingLeft.toFloat(), paddingTop.toFloat(), paddingLeft + w, paddingTop + h)
+            return RectF(0f, 0f, w, h)
         }
 
         /** Recomputes the width of a text box from its text and height. */
