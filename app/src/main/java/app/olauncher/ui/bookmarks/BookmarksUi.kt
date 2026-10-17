@@ -163,7 +163,7 @@ object BookmarksUi {
                 if (isOpen) walk(f.id, depth + 1)
             }
             bookmarks.filter { it.folder == parent }.forEach { b ->
-                list.addView(bookmarkRow(ctx, b, depth, BookmarkStore.domain(b.url), dialog, refresh))
+                list.addView(bookmarkRow(ctx, b, depth, "", dialog, refresh))
             }
         }
         walk(0L, 0)
@@ -182,9 +182,7 @@ object BookmarksUi {
             return
         }
         hits.forEach { b ->
-            val path = BookmarkStore.path(ctx, b.folder)
-            val sub = if (path.isEmpty()) BookmarkStore.domain(b.url) else "$path · ${BookmarkStore.domain(b.url)}"
-            list.addView(bookmarkRow(ctx, b, 0, sub, dialog, refresh))
+            list.addView(bookmarkRow(ctx, b, 0, BookmarkStore.path(ctx, b.folder), dialog, refresh))
         }
     }
 
@@ -250,7 +248,7 @@ object BookmarksUi {
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
                 })
-                addView(TextView(ctx).apply {
+                if (subtitle.isNotEmpty()) addView(TextView(ctx).apply {
                     text = subtitle
                     textSize = 11.5f
                     setTextColor(UiKit.secondary(ctx))
