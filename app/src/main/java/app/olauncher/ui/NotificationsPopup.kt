@@ -231,7 +231,7 @@ object NotificationsPopup {
         val frame = FrameLayout(ctx)
         // Underneath: red "Clear" across the row, blue "Reply" at the end
         val deleteLayer = TextView(ctx).apply {
-            text = "🗑  " + ctx.getString(R.string.ml_notif_clear)
+            this.text = "🗑  " + ctx.getString(R.string.ml_notif_clear)
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 15f
             setTypeface(typeface, Typeface.BOLD)
@@ -242,7 +242,7 @@ object NotificationsPopup {
         }
         frame.addView(deleteLayer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val replyLayer = TextView(ctx).apply {
-            text = "↩\n" + ctx.getString(R.string.ml_notif_reply)
+            this.text = "↩\n" + ctx.getString(R.string.ml_notif_reply)
             setTextColor(0xFFFFFFFF.toInt())
             textSize = 14f
             setTypeface(typeface, Typeface.BOLD)
@@ -313,7 +313,7 @@ object NotificationsPopup {
         }
         replyBox.addView(input, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 8.dpToPx() })
         val send = TextView(ctx).apply {
-            text = "➤"
+            this.text = "➤"
             textSize = 17f
             gravity = Gravity.CENTER
             setTextColor(surface)
