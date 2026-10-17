@@ -18,4 +18,5 @@ pushing the commits:
    release link. The release build also doubles as the compile check: the Gradle build
    cannot run in the cloud session because Maven/Google repositories are blocked.
 
-Do not create a release unless the user asks for a version.
+After every change pushed for the user, publish a new version right away (next X.Y, e.g. 0.92 -> 0.93)
+without waiting to be asked: the user installs every change from Obtainium.
