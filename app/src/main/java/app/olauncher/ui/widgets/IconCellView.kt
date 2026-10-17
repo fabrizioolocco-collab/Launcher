@@ -78,7 +78,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
 
     /** Icon edge on a card in a cell of [cellPx] (the card is the cell's square, a little inset). */
     fun cardIconSizeFor(cellPx: Int, showLabel: Boolean): Int =
-        ((cellPx - 2 * CARD_INSET_DP.dpToPx()) * if (showLabel) 0.36f else 0.46f).toInt()
+        ((cellPx - 2 * CARD_INSET_DP.dpToPx()) * if (showLabel) 0.4f else 0.5f).toInt()
 
     /**
      * [tile]: draw the icon on a rounded square ([iconSize] is then the tile's edge). [card]: the
@@ -92,7 +92,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         cardOn = card
         tileOn = tile && !card
         tileSize = iconSize
-        label.setPadding(0, if (card) 6.dpToPx() else 0, 0, 0)
+        label.setPadding(if (card) 4.dpToPx() else 0, if (card) 4.dpToPx() else 0, if (card) 4.dpToPx() else 0, 0)
         label.alpha = if (card) 0.85f else 1f
         updateFrame()
         val inner = if (tileOn) (iconSize * IconTiles.ICON_FRACTION).toInt() else iconSize
@@ -114,6 +114,15 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
             if (lp.width != side || lp.gravity != Gravity.CENTER) {
                 // Changed in place: measured right below
                 lp.width = side; lp.height = side; lp.gravity = Gravity.CENTER
+            }
+            // The name always fits: the icon gives way on a small card
+            val labelRoom = if (label.isVisible) label.lineHeight + label.paddingTop else 0
+            val maxIcon = (side - labelRoom - 2 * CARD_PADDING_DP.dpToPx()).coerceAtLeast(12.dpToPx())
+            val edge = minOf(tileSize, maxIcon)
+            val frame = iconFrame.layoutParams
+            if (frame.width != edge) {
+                frame.width = edge; frame.height = edge
+                icon.layoutParams.width = edge; icon.layoutParams.height = edge
             }
         } else if (lp.width != ViewGroup.LayoutParams.MATCH_PARENT) {
             lp.width = ViewGroup.LayoutParams.MATCH_PARENT; lp.height = ViewGroup.LayoutParams.MATCH_PARENT
@@ -171,7 +180,10 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
 
     companion object {
         /** Space around a card inside its cell (the gap between two cards is twice this). */
-        const val CARD_INSET_DP = 5
+        const val CARD_INSET_DP = 3
+
+        /** Least room above and below the icon and name on a card. */
+        private const val CARD_PADDING_DP = 5
         private const val CARD_RED = 0xFF3A1715.toInt()
         private const val CARD_RED_STROKE = 0xFFB3261E.toInt()
         private const val BADGE_COLOR = 0xFFC62828.toInt()

@@ -579,7 +579,8 @@ class HomeWidgetsController(
 
     /** The home icon size setting (dp) wins over the automatic size from the cell. */
     private fun homeIconSize(view: IconCellView, showLabel: Boolean, card: Boolean = false): Int = when {
-        prefs.homeIconSize > 0 -> prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - (if (card) 24 else 4).dpToPx())
+        // On a card the view itself shrinks the icon to leave room for the name
+        prefs.homeIconSize > 0 -> prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - 4.dpToPx())
         card -> view.cardIconSizeFor(cellPx(), showLabel)
         else -> view.iconSizeFor(cellPx(), showLabel)
     }
