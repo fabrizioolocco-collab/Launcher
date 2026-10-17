@@ -68,11 +68,7 @@ class TodoAlarmActivity : AppCompatActivity() {
             gravity = Gravity.CENTER
             setPadding(32.dpToPx(), 48.dpToPx(), 32.dpToPx(), 32.dpToPx())
         }
-        root.addView(TextView(this).apply {
-            text = "⏰"
-            textSize = 56f
-            gravity = Gravity.CENTER
-        })
+        root.addView(app.olauncher.ui.UiKit.icon(this, R.drawable.ic_m_alarm, white, 64))
         root.addView(TextView(this).apply {
             text = todo.title
             textSize = 30f

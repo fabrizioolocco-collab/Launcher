@@ -49,6 +49,7 @@ import app.olauncher.data.UNIT_MONTH
 import app.olauncher.data.UNIT_WEEK
 import app.olauncher.data.UNIT_YEAR
 import app.olauncher.helper.CalendarEvents
+import app.olauncher.helper.DESTRUCTIVE_COLOR
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
@@ -56,6 +57,7 @@ import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
+import app.olauncher.ui.UiKit
 import java.util.Calendar
 
 /**
@@ -74,14 +76,14 @@ class TodoEditActivity : AppCompatActivity() {
     private lateinit var titleInput: EditText
     private lateinit var categoryValue: TextView
     private lateinit var dateValue: TextView
-    private lateinit var dateClear: TextView
+    private lateinit var dateClear: View
     private lateinit var timeValue: TextView
-    private lateinit var timeClear: TextView
+    private lateinit var timeClear: View
     private lateinit var alertValue: TextView
     private lateinit var repeatValue: TextView
     private lateinit var customBox: LinearLayout
     private lateinit var countValue: TextView
-    private lateinit var countClear: TextView
+    private lateinit var countClear: View
     private lateinit var modeBox: LinearLayout
     private lateinit var byDue: TextView
     private lateinit var byDone: TextView
@@ -156,7 +158,7 @@ class TodoEditActivity : AppCompatActivity() {
         form.addView(titleInput, matchWrap())
 
         form.addView(label(R.string.ml_todo_category))
-        val category = field(R.string.ml_todo_none, "▾") { pickCategory() }
+        val category = field(R.string.ml_todo_none, R.drawable.ic_m_chevron_down) { pickCategory() }
         categoryValue = category.second
         form.addView(category.first, matchWrap())
         form.addView(hint(R.string.ml_todo_category_hint))
@@ -165,7 +167,7 @@ class TodoEditActivity : AppCompatActivity() {
         val dateRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         val dateColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         dateColumn.addView(label(R.string.ml_todo_due))
-        val date = field(R.string.ml_todo_no_date, "✕") { pickDate(todo.due) { setDue(it) } }
+        val date = field(R.string.ml_todo_no_date, R.drawable.ic_m_close) { pickDate(todo.due) { setDue(it) } }
         dateValue = date.second
         dateClear = date.third
         dateClear.setOnClickListener { setDue(NO_DAY) }
@@ -173,7 +175,7 @@ class TodoEditActivity : AppCompatActivity() {
         dateRow.addView(dateColumn, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 10.dpToPx() })
         val timeColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         timeColumn.addView(label(R.string.ml_todo_time))
-        val time = field(R.string.ml_todo_no_time, "✕") { pickTime() }
+        val time = field(R.string.ml_todo_no_time, R.drawable.ic_m_close) { pickTime() }
         timeValue = time.second
         timeClear = time.third
         timeClear.setOnClickListener {
@@ -185,19 +187,19 @@ class TodoEditActivity : AppCompatActivity() {
         form.addView(dateRow, matchWrap())
 
         form.addView(label(R.string.ml_todo_alert))
-        val alert = field(R.string.ml_todo_alert_none, "▾") { pickAlert() }
+        val alert = field(R.string.ml_todo_alert_none, R.drawable.ic_m_chevron_down) { pickAlert() }
         alertValue = alert.second
         form.addView(alert.first, matchWrap())
 
         form.addView(label(R.string.ml_todo_repeat))
-        val repeat = field(R.string.ml_todo_repeat_never, "▾") { pickRepeat() }
+        val repeat = field(R.string.ml_todo_repeat_never, R.drawable.ic_m_chevron_down) { pickRepeat() }
         repeatValue = repeat.second
         form.addView(repeat.first, matchWrap())
 
         // Custom repetition: where the count starts
         customBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         customBox.addView(label(R.string.ml_todo_count_from))
-        val count = field(R.string.ml_todo_count_from_empty, "✕") {
+        val count = field(R.string.ml_todo_count_from_empty, R.drawable.ic_m_close) {
             pickDate(if (countFrom != NO_DAY) countFrom else todo.due.takeIf { it != NO_DAY }?.let { TodoStore.stepBack(todo, it) } ?: today()) {
                 countFrom = it
                 todo.due = TodoStore.step(todo, it)
@@ -277,14 +279,8 @@ class TodoEditActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 10.dpToPx(), 0, 0)
         }
-        if (!isNew) bar.addView(TextView(this, null, 0, R.style.TextMedium).apply {
-            text = "🗑"
-            textSize = 22f
-            contentDescription = getString(R.string.ml_todo_delete)
-            setPadding(4.dpToPx(), 8.dpToPx(), 16.dpToPx(), 8.dpToPx())
-            isClickable = true
-            setOnClickListener { confirmDelete() }
-        })
+        if (!isNew) bar.addView(UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_todo_delete), DESTRUCTIVE_COLOR) { confirmDelete() },
+            LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()).apply { marginEnd = 10.dpToPx() })
         bar.addView(button(R.string.ml_todo_cancel, filled = false) { finish() }, LinearLayout.LayoutParams(0, 48.dpToPx(), 1f).apply { marginEnd = 12.dpToPx() })
         bar.addView(button(R.string.ml_save, filled = true) { save() }, LinearLayout.LayoutParams(0, 48.dpToPx(), 1f))
         root.addView(bar, matchWrap())
@@ -293,11 +289,7 @@ class TodoEditActivity : AppCompatActivity() {
 
     private fun matchWrap() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
-    private fun boxBackground() = GradientDrawable().apply {
-        cornerRadius = 12.dpToPx().toFloat()
-        setColor(ColorUtils.setAlphaComponent(primary, 0x10))
-        setStroke(1.dpToPx(), ColorUtils.setAlphaComponent(primary, 0x60))
-    }
+    private fun boxBackground() = UiKit.border(this, 12, ColorUtils.setAlphaComponent(primary, 0x0A))
 
     private fun label(text: Int) = TextView(this, null, 0, R.style.TextSmall).apply {
         setText(text)
@@ -313,8 +305,8 @@ class TodoEditActivity : AppCompatActivity() {
         setPadding(4.dpToPx(), 6.dpToPx(), 0, 0)
     }
 
-    /** A box showing a value, tapped to change it, with an icon at the end (▾ or a ✕ that clears). */
-    private fun field(empty: Int, icon: String, onClick: () -> Unit): Triple<LinearLayout, TextView, TextView> {
+    /** A box showing a value, tapped to change it, with an icon at the end (a chevron, or a cross that clears). */
+    private fun field(empty: Int, icon: Int, onClick: () -> Unit): Triple<LinearLayout, TextView, View> {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -331,14 +323,20 @@ class TodoEditActivity : AppCompatActivity() {
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         box.addView(value, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        val end = TextView(this, null, 0, R.style.TextMedium).apply {
-            text = icon
-            textSize = 16f
-            gravity = Gravity.CENTER
-            setPadding(10.dpToPx(), 12.dpToPx(), 10.dpToPx(), 12.dpToPx())
-            isClickable = icon != "▾"
+        val clears = icon != R.drawable.ic_m_chevron_down
+        val end = android.widget.ImageView(this).apply {
+            setImageResource(icon)
+            imageTintList = android.content.res.ColorStateList.valueOf(UiKit.secondary(this@TodoEditActivity))
+            scaleType = android.widget.ImageView.ScaleType.CENTER_INSIDE
+            val p = 12.dpToPx()
+            setPadding(p, p, p, p)
+            isClickable = clears
+            if (clears) {
+                background = UiKit.roundRipple(this@TodoEditActivity)
+                contentDescription = getString(R.string.close)
+            }
         }
-        box.addView(end)
+        box.addView(end, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()))
         return Triple(box, value, end)
     }
 
@@ -358,7 +356,7 @@ class TodoEditActivity : AppCompatActivity() {
         setTypeface(typeface, Typeface.BOLD)
         background = GradientDrawable().apply {
             cornerRadius = 14.dpToPx().toFloat()
-            if (filled) setColor(primary) else setStroke(1.dpToPx(), ColorUtils.setAlphaComponent(primary, 0x90))
+            if (filled) setColor(primary) else setStroke(1.dpToPx(), getColorFromAttr(R.attr.cardStrokeColor))
         }
         if (filled) setTextColor(getColorFromAttr(R.attr.primaryInverseColor))
         isClickable = true
@@ -371,9 +369,7 @@ class TodoEditActivity : AppCompatActivity() {
 
     private fun render() {
         categoryValue.text = TodoStore.category(this, todo.category)?.let { c ->
-            android.text.SpannableString("●  ${c.name}").apply {
-                setSpan(android.text.style.ForegroundColorSpan(c.color or 0xFF000000.toInt()), 0, 1, 0)
-            }
+            android.text.TextUtils.concat(TodoSpans.dot(c.color or 0xFF000000.toInt(), 10.dpToPx()), "  ", c.name)
         } ?: getString(R.string.ml_todo_none)
         dateValue.text = if (todo.due == NO_DAY) getString(R.string.ml_todo_no_date) else TodoLabels.date(this, todo.due)
         dateValue.alpha = if (todo.due == NO_DAY) 0.5f else 1f
@@ -462,11 +458,11 @@ class TodoEditActivity : AppCompatActivity() {
         titleInput.hideKeyboard()
         val categories = TodoStore.categories(this)
         showMenuDialog(getString(R.string.ml_todo_category),
-            listOf(MenuEntry(mark(todo.category == 0L) + getString(R.string.ml_todo_none)) {
+            listOf(MenuEntry(getString(R.string.ml_todo_none), icon = mark(todo.category == 0L)) {
                 todo.category = 0L
                 render()
             }) + categories.map { c ->
-                MenuEntry(mark(todo.category == c.id) + "●  " + c.name) {
+                MenuEntry(c.name, icon = mark(todo.category == c.id), dot = c.color or 0xFF000000.toInt()) {
                     todo.category = c.id
                     render()
                 }
@@ -480,12 +476,13 @@ class TodoEditActivity : AppCompatActivity() {
             })
     }
 
-    private fun mark(selected: Boolean) = if (selected) "✓  " else ""
+    /** The check icon of the current choice in a picker (0: none). */
+    private fun mark(selected: Boolean) = if (selected) R.drawable.ic_m_check else 0
 
     private fun pickAlert() {
         titleInput.hideKeyboard()
         showMenuDialog(getString(R.string.ml_todo_alert), listOf(ALERT_NONE, ALERT_NOTIFY, ALERT_ALARM).map { a ->
-            MenuEntry(mark(todo.alert == a) + getString(ALERT_NAMES[a])) {
+            MenuEntry(getString(ALERT_NAMES[a]), icon = mark(todo.alert == a)) {
                 todo.alert = a
                 if (a != ALERT_NONE && todo.due == NO_DAY) todo.due = today()
                 render()
@@ -500,7 +497,7 @@ class TodoEditActivity : AppCompatActivity() {
         showMenuDialog(getString(R.string.ml_todo_repeat), options.map { r ->
             val name = if (r == REPEAT_CUSTOM) getString(R.string.ml_todo_repeat_custom)
             else TodoLabels.repeat(this, Todo(-1L).apply { repeat = r })
-            MenuEntry(mark(todo.repeat == r) + name) {
+            MenuEntry(name, icon = mark(todo.repeat == r)) {
                 todo.repeat = r
                 if (r != REPEAT_NONE && todo.due == NO_DAY) todo.due = today()
                 if (r != REPEAT_CUSTOM) countFrom = NO_DAY

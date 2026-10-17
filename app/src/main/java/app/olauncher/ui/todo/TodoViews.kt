@@ -4,7 +4,13 @@ import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ReplacementSpan
 import android.view.View
+import androidx.core.content.ContextCompat
 import app.olauncher.R
 import app.olauncher.data.NO_DAY
 import app.olauncher.data.REPEAT_CUSTOM
@@ -66,6 +72,47 @@ class TodoCheckView(context: Context) : View(context) {
             paint.style = Paint.Style.STROKE
             canvas.drawCircle(cx, cy, r, paint)
         }
+    }
+}
+
+/** Draws [drawable] (bounds already set) centred on the line of text, e.g. a small icon in a label. */
+class CenteredDrawableSpan(private val drawable: Drawable) : ReplacementSpan() {
+    override fun getSize(paint: Paint, text: CharSequence?, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int =
+        drawable.bounds.width()
+
+    override fun draw(canvas: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
+        val fm = paint.fontMetricsInt
+        val dy = y + (fm.ascent + fm.descent) / 2f - drawable.bounds.height() / 2f
+        canvas.save()
+        canvas.translate(x, dy)
+        drawable.draw(canvas)
+        canvas.restore()
+    }
+}
+
+/** Small drawings inside texts: line icons and the categories' colored dots. */
+object TodoSpans {
+
+    /** A line icon [sizePx] square tinted [color], as one character of text. */
+    fun icon(context: Context, res: Int, color: Int, sizePx: Int): CharSequence {
+        val drawable = ContextCompat.getDrawable(context, res)?.mutate() ?: return ""
+        drawable.setTint(color)
+        drawable.setBounds(0, 0, sizePx, sizePx)
+        return of(drawable)
+    }
+
+    /** A filled circle of [color], as one character of text. */
+    fun dot(color: Int, sizePx: Int): CharSequence {
+        val drawable = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(color)
+            setBounds(0, 0, sizePx, sizePx)
+        }
+        return of(drawable)
+    }
+
+    private fun of(drawable: Drawable): CharSequence = SpannableString(" ").apply {
+        setSpan(CenteredDrawableSpan(drawable), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
     }
 }
 

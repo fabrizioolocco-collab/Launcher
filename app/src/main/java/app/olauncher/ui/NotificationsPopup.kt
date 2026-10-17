@@ -124,15 +124,8 @@ object NotificationsPopup {
             }
         }
         header.addView(count, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 22.dpToPx()))
-        header.addView(TextView(ctx).apply {
-            text = "✕"
-            textSize = 17f
-            setTextColor(secondary)
-            gravity = Gravity.CENTER
-            contentDescription = ctx.getString(R.string.close)
-            isClickable = true
-            setOnClickListener { dialog.dismiss() }
-        }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()))
+        header.addView(UiKit.iconButton(ctx, R.drawable.ic_m_close, ctx.getString(R.string.close), secondary) { dialog.dismiss() },
+            LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()))
         card.addView(header)
 
         // The rows, scrolling when there are many
@@ -234,25 +227,38 @@ object NotificationsPopup {
         wrap.addView(divider(ctx, line))
         val frame = FrameLayout(ctx)
         // Underneath: red "Clear" across the row, blue "Reply" at the end
-        val deleteLayer = TextView(ctx).apply {
-            this.text = "🗑  " + ctx.getString(R.string.ml_notif_clear)
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 15f
-            setTypeface(typeface, Typeface.BOLD)
+        val white = 0xFFFFFFFF.toInt()
+        val deleteLayer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
             setPadding(0, 0, 22.dpToPx(), 0)
             setBackgroundColor(DELETE_COLOR)
             isVisible = false
+            addView(UiKit.icon(ctx, R.drawable.ic_m_delete, white, 18).apply {
+                (layoutParams as LinearLayout.LayoutParams).marginEnd = 8.dpToPx()
+            })
+            addView(TextView(ctx).apply {
+                this.text = ctx.getString(R.string.ml_notif_clear)
+                setTextColor(white)
+                textSize = 15f
+                setTypeface(typeface, Typeface.BOLD)
+            })
         }
         frame.addView(deleteLayer, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        val replyLayer = TextView(ctx).apply {
-            this.text = "↩\n" + ctx.getString(R.string.ml_notif_reply)
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 14f
-            setTypeface(typeface, Typeface.BOLD)
+        val replyLayer = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             setBackgroundColor(REPLY_COLOR)
             isVisible = reply != null
+            addView(UiKit.icon(ctx, R.drawable.ic_m_back, white, 20))
+            addView(TextView(ctx).apply {
+                this.text = ctx.getString(R.string.ml_notif_reply)
+                setTextColor(white)
+                textSize = 14f
+                setTypeface(typeface, Typeface.BOLD)
+                gravity = Gravity.CENTER
+                setPadding(0, 4.dpToPx(), 0, 0)
+            })
         }
         frame.addView(replyLayer, FrameLayout.LayoutParams(REPLY_WIDTH_DP.dpToPx(), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.END))
 
@@ -316,11 +322,12 @@ object NotificationsPopup {
             minHeight = 44.dpToPx()
         }
         replyBox.addView(input, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginEnd = 8.dpToPx() })
-        val send = TextView(ctx).apply {
-            this.text = "➤"
-            textSize = 17f
-            gravity = Gravity.CENTER
-            setTextColor(surface)
+        val send = ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_m_send)
+            imageTintList = android.content.res.ColorStateList.valueOf(surface)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            val p = 11.dpToPx()
+            setPadding(p, p, p, p)
             contentDescription = ctx.getString(R.string.ml_notif_send)
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL

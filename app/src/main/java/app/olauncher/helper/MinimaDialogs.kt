@@ -17,9 +17,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.widget.AppCompatCheckBox
 import androidx.core.view.isVisible
-import androidx.core.widget.CompoundButtonCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
@@ -45,6 +43,8 @@ class MenuEntry(
     val value: String? = null,
     val icon: Int = 0,
     val destructive: Boolean = false,
+    /** A colored dot before the label (e.g. a category's color); 0: none. */
+    val dot: Int = 0,
     val onClick: () -> Unit = {},
 )
 
@@ -203,6 +203,15 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
             setImageResource(iconRes)
             imageTintList = ColorStateList.valueOf(if (destructive) DESTRUCTIVE_COLOR else secondary)
         }, LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { marginEnd = 14.dpToPx() })
+        if (entry.dot != 0) row.addView(View(ctx).apply {
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(entry.dot)
+            }
+        }, LinearLayout.LayoutParams(10.dpToPx(), 10.dpToPx()).apply {
+            if (iconRes == 0) marginStart = 5.dpToPx()
+            marginEnd = if (iconRes == 0) 19.dpToPx() else 14.dpToPx()
+        })
         row.addView(TextView(ctx).apply {
             text = label
             textSize = 16f
@@ -232,11 +241,10 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
                     ellipsize = android.text.TextUtils.TruncateAt.END
                     setPadding(10.dpToPx(), 0, 6.dpToPx(), 0)
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 0f })
-                row.addView(TextView(ctx).apply {
-                    text = "›"
-                    textSize = 18f
-                    setTextColor(secondary)
-                })
+                row.addView(ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_m_chevron_right)
+                    imageTintList = ColorStateList.valueOf(secondary)
+                }, LinearLayout.LayoutParams(16.dpToPx(), 16.dpToPx()))
             }
             row.setOnClickListener { run(entry) }
         }
@@ -380,13 +388,12 @@ fun Context.showTextInputDialog(
         setSingleLine(true)
         imeOptions = EditorInfo.IME_ACTION_DONE
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        setTextColor(ctx.getColorFromAttr(R.attr.primaryColor))
-        setHintTextColor(ctx.getColorFromAttr(R.attr.primaryColorTrans50))
-        backgroundTintList = ColorStateList.valueOf(ctx.getColorFromAttr(R.attr.primaryColor))
-        textSize = 20f
+        app.olauncher.ui.UiKit.styleInput(this)
+        textSize = 18f
         layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 16.dpToPx()
             bottomMargin = 8.dpToPx()
+            marginEnd = 8.dpToPx()
         }
     }
     fun submit() {
@@ -433,6 +440,7 @@ fun Context.showStatusDialog(title: String, message: String, action: String, onA
     val (dialog, binding) = baseDialog(title)
     binding.tvMessage.text = message
     binding.tvMessage.isVisible = true
+    binding.tvMessage.setTextColor(dialog.context.getColorFromAttr(R.attr.secondaryTextColor))
     binding.tvAction.text = action
     binding.tvAction.isVisible = true
     binding.tvAction.setOnClickListener { onAction() }
@@ -505,35 +513,63 @@ fun Context.showMultiSelectDialog(
     val ctx = dialog.context
     val checked = initiallyChecked.toMutableSet()
     val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val line = ctx.getColorFromAttr(R.attr.cardLineColor)
 
     val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val filter = EditText(ctx).apply {
         hint = ctx.getString(R.string.ml_search)
         setSingleLine(true)
+        app.olauncher.ui.UiKit.styleInput(this)
         textSize = 16f
-        setTextColor(primary)
-        setHintTextColor(ctx.getColorFromAttr(R.attr.primaryColorTrans50))
-        backgroundTintList = ColorStateList.valueOf(primary)
         imeOptions = EditorInfo.IME_ACTION_DONE
     }
     container.addView(filter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
         topMargin = 12.dpToPx()
+        marginEnd = 8.dpToPx()
     })
 
-    val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    // The rows in a bordered group like the menus, each with a round check on the right
+    val list = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, 0, 8.dpToPx(), 0)
+    }
+    val group = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        background = groupBackground(ctx, line, 16)
+        clipToOutline = true
+    }
+    list.addView(group, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    val dividers = mutableListOf<View>()
     val rows = labels.mapIndexed { index, label ->
-        AppCompatCheckBox(ctx).apply {
-            text = label
-            textSize = 17f
-            setTextColor(primary)
+        if (index > 0) View(ctx).apply { setBackgroundColor(line) }.also {
+            dividers += it
+            group.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1.dpToPx()))
+        }
+        val mark = android.widget.FrameLayout(ctx)
+        fun showMark() {
+            mark.removeAllViews()
+            mark.addView(roundCheck(ctx, index in checked), android.widget.FrameLayout.LayoutParams(22.dpToPx(), 22.dpToPx(), Gravity.CENTER))
+        }
+        showMark()
+        LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(8.dpToPx(), 10.dpToPx(), 0, 10.dpToPx())
-            CompoundButtonCompat.setButtonTintList(this, ColorStateList.valueOf(primary))
-            isChecked = index in checked
-            setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked) checked.add(index) else checked.remove(index)
+            minimumHeight = 52.dpToPx()
+            setPadding(14.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+            foreground = ripple(ctx)
+            isClickable = true
+            isFocusable = true
+            addView(TextView(ctx).apply {
+                text = label
+                textSize = 16f
+                setTextColor(primary)
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(mark, LinearLayout.LayoutParams(24.dpToPx(), 24.dpToPx()).apply { marginStart = 10.dpToPx() })
+            setOnClickListener {
+                if (!checked.add(index)) checked.remove(index)
+                showMark()
             }
-        }.also { list.addView(it) }
+        }.also { group.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)) }
     }
     container.addView(ctx.limitedHeight(list, labels.size))
 
@@ -545,6 +581,7 @@ fun Context.showMultiSelectDialog(
         override fun afterTextChanged(s: Editable?) {
             val q = normalize(s?.toString().orEmpty().trim())
             rows.forEachIndexed { i, row -> row.isVisible = q.isEmpty() || normalize(labels[i]).contains(q) }
+            dividers.forEach { it.isVisible = q.isEmpty() }
         }
     })
 
@@ -577,6 +614,22 @@ fun Context.showMultiSelectDialog(
     return dialog
 }
 
+/** Round check of the multi-select rows: an empty ring, or filled with a check icon when [checked]. */
+private fun roundCheck(ctx: Context, checked: Boolean): View {
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    return android.widget.FrameLayout(ctx).apply {
+        background = android.graphics.drawable.GradientDrawable().apply {
+            shape = android.graphics.drawable.GradientDrawable.OVAL
+            if (checked) setColor(primary)
+            setStroke(2.dpToPx(), if (checked) primary else ctx.getColorFromAttr(R.attr.cardStrokeColor))
+        }
+        if (checked) addView(ImageView(ctx).apply {
+            setImageResource(R.drawable.ic_m_check)
+            imageTintList = ColorStateList.valueOf(ctx.getColorFromAttr(R.attr.cardColor))
+        }, android.widget.FrameLayout.LayoutParams(15.dpToPx(), 15.dpToPx(), Gravity.CENTER))
+    }
+}
+
 /**
  * Grid of icons with a search field, e.g. all icons of an icon pack.
  * [loadIcon] is called off the main thread; [onPick] receives the chosen name.
@@ -590,7 +643,6 @@ fun Context.showIconGridDialog(
 ): OlDialog {
     val (dialog, binding) = baseDialog(title)
     val ctx = dialog.context
-    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
     val cellSize = 56.dpToPx()
     val iconSize = 44.dpToPx()
 
@@ -598,14 +650,13 @@ fun Context.showIconGridDialog(
     val filter = EditText(ctx).apply {
         hint = ctx.getString(R.string.ml_search)
         setSingleLine(true)
+        app.olauncher.ui.UiKit.styleInput(this)
         textSize = 16f
-        setTextColor(primary)
-        setHintTextColor(ctx.getColorFromAttr(R.attr.primaryColorTrans50))
-        backgroundTintList = ColorStateList.valueOf(primary)
         imeOptions = EditorInfo.IME_ACTION_DONE
     }
     container.addView(filter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
         topMargin = 12.dpToPx()
+        marginEnd = 8.dpToPx()
     })
 
     var shown: List<String> = names
@@ -616,6 +667,7 @@ fun Context.showIconGridDialog(
             val image = ImageView(parent.context).apply {
                 layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cellSize)
                 scaleType = ImageView.ScaleType.CENTER_INSIDE
+                background = ripple(parent.context)
                 isClickable = true
                 isFocusable = true
             }
@@ -724,9 +776,8 @@ fun Context.showColorPickerDialog(title: String, initial: Int, defaultLabel: Str
     ).apply { cornerRadius = 5.dpToPx().toFloat() }
     val hex = EditText(ctx).apply {
         setSingleLine(true)
-        textSize = 18f
-        setTextColor(primary)
-        backgroundTintList = ColorStateList.valueOf(primary)
+        app.olauncher.ui.UiKit.styleInput(this)
+        textSize = 17f
         imeOptions = EditorInfo.IME_ACTION_DONE
         inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
     }
@@ -737,7 +788,7 @@ fun Context.showColorPickerDialog(title: String, initial: Int, defaultLabel: Str
     fun refresh(fromHex: Boolean = false) {
         color = android.graphics.Color.HSVToColor(hsv)
         swatch.setColor(color)
-        swatch.setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.primaryColorTrans50))
+        swatch.setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.cardLineColor))
         syncing = true
         hue.progress = hsv[0].toInt()
         sat.progress = (hsv[1] * 100).toInt()
@@ -787,17 +838,12 @@ fun Context.showColorPickerDialog(title: String, initial: Int, defaultLabel: Str
         presets.addView(row)
     }
 
-    container.addView(ctx.dialogTextView(R.style.TextSmall).apply {
-        text = defaultLabel
-        textSize = 16f
-        setPadding(0, 14.dpToPx(), 0, 6.dpToPx())
-        isClickable = true
-        setOnClickListener {
-            hex.hideKeyboard()
-            dialog.dismiss()
-            onPick(0)
-        }
-    })
+    container.addView(pillButton(ctx, defaultLabel, filled = false, color = primary) {
+        hex.hideKeyboard()
+        dialog.dismiss()
+        onPick(0)
+    }.apply { setPadding(20.dpToPx(), 0, 20.dpToPx(), 0) },
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()).apply { topMargin = 14.dpToPx() })
     refresh()
 
     binding.contentContainer.addView(ScrollView(ctx).apply { addView(container) })
