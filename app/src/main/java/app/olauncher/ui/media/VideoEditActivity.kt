@@ -2,11 +2,13 @@ package app.olauncher.ui.media
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaMetadataRetriever
@@ -18,6 +20,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.VideoView
@@ -30,6 +33,7 @@ import androidx.lifecycle.lifecycleScope
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showToast
+import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -50,14 +54,14 @@ class VideoEditActivity : AppCompatActivity() {
     private lateinit var video: VideoView
     private lateinit var trimmer: TrimView
     private lateinit var rangeText: TextView
-    private lateinit var playButton: TextView
+    private lateinit var playButton: ImageView
     private var durationMs = 0L
     private var startMs = 0L
     private var endMs = 0L
 
     /** Crop frame over the preview; null = whole picture. In displayed (rotated) pixels. */
     private lateinit var cropView: CropOverlay
-    private lateinit var cropButton: TextView
+    private lateinit var cropButton: ImageView
     private var videoW = 0
     private var videoH = 0
     private var rotation = 0
@@ -68,7 +72,7 @@ class VideoEditActivity : AppCompatActivity() {
                 if (video.currentPosition >= endMs) {
                     video.pause()
                     video.seekTo(startMs.toInt())
-                    playButton.text = "▶"
+                    showPlaying(false)
                 } else {
                     trimmer.playhead = video.currentPosition.toLong()
                     trimmer.invalidate()
@@ -123,64 +127,68 @@ class VideoEditActivity : AppCompatActivity() {
             v.setPadding(0, bars.top, 0, bars.bottom)
             insets
         }
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(12.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
-        }
-        top.addView(button("←", 26f) { finish() })
-        top.addView(TextView(this).apply {
-            setText(R.string.ml_edit_trim)
-            setTextColor(Color.WHITE)
-            textSize = 18f
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        cropButton = button(getString(R.string.ml_edit_crop), 15f) { toggleCrop() }
-        top.addView(cropButton)
-        top.addView(button("✓", 26f) { save() })
-        root.addView(top)
+        cropButton = UiKit.iconButton(this, R.drawable.ic_m_crop, getString(R.string.ml_edit_crop)) { toggleCrop() }
+        val bar = UiKit.appBar(this, getString(R.string.ml_edit_trim), onBack = { finish() }, actions = listOf(
+            cropButton,
+            UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_save)) { save() },
+        ))
+        UiKit.setSubtitle(bar, file.name)
+        bar.view.setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+        root.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val frame = FrameLayout(this)
         video = VideoView(this).apply {
             setOnPreparedListener { it.isLooping = false }
-            setOnCompletionListener { playButton.text = "▶" }
+            setOnCompletionListener { showPlaying(false) }
         }
         frame.addView(video, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER))
-        playButton = TextView(this).apply {
-            text = "▶"
-            textSize = 40f
-            setTextColor(Color.WHITE)
-            setShadowLayer(12f, 0f, 0f, Color.BLACK)
+        // Round dark play / pause button over the preview
+        playButton = ImageView(this).apply {
+            setImageResource(R.drawable.ic_m_play)
+            imageTintList = ColorStateList.valueOf(Color.WHITE)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            contentDescription = getString(R.string.ml_search_open)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x99000000.toInt())
+                setStroke(1.dpToPx(), 0x40FFFFFF)
+            }
+            val p = 20.dpToPx()
+            setPadding(p, p, p, p)
             isClickable = true
+            isFocusable = true
             setOnClickListener { togglePlay() }
         }
-        frame.addView(playButton, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        frame.addView(playButton, FrameLayout.LayoutParams(72.dpToPx(), 72.dpToPx(), Gravity.CENTER))
         cropView = CropOverlay(this).apply { isVisible = false }
         frame.addView(cropView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(frame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
+        // Trim range and the strip of frames, in a card
+        val trimCard = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = UiKit.cardBackground(this@VideoEditActivity, 18)
+            setPadding(12.dpToPx(), 0, 12.dpToPx(), 12.dpToPx())
+        }
         rangeText = TextView(this).apply {
-            setTextColor(Color.WHITE)
+            setTextColor(UiKit.primary(this@VideoEditActivity))
             textSize = 14f
             gravity = Gravity.CENTER
-            setPadding(0, 10.dpToPx(), 0, 6.dpToPx())
+            setPadding(0, 10.dpToPx(), 0, 8.dpToPx())
         }
-        root.addView(rangeText)
+        trimCard.addView(rangeText)
         trimmer = TrimView(this)
-        root.addView(trimmer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 72.dpToPx()).apply {
-            setMargins(16.dpToPx(), 0, 16.dpToPx(), 20.dpToPx())
+        trimCard.addView(trimmer, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 72.dpToPx()))
+        root.addView(trimCard, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(12.dpToPx(), 10.dpToPx(), 12.dpToPx(), 12.dpToPx())
         })
         return root
     }
 
-    private fun button(glyph: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
-        text = glyph
-        textSize = size
-        setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER
-        setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
+    /** Play icon when stopped; a faint pause icon while the video plays (tap to pause). */
+    private fun showPlaying(playing: Boolean) {
+        playButton.setImageResource(if (playing) R.drawable.ic_m_pause else R.drawable.ic_m_play)
+        playButton.alpha = if (playing) 0.35f else 1f
     }
 
     private fun toggleCrop() {
@@ -190,8 +198,7 @@ class VideoEditActivity : AppCompatActivity() {
         }
         val on = !cropView.isVisible
         cropView.isVisible = on
-        cropButton.alpha = if (on) 1f else 0.6f
-        cropButton.setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+        UiKit.setToolActive(cropButton, on)
         if (on) {
             // Displayed size: rotated when the video is recorded in portrait
             val dw = if (rotation % 180 == 0) videoW else videoH
@@ -220,11 +227,11 @@ class VideoEditActivity : AppCompatActivity() {
     private fun togglePlay() {
         if (video.isPlaying) {
             video.pause()
-            playButton.text = "▶"
+            showPlaying(false)
         } else {
             if (video.currentPosition < startMs || video.currentPosition >= endMs) video.seekTo(startMs.toInt())
             video.start()
-            playButton.text = ""
+            showPlaying(true)
             video.postDelayed(ticker, 100)
         }
     }
@@ -240,7 +247,7 @@ class VideoEditActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         video.pause()
-        playButton.text = "▶"
+        showPlaying(false)
     }
 
     // ---------------------------------------------------------------- probing
@@ -279,7 +286,7 @@ class VideoEditActivity : AppCompatActivity() {
             return
         }
         video.pause()
-        playButton.text = "▶"
+        showPlaying(false)
         val crop = sourceCrop()
         val trimmed = startMs > 0 || endMs < durationMs
         if (crop == null && !trimmed) {
@@ -291,7 +298,10 @@ class VideoEditActivity : AppCompatActivity() {
             setTextColor(Color.WHITE)
             textSize = 16f
             gravity = Gravity.CENTER
-            setBackgroundColor(0xAA000000.toInt())
+            background = GradientDrawable().apply {
+                cornerRadius = 16.dpToPx().toFloat()
+                setColor(0xCC000000.toInt())
+            }
             setPadding(24.dpToPx(), 16.dpToPx(), 24.dpToPx(), 16.dpToPx())
             (video.parent as FrameLayout).addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             progressText = this

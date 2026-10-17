@@ -2,9 +2,11 @@ package app.olauncher.ui.media
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
@@ -16,6 +18,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.MediaController
 import android.widget.TextView
@@ -39,6 +42,7 @@ import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
+import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -104,55 +108,34 @@ class MediaViewerActivity : AppCompatActivity() {
         })
         root.addView(pager, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        topBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(0x99000000.toInt())
-            setPadding(12.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
-        }
+        val bar = UiKit.appBar(this, "", onBack = { finish() }, actions = listOf(
+            UiKit.iconButton(this, R.drawable.ic_m_share, getString(R.string.ml_explorer_share)) { share() },
+            UiKit.iconButton(this, R.drawable.ic_m_edit, getString(R.string.ml_todo_edit)) { edit() },
+            UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_explorer_delete)) { delete() },
+            UiKit.iconButton(this, R.drawable.ic_m_info, getString(R.string.info)) { details() },
+        ))
+        topBar = bar.view
+        title = bar.title
+        counter = bar.subtitle
+        title.ellipsize = TextUtils.TruncateAt.MIDDLE
+        // Dark scrim fading into the photo, so the bar stays readable on bright pictures
+        topBar.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xCC000000.toInt(), 0x66000000, 0x00000000))
+        topBar.setPadding(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 20.dpToPx())
         ViewCompat.setOnApplyWindowInsetsListener(topBar) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(12.dpToPx(), bars.top + 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
+            v.setPadding(4.dpToPx() + bars.left, bars.top + 8.dpToPx(), 4.dpToPx() + bars.right, 20.dpToPx())
             insets
         }
-        topBar.addView(button("←", 26f) { finish() })
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        title = TextView(this).apply {
-            setTextColor(Color.WHITE)
-            textSize = 16f
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.MIDDLE
-        }
-        counter = TextView(this).apply {
-            setTextColor(0xB3FFFFFF.toInt())
-            textSize = 12f
-        }
-        texts.addView(title)
-        texts.addView(counter)
-        topBar.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 8.dpToPx() })
-        topBar.addView(button("⤴", 22f) { share() })
-        topBar.addView(button("✎", 22f) { edit() })
-        topBar.addView(button("🗑", 20f) { delete() })
-        topBar.addView(button("ⓘ", 22f) { details() })
         root.addView(topBar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
         updateTitle()
         return root
-    }
-
-    private fun button(glyph: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
-        text = glyph
-        textSize = size
-        setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER
-        setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
     }
 
     private fun updateTitle() {
         val file = media.getOrNull(current) ?: return
         title.text = file.name
         counter.text = "${current + 1} / ${media.size}"
+        counter.isVisible = true
     }
 
     private fun toggleChrome() {
@@ -296,13 +279,21 @@ class MediaViewerActivity : AppCompatActivity() {
                 val poster = FrameLayout(parent.context)
                 poster.addView(ZoomImageView(parent.context).apply { onSingleTap = { toggleChrome() } },
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-                poster.addView(TextView(parent.context).apply {
-                    text = "▶"
-                    textSize = 40f
-                    setTextColor(Color.WHITE)
-                    setShadowLayer(12f, 0f, 0f, Color.BLACK)
+                poster.addView(ImageView(parent.context).apply {
+                    setImageResource(R.drawable.ic_m_play)
+                    imageTintList = ColorStateList.valueOf(Color.WHITE)
+                    scaleType = ImageView.ScaleType.FIT_CENTER
+                    contentDescription = getString(R.string.ml_search_open)
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(0x99000000.toInt())
+                        setStroke(1.dpToPx(), 0x40FFFFFF)
+                    }
+                    val p = 20.dpToPx()
+                    setPadding(p, p, p, p)
                     isClickable = true
-                }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+                    isFocusable = true
+                }, FrameLayout.LayoutParams(72.dpToPx(), 72.dpToPx(), Gravity.CENTER))
                 page.addView(poster, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             } else {
                 page.addView(ZoomImageView(parent.context).apply { onSingleTap = { toggleChrome() } },
@@ -318,7 +309,7 @@ class MediaViewerActivity : AppCompatActivity() {
                 val video = page.getChildAt(0) as VideoView
                 val poster = page.getChildAt(1) as FrameLayout
                 val image = poster.getChildAt(0) as ZoomImageView
-                val play = poster.getChildAt(1) as TextView
+                val play = poster.getChildAt(1)
                 poster.isVisible = true
                 image.setImageBitmap(null)
                 MediaThumbnails.load(lifecycleScope, image, file, 1024)

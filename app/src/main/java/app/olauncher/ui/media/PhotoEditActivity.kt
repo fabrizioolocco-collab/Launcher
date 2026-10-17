@@ -10,6 +10,7 @@ import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.drawable.GradientDrawable
 import android.media.MediaScannerConnection
 import android.os.Bundle
 import android.view.Gravity
@@ -33,6 +34,7 @@ import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
+import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,9 +53,11 @@ class PhotoEditActivity : AppCompatActivity() {
     private lateinit var editor: EditorView
     private lateinit var cropTools: LinearLayout
     private lateinit var drawTools: LinearLayout
-    private lateinit var modeCrop: TextView
-    private lateinit var modeDraw: TextView
-    private lateinit var widthButton: TextView
+    private lateinit var modeCrop: View
+    private lateinit var modeDraw: View
+    private lateinit var widthButton: LinearLayout
+    private lateinit var widthDot: View
+    private val swatches = mutableListOf<View>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -88,123 +92,139 @@ class PhotoEditActivity : AppCompatActivity() {
         }
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(0, bars.top, 0, bars.bottom)
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
             insets
         }
-        // Top: back, mode tabs, save
-        val top = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(12.dpToPx(), 8.dpToPx(), 8.dpToPx(), 8.dpToPx())
-        }
-        top.addView(button("←", 26f) { askLeave() })
-        modeCrop = tab(R.string.ml_edit_crop) { setMode(crop = true) }
-        modeDraw = tab(R.string.ml_edit_draw) { setMode(crop = false) }
-        top.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        top.addView(modeCrop)
-        top.addView(modeDraw)
-        top.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        top.addView(button("✓", 26f) { askSave() })
-        root.addView(top)
+        // Top: back, file name, save
+        val bar = UiKit.appBar(this, file.name, onBack = { askLeave() }, actions = listOf(
+            UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_save)) { askSave() },
+        ))
+        bar.view.setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
+        root.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         editor = EditorView(this)
         root.addView(editor, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        cropTools = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(8.dpToPx(), 8.dpToPx(), 8.dpToPx(), 12.dpToPx())
+        val bottom = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 10.dpToPx())
         }
-        cropTools.addView(toolButton(getString(R.string.ml_edit_rotate)) { editor.rotate() })
-        cropTools.addView(toolButton(getString(R.string.ml_edit_square)) { editor.squareCrop() })
-        cropTools.addView(toolButton(getString(R.string.ml_edit_reset)) { editor.resetCrop() })
-        root.addView(cropTools)
 
+        // Crop tools: rotate, square, reset
+        cropTools = UiKit.toolBar(this)
+        cropTools.addView(UiKit.toolButton(this, R.drawable.ic_m_rotate, getString(R.string.ml_edit_rotate)) { editor.rotate() }, toolParams())
+        cropTools.addView(UiKit.toolButton(this, R.drawable.ic_m_resize, getString(R.string.ml_edit_square)) { editor.squareCrop() }, toolParams())
+        cropTools.addView(UiKit.toolButton(this, R.drawable.ic_m_repeat, getString(R.string.ml_edit_reset)) { editor.resetCrop() }, toolParams())
+        bottom.addView(cropTools, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 8.dpToPx() })
+
+        // Draw tools: a palette card with round colour swatches, the brush width and undo
         drawTools = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 12.dpToPx())
+            background = UiKit.cardBackground(this@PhotoEditActivity, 18)
+            setPadding(14.dpToPx(), 6.dpToPx(), 4.dpToPx(), 6.dpToPx())
             isVisible = false
         }
         COLORS.forEach { color ->
-            drawTools.addView(View(this).apply {
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(color)
-                    setStroke(2.dpToPx(), Color.WHITE)
-                }
+            val swatch = View(this).apply {
                 isClickable = true
+                isFocusable = true
                 setOnClickListener {
                     editor.brushColor = color
                     updateColorMarks()
                 }
                 tag = color
-            }, LinearLayout.LayoutParams(30.dpToPx(), 30.dpToPx()).apply { marginEnd = 10.dpToPx() })
+            }
+            swatches.add(swatch)
+            drawTools.addView(swatch, LinearLayout.LayoutParams(28.dpToPx(), 28.dpToPx()).apply { marginEnd = 10.dpToPx() })
         }
         drawTools.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
-        widthButton = toolButton(getString(R.string.ml_edit_width) + " ●●") { pickWidth() }
+        widthDot = View(this)
+        widthButton = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(8.dpToPx(), 4.dpToPx(), 8.dpToPx(), 4.dpToPx())
+            isClickable = true
+            isFocusable = true
+            contentDescription = getString(R.string.ml_edit_width)
+            background = UiKit.ripple(this@PhotoEditActivity)
+            addView(FrameLayout(this@PhotoEditActivity).apply {
+                addView(widthDot, FrameLayout.LayoutParams(12.dpToPx(), 12.dpToPx(), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(26.dpToPx(), 26.dpToPx()))
+            addView(TextView(this@PhotoEditActivity).apply {
+                setText(R.string.ml_edit_width)
+                textSize = 11.5f
+                setTextColor(UiKit.primary(this@PhotoEditActivity))
+                maxLines = 1
+                gravity = Gravity.CENTER
+                setPadding(0, 2.dpToPx(), 0, 0)
+            })
+            setOnClickListener { pickWidth() }
+        }
         drawTools.addView(widthButton)
-        drawTools.addView(toolButton(getString(R.string.ml_edit_undo)) { editor.undo() })
-        root.addView(drawTools)
+        drawTools.addView(UiKit.iconButton(this, R.drawable.ic_m_undo, getString(R.string.ml_edit_undo)) { editor.undo() })
+        bottom.addView(drawTools, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 8.dpToPx() })
+
+        // Modes: crop or draw
+        val modes = UiKit.toolBar(this)
+        modeCrop = UiKit.toolButton(this, R.drawable.ic_m_crop, getString(R.string.ml_edit_crop)) { setMode(crop = true) }
+        modeDraw = UiKit.toolButton(this, R.drawable.ic_m_draw, getString(R.string.ml_edit_draw)) { setMode(crop = false) }
+        modes.addView(modeCrop, toolParams())
+        modes.addView(modeDraw, toolParams())
+        bottom.addView(modes, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(bottom, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
         updateColorMarks()
+        updateWidthDot()
         setMode(crop = true)
         return root
     }
 
-    private fun button(glyph: String, size: Float, onClick: () -> Unit) = TextView(this).apply {
-        text = glyph
-        textSize = size
-        setTextColor(Color.WHITE)
-        gravity = Gravity.CENTER
-        setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
-    }
-
-    private fun tab(label: Int, onClick: () -> Unit) = TextView(this).apply {
-        setText(label)
-        textSize = 16f
-        setTextColor(Color.WHITE)
-        setPadding(14.dpToPx(), 6.dpToPx(), 14.dpToPx(), 6.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
-    }
-
-    private fun toolButton(label: String, onClick: () -> Unit) = TextView(this).apply {
-        text = label
-        textSize = 15f
-        setTextColor(Color.WHITE)
-        setPadding(14.dpToPx(), 10.dpToPx(), 14.dpToPx(), 10.dpToPx())
-        isClickable = true
-        setOnClickListener { onClick() }
+    private fun toolParams() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+        val m = 2.dpToPx()
+        setMargins(m, m, m, m)
     }
 
     private fun setMode(crop: Boolean) {
         editor.cropMode = crop
         cropTools.isVisible = crop
         drawTools.isVisible = !crop
-        modeCrop.alpha = if (crop) 1f else 0.5f
-        modeDraw.alpha = if (crop) 0.5f else 1f
-        modeCrop.setTypeface(null, if (crop) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
-        modeDraw.setTypeface(null, if (crop) android.graphics.Typeface.NORMAL else android.graphics.Typeface.BOLD)
+        UiKit.setToolActive(modeCrop, crop)
+        UiKit.setToolActive(modeDraw, !crop)
     }
 
     private fun updateColorMarks() {
-        for (i in 0 until drawTools.childCount) {
-            val v = drawTools.getChildAt(i)
-            val color = v.tag as? Int ?: continue
-            v.scaleX = if (color == editor.brushColor) 1.25f else 1f
+        swatches.forEach { v ->
+            val color = v.tag as? Int ?: return@forEach
+            val selected = color == editor.brushColor
+            v.background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color)
+                if (selected) setStroke(3.dpToPx(), UiKit.primary(this@PhotoEditActivity))
+                else setStroke(1.dpToPx(), UiKit.stroke(this@PhotoEditActivity))
+            }
+            v.scaleX = if (selected) 1.15f else 1f
             v.scaleY = v.scaleX
         }
     }
 
-    /** Cycles the brush width: thin → medium → thick → extra, showing the chosen one. */
+    /** Cycles the brush width: thin, medium, thick, extra; the dot shows the chosen one. */
     private fun pickWidth() {
         val widths = listOf(4f, 8f, 14f, 24f)
         val current = widths.indexOfFirst { abs(it.dpToPx() - editor.brushWidth) < 0.5f }
         val next = widths[(current + 1) % widths.size]
         editor.brushWidth = next.dpToPx()
-        widthButton.text = getString(R.string.ml_edit_width) + " " + "●".repeat((widths.indexOf(next) + 1))
+        updateWidthDot()
+    }
+
+    /** The dot of the width button, as big as the brush (capped to the button). */
+    private fun updateWidthDot() {
+        val size = min(editor.brushWidth + 4f.dpToPx(), 24f.dpToPx()).toInt()
+        widthDot.background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(UiKit.primary(this@PhotoEditActivity))
+        }
+        widthDot.layoutParams = FrameLayout.LayoutParams(size, size, Gravity.CENTER)
     }
 
     private fun Float.dpToPx() = this * resources.displayMetrics.density
