@@ -18,7 +18,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.widget.AppCompatCheckBox
-import androidx.appcompat.widget.SwitchCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.CompoundButtonCompat
 import androidx.recyclerview.widget.GridLayoutManager
@@ -199,27 +198,18 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
             setTextColor(if (destructive) DESTRUCTIVE_COLOR else primary)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (entry.checked != null) {
-            val switch = SwitchCompat(ctx).apply {
-                isChecked = entry.checked
-                thumbTintList = ColorStateList(
-                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(ctx.getColorFromAttr(R.attr.cardColor), secondary)
-                )
-                trackTintList = ColorStateList(
-                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(primary, line)
-                )
+            val switch = PillSwitch(ctx).apply {
+                checked = entry.checked
                 var reverting = false
-                setOnCheckedChangeListener { button, isChecked ->
-                    if (reverting) return@setOnCheckedChangeListener
-                    if (entry.onToggle?.invoke(isChecked) == false) {
+                onChange = { isChecked ->
+                    if (!reverting && entry.onToggle?.invoke(isChecked) == false) {
                         reverting = true
-                        button.isChecked = !isChecked
+                        checked = !isChecked
                         reverting = false
                     }
                 }
             }
-            row.addView(switch)
+            row.addView(switch, LinearLayout.LayoutParams(46.dpToPx(), 28.dpToPx()).apply { marginStart = 10.dpToPx() })
             row.setOnClickListener { switch.toggle() }
         } else {
             value?.let { v ->
@@ -863,4 +853,85 @@ fun View.showDropdown(entries: List<MenuEntry>): android.widget.PopupWindow {
     }
     popup.showAsDropDown(this, width - 220.dpToPx(), 4.dpToPx())
     return popup
+}
+
+/**
+ * On/off switch of the menus: a pill track with a round knob. On: light track, dark knob on the
+ * right; off: dark track with a border, grey knob on the left. Tapping it (or its row) toggles it.
+ */
+class PillSwitch(context: Context) : View(context) {
+    var onChange: ((Boolean) -> Unit)? = null
+    var checked = false
+        set(value) {
+            if (field == value) return
+            field = value
+            animateKnob()
+        }
+    private var position = 0f
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    private val rect = android.graphics.RectF()
+    private val onTrack = context.getColorFromAttr(R.attr.primaryColor)
+    private val onKnob = context.getColorFromAttr(R.attr.cardColor)
+    private val offTrack = context.getColorFromAttr(R.attr.cardLineColor)
+    private val offBorder = context.getColorFromAttr(R.attr.cardStrokeColor)
+    private val offKnob = context.getColorFromAttr(R.attr.secondaryTextColor)
+    private var animator: android.animation.ValueAnimator? = null
+
+    init {
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { toggle() }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        position = if (checked) 1f else 0f
+    }
+
+    fun toggle() {
+        checked = !checked
+        onChange?.invoke(checked)
+    }
+
+    private fun animateKnob() {
+        animator?.cancel()
+        if (!isAttachedToWindow) {
+            position = if (checked) 1f else 0f
+            invalidate()
+            return
+        }
+        animator = android.animation.ValueAnimator.ofFloat(position, if (checked) 1f else 0f).apply {
+            duration = 150
+            addUpdateListener {
+                position = it.animatedValue as Float
+                invalidate()
+            }
+            start()
+        }
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        val h = height.toFloat()
+        val w = width.toFloat()
+        val r = h / 2f
+        rect.set(0f, 0f, w, h)
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = androidx.core.graphics.ColorUtils.blendARGB(offTrack, onTrack, position)
+        canvas.drawRoundRect(rect, r, r, paint)
+        if (position < 1f) {
+            paint.style = android.graphics.Paint.Style.STROKE
+            paint.strokeWidth = 1.dpToPx().toFloat()
+            paint.color = androidx.core.graphics.ColorUtils.setAlphaComponent(offBorder, ((1f - position) * 255).toInt())
+            rect.inset(0.5f.dpToPxF(), 0.5f.dpToPxF())
+            canvas.drawRoundRect(rect, r, r, paint)
+        }
+        val pad = 3.dpToPx().toFloat()
+        val knobR = r - pad
+        val cx = pad + knobR + (w - 2 * (pad + knobR)) * position
+        paint.style = android.graphics.Paint.Style.FILL
+        paint.color = androidx.core.graphics.ColorUtils.blendARGB(offKnob, onKnob, position)
+        canvas.drawCircle(cx, r, knobR, paint)
+    }
+
+    private fun Float.dpToPxF() = this * resources.displayMetrics.density
 }
