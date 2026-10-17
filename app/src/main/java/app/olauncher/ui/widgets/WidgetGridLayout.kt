@@ -156,7 +156,8 @@ class WidgetGridLayout @JvmOverloads constructor(
     private var dropPreview: Rect? = null
     private var dropValid = true
 
-    private val gap = 4.dpToPx()
+    /** Inset of every item inside its cells. */
+    val gap = 4.dpToPx()
     private val handleRadius = 9.dpToPx().toFloat()
     private val handleTouch = 28.dpToPx()
     private val primary = context.getColorFromAttr(R.attr.primaryColor)

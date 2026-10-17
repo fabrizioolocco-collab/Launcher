@@ -234,12 +234,17 @@ class HomeWidgetsController(
     fun setNews(apps: List<AppModel.App>, onMenu: (AppModel.App) -> Unit) {
         newsView.row.removeAllViews()
         val cell = cellPx()
-        val size = (cell - 8.dpToPx()).coerceAtLeast(24.dpToPx())
+        // Like the home icons: each tile is a cell minus the gap on both sides, so the tiles sit
+        // on the grid columns (the strip itself starts one gap in) and a full row fits exactly
+        val gap = grid.gap
+        newsView.snapStep = cell
         val tile = prefs.iconTiles
         val iconPack = prefs.iconPack
         val context = activity.applicationContext
         apps.forEach { app ->
             val view = IconCellView(activity) { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
+            // Same icon size as on the home, so the strip looks like one more grid row
+            val size = homeIconSize(view, false)
             view.bind(app.appLabel, false, size, tile)
             view.setNotified(true)
             view.setTag(R.id.ml_swipe_app, app)
@@ -249,7 +254,9 @@ class HomeWidgetsController(
                 override fun onDrop(view: View, dx: Float, dy: Float) {}
                 override fun onMenu(view: View) = onMenu(app)
             }
-            newsView.row.addView(view, android.widget.LinearLayout.LayoutParams(cell, android.view.ViewGroup.LayoutParams.MATCH_PARENT))
+            newsView.row.addView(view, android.widget.LinearLayout.LayoutParams(cell - 2 * gap, android.view.ViewGroup.LayoutParams.MATCH_PARENT).apply {
+                if (newsView.row.childCount > 0) leftMargin = 2 * gap
+            })
             val bitmapSize = view.bitmapSizeFor(size, tile)
             scope.launch {
                 val bitmap = withContext(Dispatchers.IO) {
@@ -477,6 +484,11 @@ class HomeWidgetsController(
         return hostView
     }
 
+    /** The home icon size setting (dp) wins over the automatic size from the cell. */
+    private fun homeIconSize(view: IconCellView, showLabel: Boolean): Int =
+        if (prefs.homeIconSize > 0) prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - 4.dpToPx())
+        else view.iconSizeFor(cellPx(), showLabel)
+
     private fun iconView(item: HomeWidget, app: AppModel.App): View {
         val view = IconCellView(activity) { onLaunchApp(app) }
         view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
@@ -485,9 +497,7 @@ class HomeWidgetsController(
         view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, rowDivisions)
         val showLabel = showLabels
         val tile = prefs.iconTiles
-        // The home icon size setting (dp) wins over the automatic size from the cell
-        val size = if (prefs.homeIconSize > 0) prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - 4.dpToPx())
-        else view.iconSizeFor(cellPx(), showLabel)
+        val size = homeIconSize(view, showLabel)
         view.bind(app.appLabel, showLabel, size, tile)
         view.touch.listener = dragListener(null)
         val iconPack = prefs.iconPack

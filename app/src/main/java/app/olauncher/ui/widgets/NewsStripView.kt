@@ -15,14 +15,21 @@ import app.olauncher.helper.getColorFromAttr
 
 /**
  * The "news" row on the home grid: a reserved, movable block one cell tall where the apps with
- * notifications appear as red tiles (scrolling sideways when many). Invisible while empty; a
- * dashed outline shows where it is while something is being moved or resized, or on request.
+ * notifications appear as red tiles on the grid columns (scrolling sideways, one column at a time,
+ * when they are more than the columns). Invisible while empty; a dashed outline shows where it is
+ * while something is being moved or resized, or on request.
  */
 class NewsStripView(context: Context) : SectionBlockView(context) {
 
-    private val scroll = HorizontalScrollView(context).apply {
+    /** Width of one grid column: scrolling always comes to rest with the tiles on the columns. */
+    var snapStep = 0
+
+    private val scroll = SnapScrollView(context).apply {
         isHorizontalScrollBarEnabled = false
         overScrollMode = OVER_SCROLL_NEVER
+        // Faded edges hint at more tiles beyond the visible columns
+        isHorizontalFadingEdgeEnabled = true
+        setFadingEdgeLength(24.dpToPx())
     }
     val row = LinearLayout(context).apply {
         orientation = LinearLayout.HORIZONTAL
@@ -58,6 +65,42 @@ class NewsStripView(context: Context) : SectionBlockView(context) {
     }
 
     val isEmpty get() = row.childCount == 0
+
+    /** Settles on the nearest column once the finger is up and the fling is over. */
+    private inner class SnapScrollView(context: Context) : HorizontalScrollView(context) {
+        private var touching = false
+        private val snap = Runnable {
+            val step = snapStep
+            if (step <= 0 || touching) return@Runnable
+            val target = ((scrollX + step / 2) / step) * step
+            if (target != scrollX) smoothScrollTo(target, 0)
+        }
+
+        private fun scheduleSnap() {
+            removeCallbacks(snap)
+            postDelayed(snap, 80)
+        }
+
+        // dispatch, not onTouchEvent: the down usually lands on a tile, not on the scroll view
+        override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    touching = true
+                    removeCallbacks(snap)
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    touching = false
+                    scheduleSnap()
+                }
+            }
+            return super.dispatchTouchEvent(ev)
+        }
+
+        override fun onScrollChanged(l: Int, t: Int, oldl: Int, oldt: Int) {
+            super.onScrollChanged(l, t, oldl, oldt)
+            if (!touching) scheduleSnap()
+        }
+    }
 
     fun setOutlined(outlined: Boolean) {
         removeCallbacks(hideOutline)
