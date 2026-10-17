@@ -177,6 +177,22 @@
         </app.olauncher.ui.HomeScrollView>
 
 
+        <!-- Dock: a card of up to five apps above the search bar (the slot is hidden while searching) -->
+        <FrameLayout
+            android:id="@+id/dockSlot"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <FrameLayout
+                android:id="@+id/dock"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginHorizontal="16dp"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="8dp"
+                android:visibility="gone" />
+        </FrameLayout>
+
         <!-- Search results (phone), in place of home while searching -->
         <ScrollView
             android:id="@+id/searchResultsScroll"
