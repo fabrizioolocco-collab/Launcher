@@ -50,6 +50,9 @@ class TodoActivity : AppCompatActivity() {
     /** Category shown (0 = all). */
     private var filter = 0L
     private var showDone = false
+    /** The list by category (each one can be folded) instead of by date. */
+    private var byCategory = false
+    private val folded = mutableSetOf<Long>()
     private val prefs by lazy { getSharedPreferences("app.minimalauncher.todo", Context.MODE_PRIVATE) }
     private val listener: () -> Unit = { refresh() }
 
@@ -58,6 +61,8 @@ class TodoActivity : AppCompatActivity() {
         primary = getColorFromAttr(R.attr.primaryColor)
         filter = prefs.getLong("filter", 0L)
         showDone = prefs.getBoolean("show_done", false)
+        byCategory = prefs.getBoolean("by_category", false)
+        prefs.getStringSet("folded", emptySet())?.mapNotNullTo(folded) { it.toLongOrNull() }
         setContentView(buildLayout())
     }
 
@@ -144,17 +149,7 @@ class TodoActivity : AppCompatActivity() {
         val todos = TodoStore.todos(this).filter { !it.done && (filter == 0L || it.category == filter) }
         val order = compareBy<Todo>({ it.due }, { if (it.time == NO_TIME) -1 else it.time }, { it.created })
 
-        val late = todos.filter { it.isOverdue(today) }.sortedWith(order)
-        val dueToday = todos.filter { it.due == today }.sortedWith(order)
-        val tomorrow = todos.filter { it.due == today + 1 }.sortedWith(order)
-        val later = todos.filter { it.due != NO_DAY && it.due > today + 1 }.sortedWith(order)
-        val undated = todos.filter { it.due == NO_DAY }.sortedBy { it.created }
-
-        section(R.string.ml_todo_section_late, late, today, showDate = true)
-        section(R.string.ml_cal_today, dueToday, today, showDate = false)
-        section(R.string.ml_cal_tomorrow, tomorrow, today, showDate = false)
-        section(R.string.ml_todo_section_later, later, today, showDate = true)
-        section(R.string.ml_todo_no_date, undated, today, showDate = false)
+        if (byCategory) showByCategory(categories, todos, today) else showByDate(todos, today, order)
 
         val done = TodoStore.history(this).filter { filter == 0L || it.category == filter }.sortedByDescending { it.at }
         if (list.childCount == 0) list.addView(TextView(this, null, 0, R.style.TextSmall).apply {
@@ -172,6 +167,54 @@ class TodoActivity : AppCompatActivity() {
                 }
             })
             if (showDone) done.take(100).forEach { list.addView(doneRow(it)) }
+        }
+    }
+
+    private fun showByDate(todos: List<Todo>, today: Int, order: Comparator<Todo>) {
+        val late = todos.filter { it.isOverdue(today) }.sortedWith(order)
+        val dueToday = todos.filter { it.due == today }.sortedWith(order)
+        val tomorrow = todos.filter { it.due == today + 1 }.sortedWith(order)
+        val later = todos.filter { it.due != NO_DAY && it.due > today + 1 }.sortedWith(order)
+        val undated = todos.filter { it.due == NO_DAY }.sortedBy { it.created }
+
+        section(R.string.ml_todo_section_late, late, today, showDate = true)
+        section(R.string.ml_cal_today, dueToday, today, showDate = false)
+        section(R.string.ml_cal_tomorrow, tomorrow, today, showDate = false)
+        section(R.string.ml_todo_section_later, later, today, showDate = true)
+        section(R.string.ml_todo_no_date, undated, today, showDate = false)
+    }
+
+    /**
+     * One block per category (in the categories' order, then the todos without one): tap the
+     * title to fold it, long press to rename / recolor / delete the category.
+     */
+    private fun showByCategory(categories: List<TodoCategory>, todos: List<Todo>, today: Int) {
+        // Dated first (by date, the late ones on top), the undated at the end
+        val order = compareBy<Todo>({ if (it.due == NO_DAY) Int.MAX_VALUE else it.due }, { if (it.time == NO_TIME) -1 else it.time }, { it.created })
+        val groups: List<Pair<TodoCategory?, List<Todo>>> = categories.map { it to todos.filter { t -> t.category == it.id } } +
+                (null to todos.filter { t -> categories.none { it.id == t.category } })
+        groups.forEach { (category, items) ->
+            if (items.isEmpty() && (category == null || filter != 0L && filter != category.id)) return@forEach
+            val id = category?.id ?: 0L
+            val open = id !in folded
+            val name = category?.name ?: getString(R.string.ml_todo_no_category)
+            val title = "●  $name  (${items.size})" + if (open) "  ▾" else "  ▸"
+            list.addView(sectionTitle(title).apply {
+                text = android.text.SpannableString(title).apply {
+                    setSpan(android.text.style.ForegroundColorSpan(categoryColor(id)), 0, 1, 0)
+                }
+                isClickable = true
+                setOnClickListener {
+                    if (!folded.add(id)) folded.remove(id)
+                    prefs.edit { putStringSet("folded", folded.map { it.toString() }.toSet()) }
+                    refresh()
+                }
+                if (category != null) setOnLongClickListener {
+                    showCategory(this@TodoActivity, category) {}
+                    true
+                }
+            })
+            if (open) items.sortedWith(order).forEach { list.addView(todoRow(it, today, showDate = true)) }
         }
     }
 
@@ -248,7 +291,7 @@ class TodoActivity : AppCompatActivity() {
         if (todo.recurring) details += "↻ " + TodoLabels.repeat(this, todo)
         if (todo.alert == ALERT_NOTIFY) details += "🔔"
         if (todo.alert == ALERT_ALARM) details += "⏰"
-        TodoStore.category(this, todo.category)?.let { if (filter == 0L) details += it.name }
+        TodoStore.category(this, todo.category)?.let { if (filter == 0L && !byCategory) details += it.name }
         if (details.isNotEmpty()) column.addView(TextView(this, null, 0, R.style.TextSmall).apply {
             text = details.joinToString("  ·  ")
             textSize = 13f
@@ -339,6 +382,12 @@ class TodoActivity : AppCompatActivity() {
         showMenuDialog(getString(R.string.ml_todo_app), listOf(
             MenuEntry(getString(R.string.ml_todo_new)) { newTodo() },
             MenuEntry(getString(R.string.ml_todo_categories)) { showCategories(this) },
+            MenuEntry(getString(R.string.ml_todo_by_category), checked = byCategory, onToggle = { v ->
+                byCategory = v
+                prefs.edit { putBoolean("by_category", v) }
+                refresh()
+                true
+            }),
             MenuEntry(getString(R.string.ml_todo_show_done), checked = showDone, onToggle = { v ->
                 showDone = v
                 prefs.edit { putBoolean("show_done", v) }
@@ -375,7 +424,7 @@ class TodoActivity : AppCompatActivity() {
             }
         }
 
-        private fun showCategory(context: Context, c: TodoCategory, back: () -> Unit) {
+        fun showCategory(context: Context, c: TodoCategory, back: () -> Unit) {
             context.showMenuDialog(c.name, listOf(
                 MenuEntry(context.getString(R.string.ml_todo_category_rename)) {
                     context.showTextInputDialog(context.getString(R.string.ml_todo_category_rename), c.name, context.getString(R.string.ml_todo_category_name), context.getString(R.string.ml_save)) { name ->

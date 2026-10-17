@@ -52,8 +52,9 @@ class CalendarWidgetConfig {
     var showDeclined = false
     /** Background opacity in percent (0 = none). */
     var background = 0
-    /** The ToDos of the launcher's ToDo app in the widget. */
-    var showTodos = true
+    /** The ToDos of the launcher's ToDo app in the widget: all, only those to do, none (button in the header). */
+    var todoFilter = TODO_SHOW_ALL
+    val showTodos get() = todoFilter != TODO_HIDE_ALL
     var todoPlace = TODO_MIXED
     var todoDoneMode = TODO_DONE_STRIKE
     /** ToDo categories to show; empty = all (and the todos without a category). */
@@ -80,7 +81,7 @@ class CalendarWidgetConfig {
         .put("all", showAllDay)
         .put("dec", showDeclined)
         .put("bg", background)
-        .put("td", showTodos)
+        .put("tdf", todoFilter)
         .put("tdp", todoPlace)
         .put("tdd", todoDoneMode)
         .put("tdc", JSONArray(todoCategories.toList()))
@@ -94,6 +95,10 @@ class CalendarWidgetConfig {
         const val PAST_SHOW = 0
         const val PAST_DIM = 1
         const val PAST_HIDE = 2
+
+        const val TODO_SHOW_ALL = 0
+        const val TODO_HIDE_DONE = 1
+        const val TODO_HIDE_ALL = 2
 
         /** ToDos in their own block under the events, among them by time, or above them. */
         const val TODO_BELOW = 0
@@ -122,7 +127,7 @@ class CalendarWidgetConfig {
             showAllDay = o.optBoolean("all", true)
             showDeclined = o.optBoolean("dec", false)
             background = o.optInt("bg", 0)
-            showTodos = o.optBoolean("td", true)
+            todoFilter = o.optInt("tdf", if (o.optBoolean("td", true)) TODO_SHOW_ALL else TODO_HIDE_ALL).coerceIn(0, 2)
             todoPlace = o.optInt("tdp", TODO_MIXED).coerceIn(0, 2)
             todoDoneMode = o.optInt("tdd", TODO_DONE_STRIKE).coerceIn(0, 1)
             val tdc = o.optJSONArray("tdc")

@@ -37,6 +37,7 @@ object CalendarWidgetSettings {
                 true
             })
 
+        val filterNames = listOf(R.string.ml_cal_todo_show_all, R.string.ml_cal_todo_hide_done, R.string.ml_cal_todo_hide_all).map { activity.getString(it) }
         val placeNames = listOf(R.string.ml_cal_todo_below, R.string.ml_cal_todo_mixed, R.string.ml_cal_todo_above).map { activity.getString(it) }
         val doneNames = listOf(R.string.ml_cal_todo_done_strike, R.string.ml_cal_todo_done_hide).map { activity.getString(it) }
         val pastNames = listOf(R.string.ml_cal_past_show, R.string.ml_cal_past_dim, R.string.ml_cal_past_hide).map { activity.getString(it) }
@@ -46,7 +47,12 @@ object CalendarWidgetSettings {
                 MenuEntry(activity.getString(R.string.ml_cal_calendars, calendarsLabel(activity, c))) {
                     pickCalendars(activity, view, scope, reopen)
                 },
-                toggle(R.string.ml_cal_show_todos, c.showTodos) { cfg, v -> cfg.showTodos = v },
+                MenuEntry(activity.getString(R.string.ml_cal_todo_filter, filterNames[c.todoFilter])) {
+                    choose(activity, activity.getString(R.string.ml_cal_todo_filter_title), filterNames, c.todoFilter) { i ->
+                        view.updateConfig { it.todoFilter = i }
+                        reopen()
+                    }
+                },
                 MenuEntry(activity.getString(R.string.ml_cal_todo_place, placeNames[c.todoPlace])) {
                     choose(activity, activity.getString(R.string.ml_cal_todo_place_title), placeNames, c.todoPlace) { i ->
                         view.updateConfig { it.todoPlace = i }

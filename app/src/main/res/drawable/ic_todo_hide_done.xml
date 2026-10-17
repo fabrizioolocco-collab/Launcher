@@ -1,0 +1,13 @@
+<!-- Done ToDos hidden: only empty boxes left -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M22,7h-9v2h9V7zM22,15h-9v2h9V15zM3,5h7v7h-7zM5,7v3h3v-3zM3,13h7v7h-7zM5,15v3h3v-3z"
+        android:fillType="evenOdd" />
+
+</vector>

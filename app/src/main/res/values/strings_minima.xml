@@ -491,10 +491,8 @@
     <string name="ml_cal_progress_track_title">Rest of the progress bar</string>
 
     <!-- ToDo -->
-    <string name="ml_cal_add_title">Add</string>
     <string name="ml_cal_add_event">Event</string>
     <string name="ml_cal_add_todo">ToDo</string>
-    <string name="ml_cal_show_todos">ToDos in the widget</string>
     <string name="ml_cal_todo_place">ToDos: %s</string>
     <string name="ml_cal_todo_place_title">Where the ToDos go</string>
     <string name="ml_cal_todo_below">Below the events</string>
@@ -604,4 +602,12 @@
         <item quantity="one">year</item>
         <item quantity="other">years</item>
     </plurals>
+    <string name="ml_cal_todo_filter">ToDos shown: %s</string>
+    <string name="ml_cal_todo_filter_title">ToDos shown</string>
+    <string name="ml_cal_todo_show_all">All the ToDos</string>
+    <string name="ml_cal_todo_hide_done">Hide the ToDos done</string>
+    <string name="ml_cal_todo_hide_all">Hide the ToDos</string>
+    <string name="ml_cal_open_todo">Open ToDo</string>
+    <string name="ml_todo_by_category">Group by category</string>
+    <string name="ml_todo_no_category">No category</string>
 </resources>

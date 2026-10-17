@@ -37,10 +37,10 @@ import app.olauncher.data.TodoDone
 import app.olauncher.data.TodoStore
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
-import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
-import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showPopupMenu
+import app.olauncher.helper.showToast
 import app.olauncher.ui.todo.TODO_LATE_COLOR
 import app.olauncher.ui.todo.TodoActivity
 import app.olauncher.ui.todo.TodoCheckView
@@ -104,10 +104,15 @@ class CalendarWidgetView(
         maxLines = 1
         setOnClickListener { openClock() }
     }
-    private val addButton = iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { showAddMenu() }
+    private val addButton = iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { showAddMenu(it) }
+    /** Cycles the todos shown: all, only those to do, none. */
+    private val todoFilterButton = iconButton(R.drawable.ic_todo_show_all, R.string.ml_cal_todo_filter_title) {
+        updateConfig { c -> c.todoFilter = (c.todoFilter + 1) % 3 }
+        activity.showToast(activity.getString(FILTER_NAMES[config.todoFilter]))
+    }
     private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
     private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
-    private val buttons = listOf(addButton, prevButton, nextButton)
+    private val buttons = listOf(todoFilterButton, addButton, prevButton, nextButton)
     private val divider = View(activity)
     private val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private val scroll = ScrollView(activity).apply {
@@ -362,6 +367,14 @@ class CalendarWidgetView(
             it.layoutParams = LinearLayout.LayoutParams(iconSize + 16.dpToPx(), iconSize + 12.dpToPx())
             it.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
         }
+        todoFilterButton.setImageResource(
+            when (config.todoFilter) {
+                CalendarWidgetConfig.TODO_HIDE_DONE -> R.drawable.ic_todo_hide_done
+                CalendarWidgetConfig.TODO_HIDE_ALL -> R.drawable.ic_todo_hide_all
+                else -> R.drawable.ic_todo_show_all
+            }
+        )
+        todoFilterButton.contentDescription = activity.getString(FILTER_NAMES[config.todoFilter])
         prevButton.isVisible = config.showArrows
         nextButton.isVisible = config.showArrows
         styleText(clockText, CalendarText.CLOCK)
@@ -430,7 +443,7 @@ class CalendarWidgetView(
         val first = loadedDay
         val todos = if (config.showTodos) TodoStore.todos(activity).filter { !it.done && it.due != NO_DAY && todoVisible(it.category) } else emptyList()
         val history = if (config.showTodos) TodoStore.history(activity).filter {
-            todoVisible(it.category) && (config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_STRIKE || it.at in undoable)
+            todoVisible(it.category) && (!hidesDone() || it.at in undoable)
         } else emptyList()
         for (day in first until first + config.days) {
             var dayEvents = events.filter { day in it.startDay..it.endDay }
@@ -479,22 +492,25 @@ class CalendarWidgetView(
 
     // ---------------------------------------------------------------- todos
 
-    private fun showAddMenu() {
+    /** Drop-down under the +: new event, new todo, the ToDo app. */
+    private fun showAddMenu(anchor: View) {
         val day = firstDay()
-        if (!config.showTodos) {
-            CalendarEvents.addEvent(activity, day)
-            return
+        anchor.showPopupMenu(configure = { menu ->
+            menu.add(0, 1, 0, R.string.ml_cal_add_event)
+            menu.add(0, 2, 1, R.string.ml_cal_add_todo)
+            menu.add(0, 3, 2, R.string.ml_cal_open_todo)
+        }) { item ->
+            when (item.itemId) {
+                1 -> CalendarEvents.addEvent(activity, day)
+                2 -> TodoEditActivity.create(activity, maxOf(day, CalendarEvents.julianDay(System.currentTimeMillis())))
+                3 -> TodoActivity.open(activity)
+            }
         }
-        activity.showMenuDialog(
-            activity.getString(R.string.ml_cal_add_title),
-            listOf(
-                MenuEntry(activity.getString(R.string.ml_cal_add_event)) { CalendarEvents.addEvent(activity, day) },
-                MenuEntry(activity.getString(R.string.ml_cal_add_todo)) {
-                    TodoEditActivity.create(activity, maxOf(day, CalendarEvents.julianDay(System.currentTimeMillis())))
-                },
-            )
-        )
     }
+
+    /** Done todos go away: by setting, or with the header button on "only those to do". */
+    private fun hidesDone() = config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_HIDE ||
+            config.todoFilter == CalendarWidgetConfig.TODO_HIDE_DONE
 
     private fun todoColor(category: Long) =
         TodoStore.category(activity, category)?.color?.or(0xFF000000.toInt()) ?: ColorUtils.setAlphaComponent(primary, 0x80)
@@ -567,7 +583,7 @@ class CalendarWidgetView(
         row.setOnClickListener {
             if (TodoStore.get(activity, done.todoId) != null) TodoEditActivity.edit(activity, done.todoId) else TodoActivity.open(activity)
         }
-        val hideMode = config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_HIDE
+        val hideMode = hidesDone()
         if (!hideMode && done.time != NO_TIME) line.addView(text(CalendarText.TIME).apply {
             text = TodoLabels.time(activity, done.time)
             maxLines = 1
@@ -592,7 +608,7 @@ class CalendarWidgetView(
 
     private fun complete(todo: Todo) {
         val record = TodoStore.complete(activity, todo.id) ?: return
-        if (config.todoDoneMode == CalendarWidgetConfig.TODO_DONE_HIDE) {
+        if (hidesDone()) {
             undoable += record.at
             showEvents()
             handler.postDelayed({
@@ -722,14 +738,14 @@ class CalendarWidgetView(
         view.includeFontPadding = false
     }
 
-    private fun iconButton(icon: Int, description: Int, onClick: () -> Unit) = ImageView(activity).apply {
+    private fun iconButton(icon: Int, description: Int, onClick: (View) -> Unit) = ImageView(activity).apply {
         setImageResource(icon)
         contentDescription = activity.getString(description)
         scaleType = ImageView.ScaleType.CENTER_INSIDE
         setPadding(8.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
         isClickable = true
         isFocusable = true
-        setOnClickListener { onClick() }
+        setOnClickListener { onClick(it) }
     }
 
     /** Rounded bar: the elapsed part in [fill] (dimmed by default), the part left in [track]. */
@@ -755,5 +771,6 @@ class CalendarWidgetView(
         const val KIND = "calendar"
         const val REQUEST_CALENDAR = 7110
         private const val UNDO_MS = 4_000L
+        private val FILTER_NAMES = listOf(R.string.ml_cal_todo_show_all, R.string.ml_cal_todo_hide_done, R.string.ml_cal_todo_hide_all)
     }
 }
