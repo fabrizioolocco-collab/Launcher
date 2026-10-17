@@ -22,6 +22,8 @@
         tools:ignore="ProtectedPermissions" />
     <!--Used for Private Space support on Android 15+-->
     <uses-permission android:name="android.permission.ACCESS_HIDDEN_PROFILES" />
+    <!--Calendar widget on home: reads the events of the phone's calendars-->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
     <!--Home search: contacts and files on the phone-->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission

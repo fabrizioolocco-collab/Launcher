@@ -40,12 +40,22 @@ object WidgetPickerDialog {
 
     class Item(val app: String, val label: String, val info: AppWidgetProviderInfo, val cols: Int, val rows: Int)
 
+    /** A widget drawn by the launcher itself, listed first. */
+    class BuiltIn(val label: String, val icon: Int, val onPick: () -> Unit)
+
     private sealed class Row {
         class Header(val app: String) : Row()
         class Widget(val item: Item) : Row()
+        class Own(val item: BuiltIn) : Row()
     }
 
-    fun show(context: Context, items: List<Item>, scope: CoroutineScope, onPick: (AppWidgetProviderInfo) -> Unit) {
+    fun show(
+        context: Context,
+        items: List<Item>,
+        scope: CoroutineScope,
+        builtIns: List<BuiltIn> = emptyList(),
+        onPick: (AppWidgetProviderInfo) -> Unit,
+    ) {
         val dialog = OlDialog(context)
         val ctx = dialog.context
         val primary = ctx.getColorFromAttr(R.attr.primaryColor)
@@ -85,6 +95,11 @@ object WidgetPickerDialog {
             val filtered = if (q.isEmpty()) items
             else items.filter { it.app.contains(q, true) || it.label.contains(q, true) }
             val rows = mutableListOf<Row>()
+            val own = builtIns.filter { q.isEmpty() || it.label.contains(q, true) || ctx.getString(R.string.app_name).contains(q, true) }
+            if (own.isNotEmpty()) {
+                rows += Row.Header(ctx.getString(R.string.app_name))
+                own.forEach { rows += Row.Own(it) }
+            }
             var lastApp: String? = null
             filtered.forEach { item ->
                 if (item.app != lastApp) {
@@ -143,6 +158,24 @@ object WidgetPickerDialog {
                             onPick(item.info)
                         }
                         bindPreview(ctx, container, item.info, previewMaxHeight, scope)
+                    }
+
+                    is Row.Own -> {
+                        val item = row.item
+                        val container = holder.itemView.findViewById<FrameLayout>(R.id.ml_widget_preview)
+                        holder.itemView.findViewById<TextView>(R.id.ml_widget_label).text = item.label
+                        holder.itemView.setOnClickListener {
+                            search.clearFocus()
+                            dialog.dismiss()
+                            item.onPick()
+                        }
+                        container.removeAllViews()
+                        container.tag = null
+                        container.addView(ImageView(ctx).apply {
+                            setImageResource(item.icon)
+                            setColorFilter(primary)
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                        }, FrameLayout.LayoutParams(48.dpToPx(), 48.dpToPx(), Gravity.CENTER))
                     }
                 }
             }

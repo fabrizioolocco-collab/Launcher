@@ -407,4 +407,83 @@
     <string name="ml_news_zone">Zona novità</string>
     <string name="ml_news_zone_show">Mostra la zona novità</string>
     <string name="ml_news_zone_blocked">Lì c\u2019è la zona novità: i widget non possono coprirla</string>
+
+    <!-- Calendar widget -->
+    <string name="ml_cal_widget">Calendario</string>
+    <string name="ml_cal_add">Nuovo evento</string>
+    <string name="ml_cal_all_day">Tutto il giorno</string>
+    <string name="ml_cal_back">Indietro</string>
+    <string name="ml_cal_background">Sfondo: %d%%</string>
+    <string name="ml_cal_background_title">Opacità dello sfondo</string>
+    <string name="ml_cal_calendars">Calendari: %s</string>
+    <string name="ml_cal_calendars_all">tutti</string>
+    <string name="ml_cal_calendars_count">%d selezionati</string>
+    <string name="ml_cal_calendars_title">Calendari da mostrare</string>
+    <string name="ml_cal_color">Colore: %s</string>
+    <string name="ml_cal_color_title">Colore</string>
+    <string name="ml_cal_days">Giorni mostrati: %d</string>
+    <string name="ml_cal_days_ago">%d giorni fa</string>
+    <string name="ml_cal_days_short">%d g</string>
+    <string name="ml_cal_days_title">Giorni mostrati</string>
+    <string name="ml_cal_font">Font: %s</string>
+    <string name="ml_cal_font_title">Font</string>
+    <string name="ml_cal_hours">%dh</string>
+    <string name="ml_cal_hours_minutes">%1$dh %2$dm</string>
+    <string name="ml_cal_in">tra %s</string>
+    <string name="ml_cal_in_days">Tra %d giorni</string>
+    <string name="ml_cal_left">ancora %s</string>
+    <string name="ml_cal_minutes">%d min</string>
+    <string name="ml_cal_next">Avanti</string>
+    <string name="ml_cal_no_app">Nessuna app calendario trovata</string>
+    <string name="ml_cal_no_calendars">Nessun calendario trovato</string>
+    <string name="ml_cal_no_events">Nessun evento</string>
+    <string name="ml_cal_no_title">(Senza titolo)</string>
+    <string name="ml_cal_past">Eventi passati: %s</string>
+    <string name="ml_cal_past_dim">Trasparenti</string>
+    <string name="ml_cal_past_hide">Nascosti</string>
+    <string name="ml_cal_past_show">Visibili</string>
+    <string name="ml_cal_past_title">Eventi passati</string>
+    <string name="ml_cal_permission">Tocca per consentire l\u2019accesso al calendario</string>
+    <string name="ml_cal_prev">Indietro</string>
+    <string name="ml_cal_reset_text">Ripristina questo testo</string>
+    <string name="ml_cal_reset_texts">Ripristina tutti i testi</string>
+    <string name="ml_cal_settings">Impostazioni calendario</string>
+    <string name="ml_cal_show_all_day">Eventi di tutto il giorno</string>
+    <string name="ml_cal_show_declined">Eventi rifiutati</string>
+    <string name="ml_cal_show_header">Intestazione con data e pulsanti</string>
+    <string name="ml_cal_show_progress">Barra di avanzamento</string>
+    <string name="ml_cal_show_status">Tempo rimanente / all\u2019inizio</string>
+    <string name="ml_cal_size">Dimensione: %d sp</string>
+    <string name="ml_cal_size_title">Dimensione</string>
+    <string name="ml_cal_style">Stile: %s</string>
+    <string name="ml_cal_style_bold">Grassetto</string>
+    <string name="ml_cal_style_bold_italic">Grassetto corsivo</string>
+    <string name="ml_cal_style_italic">Corsivo</string>
+    <string name="ml_cal_style_normal">Normale</string>
+    <string name="ml_cal_style_title">Stile</string>
+    <string name="ml_cal_text_day">Etichetta del giorno</string>
+    <string name="ml_cal_text_header">Data nell\u2019intestazione</string>
+    <string name="ml_cal_text_status">Tempo rimanente</string>
+    <string name="ml_cal_text_time">Orario evento</string>
+    <string name="ml_cal_text_title">Titolo evento</string>
+    <string name="ml_cal_texts">Testi: font, dimensione, colore</string>
+    <string name="ml_cal_today">Oggi</string>
+    <string name="ml_cal_today_button">Torna a oggi</string>
+    <string name="ml_cal_tomorrow">Domani</string>
+    <string name="ml_cal_yesterday">Ieri</string>
+    <string-array name="ml_cal_color_names">
+        <item>Tema</item>
+        <item>Bianco</item>
+        <item>Grigio chiaro</item>
+        <item>Grigio</item>
+        <item>Nero</item>
+        <item>Giallo</item>
+        <item>Arancione</item>
+        <item>Rosso</item>
+        <item>Rosa</item>
+        <item>Verde</item>
+        <item>Azzurro</item>
+        <item>Blu</item>
+        <item>Viola</item>
+    </string-array>
 </resources>

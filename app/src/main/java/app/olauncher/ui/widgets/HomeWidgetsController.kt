@@ -9,7 +9,11 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
 import app.olauncher.R
+import android.Manifest
+import androidx.core.app.ActivityCompat
 import app.olauncher.data.AppModel
+import app.olauncher.data.CalendarWidgetRepository
+import app.olauncher.helper.CalendarEvents
 import app.olauncher.data.HomeWidget
 import app.olauncher.data.HomeWidgetsRepository
 import app.olauncher.data.HomeSectionsRepository
@@ -448,6 +452,10 @@ class HomeWidgetsController(
                 grid.addView(iconView(widget, app))
                 return@forEach
             }
+            if (widget.isBuiltin) {
+                if (widget.builtin == CalendarWidgetView.KIND) free.addView(calendarView(widget))
+                return@forEach
+            }
             val info = manager.getAppWidgetInfo(widget.appWidgetId)
             if (info == null) {
                 // The app was uninstalled or the widget is gone
@@ -553,6 +561,17 @@ class HomeWidgetsController(
         hostView.touch.listener = dragListener(info)
         updateSize(hostView, widget)
         return hostView
+    }
+
+    private fun calendarView(widget: HomeWidget): View {
+        val view = CalendarWidgetView(activity, widget.appWidgetId, scope) { CalendarWidgetSettings.show(activity, it, scope) }
+        view.tag = widget
+        view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
+            leftMargin = widget.x.dpToPx()
+            topMargin = widget.y.dpToPx()
+        }
+        view.touch.listener = dragListener(null)
+        return view
     }
 
     /** The home icon size setting (dp) wins over the automatic size from the cell. */
@@ -714,7 +733,11 @@ class HomeWidgetsController(
                 ParkingShortcut.openMaps(activity)
                 return
             }
-            if (info != null) showWidgetMenu(item, info, view as MinimaWidgetHostView) else showIconMenu(item)
+            when {
+                view is CalendarWidgetView -> showCalendarMenu(item, view)
+                info != null -> showWidgetMenu(item, info, view as MinimaWidgetHostView)
+                else -> showIconMenu(item)
+            }
         }
     }
 
@@ -761,7 +784,7 @@ class HomeWidgetsController(
             widget.x = p.leftMargin.toDp(); widget.y = p.topMargin.toDp()
             widget.w = p.width.toDp(); widget.h = p.height.toDp()
             save()
-            updateSize(view as MinimaWidgetHostView, widget)
+            (view as? MinimaWidgetHostView)?.let { updateSize(it, widget) }
         }
 
         override fun onTapOutsideFrame() = endEditing()
@@ -894,10 +917,6 @@ class HomeWidgetsController(
         } catch (e: Exception) {
             emptyList()
         }
-        if (providers.isEmpty()) {
-            activity.showToast(activity.getString(R.string.ml_no_widgets))
-            return
-        }
         val cell = cellPx()
         val items = providers.map { info ->
             val app = try {
@@ -918,7 +937,46 @@ class HomeWidgetsController(
                 rows = ceilDiv(info.minHeight, cell).coerceAtLeast(1),
             )
         }.sortedWith(compareBy({ it.app.lowercase() }, { it.label.lowercase() }))
-        WidgetPickerDialog.show(activity, items, scope) { startAdding(it) }
+        val builtIns = listOf(
+            WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_cal_widget), R.drawable.ic_calendar) { addCalendarWidget() },
+        )
+        WidgetPickerDialog.show(activity, items, scope, builtIns) { startAdding(it) }
+    }
+
+    /** Adds the launcher's calendar widget: full width, three cells tall; asks for the calendar access. */
+    private fun addCalendarWidget() {
+        val id = (widgets.filter { it.isBuiltin }.minOfOrNull { it.appWidgetId } ?: BUILTIN_FIRST_ID) - 1
+        val cellDp = cellPx().toDp()
+        val w = prefs.widgetColumns * cellDp
+        val h = 3 * cellDp
+        val (x, y) = freePositionFor(w, h)
+        widgets.add(HomeWidget(id, x = x, y = y, w = w, h = h, builtin = CalendarWidgetView.KIND))
+        save()
+        render()
+        if (!CalendarEvents.hasPermission(activity))
+            ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.READ_CALENDAR), CalendarWidgetView.REQUEST_CALENDAR)
+    }
+
+    private fun showCalendarMenu(widget: HomeWidget, view: CalendarWidgetView) {
+        activity.showMenuDialog(
+            activity.getString(R.string.ml_cal_widget),
+            listOf(
+                MenuEntry(activity.getString(R.string.ml_cal_settings)) { CalendarWidgetSettings.show(activity, view, scope) },
+                MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
+                MenuEntry(activity.getString(R.string.ml_widget_remove)) {
+                    activity.showConfirmDialog(
+                        title = activity.getString(R.string.ml_widget_remove),
+                        message = activity.getString(R.string.ml_widget_remove_confirm),
+                        action = activity.getString(R.string.ml_widget_remove),
+                    ) {
+                        CalendarWidgetRepository(activity).delete(widget.appWidgetId)
+                        widgets.remove(widget)
+                        save()
+                        render()
+                    }
+                },
+            )
+        )
     }
 
     private fun startAdding(info: AppWidgetProviderInfo) {
@@ -1123,6 +1181,9 @@ class HomeWidgetsController(
 
         /** Where widgets from older layouts land (dp from the top of home, below the clock). */
         private const val LEGACY_TOP_DP = 140
+
+        /** Ids of the launcher's own widgets count down from here (Android's ids are positive). */
+        private const val BUILTIN_FIRST_ID = -1000
 
         private const val NEWS_ID = "news"
         /** How many rows away from its own row the news strip may go while that row is taken. */

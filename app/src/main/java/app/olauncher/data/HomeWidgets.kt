@@ -10,6 +10,8 @@ import org.json.JSONObject
  * ([col], [row]); or a widget placed freely at ([x], [y]) with size [w] x [h], all in dp.
  * A widget with [w] == 0 was saved by an older layout: on the grid ([colSpan] > 0) or stacked
  * ([legacyHeightDp]); it gets a free position the first time it's shown.
+ * A widget drawn by the launcher itself (e.g. the calendar) has [builtin] set and a negative
+ * [appWidgetId] of its own, not allocated by Android.
  */
 data class HomeWidget(
     val appWidgetId: Int,
@@ -25,8 +27,10 @@ data class HomeWidget(
     var y: Int = 0,
     var w: Int = 0,
     var h: Int = 0,
+    val builtin: String? = null,
 ) {
     val isApp get() = packageName != null
+    val isBuiltin get() = builtin != null
 }
 
 /** Persists the home widgets as JSON in a dedicated SharedPreferences file. */
@@ -54,6 +58,7 @@ class HomeWidgetsRepository(context: Context, private val key: String = KEY) {
                     y = o.optInt("y", 0),
                     w = o.optInt("w", 0),
                     h = o.optInt("h", 0),
+                    builtin = o.optString("b").ifBlank { null },
                 )
             }
         } catch (e: Exception) {
@@ -72,6 +77,7 @@ class HomeWidgetsRepository(context: Context, private val key: String = KEY) {
                 .put("cs", it.colSpan).put("rs", it.rowSpan)
             if (it.packageName != null) o.put("p", it.packageName).put("cl", it.activityClassName ?: "").put("u", it.user ?: "")
             if (it.w > 0) o.put("x", it.x).put("y", it.y).put("w", it.w).put("h", it.h)
+            if (it.builtin != null) o.put("b", it.builtin)
             array.put(o)
         }
         prefs.edit { putString(key, array.toString()) }

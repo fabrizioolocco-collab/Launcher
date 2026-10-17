@@ -413,4 +413,83 @@
     <string name="ml_news_zone">News row</string>
     <string name="ml_news_zone_show">Show the news row</string>
     <string name="ml_news_zone_blocked">The news row is there: widgets cannot cover it</string>
+
+    <!-- Calendar widget -->
+    <string name="ml_cal_widget">Calendar</string>
+    <string name="ml_cal_add">New event</string>
+    <string name="ml_cal_all_day">All day</string>
+    <string name="ml_cal_back">Back</string>
+    <string name="ml_cal_background">Background: %d%%</string>
+    <string name="ml_cal_background_title">Background opacity</string>
+    <string name="ml_cal_calendars">Calendars: %s</string>
+    <string name="ml_cal_calendars_all">all</string>
+    <string name="ml_cal_calendars_count">%d selected</string>
+    <string name="ml_cal_calendars_title">Calendars to show</string>
+    <string name="ml_cal_color">Color: %s</string>
+    <string name="ml_cal_color_title">Color</string>
+    <string name="ml_cal_days">Days shown: %d</string>
+    <string name="ml_cal_days_ago">%d days ago</string>
+    <string name="ml_cal_days_short">%d d</string>
+    <string name="ml_cal_days_title">Days shown</string>
+    <string name="ml_cal_font">Font: %s</string>
+    <string name="ml_cal_font_title">Font</string>
+    <string name="ml_cal_hours">%dh</string>
+    <string name="ml_cal_hours_minutes">%1$dh %2$dm</string>
+    <string name="ml_cal_in">in %s</string>
+    <string name="ml_cal_in_days">In %d days</string>
+    <string name="ml_cal_left">%s left</string>
+    <string name="ml_cal_minutes">%d min</string>
+    <string name="ml_cal_next">Next</string>
+    <string name="ml_cal_no_app">No calendar app found</string>
+    <string name="ml_cal_no_calendars">No calendars found</string>
+    <string name="ml_cal_no_events">No events</string>
+    <string name="ml_cal_no_title">(No title)</string>
+    <string name="ml_cal_past">Past events: %s</string>
+    <string name="ml_cal_past_dim">Transparent</string>
+    <string name="ml_cal_past_hide">Hidden</string>
+    <string name="ml_cal_past_show">Shown</string>
+    <string name="ml_cal_past_title">Past events</string>
+    <string name="ml_cal_permission">Tap to allow access to the calendar</string>
+    <string name="ml_cal_prev">Previous</string>
+    <string name="ml_cal_reset_text">Reset this text</string>
+    <string name="ml_cal_reset_texts">Reset all texts</string>
+    <string name="ml_cal_settings">Calendar settings</string>
+    <string name="ml_cal_show_all_day">All-day events</string>
+    <string name="ml_cal_show_declined">Declined events</string>
+    <string name="ml_cal_show_header">Header with date and buttons</string>
+    <string name="ml_cal_show_progress">Progress bar</string>
+    <string name="ml_cal_show_status">Time left / time to start</string>
+    <string name="ml_cal_size">Size: %d sp</string>
+    <string name="ml_cal_size_title">Size</string>
+    <string name="ml_cal_style">Style: %s</string>
+    <string name="ml_cal_style_bold">Bold</string>
+    <string name="ml_cal_style_bold_italic">Bold italic</string>
+    <string name="ml_cal_style_italic">Italic</string>
+    <string name="ml_cal_style_normal">Normal</string>
+    <string name="ml_cal_style_title">Style</string>
+    <string name="ml_cal_text_day">Day label</string>
+    <string name="ml_cal_text_header">Date in the header</string>
+    <string name="ml_cal_text_status">Time left</string>
+    <string name="ml_cal_text_time">Event time</string>
+    <string name="ml_cal_text_title">Event title</string>
+    <string name="ml_cal_texts">Texts: font, size, color</string>
+    <string name="ml_cal_today">Today</string>
+    <string name="ml_cal_today_button">Back to today</string>
+    <string name="ml_cal_tomorrow">Tomorrow</string>
+    <string name="ml_cal_yesterday">Yesterday</string>
+    <string-array name="ml_cal_color_names">
+        <item>Theme</item>
+        <item>White</item>
+        <item>Light gray</item>
+        <item>Gray</item>
+        <item>Black</item>
+        <item>Yellow</item>
+        <item>Orange</item>
+        <item>Red</item>
+        <item>Pink</item>
+        <item>Green</item>
+        <item>Light blue</item>
+        <item>Blue</item>
+        <item>Purple</item>
+    </string-array>
 </resources>
