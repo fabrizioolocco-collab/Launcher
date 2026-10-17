@@ -13,6 +13,7 @@ import android.view.animation.AnimationUtils
 import android.view.inputmethod.BaseInputConnection
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.widget.SearchView
 import androidx.core.view.doOnLayout
@@ -110,10 +111,11 @@ class AppDrawerFragment : BaseFragment() {
         initClickListeners()
         initLetterIndex()
         if (flag == Constants.FLAG_LAUNCH_APP) {
-            binding.tabsScroll.isVisible = true
             tabs = DrawerTabsController(
                 context = requireContext(),
                 bar = binding.tabsBar,
+                barContainer = binding.tabsScroll,
+                searchRow = binding.search.parent as LinearLayout,
                 allApps = { currentAppList.orEmpty().filterIsInstance<AppModel.App>() },
                 hiddenApps = { currentHiddenApps },
                 onSelectionChanged = { updateCombinedAppList() },
@@ -550,6 +552,7 @@ class AppDrawerFragment : BaseFragment() {
         val allowed = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         val searching = !binding.search.query.isNullOrBlank()
         listBuiltForSearch = searching
+        tabs?.setApps(allowed)
         val apps = (if (searching) allowed else tabs?.filter(allowed) ?: allowed)
             .filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         // "News" block removed: apps with notifications are shown on home instead

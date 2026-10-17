@@ -3,6 +3,7 @@ package app.olauncher.ui
 import android.content.Context
 import android.graphics.Typeface
 import app.olauncher.helper.getColorFromAttr
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -22,10 +23,17 @@ import app.olauncher.helper.showToast
  * Tab bar of the app drawer: "All" (can be turned off) plus the user's tabs, each switchable on/off.
  * Tap a tab to show its apps; long press for rename / edit apps / move / turn off / delete;
  * "+" creates a tab. Search always looks through all apps (handled by the fragment).
+ *
+ * Tabs without apps are not shown. With a single tab left the bar is hidden and "+" moves next to
+ * the search field (a long press there opens the menu of that tab).
  */
 class DrawerTabsController(
     private val context: Context,
     private val bar: LinearLayout,
+    /** The view holding [bar], hidden together with it. */
+    private val barContainer: View,
+    /** The row of the search field, where "+" goes while the bar is hidden. */
+    private val searchRow: LinearLayout,
     /** All launchable apps, used when editing a tab's apps. */
     private val allApps: () -> List<AppModel.App>,
     /** Hidden apps, listed by the "Hidden" tab. */
@@ -35,10 +43,26 @@ class DrawerTabsController(
     private val repo = DrawerTabsRepository(context)
     private var tabs = repo.load()
 
-    /** Visible tabs in order: (All) + enabled user tabs. A null id stands for "All". */
-    private fun visibleIds(): List<String> =
-        (if (repo.allEnabled) listOf(DrawerTabsRepository.ALL_ID) else emptyList()) + tabs.filter { it.enabled }.map { it.id } +
+    /** The apps the drawer lists (null until known): tabs left without any of them are not shown. */
+    private var available: List<AppModel>? = null
+
+    /** "+" next to the search field, while the bar is hidden. */
+    private var searchPlus: View? = null
+
+    /** Visible tabs in order: (All) + enabled user tabs + (Hidden), only those with apps. */
+    private fun visibleIds(): List<String> {
+        val ids = (if (repo.allEnabled) listOf(DrawerTabsRepository.ALL_ID) else emptyList()) + tabs.filter { it.enabled }.map { it.id } +
                 (if (repo.hiddenEnabled) listOf(DrawerTabsRepository.HIDDEN_ID) else emptyList())
+        val apps = available ?: return ids
+        return ids.filter { appsOf(it, apps).isNotEmpty() }
+    }
+
+    /** Updates the apps the drawer lists; re-renders when that changes which tabs are shown. */
+    fun setApps(apps: List<AppModel>) {
+        val before = visibleIds()
+        available = apps
+        if (visibleIds() != before) render()
+    }
 
     /** True when the "Hidden" tab is the one shown. */
     val showingHidden get() = selectedId() == DrawerTabsRepository.HIDDEN_ID
@@ -50,8 +74,9 @@ class DrawerTabsController(
     }
 
     /** Apps to list in the selected tab. */
-    fun filter(apps: List<AppModel>): List<AppModel> {
-        val id = selectedId()
+    fun filter(apps: List<AppModel>): List<AppModel> = appsOf(selectedId(), apps)
+
+    private fun appsOf(id: String, apps: List<AppModel>): List<AppModel> {
         // "All" lists what is in no other tab: an app is either hidden, in a tab, or here
         if (id == DrawerTabsRepository.ALL_ID) {
             val placed = tabs.flatMap { it.apps }.toHashSet()
@@ -65,7 +90,31 @@ class DrawerTabsController(
     fun render() {
         bar.removeAllViews()
         val selected = selectedId()
-        visibleIds().forEach { id ->
+        val visible = visibleIds()
+        val single = visible.size <= 1
+        barContainer.visibility = if (single) View.GONE else View.VISIBLE
+        searchPlus?.let { searchRow.removeView(it) }
+        searchPlus = null
+        if (single) {
+            searchPlus = chip("+", false).apply {
+                minWidth = 52.dpToPx()
+                minHeight = 52.dpToPx()
+                setPadding(0, 0, 0, 0)
+                setOnClickListener { createTab() }
+                setOnLongClickListener {
+                    visible.firstOrNull()?.let { showTabMenu(it) }
+                    true
+                }
+                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    // The search field already leaves 16dp on its right
+                    marginStart = (-4).dpToPx(); marginEnd = 16.dpToPx()
+                }
+            }
+            searchRow.addView(searchPlus, 1)
+            return
+        }
+        visible.forEach { id ->
             val name = when (id) {
                 DrawerTabsRepository.ALL_ID -> context.getString(R.string.ml_tab_all)
                 DrawerTabsRepository.HIDDEN_ID -> context.getString(R.string.ml_tab_hidden)
@@ -117,7 +166,8 @@ class DrawerTabsController(
 
     // ---------------------------------------------------------------- tab operations
 
-    private fun createTab(then: (DrawerTab) -> Unit = {}) {
+    /** New tab; by default its apps are picked right away, since a tab without apps is not shown. */
+    private fun createTab(then: (DrawerTab) -> Unit = { editApps(it) }) {
         context.showTextInputDialog(
             title = context.getString(R.string.ml_tab_new),
             initial = "",
