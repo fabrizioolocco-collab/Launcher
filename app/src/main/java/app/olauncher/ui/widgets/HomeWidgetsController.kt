@@ -123,6 +123,14 @@ class HomeWidgetsController(
         if (repo.migrateRowDivisions(TOP_ROW_DIVISIONS)) widgets = repo.load()
         migrateUngroupedApps()
         migrateBottomArea()
+        // Whenever the grid's height changes (first layout included: the dock, the clock, the
+        // search bar take their room), keep the lowest icons and sections on screen
+        grid.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) grid.post {
+                fitToHeight()
+                replaceNews()
+            }
+        }
     }
 
     private val density get() = activity.resources.displayMetrics.density
@@ -186,12 +194,6 @@ class HomeWidgetsController(
         loadedRaw = raw
         widgets = repo.load()
         render()
-        grid.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-            if (bottom - top != oldBottom - oldTop) grid.post {
-                fitToHeight()
-                replaceNews()
-            }
-        }
     }
 
     /**
