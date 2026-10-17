@@ -125,11 +125,13 @@ class HomeWidgetsController(
         migrateUngroupedApps()
         migrateBottomArea()
         // Whenever the grid's height changes (first layout included: the dock, the clock, the
-        // search bar take their room), keep the lowest icons and sections on screen
+        // search bar take their room), keep the lowest icons and sections on screen. Moving them is
+        // saved, so it waits for the height to settle (the keyboard opens and closes in steps).
         grid.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-            if (bottom - top != oldBottom - oldTop) grid.post {
-                fitToHeight()
-                replaceNews()
+            if (bottom - top != oldBottom - oldTop) {
+                grid.post { replaceNews() }
+                grid.removeCallbacks(fitRunnable)
+                grid.postDelayed(fitRunnable, FIT_DELAY_MS)
             }
         }
     }
@@ -202,8 +204,13 @@ class HomeWidgetsController(
      * past the bottom: removes as many empty rows above them as needed, so everything below the
      * gap moves up together and stays visible.
      */
+    private val fitRunnable = Runnable { fitToHeight() }
+
     private fun fitToHeight() {
         if (grid.height == 0 || grid.editing) return
+        // The keyboard (search, a rename dialog...) only borrows the room: the icons stay put
+        if (androidx.core.view.ViewCompat.getRootWindowInsets(grid)
+                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true) return
         val bottom = usedRows()
         if (bottom == 0 || grid.fits(0, bottom)) return
         val overflow = grid.rowTop(bottom) - (grid.height - grid.paddingBottom)
@@ -1207,6 +1214,9 @@ class HomeWidgetsController(
     companion object {
         /** The grid's rows are half a column tall, so sections and icons pack tighter. */
         const val TOP_ROW_DIVISIONS = 2
+
+        /** How long the grid's height must stay the same before the icons are moved to fit it. */
+        private const val FIT_DELAY_MS = 800L
 
         /** Where widgets from older layouts land (dp from the top of home, below the clock). */
         private const val LEGACY_TOP_DP = 140
