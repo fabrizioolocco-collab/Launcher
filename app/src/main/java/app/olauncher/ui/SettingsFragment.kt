@@ -166,6 +166,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         componentName = ComponentName(requireContext(), DeviceAdmin::class.java)
         checkAdminPermission()
 
+        SettingsStyle.apply(binding.scrollLayout)
         populateIcons()
         populateTextStyle()
         populateProMessage()
