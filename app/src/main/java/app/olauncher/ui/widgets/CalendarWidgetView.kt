@@ -35,6 +35,8 @@ import app.olauncher.data.NO_TIME
 import app.olauncher.data.Todo
 import app.olauncher.data.TodoDone
 import app.olauncher.data.TodoStore
+import app.olauncher.data.WeatherIcons
+import app.olauncher.data.WeatherRepository
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.dpToPx
@@ -87,6 +89,12 @@ class CalendarWidgetView(
     private val primary = activity.getColorFromAttr(R.attr.primaryColor)
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
+    /** The next hours: hour, icon, temperature; a tap opens the Weather app. */
+    private val weatherRow = LinearLayout(activity).apply {
+        orientation = LinearLayout.HORIZONTAL
+        isClickable = true
+        setOnClickListener { app.olauncher.ui.weather.WeatherActivity.open(activity) }
+    }
     private val header = LinearLayout(activity).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -150,6 +158,9 @@ class CalendarWidgetView(
         header.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
         buttons.forEach { header.addView(it) }
         content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        content.addView(weatherRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 8.dpToPx(); bottomMargin = 2.dpToPx()
+        })
         content.addView(divider, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1.dpToPx()).apply {
             topMargin = 4.dpToPx(); bottomMargin = 6.dpToPx()
         })
@@ -263,11 +274,73 @@ class CalendarWidgetView(
 
     private val todoListener: () -> Unit = { if (isAttachedToWindow) showEvents() }
 
+    // ---------------------------------------------------------------- weather
+
+    private var weatherJob: Job? = null
+    private var hadLocation = false
+
+    private fun refreshWeather(force: Boolean = false) {
+        if (!config.showWeather) return
+        hadLocation = WeatherRepository.hasPermission(activity)
+        showWeather()
+        if (!hadLocation || weatherJob?.isActive == true) return
+        if (!force && !WeatherRepository.isStale(activity)) return
+        val ctx = activity.applicationContext
+        weatherJob = scope.launch {
+            WeatherRepository.refresh(ctx, force)
+            if (isAttachedToWindow) showWeather()
+        }
+    }
+
+    private fun showWeather() {
+        weatherRow.removeAllViews()
+        weatherRow.isVisible = config.showWeather
+        if (!config.showWeather) return
+        if (!WeatherRepository.hasPermission(activity) && WeatherRepository.cached(activity) == null) {
+            weatherRow.addView(text(CalendarText.STATUS).apply {
+                setText(R.string.ml_w_no_location)
+                alpha = 0.7f
+                setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
+                setOnClickListener {
+                    ActivityCompat.requestPermissions(activity, arrayOf(android.Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_LOCATION)
+                }
+            })
+            return
+        }
+        val hours = WeatherRepository.cached(activity)?.upcoming()?.take(WEATHER_HOURS).orEmpty()
+        val line = activity.getColorFromAttr(R.attr.cardLineColor)
+        hours.forEachIndexed { i, h ->
+            weatherRow.addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
+                if (i == 0) background = GradientDrawable().apply {
+                    cornerRadius = 10.dpToPx().toFloat()
+                    setColor(line)
+                }
+                addView(text(CalendarText.STATUS).apply {
+                    text = WeatherIcons.hourLabel(h.time)
+                    textSize = 11f
+                    alpha = 0.6f
+                    typeface = Typeface.DEFAULT
+                })
+                addView(ImageView(activity).apply { setImageResource(WeatherIcons.icon(h.code, h.isDay)) },
+                    LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { topMargin = 3.dpToPx(); bottomMargin = 3.dpToPx() })
+                addView(text(CalendarText.TIME, Typeface.BOLD).apply {
+                    text = activity.getString(R.string.ml_w_degrees, Math.round(h.temp))
+                    textSize = 12f
+                })
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { if (i > 0) marginStart = 4.dpToPx() })
+        }
+        if (hours.isEmpty()) weatherRow.isVisible = false
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         TodoStore.addListener(todoListener)
         observe()
         reload()
+        refreshWeather()
         scheduleTick()
     }
 
@@ -288,6 +361,7 @@ class CalendarWidgetView(
         if (visibility == VISIBLE && isAttachedToWindow) {
             observe()
             reload()
+            refreshWeather()
         }
     }
 
@@ -298,6 +372,7 @@ class CalendarWidgetView(
             observe()
             reload()
         }
+        if (hasWindowFocus && config.showWeather && WeatherRepository.hasPermission(activity) != hadLocation) refreshWeather(force = true)
     }
 
     private fun observe() {
@@ -383,10 +458,22 @@ class CalendarWidgetView(
         styleText(weekText, CalendarText.WEEK)
         if (config.text(CalendarText.WEEK).color == 0) weekText.alpha = 0.6f else weekText.alpha = 1f
         weekText.isVisible = config.showWeek
-        background = if (config.background > 0) GradientDrawable().apply {
-            cornerRadius = 16.dpToPx().toFloat()
-            setColor(ColorUtils.setAlphaComponent(activity.getColorFromAttr(R.attr.primaryInverseColor), config.background * 255 / 100))
-        } else null
+        background = when {
+            // A card like the menus' (the opacity setting fades its ground, the border stays)
+            config.card -> GradientDrawable().apply {
+                cornerRadius = 20.dpToPx().toFloat()
+                val alpha = if (config.background > 0) config.background * 255 / 100 else 255
+                setColor(ColorUtils.setAlphaComponent(activity.getColorFromAttr(R.attr.cardColor), alpha))
+                setStroke(1.dpToPx(), activity.getColorFromAttr(R.attr.cardStrokeColor))
+            }
+            config.background > 0 -> GradientDrawable().apply {
+                cornerRadius = 16.dpToPx().toFloat()
+                setColor(ColorUtils.setAlphaComponent(activity.getColorFromAttr(R.attr.primaryInverseColor), config.background * 255 / 100))
+            }
+            else -> null
+        }
+        if (config.card) setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 10.dpToPx()) else setPadding(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 8.dpToPx())
+        if (isAttachedToWindow) showWeather()
     }
 
     private fun updateHeader() {
@@ -767,6 +854,8 @@ class CalendarWidgetView(
     companion object {
         const val KIND = "calendar"
         const val REQUEST_CALENDAR = 7110
+        const val REQUEST_LOCATION = 7112
+        private const val WEATHER_HOURS = 7
         private const val UNDO_MS = 4_000L
         private val FILTER_NAMES = listOf(R.string.ml_cal_todo_show_all, R.string.ml_cal_todo_hide_done, R.string.ml_cal_todo_hide_all)
     }

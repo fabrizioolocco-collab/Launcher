@@ -661,4 +661,6 @@
     <string name="ml_w_source">Dati: Open-Meteo</string>
     <string name="ml_cal_show_weather">Meteo nell\'intestazione</string>
     <string name="ml_w_sunrise">Alba %1$s · tramonto %2$s</string>
+    <string name="ml_cal_card">Scheda con bordo</string>
+    <string name="ml_w_degrees">%d°</string>
 </resources>

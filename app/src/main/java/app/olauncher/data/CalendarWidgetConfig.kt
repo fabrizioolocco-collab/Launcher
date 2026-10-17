@@ -52,6 +52,10 @@ class CalendarWidgetConfig {
     var showDeclined = false
     /** Background opacity in percent (0 = none). */
     var background = 0
+    /** A card behind the widget: the cards' color with a thin border. */
+    var card = true
+    /** The next hours' weather under the header (opens the Weather app). */
+    var showWeather = true
     /** The ToDos of the launcher's ToDo app in the widget: all, only those to do, none (button in the header). */
     var todoFilter = TODO_SHOW_ALL
     val showTodos get() = todoFilter != TODO_HIDE_ALL
@@ -81,6 +85,8 @@ class CalendarWidgetConfig {
         .put("all", showAllDay)
         .put("dec", showDeclined)
         .put("bg", background)
+        .put("card", card)
+        .put("wx", showWeather)
         .put("tdf", todoFilter)
         .put("tdp", todoPlace)
         .put("tdd", todoDoneMode)
@@ -127,6 +133,8 @@ class CalendarWidgetConfig {
             showAllDay = o.optBoolean("all", true)
             showDeclined = o.optBoolean("dec", false)
             background = o.optInt("bg", 0)
+            card = o.optBoolean("card", true)
+            showWeather = o.optBoolean("wx", true)
             todoFilter = o.optInt("tdf", if (o.optBoolean("td", true)) TODO_SHOW_ALL else TODO_HIDE_ALL).coerceIn(0, 2)
             todoPlace = o.optInt("tdp", TODO_MIXED).coerceIn(0, 2)
             todoDoneMode = o.optInt("tdd", TODO_DONE_STRIKE).coerceIn(0, 1)

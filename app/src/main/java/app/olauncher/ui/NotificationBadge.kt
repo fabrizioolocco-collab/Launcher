@@ -33,12 +33,15 @@ object NotificationBadge {
         ColorMatrixColorFilter(ColorMatrix(row(r) + row(g) + row(b) + floatArrayOf(0f, 0f, 0f, 1f, 0f)))
     }
 
-    /** Red rounded square drawn behind the icon of an app with notifications (same shape as the tiles). */
+    /** Deep red rounded square with a bright red border behind the icon of an app with notifications (the tiles' shape). */
     fun background(sizePx: Int): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = sizePx * 0.27f
-        setColor(HomeSectionsController.NOTIFICATION_COLOR)
+        setColor(TILE_RED)
+        setStroke((sizePx / 40).coerceAtLeast(2), HomeSectionsController.NOTIFICATION_COLOR)
     }
+
+    private const val TILE_RED = 0xFF7A1F1B.toInt()
 
     /** When [notified]: the icon on a red square, its dark parts red too; normal otherwise. */
     fun tint(drawable: Drawable, notified: Boolean): Drawable {

@@ -168,7 +168,7 @@
     <string name="ml_open_app">Open app</string>
     <string name="ml_date_week" translatable="false">%1$s · W%2$d</string>
     <!-- Home search bar -->
-    <string name="ml_search_mode_format" translatable="false">%1$s ⇄</string>
+    <string name="ml_search_mode_format" translatable="false">%1$s</string>
     <string name="ml_search_web">Google</string>
     <string name="ml_search_phone">Phone</string>
     <string name="ml_search_hint_web">Search Google</string>
@@ -667,4 +667,6 @@
     <string name="ml_w_source">Data: Open-Meteo</string>
     <string name="ml_cal_show_weather">Weather in the header</string>
     <string name="ml_w_sunrise">Sunrise %1$s · sunset %2$s</string>
+    <string name="ml_cal_card">Card with a border</string>
+    <string name="ml_w_degrees">%d°</string>
 </resources>

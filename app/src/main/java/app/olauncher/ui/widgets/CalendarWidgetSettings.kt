@@ -99,6 +99,8 @@ object CalendarWidgetSettings {
                     }
                 },
                 MenuEntry(activity.getString(R.string.ml_cal_texts)) { showTexts(activity, view, reopen) },
+                toggle(R.string.ml_cal_show_weather, c.showWeather) { cfg, v -> cfg.showWeather = v },
+                toggle(R.string.ml_cal_card, c.card) { cfg, v -> cfg.card = v },
                 toggle(R.string.ml_cal_show_header, c.showHeader) { cfg, v -> cfg.showHeader = v },
                 toggle(R.string.ml_cal_show_clock, c.showClock) { cfg, v -> cfg.showClock = v },
                 toggle(R.string.ml_cal_short_date, c.shortDate) { cfg, v -> cfg.shortDate = v },
