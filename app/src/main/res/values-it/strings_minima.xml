@@ -471,6 +471,11 @@
     <string name="ml_cal_today_button">Torna a oggi</string>
     <string name="ml_cal_tomorrow">Domani</string>
     <string name="ml_cal_yesterday">Ieri</string>
+    <string name="ml_cal_week">WK %d</string>
+    <string name="ml_cal_text_week">Numero della settimana</string>
+    <string name="ml_cal_show_week">Numero della settimana accanto alla data</string>
+    <string name="ml_cal_swipe_days">Scorri di lato per cambiare giorno</string>
+    <string name="ml_cal_show_arrows">Frecce giorno precedente / successivo</string>
     <string-array name="ml_cal_color_names">
         <item>Tema</item>
         <item>Bianco</item>

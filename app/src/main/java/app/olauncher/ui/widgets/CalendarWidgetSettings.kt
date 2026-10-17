@@ -67,6 +67,9 @@ object CalendarWidgetSettings {
                 },
                 MenuEntry(activity.getString(R.string.ml_cal_texts)) { showTexts(activity, view, reopen) },
                 toggle(R.string.ml_cal_show_header, c.showHeader) { cfg, v -> cfg.showHeader = v },
+                toggle(R.string.ml_cal_show_week, c.showWeek) { cfg, v -> cfg.showWeek = v },
+                toggle(R.string.ml_cal_swipe_days, c.swipeDays) { cfg, v -> cfg.swipeDays = v },
+                toggle(R.string.ml_cal_show_arrows, c.showArrows) { cfg, v -> cfg.showArrows = v },
                 toggle(R.string.ml_cal_show_progress, c.showProgress) { cfg, v -> cfg.showProgress = v },
                 toggle(R.string.ml_cal_show_status, c.showStatus) { cfg, v -> cfg.showStatus = v },
                 toggle(R.string.ml_cal_show_all_day, c.showAllDay) { cfg, v -> cfg.showAllDay = v },
@@ -114,6 +117,7 @@ object CalendarWidgetSettings {
 
     private fun textName(t: CalendarText) = when (t) {
         CalendarText.HEADER -> R.string.ml_cal_text_header
+        CalendarText.WEEK -> R.string.ml_cal_text_week
         CalendarText.DAY -> R.string.ml_cal_text_day
         CalendarText.TIME -> R.string.ml_cal_text_time
         CalendarText.TITLE -> R.string.ml_cal_text_title

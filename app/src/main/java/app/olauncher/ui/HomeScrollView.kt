@@ -60,6 +60,7 @@ class HomeScrollView @JvmOverloads constructor(
     var gesturesEnabled = true
 
     private var downOnInteractive = false
+    private var downOnSideSwipeOwner = false
     private var atBottomOnDown = false
     private var atTopOnDown = false
     private var flingHandled = false
@@ -87,6 +88,8 @@ class HomeScrollView @JvmOverloads constructor(
             val diffX = e2.rawX - start.rawX
             val diffY = e2.rawY - start.rawY
             if (abs(diffX) > abs(diffY)) {
+                // The view under the finger uses side swipes itself (e.g. the calendar's days)
+                if (downOnSideSwipeOwner) return false
                 if (abs(diffX) > SWIPE_THRESHOLD && abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
                     flingHandled = true
                     if (diffX > 0) callbacks?.onSwipeRight() else callbacks?.onSwipeLeft()
@@ -125,6 +128,7 @@ class HomeScrollView @JvmOverloads constructor(
             atBottomOnDown = !canScrollVertically(1)
             atTopOnDown = !canScrollVertically(-1)
             downOnInteractive = isOverInteractiveChild(this, ev.rawX.toInt(), ev.rawY.toInt())
+            downOnSideSwipeOwner = isOverSideSwipeOwner(this, ev.rawX.toInt(), ev.rawY.toInt())
         }
         detector.onTouchEvent(ev)
         if (flingHandled && ev.actionMasked == MotionEvent.ACTION_UP) {
@@ -192,6 +196,22 @@ class HomeScrollView @JvmOverloads constructor(
             if (child is ViewGroup) findSwipeApp(child, x, y)?.let { return it }
         }
         return null
+    }
+
+    private fun isOverSideSwipeOwner(group: ViewGroup, x: Int, y: Int): Boolean {
+        for (i in 0 until group.childCount) {
+            val child = group.getChildAt(i)
+            if (child.visibility != View.VISIBLE) continue
+            if (!child.getGlobalVisibleRect(tmpRect) || !tmpRect.contains(x, y)) continue
+            if (child is SideSwipeOwner && child.ownsSideSwipes) return true
+            if (child is ViewGroup && isOverSideSwipeOwner(child, x, y)) return true
+        }
+        return false
+    }
+
+    /** A view on home that takes left / right swipes for itself instead of the home swipe actions. */
+    interface SideSwipeOwner {
+        val ownsSideSwipes: Boolean
     }
 
     private fun isOverInteractiveChild(group: ViewGroup, x: Int, y: Int): Boolean {

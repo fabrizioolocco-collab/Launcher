@@ -42,19 +42,20 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 
 /**
  * The launcher's own calendar widget: the events of the selected day (or of a few days from it)
  * with a colored mark for their calendar, the time left / to the start and a progress bar for the
- * ones in progress. The header moves between days, adds events and opens the settings; tapping an
- * event opens it in the calendar app. Long press moves it, like any widget on home.
+ * ones in progress. A side swipe (or the optional arrows) moves between days, the header adds
+ * events; tapping an event opens it in the calendar app. Long press moves it or opens its menu
+ * (with the settings), like any widget on home.
  */
 class CalendarWidgetView(
     private val activity: Activity,
     val widgetId: Int,
     private val scope: CoroutineScope,
-    private val onSettings: (CalendarWidgetView) -> Unit,
-) : FrameLayout(activity) {
+) : FrameLayout(activity), app.olauncher.ui.HomeScrollView.SideSwipeOwner {
 
     val touch = GridItemTouch(this)
 
@@ -83,12 +84,11 @@ class CalendarWidgetView(
         offset = 0
         reload()
     }
-    private val buttons = listOf(
-        iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { CalendarEvents.addEvent(activity, firstDay()) },
-        iconButton(R.drawable.ic_cal_settings, R.string.ml_cal_settings) { onSettings(this) },
-        iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { offset -= config.days; reload() },
-        iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { offset += config.days; reload() },
-    )
+    private val weekText = text(CalendarText.WEEK).apply { maxLines = 1 }
+    private val addButton = iconButton(R.drawable.ic_cal_add, R.string.ml_cal_add) { CalendarEvents.addEvent(activity, firstDay()) }
+    private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
+    private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
+    private val buttons = listOf(addButton, prevButton, nextButton)
     private val divider = View(activity)
     private val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private val scroll = ScrollView(activity).apply {
@@ -113,14 +113,12 @@ class CalendarWidgetView(
 
     init {
         header.addView(dateText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        header.addView(weekText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = 10.dpToPx()
+        })
         header.addView(todayButton)
         todayButton.isVisible = false
-        // A long date shrinks (ellipsized) instead of pushing the buttons out
-        header.addOnLayoutChangeListener { _, left, _, right, _, _, _, _, _ ->
-            val others = (buttons + todayButton).sumOf { it.layoutParams.width.coerceAtLeast(0) }
-            val max = (right - left - header.paddingLeft - header.paddingRight - others).coerceAtLeast(0)
-            if (dateText.maxWidth != max) header.post { dateText.maxWidth = max }
-        }
+        header.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitDate() }
         header.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
         buttons.forEach { header.addView(it) }
         content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -135,11 +133,92 @@ class CalendarWidgetView(
         applyConfig()
     }
 
-    // ---------------------------------------------------------------- touch: long press moves the widget
+    /** A long date shrinks (ellipsized) instead of pushing the week number and the buttons out. */
+    private fun fitDate() {
+        if (header.width == 0) return
+        fun need(v: View): Int {
+            if (!v.isVisible) return 0
+            val lp = v.layoutParams as LinearLayout.LayoutParams
+            val w = if (v is TextView) (v.paint.measureText(v.text.toString()) + v.paddingLeft + v.paddingRight).toInt() + 1
+            else lp.width.coerceAtLeast(0)
+            return w + lp.marginStart + lp.marginEnd
+        }
+        val others = need(weekText) + need(todayButton) + buttons.sumOf { need(it) }
+        val max = (header.width - header.paddingLeft - header.paddingRight - others).coerceAtLeast(0)
+        if (dateText.maxWidth != max) header.post { dateText.maxWidth = max }
+    }
 
-    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = touch.intercept(ev)
+    // ---------------------------------------------------------------- touch: long press moves the widget, side swipe changes day
 
-    override fun onTouchEvent(event: MotionEvent): Boolean = touch.touch(event)
+    override val ownsSideSwipes get() = config.swipeDays
+
+    private val touchSlop = android.view.ViewConfiguration.get(activity).scaledTouchSlop
+    private var swipeDownX = 0f
+    private var swipeDownY = 0f
+    private var swiping = false
+
+    /** True once the finger moved sideways enough to be a day swipe (not before a long press). */
+    private fun trackSwipe(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                swipeDownX = ev.rawX
+                swipeDownY = ev.rawY
+                swiping = false
+            }
+
+            MotionEvent.ACTION_MOVE -> if (!swiping && config.swipeDays && !touch.longPressed) {
+                val dx = ev.rawX - swipeDownX
+                val dy = ev.rawY - swipeDownY
+                if (abs(dx) > touchSlop * 2 && abs(dx) > abs(dy) * 1.5f) {
+                    swiping = true
+                    touch.cancel()
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                }
+            }
+        }
+        return swiping
+    }
+
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+        if (touch.intercept(ev)) return true
+        return trackSwipe(ev)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!touch.longPressed) trackSwipe(event)
+        if (!swiping) return touch.touch(event)
+        val dx = event.rawX - swipeDownX
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                content.translationX = dx
+                content.alpha = 1f - (abs(dx) / width.coerceAtLeast(1)).coerceAtMost(1f) * 0.6f
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                swiping = false
+                val commit = event.actionMasked == MotionEvent.ACTION_UP && abs(dx) > minOf(width / 5f, 80f * resources.displayMetrics.density)
+                if (commit) slideTo(if (dx < 0) 1 else -1)
+                else content.animate().translationX(0f).alpha(1f).setDuration(150).start()
+            }
+        }
+        return true
+    }
+
+    /** Slides the days out on the side of the swipe and the new ones in from the other side. */
+    private fun slideTo(direction: Int) {
+        val w = width.toFloat()
+        content.animate().translationX(-direction * w).alpha(0f).setDuration(120).withEndAction {
+            moveDays(direction)
+            content.translationX = direction * w * 0.4f
+            content.animate().translationX(0f).alpha(1f).setDuration(180).start()
+        }.start()
+    }
+
+    /** Forward ([direction] 1) or back (-1) by as many days as are shown. */
+    private fun moveDays(direction: Int) {
+        offset += direction * config.days
+        reload()
+    }
 
     /** The list scrolling takes the gesture: no long press then. */
     override fun requestDisallowInterceptTouchEvent(disallowIntercept: Boolean) {
@@ -254,6 +333,11 @@ class CalendarWidgetView(
             it.layoutParams = LinearLayout.LayoutParams(iconSize + 16.dpToPx(), iconSize + 12.dpToPx())
             it.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
         }
+        prevButton.isVisible = config.showArrows
+        nextButton.isVisible = config.showArrows
+        styleText(weekText, CalendarText.WEEK)
+        if (config.text(CalendarText.WEEK).color == 0) weekText.alpha = 0.6f else weekText.alpha = 1f
+        weekText.isVisible = config.showWeek
         background = if (config.background > 0) GradientDrawable().apply {
             cornerRadius = 16.dpToPx().toFloat()
             setColor(ColorUtils.setAlphaComponent(activity.getColorFromAttr(R.attr.primaryInverseColor), config.background * 255 / 100))
@@ -267,7 +351,15 @@ class CalendarWidgetView(
         val pattern = if (sameYear) "EEEE, d MMMM" else "EEEE, d MMMM yyyy"
         dateText.text = SimpleDateFormat(pattern, Locale.getDefault()).format(Date(start)).uppercase(Locale.getDefault())
         todayButton.isVisible = offset != 0
+        weekText.text = activity.getString(R.string.ml_cal_week, isoWeek(start))
+        fitDate()
     }
+
+    private fun isoWeek(millis: Long): Int = java.util.Calendar.getInstance().apply {
+        firstDayOfWeek = java.util.Calendar.MONDAY
+        minimalDaysInFirstWeek = 4
+        timeInMillis = millis
+    }.get(java.util.Calendar.WEEK_OF_YEAR)
 
     private fun showPermissionRequest() {
         list.removeAllViews()

@@ -9,6 +9,7 @@ import org.json.JSONObject
 /** The texts of the calendar widget, each with its own font, size, style and color. */
 enum class CalendarText(val key: String, val defaultSize: Int, val defaultStyle: Int) {
     HEADER("hd", 18, Typeface.BOLD),
+    WEEK("wk", 14, Typeface.BOLD),
     DAY("dy", 14, Typeface.BOLD),
     TIME("tm", 15, Typeface.NORMAL),
     TITLE("tt", 17, Typeface.NORMAL),
@@ -31,6 +32,12 @@ class CalendarWidgetConfig {
     /** Days listed from the selected one (1 = only that day). */
     var days = 1
     var showHeader = true
+    /** Week number (ISO) next to the date. */
+    var showWeek = true
+    /** Swipe left / right on the widget for the next / previous day. */
+    var swipeDays = true
+    /** Previous / next day buttons in the header. */
+    var showArrows = false
     var showProgress = true
     var showStatus = true
     var showAllDay = true
@@ -47,6 +54,9 @@ class CalendarWidgetConfig {
         .put("past", pastMode)
         .put("days", days)
         .put("hdr", showHeader)
+        .put("wk", showWeek)
+        .put("swp", swipeDays)
+        .put("arr", showArrows)
         .put("prg", showProgress)
         .put("sts", showStatus)
         .put("all", showAllDay)
@@ -69,6 +79,9 @@ class CalendarWidgetConfig {
             pastMode = o.optInt("past", PAST_DIM)
             days = o.optInt("days", 1).coerceIn(1, 14)
             showHeader = o.optBoolean("hdr", true)
+            showWeek = o.optBoolean("wk", true)
+            swipeDays = o.optBoolean("swp", true)
+            showArrows = o.optBoolean("arr", false)
             showProgress = o.optBoolean("prg", true)
             showStatus = o.optBoolean("sts", true)
             showAllDay = o.optBoolean("all", true)

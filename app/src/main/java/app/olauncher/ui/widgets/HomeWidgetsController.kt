@@ -564,7 +564,7 @@ class HomeWidgetsController(
     }
 
     private fun calendarView(widget: HomeWidget): View {
-        val view = CalendarWidgetView(activity, widget.appWidgetId, scope) { CalendarWidgetSettings.show(activity, it, scope) }
+        val view = CalendarWidgetView(activity, widget.appWidgetId, scope)
         view.tag = widget
         view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
             leftMargin = widget.x.dpToPx()

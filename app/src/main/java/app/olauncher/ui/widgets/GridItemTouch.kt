@@ -31,7 +31,9 @@ class GridItemTouch(private val view: View, private val onTap: (() -> Unit)? = n
     private var downRawX = 0f
     private var downRawY = 0f
     private var moved = false
-    private var longPressed = false
+    /** True from the long press until the finger is lifted: the gesture belongs to move / menu. */
+    var longPressed = false
+        private set
     private var dragging = false
 
     private val longPressRunnable = Runnable {
