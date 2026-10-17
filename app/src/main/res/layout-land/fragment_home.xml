@@ -216,54 +216,76 @@
         </ScrollView>
 
         <!-- Search bar: Google or phone (switch on the right) -->
+        <!-- Search bar and, next to it, the bookmarks (the row moves as one with the search page) -->
         <LinearLayout
-            android:id="@+id/searchBar"
+            android:id="@+id/searchRow"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_marginHorizontal="66dp"
             android:layout_marginTop="4dp"
             android:layout_marginBottom="24dp"
-            android:background="@drawable/rounded_rect_shade_color"
             android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="4dp">
+            android:orientation="horizontal">
 
-            <EditText
-                android:id="@+id/searchInput"
-                style="@style/TextSmall"
+            <LinearLayout
+                android:id="@+id/searchBar"
                 android:layout_width="0dp"
-                android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:background="@android:color/transparent"
-                android:hint="@string/ml_search_hint_web"
-                android:imeOptions="actionSearch"
-                android:importantForAutofill="no"
-                android:inputType="text"
-                android:maxLines="1"
-                android:textColorHint="?attr/primaryColorTrans50"
-                android:textSize="16sp" />
+                android:layout_height="48dp"
+                android:background="@drawable/rounded_rect_shade_color"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="4dp">
 
-            <TextView
-                android:id="@+id/searchClear"
-                style="@style/TextSmall"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:paddingHorizontal="10dp"
-                android:text="✕"
-                android:textSize="16sp"
-                android:visibility="gone" />
+                <EditText
+                    android:id="@+id/searchInput"
+                    style="@style/TextSmall"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:hint="@string/ml_search_hint_web"
+                    android:imeOptions="actionSearch"
+                    android:importantForAutofill="no"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textColorHint="?attr/primaryColorTrans50"
+                    android:textSize="16sp" />
 
-            <TextView
-                android:id="@+id/searchMode"
-                style="@style/TextSmallBold"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:paddingHorizontal="12dp"
-                android:textSize="14sp"
-                tools:text="Google ▾" />
+                <TextView
+                    android:id="@+id/searchClear"
+                    style="@style/TextSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:paddingHorizontal="10dp"
+                    android:text="✕"
+                    android:textSize="16sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/searchMode"
+                    style="@style/TextSmallBold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:textSize="14sp"
+                    tools:text="Google ▾" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/bookmarksButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_search_pill"
+                android:contentDescription="@string/ml_bm_title"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="13dp"
+                android:src="@drawable/ic_m_star"
+                app:tint="?attr/primaryColor" />
         </LinearLayout>
     </LinearLayout>
 

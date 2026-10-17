@@ -217,67 +217,89 @@
         </ScrollView>
 
         <!-- Search bar: Google or phone (switch on the right) -->
+        <!-- Search bar and, next to it, the bookmarks (the row moves as one with the search page) -->
         <LinearLayout
-            android:id="@+id/searchBar"
+            android:id="@+id/searchRow"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="wrap_content"
             android:layout_marginHorizontal="16dp"
             android:layout_marginTop="4dp"
             android:layout_marginBottom="24dp"
-            android:background="@drawable/bg_search_pill"
             android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:paddingStart="16dp"
-            android:paddingEnd="4dp">
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:id="@+id/searchBar"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="48dp"
+                android:background="@drawable/bg_search_pill"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="4dp">
+
+                <ImageView
+                    android:layout_width="18dp"
+                    android:layout_height="18dp"
+                    android:layout_marginEnd="10dp"
+                    android:alpha="0.6"
+                    android:importantForAccessibility="no"
+                    android:src="@drawable/ic_m_search_small"
+                    android:tint="?attr/primaryColor" />
+
+                <EditText
+                    android:id="@+id/searchInput"
+                    style="@style/TextSmall"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@android:color/transparent"
+                    android:hint="@string/ml_search_hint_web"
+                    android:imeOptions="actionSearch"
+                    android:importantForAutofill="no"
+                    android:inputType="text"
+                    android:maxLines="1"
+                    android:textColorHint="?attr/primaryColorTrans50"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/searchClear"
+                    style="@style/TextSmall"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:contentDescription="@string/close"
+                    android:drawableStart="@drawable/ic_m_close_small"
+                    android:drawableTint="?attr/primaryColor"
+                    android:paddingHorizontal="10dp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/searchMode"
+                    style="@style/TextSmallBold"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:drawableEnd="@drawable/ic_m_swap_small"
+                    android:drawablePadding="6dp"
+                    android:drawableTint="?attr/primaryColor"
+                    android:paddingHorizontal="12dp"
+                    android:textSize="14sp"
+                    tools:text="Google" />
+            </LinearLayout>
 
             <ImageView
-                android:layout_width="18dp"
-                android:layout_height="18dp"
-                android:layout_marginEnd="10dp"
-                android:alpha="0.6"
-                android:importantForAccessibility="no"
-                android:src="@drawable/ic_m_search_small"
-                android:tint="?attr/primaryColor" />
-
-            <EditText
-                android:id="@+id/searchInput"
-                style="@style/TextSmall"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="@android:color/transparent"
-                android:hint="@string/ml_search_hint_web"
-                android:imeOptions="actionSearch"
-                android:importantForAutofill="no"
-                android:inputType="text"
-                android:maxLines="1"
-                android:textColorHint="?attr/primaryColorTrans50"
-                android:textSize="16sp" />
-
-            <TextView
-                android:id="@+id/searchClear"
-                style="@style/TextSmall"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:contentDescription="@string/close"
-                android:drawableStart="@drawable/ic_m_close_small"
-                android:drawableTint="?attr/primaryColor"
-                android:paddingHorizontal="10dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/searchMode"
-                style="@style/TextSmallBold"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center"
-                android:drawableEnd="@drawable/ic_m_swap_small"
-                android:drawablePadding="6dp"
-                android:drawableTint="?attr/primaryColor"
-                android:paddingHorizontal="12dp"
-                android:textSize="14sp"
-                tools:text="Google" />
+                android:id="@+id/bookmarksButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_search_pill"
+                android:contentDescription="@string/ml_bm_title"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="13dp"
+                android:src="@drawable/ic_m_star"
+                app:tint="?attr/primaryColor" />
         </LinearLayout>
     </LinearLayout>
 

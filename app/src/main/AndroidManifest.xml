@@ -219,6 +219,22 @@
             android:exported="false"
             android:launchMode="singleTask"
             android:taskAffinity="app.minimalauncher.todoalarm" />
+        <!-- Share > Bookmarks from a browser: add the page to the launcher's bookmarks -->
+        <activity
+            android:name=".ui.bookmarks.BookmarkShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/ml_bm_share_label"
+            android:taskAffinity="app.minimalauncher.bookmarks"
+            android:theme="@style/ShareTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ui.weather.WeatherActivity"
             android:exported="false"

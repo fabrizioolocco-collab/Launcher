@@ -182,4 +182,13 @@
         <item name="tileColor">@color/tileDark</item>
         <item name="accentColor">@color/accentDark</item>
     </style>
+
+    <!-- Over another app (a browser's Share): transparent, only the form shows -->
+    <style name="ShareTheme" parent="ViewerTheme">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+    </style>
 </resources>

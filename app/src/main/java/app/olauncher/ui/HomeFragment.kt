@@ -53,6 +53,7 @@ import app.olauncher.helper.setPlainWallpaperByTheme
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
+import app.olauncher.ui.bookmarks.BookmarksUi
 import app.olauncher.ui.widgets.HomeWidgetsController
 import app.olauncher.ui.widgets.WidgetGridLayout
 import java.text.SimpleDateFormat
@@ -177,13 +178,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         search = HomeSearchController(
             activity = requireActivity(),
             column = binding.homeColumn,
-            bar = binding.searchBar,
+            bar = binding.searchRow,
             input = binding.searchInput,
             clear = binding.searchClear,
             modeButton = binding.searchMode,
             resultsScroll = binding.searchResultsScroll,
             results = binding.searchResults,
-            homeViews = listOf(binding.homeScroll, binding.dockSlot),
+            homeViews = listOf(binding.homeScroll, binding.dockSlot, binding.bookmarksButton),
             prefs = prefs,
             scope = uiScope,
             apps = {
@@ -204,6 +205,18 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             val ime = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, ime)
             insets
+        }
+
+        // Bookmarks: the panel opens just above the search row; a long press adds the copied address
+        binding.bookmarksButton.setOnClickListener { v ->
+            val loc = IntArray(2)
+            binding.searchRow.getLocationOnScreen(loc)
+            val bottom = (v.rootView.height - loc[1] + 10.dpToPx()).coerceAtLeast(0)
+            BookmarksUi.showPanel(requireContext(), bottom)
+        }
+        binding.bookmarksButton.setOnLongClickListener {
+            BookmarksUi.showForm(requireContext(), BookmarksUi.fromClipboard(requireContext())) {}
+            true
         }
 
         detox = DetoxController(
