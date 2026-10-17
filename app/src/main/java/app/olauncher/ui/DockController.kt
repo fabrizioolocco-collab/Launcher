@@ -30,8 +30,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The dock: a card above the search bar with up to [MAX] apps, each on its own tile (red when the
- * app has notifications). Hidden while empty; apps get there from their menu or the home menu.
+ * The dock: a card above the search bar with one app per column of the home grid, each on its own
+ * tile (red when the app has notifications), lined up with the grid's cells. Hidden while empty; apps get there from their menu or the home
+ * menu.
  */
 class DockController(
     private val context: Context,
@@ -64,13 +65,16 @@ class DockController(
 
     fun contains(app: AppModel.App) = dock.any { it.samePackageAndUser(SectionApp.from(app)) }
 
-    fun isFull() = dock.size >= MAX
+    /** As many apps as the home grid has columns (6 by default), so the tiles line up with it. */
+    private val max get() = prefs.widgetColumns
+
+    fun isFull() = dock.size >= max
 
     /** Adds [app] at the end; tells why not when it's already there or the dock is full. */
     fun add(app: AppModel.App) {
         when {
             contains(app) -> context.showToast(context.getString(R.string.ml_dock_already))
-            isFull() -> context.showToast(context.getString(R.string.ml_dock_full, MAX))
+            isFull() -> context.showToast(context.getString(R.string.ml_dock_full, max))
             else -> {
                 dock += SectionApp.from(app)
                 save()
@@ -81,7 +85,7 @@ class DockController(
     /** Picks an app to add, from all apps. */
     fun showAddDialog() {
         if (isFull()) {
-            context.showToast(context.getString(R.string.ml_dock_full, MAX))
+            context.showToast(context.getString(R.string.ml_dock_full, max))
             return
         }
         val entries = apps.filter { !contains(it) }.sortedBy { it.appLabel.lowercase() }.map { app ->
@@ -109,13 +113,14 @@ class DockController(
 
     fun render() {
         container.removeAllViews()
-        val shown = dock.mapNotNull { d -> findApp(d)?.let { d to it } }
+        val shown = dock.mapNotNull { d -> findApp(d)?.let { d to it } }.take(max)
         container.isVisible = shown.isNotEmpty()
         if (!container.isVisible) return
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = UiKit.cardBackground(context, 26)
-            setPadding(10.dpToPx(), 10.dpToPx(), 10.dpToPx(), 10.dpToPx())
+            background = UiKit.cardBackground(context, 20)
+            // No side padding: the card is as wide as the home grid, the tiles sit in its columns
+            setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
             // Long press on the card itself (between the tiles): add an app
             isLongClickable = true
             setOnLongClickListener {
@@ -123,9 +128,13 @@ class DockController(
                 true
             }
         }
-        // Always room for MAX tiles, so they keep their size however many there are
-        for (i in 0 until MAX) {
-            val lp = LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { if (i > 0) marginStart = 6.dpToPx() }
+        // One slot per grid column (with the grid's gap around each tile), so they keep their size
+        // however many apps there are and stay aligned with the home's icons
+        for (i in 0 until max) {
+            val lp = LinearLayout.LayoutParams(0, 46.dpToPx(), 1f).apply {
+                marginStart = GRID_GAP_DP.dpToPx()
+                marginEnd = GRID_GAP_DP.dpToPx()
+            }
             val entry = shown.getOrNull(i)
             row.addView(if (entry == null) FrameLayout(context) else tile(i, entry.first, entry.second), lp)
         }
@@ -154,7 +163,7 @@ class DockController(
             showAppMenu(index, dockApp, app)
             true
         }
-        val size = 30.dpToPx()
+        val size = 28.dpToPx()
         val iconPack = prefs.iconPack
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) {
@@ -191,7 +200,8 @@ class DockController(
     }
 
     companion object {
-        const val MAX = 5
+        /** The gap [app.olauncher.ui.widgets.WidgetGridLayout] leaves around each cell's content. */
+        private const val GRID_GAP_DP = 4
         private const val TILE_RED = 0xFF3A1715.toInt()
     }
 }

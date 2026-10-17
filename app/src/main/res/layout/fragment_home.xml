@@ -178,7 +178,7 @@
         </app.olauncher.ui.HomeScrollView>
 
 
-        <!-- Dock: a card of up to five apps above the search bar (the slot is hidden while searching) -->
+        <!-- Dock: a card of apps above the search bar (the slot is hidden while searching) -->
         <FrameLayout
             android:id="@+id/dockSlot"
             android:layout_width="match_parent"
