@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.PointF
 import android.graphics.RectF
 import android.graphics.pdf.PdfRenderer
 import android.media.MediaScannerConnection
@@ -96,12 +97,19 @@ class PdfViewerActivity : AppCompatActivity() {
     private lateinit var searchBar: LinearLayout
     private lateinit var searchInput: android.widget.EditText
     private lateinit var searchCount: TextView
-    private var search: PdfSearch? = null
+    private var pdfText: PdfText? = null
+    /** OCR progress shown next to the count, while scanned pages are being read. */
+    private var ocrStatus = ""
+    /** Text selected with the "Select" tool: its page and the selection. */
+    private var textSelection: Pair<Int, PdfText.Selection>? = null
+    private var selectStart: PointF? = null
+    private lateinit var selectionBar: LinearLayout
+    private lateinit var selectionText: TextView
     private var hits: List<PdfSearch.Hit> = emptyList()
     private var hitIndex = -1
     private var searchJob: kotlinx.coroutines.Job? = null
 
-    private enum class Tool { NONE, TEXT, CHECK, DRAW, SIGN }
+    private enum class Tool { NONE, TEXT, CHECK, DRAW, SIGN, SELECT }
     private enum class DrawMode { PEN, HIGHLIGHTER, ERASER }
 
     private val inkColor get() = if (drawMode == DrawMode.HIGHLIGHTER) highlightColor else penColor
@@ -133,6 +141,9 @@ class PdfViewerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
         // A link from the browser: download it first
         val link = intent.data?.takeIf { it.scheme == "http" || it.scheme == "https" }
         if (link != null) {
@@ -211,10 +222,10 @@ class PdfViewerActivity : AppCompatActivity() {
                 showToast(getString(R.string.ml_pdf_move_hint), android.widget.Toast.LENGTH_LONG)
             }
         }
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
         setContentView(buildLayout())
+        // After the "downloading" page the insets aren't sent again by themselves: the bar went under the status bar
+        ViewCompat.requestApplyInsets(window.decorView)
+        offerDefault()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (editing != null) stopEdit()
@@ -306,6 +317,7 @@ class PdfViewerActivity : AppCompatActivity() {
             isVisible = false
         }
         root.addView(hint)
+        root.addView(buildSelectionBar())
 
         pager = ZoomRecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@PdfViewerActivity)
@@ -335,12 +347,12 @@ class PdfViewerActivity : AppCompatActivity() {
         }
         listOf(
             Tool.TEXT to R.string.ml_pdf_text, Tool.CHECK to R.string.ml_pdf_check,
-            Tool.DRAW to R.string.ml_pdf_draw, Tool.SIGN to R.string.ml_pdf_sign,
+            Tool.DRAW to R.string.ml_pdf_draw, Tool.SIGN to R.string.ml_pdf_sign, Tool.SELECT to R.string.ml_pdf_select_text,
         ).forEach { (t, label) ->
             toolbar.addView(TextView(this).apply {
                 setText(label)
                 setTextColor(Color.WHITE)
-                textSize = 14f
+                textSize = 13f
                 gravity = Gravity.CENTER
                 maxLines = 1
                 setPadding(2.dpToPx(), 12.dpToPx(), 2.dpToPx(), 12.dpToPx())
@@ -375,6 +387,80 @@ class PdfViewerActivity : AppCompatActivity() {
         setPadding(10.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
         isClickable = true
         setOnClickListener { onClick() }
+    }
+
+    // ---------------------------------------------------------------- text selection
+
+    private fun buildSelectionBar(): View {
+        selectionBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(0xFF101010.toInt())
+            setPadding(12.dpToPx(), 0, 4.dpToPx(), 0)
+            isVisible = false
+        }
+        selectionText = TextView(this).apply {
+            setTextColor(0xB3FFFFFF.toInt())
+            textSize = 13f
+            maxLines = 2
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        selectionBar.addView(selectionText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        selectionBar.addView(button(getString(R.string.ml_pdf_copy), 15f) { copySelection() })
+        selectionBar.addView(button("✕", 18f) { clearTextSelection() })
+        return selectionBar
+    }
+
+    private fun clearTextSelection() {
+        if (!::selectionBar.isInitialized || (textSelection == null && !selectionBar.isVisible)) return
+        textSelection = null
+        selectStart = null
+        selectionBar.isVisible = false
+        invalidatePages()
+    }
+
+    private fun copySelection() {
+        val text = textSelection?.second?.text ?: return
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText(file.name, text))
+        showToast(getString(R.string.ml_pdf_copied))
+        clearTextSelection()
+    }
+
+    /** A drag on [page] with the "Select" tool, at ([fx], [fy]) of the page as shown. */
+    private fun dragSelection(page: Int, action: Int, fx: Float, fy: Float) {
+        val engine = textEngine() ?: return
+        val p = toOriginal(page, fx, fy)
+        if (action == MotionEvent.ACTION_DOWN) {
+            selectStart = p
+            // A scan: read its text first
+            if (!engine.isRecognised(page) && !engine.pageHasText(page)) {
+                selectStart = null
+                hint.setText(R.string.ml_pdf_ocr_page)
+                lifecycleScope.launch {
+                    val ok = withContext(Dispatchers.Default) { engine.recognise(page) }
+                    updateHint()
+                    if (!ok) showToast(getString(R.string.ml_pdf_ocr_failed))
+                }
+            }
+            return
+        }
+        val start = selectStart ?: return
+        val selection = engine.select(page, start, p)
+        textSelection = selection?.let { page to it }
+        invalidatePages()
+        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+            selectionBar.isVisible = selection != null
+            selectionText.text = selection?.text?.replace('\n', ' ')
+        }
+    }
+
+    /** From the page as shown (turned in "Pages") back to the page itself. */
+    private fun toOriginal(page: Int, x: Float, y: Float): PointF = when ((layout.rotation[page] ?: 0).mod(360)) {
+        90 -> PointF(y, 1f - x)
+        180 -> PointF(1f - x, 1f - y)
+        270 -> PointF(1f - y, x)
+        else -> PointF(x, y)
     }
 
     // ---------------------------------------------------------------- search
@@ -457,30 +543,60 @@ class PdfViewerActivity : AppCompatActivity() {
             invalidatePages()
             return
         }
-        if (search == null) searchCount.setText(R.string.ml_pdf_searching)
+        val engine = textEngine() ?: return
+        searchCount.setText(R.string.ml_pdf_searching)
+        ocrStatus = ""
         searchJob = lifecycleScope.launch {
-            val found = withContext(Dispatchers.Default) {
-                val s = search ?: PdfSearch.load(this@PdfViewerActivity, file)?.also { search = it }
-                s?.find(query)
-            }
-            if (found == null) {
-                searchCount.setText(R.string.ml_pdf_search_no_text)
-                return@launch
-            }
             // In the order the pages are shown (after any reordering), deleted pages left out
-            hits = found.filter { it.page in layout.order }.sortedBy { layout.order.indexOf(it.page) }
+            val pages = layout.order.toList()
+            val scanned = mutableListOf<Int>()
+            val found = withContext(Dispatchers.Default) {
+                pages.flatMap { p ->
+                    if (engine.isRecognised(p) || engine.pageHasText(p)) engine.search(p, query)
+                    else emptyList<PdfSearch.Hit>().also { scanned += p }
+                }
+            }
+            hits = found
             hitIndex = -1
-            if (hits.isEmpty()) {
-                searchCount.setText(R.string.ml_pdf_search_none)
-                invalidatePages()
-            } else moveHit(1)
+            if (hits.isNotEmpty()) moveHit(1) else updateCount()
+            invalidatePages()
+            // Scanned pages: read their text (OCR) one by one, adding their matches as they come
+            scanned.forEachIndexed { i, p ->
+                ocrStatus = getString(R.string.ml_pdf_ocr_progress, i + 1, scanned.size)
+                updateCount()
+                val more = withContext(Dispatchers.Default) {
+                    if (engine.recognise(p)) engine.search(p, query) else emptyList()
+                }
+                if (more.isNotEmpty()) {
+                    val current = hits.getOrNull(hitIndex)
+                    hits = (hits + more).sortedBy { pages.indexOf(it.page) }
+                    if (current == null) moveHit(1) else {
+                        hitIndex = hits.indexOf(current)
+                        updateCount()
+                    }
+                    invalidatePages()
+                }
+            }
+            ocrStatus = ""
+            updateCount()
         }
+    }
+
+    private fun textEngine(): PdfText? = pdfText ?: renderer?.let { PdfText(this, file, it).also { t -> pdfText = t } }
+
+    private fun updateCount() {
+        val count = when {
+            hits.isEmpty() && ocrStatus.isEmpty() -> getString(R.string.ml_pdf_search_none)
+            hits.isEmpty() -> ""
+            else -> "${hitIndex + 1}/${hits.size}"
+        }
+        searchCount.text = listOf(count, ocrStatus).filter { it.isNotEmpty() }.joinToString("  ·  ")
     }
 
     private fun moveHit(delta: Int) {
         if (hits.isEmpty()) return
         hitIndex = if (hitIndex < 0) 0 else (hitIndex + delta).mod(hits.size)
-        searchCount.text = "${hitIndex + 1}/${hits.size}"
+        updateCount()
         hideKeyboard(searchInput)
         invalidatePages()
         val hit = hits[hitIndex]
@@ -533,6 +649,7 @@ class PdfViewerActivity : AppCompatActivity() {
     }
 
     private fun setTool(t: Tool) {
+        if (t != Tool.SELECT) clearTextSelection()
         tool = t
         for (i in 0 until toolbar.childCount) {
             val v = toolbar.getChildAt(i) as TextView
@@ -555,6 +672,7 @@ class PdfViewerActivity : AppCompatActivity() {
             tool == Tool.CHECK -> getString(R.string.ml_pdf_check_hint)
             tool == Tool.DRAW -> getString(R.string.ml_pdf_draw_hint)
             tool == Tool.SIGN -> getString(R.string.ml_pdf_sign_hint)
+            tool == Tool.SELECT -> getString(R.string.ml_pdf_select_text_hint)
             else -> ""
         }
     }
@@ -841,6 +959,55 @@ class PdfViewerActivity : AppCompatActivity() {
                 MenuEntry(getString(R.string.ml_pdf_share_copy)) { share(target) },
                 MenuEntry(getString(R.string.ml_search_open)) { open(this@PdfViewerActivity, target); finish() },
             ))
+        }
+    }
+
+    // ---------------------------------------------------------------- default PDF app
+
+    /** The app that opens PDFs without asking: null when none is set (the system asks). */
+    private fun defaultPdfApp(): String? {
+        val probe = Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse("content://$packageName.files/probe.pdf"), "application/pdf")
+        val info = packageManager.resolveActivity(probe, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY) ?: return null
+        return info.activityInfo?.packageName?.takeIf { it != "android" && !it.contains("resolver", true) }
+    }
+
+    /** Asks once to become the app for PDFs, when it isn't already. */
+    private fun offerDefault() {
+        val prefs = getSharedPreferences("app.minimalauncher.hints", MODE_PRIVATE)
+        if (prefs.getBoolean("pdf_default_asked", false) || defaultPdfApp() == packageName) return
+        prefs.edit().putBoolean("pdf_default_asked", true).apply()
+        showConfirmDialog(getString(R.string.ml_pdf_default_title), getString(R.string.ml_pdf_default_message), getString(R.string.ml_pdf_default_action)) {
+            makeDefault()
+        }
+    }
+
+    /**
+     * Android doesn't let an app make itself the default: with another app set, its settings page
+     * opens (to clear its defaults); with none, the system's choice opens on this PDF, to pick
+     * this app with "Always".
+     */
+    private fun makeDefault() {
+        val current = defaultPdfApp()
+        when {
+            current == packageName -> showToast(getString(R.string.ml_pdf_default_already))
+            current != null -> {
+                showToast(getString(R.string.ml_pdf_default_clear), android.widget.Toast.LENGTH_LONG)
+                try {
+                    startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$current")))
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            else -> {
+                showToast(getString(R.string.ml_pdf_default_pick), android.widget.Toast.LENGTH_LONG)
+                try {
+                    val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+                    startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+                    finish()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
         }
     }
 
@@ -1175,6 +1342,7 @@ class PdfViewerActivity : AppCompatActivity() {
 
             private val hitPaint = Paint().apply { color = 0x66FFEB3B }
             private val currentHitPaint = Paint().apply { color = 0x88FF9800.toInt() }
+            private val selectionPaint = Paint().apply { color = 0x552979FF }
 
             /** The search matches on this page; the current one stronger. */
             private fun drawHits(canvas: Canvas, r: RectF) {
@@ -1183,6 +1351,9 @@ class PdfViewerActivity : AppCompatActivity() {
                     if (hit.page != original) return@forEach
                     val paint = if (hit === current) currentHitPaint else hitPaint
                     hit.rects.forEach { canvas.drawRect(toView(r, hitBox(original, it)), paint) }
+                }
+                textSelection?.takeIf { it.first == original }?.second?.rects?.forEach {
+                    canvas.drawRect(toView(r, hitBox(original, it)), selectionPaint)
                 }
             }
 
@@ -1324,6 +1495,11 @@ class PdfViewerActivity : AppCompatActivity() {
                 }
                 val fx = ((e.x - r.left) / r.width()).coerceIn(0f, 1f)
                 val fy = ((e.y - r.top) / r.height()).coerceIn(0f, 1f)
+                if (tool == Tool.SELECT) {
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    dragSelection(original, e.actionMasked, fx, fy)
+                    return true
+                }
                 val sel = selected?.takeIf { it.page == original }
                 if (sel != null && handleSelection(e, r, sel, fx, fy)) return true
                 if (tool == Tool.NONE || (tool != Tool.DRAW && e.actionMasked == MotionEvent.ACTION_DOWN && annotationAt(r, e.x, e.y) != null) || pressed != null)
@@ -1372,7 +1548,7 @@ class PdfViewerActivity : AppCompatActivity() {
                         select(a)
                     }
 
-                    Tool.NONE -> Unit
+                    Tool.NONE, Tool.SELECT -> Unit
                 }
                 invalidate()
                 return true

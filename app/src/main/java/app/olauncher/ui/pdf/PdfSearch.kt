@@ -20,6 +20,11 @@ class PdfSearch private constructor(private val pages: List<PageText>) {
 
     private class PageText(val text: String, val boxes: List<RectF?>)
 
+    fun hasText(page: Int) = pages.getOrNull(page)?.text?.isNotBlank() == true
+
+    /** Matches on one page. */
+    fun find(query: String, page: Int): List<Hit> = find(query).filter { it.page == page }
+
     fun find(query: String): List<Hit> {
         val q = fold(query.trim().replace(Regex("\\s+"), " "))
         if (q.isEmpty()) return emptyList()

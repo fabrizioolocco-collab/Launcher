@@ -609,4 +609,17 @@
     <string name="ml_pdf_search_no_text">Nessun testo da cercare</string>
     <string name="ml_pdf_search_none">Non trovato</string>
     <string name="ml_pdf_downloading">Scarico il PDF…</string>
+    <string name="ml_pdf_select_text">Seleziona</string>
+    <string name="ml_pdf_select_text_hint">Trascina sul testo per selezionarlo, poi Copia</string>
+    <string name="ml_pdf_copy">Copia</string>
+    <string name="ml_pdf_copied">Testo copiato</string>
+    <string name="ml_pdf_ocr_progress">OCR %1$d/%2$d</string>
+    <string name="ml_pdf_ocr_page">Lettura del testo della pagina (OCR)…</string>
+    <string name="ml_pdf_ocr_failed">Riconoscimento del testo non disponibile</string>
+    <string name="ml_pdf_default_title">App per i PDF</string>
+    <string name="ml_pdf_default_message">Aprire i PDF sempre con MinimaLauncher?</string>
+    <string name="ml_pdf_default_action">Imposta come predefinita</string>
+    <string name="ml_pdf_default_already">È già l\'app per i PDF</string>
+    <string name="ml_pdf_default_clear">Un\'altra app apre i PDF: nella sua pagina tocca \"Apri per impostazione predefinita\" → \"Cancella impostazioni predefinite\", poi apri un PDF e scegli MinimaLauncher → Sempre</string>
+    <string name="ml_pdf_default_pick">Scegli MinimaLauncher e tocca \"Sempre\"</string>
 </resources>

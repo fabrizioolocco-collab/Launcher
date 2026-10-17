@@ -72,6 +72,8 @@ dependencies {
     implementation libs.exifinterface
     // PDF editing (annotations, signature, page order) without rasterising the pages
     implementation libs.pdfbox
+    // OCR of scanned PDF pages (the model comes with Google Play services)
+    implementation libs.mlkit.text.recognition
 
     // Android lifecycle
     implementation libs.lifecycle.extensions

@@ -4,4 +4,8 @@
     <external-path
         name="storage"
         path="." />
+    <!-- PDFs from other apps or links, copied to the cache -->
+    <cache-path
+        name="cache"
+        path="." />
 </paths>

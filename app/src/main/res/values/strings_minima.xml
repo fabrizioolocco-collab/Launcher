@@ -615,4 +615,17 @@
     <string name="ml_pdf_search_no_text">No text to search</string>
     <string name="ml_pdf_search_none">Not found</string>
     <string name="ml_pdf_downloading">Downloading the PDF…</string>
+    <string name="ml_pdf_select_text">Select</string>
+    <string name="ml_pdf_select_text_hint">Drag over the text to select it, then Copy</string>
+    <string name="ml_pdf_copy">Copy</string>
+    <string name="ml_pdf_copied">Text copied</string>
+    <string name="ml_pdf_ocr_progress">OCR %1$d/%2$d</string>
+    <string name="ml_pdf_ocr_page">Reading the text of the page (OCR)…</string>
+    <string name="ml_pdf_ocr_failed">Text recognition not available</string>
+    <string name="ml_pdf_default_title">App for PDFs</string>
+    <string name="ml_pdf_default_message">Open PDFs always with MinimaLauncher?</string>
+    <string name="ml_pdf_default_action">Set as default</string>
+    <string name="ml_pdf_default_already">Already the app for PDFs</string>
+    <string name="ml_pdf_default_clear">Another app opens the PDFs: in its page tap \"Open by default\" → \"Clear defaults\", then open a PDF and choose MinimaLauncher → Always</string>
+    <string name="ml_pdf_default_pick">Choose MinimaLauncher and tap \"Always\"</string>
 </resources>
