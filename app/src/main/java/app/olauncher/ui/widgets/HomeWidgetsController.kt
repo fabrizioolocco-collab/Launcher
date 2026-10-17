@@ -173,6 +173,8 @@ class HomeWidgetsController(
     }
 
     private fun save() {
+        // An icon placed over an undrawn one takes its cell for good
+        widgets.filter { holdsCell(it) }.forEach { dropGhostsUnder(it) }
         repo.save(widgets)
         loadedRaw = repo.raw()
     }
@@ -629,9 +631,23 @@ class HomeWidgetsController(
      * itself. Only icons and sections occupy the grid; widgets float over it. The cells must be
      * visible: the home doesn't scroll.
      */
+    /**
+     * An icon whose app isn't there any more (uninstalled, or its activity gone) is not drawn: it
+     * doesn't hold its cell either. During detox, or before the apps are known, it still does.
+     */
+    private fun holdsCell(item: HomeWidget): Boolean =
+        item.isApp && item.row >= 0 &&
+                (apps.isEmpty() || !DetoxManager.isAllowed(activity, item.packageName.orEmpty()) || findApp(item) != null)
+
+    /** Drops the undrawn icons under [item] (just placed there): their cell is taken now. */
+    private fun dropGhostsUnder(item: HomeWidget) {
+        if (apps.isEmpty()) return
+        widgets.removeAll { it !== item && it.isApp && it.row >= 0 && !holdsCell(it) && overlaps(it, item.col, item.row, item.colSpan, item.rowSpan) }
+    }
+
     private fun isFree(col: Int, row: Int, colSpan: Int, rowSpan: Int, except: Any?): Boolean =
         col >= 0 && row >= 0 && col + colSpan <= prefs.widgetColumns && grid.fits(row, rowSpan) &&
-                widgets.none { it !== except && it.isApp && it.row >= 0 && overlaps(it, col, row, colSpan, rowSpan) } &&
+                widgets.none { it !== except && holdsCell(it) && overlaps(it, col, row, colSpan, rowSpan) } &&
                 blocks.none { it !== except && it.row >= 0 && row < it.row + it.rowSpan && it.row < row + rowSpan }
 
     /** First free cell for an item of that size (also passing [accept]), or null when the home is full. */
