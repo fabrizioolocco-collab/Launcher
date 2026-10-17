@@ -180,7 +180,10 @@ class HomeWidgetsController(
         widgets = repo.load()
         render()
         grid.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-            if (bottom - top != oldBottom - oldTop) grid.post { fitToHeight() }
+            if (bottom - top != oldBottom - oldTop) grid.post {
+                fitToHeight()
+                replaceNews()
+            }
         }
     }
 
@@ -241,10 +244,10 @@ class HomeWidgetsController(
             grid.post { if (newsBlock.row < 0) setBlocks(sectionBlocks) }
         }
         blocks.forEach { block ->
-            if (block === newsBlock && block.row < 0) {
-                if (grid.height == 0) return@forEach
-                block.row = findFreeSpotFromBottom(block.rowSpan, block) ?: findFreeSpot(columns, block.rowSpan, block)?.second ?: 0
-                prefs.newsRow = block.row
+            if (block === newsBlock) {
+                if (grid.height == 0 && prefs.newsRow < 0) return@forEach
+                block.row = newsRow()
+                if (prefs.newsRow < 0) prefs.newsRow = block.row
             } else if (block.row < 0 || !isFree(0, block.row, columns, block.rowSpan, block)) {
                 // No visible row left: the section goes below the others (clipped) rather than lost
                 block.row = findFreeSpot(columns, block.rowSpan, block)?.second ?: usedRows()
@@ -259,6 +262,32 @@ class HomeWidgetsController(
 
     private fun blockMoved(block: Block) {
         if (block === newsBlock) prefs.newsRow = block.row else onBlockMoved?.invoke(block)
+    }
+
+    /**
+     * Where the news strip goes: the row the user put it on ([Prefs.newsRow], changed only by
+     * dragging it or by [fitToHeight]) or, while that is taken or past the bottom, the nearest free row. That
+     * fallback is not saved, so the strip goes back to its row as soon as it is free again.
+     */
+    private fun newsRow(): Int {
+        val span = newsBlock.rowSpan
+        val columns = prefs.widgetColumns
+        val wanted = prefs.newsRow
+        if (wanted >= 0) for (d in 0..MAX_NEWS_SHIFT) {
+            if (wanted - d >= 0 && isFree(0, wanted - d, columns, span, newsBlock)) return wanted - d
+            if (d > 0 && isFree(0, wanted + d, columns, span, newsBlock)) return wanted + d
+        }
+        return findFreeSpotFromBottom(span, newsBlock) ?: findFreeSpot(columns, span, newsBlock)?.second ?: wanted.coerceAtLeast(0)
+    }
+
+    /** The grid changed height: the news strip may fit on its own row again (or no longer). */
+    private fun replaceNews() {
+        if (newsBlock.row < 0 || prefs.newsRow < 0) return
+        val row = newsRow()
+        if (row == newsBlock.row) return
+        newsBlock.row = row
+        (newsView.layoutParams as? WidgetGridLayout.CellParams)?.row = row
+        grid.requestLayout()
     }
 
     /** The lowest visible row where a full-width block of [rowSpan] rows is free. */
@@ -1096,6 +1125,8 @@ class HomeWidgetsController(
         private const val LEGACY_TOP_DP = 140
 
         private const val NEWS_ID = "news"
+        /** How many rows away from its own row the news strip may go while that row is taken. */
+        private const val MAX_NEWS_SHIFT = 64
 
         /** Frames to wait for the home layout before placing icons added from the app drawer. */
         private const val MAX_PLACE_TRIES = 20
