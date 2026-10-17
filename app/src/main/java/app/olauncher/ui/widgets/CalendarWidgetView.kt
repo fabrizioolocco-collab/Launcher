@@ -39,7 +39,8 @@ import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
-import app.olauncher.helper.showPopupMenu
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.showDropdown
 import app.olauncher.helper.showToast
 import app.olauncher.ui.todo.TODO_LATE_COLOR
 import app.olauncher.ui.todo.TodoActivity
@@ -495,17 +496,13 @@ class CalendarWidgetView(
     /** Drop-down under the +: new event, new todo, the ToDo app. */
     private fun showAddMenu(anchor: View) {
         val day = firstDay()
-        anchor.showPopupMenu(configure = { menu ->
-            menu.add(0, 1, 0, R.string.ml_cal_add_event)
-            menu.add(0, 2, 1, R.string.ml_cal_add_todo)
-            menu.add(0, 3, 2, R.string.ml_cal_open_todo)
-        }) { item ->
-            when (item.itemId) {
-                1 -> CalendarEvents.addEvent(activity, day)
-                2 -> TodoEditActivity.create(activity, maxOf(day, CalendarEvents.julianDay(System.currentTimeMillis())))
-                3 -> TodoActivity.open(activity)
-            }
-        }
+        anchor.showDropdown(listOf(
+            MenuEntry(activity.getString(R.string.ml_cal_add_event)) { CalendarEvents.addEvent(activity, day) },
+            MenuEntry(activity.getString(R.string.ml_cal_add_todo)) {
+                TodoEditActivity.create(activity, maxOf(day, CalendarEvents.julianDay(System.currentTimeMillis())))
+            },
+            MenuEntry(activity.getString(R.string.ml_cal_open_todo)) { TodoActivity.open(activity) },
+        ))
     }
 
     /** Done todos go away: by setting, or with the header button on "only those to do". */

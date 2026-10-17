@@ -40,6 +40,12 @@ class MenuEntry(
     val label: String,
     val checked: Boolean? = null,
     val onToggle: ((Boolean) -> Boolean)? = null,
+    /** Starts a new group with this title (small capitals above it). */
+    val section: String? = null,
+    /** Current value, shown on the right ("Days shown: 1" is split like that by itself). */
+    val value: String? = null,
+    val icon: Int = 0,
+    val destructive: Boolean = false,
     val onClick: () -> Unit = {},
 )
 
@@ -47,6 +53,7 @@ private fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding>
     val dialog = OlDialog(this)
     val binding = DialogBaseBinding.inflate(LayoutInflater.from(dialog.context))
     binding.tvTitle.text = title
+    styleTitle(binding.tvTitle)
     binding.ivClose.setOnClickListener { dialog.dismiss() }
     binding.tvAction.isVisible = false
     dialog.setView(binding.root)
@@ -72,46 +79,168 @@ private fun Context.limitedHeight(content: View, itemCount: Int): View {
     return scroll
 }
 
-/** Simple vertical list of actions. Tapping one closes the dialog and runs it. Long lists get a search field. */
+/**
+ * Vertical list of actions in bordered groups (a [MenuEntry.section] starts a new one), each row
+ * with its icon and, on the right, its value. Tapping one closes the dialog and runs it. App menus
+ * get Info / Rename / Hide / Uninstall as tiles on top. Long lists get a search field.
+ */
 fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((OlDialog) -> View?)? = null): OlDialog {
     val (dialog, binding) = baseDialog(title)
     val ctx = dialog.context
     val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val secondary = ctx.getColorFromAttr(R.attr.secondaryTextColor)
+    val line = ctx.getColorFromAttr(R.attr.cardLineColor)
     val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
     val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-    val rows = entries.map { entry ->
-        if (entry.checked != null) return@map SwitchCompat(ctx).apply {
-            text = entry.label
-            textSize = 18f
-            setTextColor(primary)
-            setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
-            isChecked = entry.checked
-            var reverting = false
-            setOnCheckedChangeListener { button, isChecked ->
-                if (reverting) return@setOnCheckedChangeListener
-                if (entry.onToggle?.invoke(isChecked) == false) {
-                    reverting = true
-                    button.isChecked = !isChecked
-                    reverting = false
-                }
-            }
-        }.also {
-            list.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    val known = MenuIcons.known(ctx)
+
+    fun run(entry: MenuEntry) {
+        dialog.currentFocus?.hideKeyboard()
+        dialog.dismiss()
+        entry.onClick()
+    }
+
+    // App menus: the four usual actions as tiles
+    val tiles = MenuIcons.tiles(ctx, entries)
+    if (tiles.isNotEmpty()) {
+        val grid = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
+        tiles.forEachIndexed { i, entry ->
+            val look = known[entry.label]
+            val color = if (look?.destructive == true) DESTRUCTIVE_COLOR else primary
+            grid.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                background = groupBackground(ctx, line, 16)
+                foreground = ripple(ctx)
+                minimumHeight = 72.dpToPx()
+                setPadding(2.dpToPx(), 10.dpToPx(), 2.dpToPx(), 10.dpToPx())
+                isClickable = true
+                contentDescription = entry.label
+                setOnClickListener { run(entry) }
+                addView(ImageView(ctx).apply {
+                    setImageResource(look?.icon ?: 0)
+                    imageTintList = ColorStateList.valueOf(color)
+                }, LinearLayout.LayoutParams(22.dpToPx(), 22.dpToPx()))
+                addView(TextView(ctx).apply {
+                    text = look?.short ?: entry.label
+                    setTextColor(color)
+                    textSize = 12f
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(0, 6.dpToPx(), 0, 0)
+                })
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                if (i > 0) marginStart = 8.dpToPx()
+            })
         }
-        ctx.dialogTextView(R.style.TextSmall).apply {
-            text = entry.label
-            textSize = 18f
-            setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
+        list.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = 10.dpToPx()
+        })
+    }
+
+    var group: LinearLayout? = null
+    val dividers = mutableListOf<View>()
+    fun newGroup(sectionTitle: String?) {
+        if (!sectionTitle.isNullOrEmpty()) list.addView(TextView(ctx).apply {
+            text = sectionTitle.uppercase()
+            setTextColor(secondary)
+            textSize = 12f
+            letterSpacing = 0.08f
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding(8.dpToPx(), if (list.childCount == 0) 0 else 6.dpToPx(), 0, 6.dpToPx())
+        })
+        group = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            background = groupBackground(ctx, line, 16)
+            clipToOutline = true
+        }
+        list.addView(group, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            bottomMargin = 10.dpToPx()
+        })
+    }
+
+    val rows: List<View?> = entries.map { entry ->
+        if (entry in tiles) return@map null
+        if (group == null || entry.section != null) newGroup(entry.section)
+        val g = group!!
+        if (g.childCount > 0) View(ctx).apply { setBackgroundColor(line) }.also {
+            dividers += it
+            g.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1.dpToPx()))
+        }
+        val look = known[entry.label]
+        // "Days shown: 1" → "Days shown" with "1" on the right
+        var label = entry.label
+        var value = entry.value
+        if (value == null && entry.checked == null) {
+            Regex("^(.{1,48}): (.{1,40})$").find(entry.label)?.let {
+                label = it.groupValues[1]
+                value = it.groupValues[2]
+            }
+        }
+        val destructive = entry.destructive || look?.destructive == true
+        val row = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = 52.dpToPx()
+            setPadding(14.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+            foreground = ripple(ctx)
             isClickable = true
             isFocusable = true
-            setOnClickListener {
-                hideKeyboard()
-                dialog.dismiss()
-                entry.onClick()
-            }
-        }.also {
-            list.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+        val iconRes = if (entry.icon != 0) entry.icon else look?.icon ?: 0
+        if (iconRes != 0) row.addView(ImageView(ctx).apply {
+            setImageResource(iconRes)
+            imageTintList = ColorStateList.valueOf(if (destructive) DESTRUCTIVE_COLOR else secondary)
+        }, LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { marginEnd = 14.dpToPx() })
+        row.addView(TextView(ctx).apply {
+            text = label
+            textSize = 16f
+            setTextColor(if (destructive) DESTRUCTIVE_COLOR else primary)
+        }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        if (entry.checked != null) {
+            val switch = SwitchCompat(ctx).apply {
+                isChecked = entry.checked
+                thumbTintList = ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(ctx.getColorFromAttr(R.attr.cardColor), secondary)
+                )
+                trackTintList = ColorStateList(
+                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                    intArrayOf(primary, line)
+                )
+                var reverting = false
+                setOnCheckedChangeListener { button, isChecked ->
+                    if (reverting) return@setOnCheckedChangeListener
+                    if (entry.onToggle?.invoke(isChecked) == false) {
+                        reverting = true
+                        button.isChecked = !isChecked
+                        reverting = false
+                    }
+                }
+            }
+            row.addView(switch)
+            row.setOnClickListener { switch.toggle() }
+        } else {
+            value?.let { v ->
+                row.addView(TextView(ctx).apply {
+                    text = v
+                    textSize = 14f
+                    setTextColor(secondary)
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(10.dpToPx(), 0, 6.dpToPx(), 0)
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 0f })
+                row.addView(TextView(ctx).apply {
+                    text = "›"
+                    textSize = 18f
+                    setTextColor(secondary)
+                })
+            }
+            row.setOnClickListener { run(entry) }
+        }
+        g.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        row
     }
     if (entries.size > SEARCH_THRESHOLD) {
         val filter = EditText(ctx).apply {
@@ -119,8 +248,9 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
             setSingleLine(true)
             textSize = 16f
             setTextColor(primary)
-            setHintTextColor(ctx.getColorFromAttr(R.attr.primaryColorTrans50))
-            backgroundTintList = ColorStateList.valueOf(primary)
+            setHintTextColor(secondary)
+            background = groupBackground(ctx, line, 14)
+            setPadding(14.dpToPx(), 10.dpToPx(), 14.dpToPx(), 10.dpToPx())
             imeOptions = EditorInfo.IME_ACTION_DONE
         }
         filter.addTextChangedListener(object : TextWatcher {
@@ -128,7 +258,8 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 val q = s?.toString().orEmpty().trim()
-                rows.forEachIndexed { i, row -> row.isVisible = q.isEmpty() || entries[i].label.contains(q, true) }
+                rows.forEachIndexed { i, row -> row?.isVisible = q.isEmpty() || entries[i].label.contains(q, true) }
+                dividers.forEach { it.isVisible = q.isEmpty() }
             }
         })
         container.addView(filter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -142,6 +273,91 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
     binding.contentContainer.isVisible = true
     dialog.showRespectingStatusBar()
     return dialog
+}
+
+/** Dialog titles: smaller and bold, like the cards' headers. */
+fun styleTitle(title: TextView) {
+    title.textSize = 19f
+    title.setTypeface(title.typeface, android.graphics.Typeface.BOLD)
+}
+
+/** Red of the actions that delete or uninstall. */
+const val DESTRUCTIVE_COLOR = 0xFFE5534B.toInt()
+
+/** A group's border: thin line, rounded [radiusDp]. */
+fun groupBackground(ctx: Context, line: Int, radiusDp: Int) = android.graphics.drawable.GradientDrawable().apply {
+    cornerRadius = radiusDp.dpToPx().toFloat()
+    setStroke(1.dpToPx(), line)
+}
+
+private fun ripple(ctx: Context): android.graphics.drawable.Drawable? {
+    val tv = android.util.TypedValue()
+    return if (ctx.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true))
+        androidx.core.content.ContextCompat.getDrawable(ctx, tv.resourceId) else null
+}
+
+/** Icons and looks of the entries every menu shares, found by their label. */
+object MenuIcons {
+    class Look(val icon: Int, val destructive: Boolean = false, val short: String? = null)
+
+    private var cache: Pair<java.util.Locale, Map<String, Look>>? = null
+
+    fun known(ctx: Context): Map<String, Look> {
+        val locale = ctx.resources.configuration.locales[0]
+        cache?.takeIf { it.first == locale }?.let { return it.second }
+        fun s(id: Int) = ctx.getString(id)
+        val map = mapOf(
+            s(R.string.ml_app_info) to Look(R.drawable.ic_m_info, short = s(R.string.ml_tile_info)),
+            s(R.string.rename) to Look(R.drawable.ic_m_rename),
+            s(R.string.adapter_hide) to Look(R.drawable.ic_m_hide),
+            s(R.string.adapter_show) to Look(R.drawable.ic_m_show),
+            s(R.string.delete) to Look(R.drawable.ic_m_delete, destructive = true),
+            s(R.string.ml_change_icon) to Look(R.drawable.ic_m_icon),
+            s(R.string.ml_add_to_section) to Look(R.drawable.ic_m_add_section),
+            s(R.string.ml_add_to_tab) to Look(R.drawable.ic_m_tab),
+            s(R.string.ml_tab_back_to_all) to Look(R.drawable.ic_m_back),
+            s(R.string.ml_move_up) to Look(R.drawable.ic_m_up),
+            s(R.string.ml_move_down) to Look(R.drawable.ic_m_down),
+            s(R.string.ml_app_move_to) to Look(R.drawable.ic_m_move),
+            s(R.string.ml_app_copy_to) to Look(R.drawable.ic_m_copy),
+            s(R.string.ml_app_remove_from_section) to Look(R.drawable.ic_m_remove),
+            s(R.string.ml_add_app) to Look(R.drawable.ic_m_app),
+            s(R.string.ml_add_widget) to Look(R.drawable.ic_m_widget),
+            s(R.string.ml_section_new) to Look(R.drawable.ic_m_section),
+            s(R.string.ml_folder_new_ellipsis) to Look(R.drawable.ic_m_folder),
+            s(R.string.ml_parking_menu) to Look(R.drawable.ic_m_parking),
+            s(R.string.ml_news_zone_show) to Look(R.drawable.ic_m_news),
+            s(R.string.ml_explorer) to Look(R.drawable.ic_m_file),
+            s(R.string.ml_detox) to Look(R.drawable.ic_m_detox),
+            s(R.string.ml_settings) to Look(R.drawable.ic_m_settings),
+            s(R.string.ml_section_rename) to Look(R.drawable.ic_m_rename),
+            s(R.string.ml_section_edit_apps) to Look(R.drawable.ic_m_app),
+            s(R.string.ml_section_delete) to Look(R.drawable.ic_m_delete, destructive = true),
+            s(R.string.ml_tab_delete) to Look(R.drawable.ic_m_delete, destructive = true),
+            s(R.string.ml_tab_edit_apps) to Look(R.drawable.ic_m_app),
+            s(R.string.ml_open_app) to Look(R.drawable.ic_m_open),
+            s(R.string.ml_cal_settings) to Look(R.drawable.ic_m_settings),
+            s(R.string.ml_widget_remove) to Look(R.drawable.ic_m_remove, destructive = true),
+            s(R.string.ml_cal_add_event) to Look(R.drawable.ic_m_event),
+            s(R.string.ml_cal_add_todo) to Look(R.drawable.ic_m_todo),
+            s(R.string.ml_cal_open_todo) to Look(R.drawable.ic_m_open),
+            s(R.string.ml_todo_delete) to Look(R.drawable.ic_m_delete, destructive = true),
+            s(R.string.ml_todo_category_delete) to Look(R.drawable.ic_m_delete, destructive = true),
+            s(R.string.ml_todo_edit) to Look(R.drawable.ic_m_rename),
+            s(R.string.ml_todo_duplicate) to Look(R.drawable.ic_m_copy),
+        )
+        cache = locale to map
+        return map
+    }
+
+    /** The tiles of an app menu (it has app info and uninstall): info, rename, hide/show, uninstall. */
+    fun tiles(ctx: Context, entries: List<MenuEntry>): List<MenuEntry> {
+        val labels = listOf(R.string.ml_app_info, R.string.rename, R.string.adapter_hide, R.string.adapter_show, R.string.delete).map { ctx.getString(it) }
+        val info = ctx.getString(R.string.ml_app_info)
+        val uninstall = ctx.getString(R.string.delete)
+        if (entries.none { it.label == info } || entries.none { it.label == uninstall }) return emptyList()
+        return labels.mapNotNull { l -> entries.firstOrNull { it.label == l && it.checked == null } }
+    }
 }
 
 private const val SEARCH_THRESHOLD = 12
@@ -226,16 +442,51 @@ fun Context.showStatusDialog(title: String, message: String, action: String, onA
 /** Confirmation with a message and one action. */
 fun Context.showConfirmDialog(title: String, message: String, action: String, onConfirm: () -> Unit): OlDialog {
     val (dialog, binding) = baseDialog(title)
+    val ctx = dialog.context
     binding.tvMessage.text = message
     binding.tvMessage.isVisible = true
-    binding.tvAction.text = action
-    binding.tvAction.isVisible = true
-    binding.tvAction.setOnClickListener {
+    binding.tvMessage.setTextColor(ctx.getColorFromAttr(R.attr.secondaryTextColor))
+    // Cancel / action as two buttons; the action is red when it deletes or throws something away
+    val destructive = MenuIcons.known(ctx)[action]?.destructive == true ||
+            action in listOf(R.string.ml_todo_delete, R.string.ml_explorer_delete, R.string.ml_edit_discard_action).map { ctx.getString(it) }
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val buttons = LinearLayout(ctx).apply {
+        orientation = LinearLayout.HORIZONTAL
+        setPadding(0, 8.dpToPx(), 8.dpToPx(), 0)
+    }
+    buttons.addView(pillButton(ctx, ctx.getString(R.string.ml_todo_cancel), filled = false, color = primary) { dialog.dismiss() },
+        LinearLayout.LayoutParams(0, 48.dpToPx(), 1f).apply { marginEnd = 10.dpToPx() })
+    buttons.addView(pillButton(ctx, action, filled = true, color = if (destructive) DESTRUCTIVE_COLOR else primary) {
         dialog.dismiss()
         onConfirm()
-    }
+    }, LinearLayout.LayoutParams(0, 48.dpToPx(), 1f))
+    binding.contentContainer.addView(buttons)
+    binding.contentContainer.isVisible = true
     dialog.showRespectingStatusBar()
     return dialog
+}
+
+/** Rounded button: outlined, or filled with [color] (text then in the card's color, white on red). */
+fun pillButton(ctx: Context, label: String, filled: Boolean, color: Int, onClick: () -> Unit) = TextView(ctx).apply {
+    text = label
+    textSize = 15f
+    gravity = Gravity.CENTER
+    maxLines = 1
+    setTypeface(typeface, android.graphics.Typeface.BOLD)
+    setTextColor(
+        when {
+            !filled -> color
+            color == DESTRUCTIVE_COLOR -> 0xFFFFFFFF.toInt()
+            else -> ctx.getColorFromAttr(R.attr.cardColor)
+        }
+    )
+    background = android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = 24.dpToPx().toFloat()
+        if (filled) setColor(color) else setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.cardStrokeColor))
+    }
+    isClickable = true
+    isFocusable = true
+    setOnClickListener { onClick() }
 }
 
 /**
@@ -560,4 +811,56 @@ fun Context.showColorPickerDialog(title: String, initial: Int, defaultLabel: Str
     dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
     dialog.showRespectingStatusBar()
     return dialog
+}
+
+/**
+ * A small drop-down card under this view (end-aligned), one row per entry with its icon.
+ * Tapping one closes it and runs it.
+ */
+fun View.showDropdown(entries: List<MenuEntry>): android.widget.PopupWindow {
+    val ctx = context
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    val secondary = ctx.getColorFromAttr(R.attr.secondaryTextColor)
+    val known = MenuIcons.known(ctx)
+    val card = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(6.dpToPx(), 6.dpToPx(), 6.dpToPx(), 6.dpToPx())
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 16.dpToPx().toFloat()
+            setColor(ctx.getColorFromAttr(R.attr.cardColor))
+            setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.cardStrokeColor))
+        }
+    }
+    val popup = android.widget.PopupWindow(card, 220.dpToPx(), ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+        elevation = 8.dpToPx().toFloat()
+        setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+        isOutsideTouchable = true
+    }
+    entries.forEach { entry ->
+        val look = known[entry.label]
+        card.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = 46.dpToPx()
+            setPadding(10.dpToPx(), 0, 10.dpToPx(), 0)
+            background = ripple(ctx)
+            isClickable = true
+            val iconRes = if (entry.icon != 0) entry.icon else look?.icon ?: 0
+            if (iconRes != 0) addView(ImageView(ctx).apply {
+                setImageResource(iconRes)
+                imageTintList = ColorStateList.valueOf(secondary)
+            }, LinearLayout.LayoutParams(18.dpToPx(), 18.dpToPx()).apply { marginEnd = 12.dpToPx() })
+            addView(TextView(ctx).apply {
+                text = entry.label
+                textSize = 15f
+                setTextColor(primary)
+            })
+            setOnClickListener {
+                popup.dismiss()
+                entry.onClick()
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+    popup.showAsDropDown(this, width - 220.dpToPx(), 4.dpToPx())
+    return popup
 }

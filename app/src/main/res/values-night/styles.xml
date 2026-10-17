@@ -32,6 +32,10 @@
         <item name="colorAccent">@color/white</item>
 
         <item name="primaryColor">@color/white</item>
+        <item name="cardColor">#FF0F1214</item>
+        <item name="cardStrokeColor">#FF2A3135</item>
+        <item name="cardLineColor">#FF22282C</item>
+        <item name="secondaryTextColor">#FF9AA4AD</item>
         <item name="primaryInverseColor">@color/whiteInverse</item>
         <item name="primaryTextShadowColor">@color/whiteInverseTrans50</item>
         <item name="primaryColorTrans50">@color/whiteTrans50</item>
@@ -156,6 +160,10 @@
         <item name="colorPrimary">@color/white</item>
         <item name="colorAccent">@color/white</item>
         <item name="primaryColor">@color/white</item>
+        <item name="cardColor">#FF0F1214</item>
+        <item name="cardStrokeColor">#FF2A3135</item>
+        <item name="cardLineColor">#FF22282C</item>
+        <item name="secondaryTextColor">#FF9AA4AD</item>
         <item name="primaryInverseColor">@color/whiteInverse</item>
         <item name="primaryTextShadowColor">@color/whiteInverseTrans50</item>
         <item name="primaryColorTrans50">@color/whiteTrans50</item>

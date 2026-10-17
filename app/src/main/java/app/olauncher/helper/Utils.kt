@@ -55,14 +55,34 @@ import java.util.Scanner
 import kotlin.math.pow
 import kotlin.math.sqrt
 
+/** A pill at the bottom in the cards' style (the system's plain toast if that can't be shown). */
 fun Context.showToast(message: String?, duration: Int = Toast.LENGTH_SHORT) {
     if (message.isNullOrBlank()) return
-    Toast.makeText(this, message, duration).show()
+    val toast = try {
+        val pill = android.widget.TextView(this).apply {
+            text = message
+            textSize = 14f
+            setTextColor(getColorFromAttr(R.attr.primaryColor))
+            setPadding(20.dpToPx(), 12.dpToPx(), 20.dpToPx(), 12.dpToPx())
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = 24.dpToPx().toFloat()
+                setColor(getColorFromAttr(R.attr.cardColor))
+                setStroke(1.dpToPx(), getColorFromAttr(R.attr.cardStrokeColor))
+            }
+        }
+        Toast(this).apply {
+            @Suppress("DEPRECATION")
+            view = pill
+            this.duration = duration
+            setGravity(android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL, 0, 96.dpToPx())
+        }
+    } catch (e: Exception) {
+        Toast.makeText(this, message, duration)
+    }
+    toast.show()
 }
 
-fun Context.showToast(stringResource: Int, duration: Int = Toast.LENGTH_SHORT) {
-    Toast.makeText(this, getString(stringResource), duration).show()
-}
+fun Context.showToast(stringResource: Int, duration: Int = Toast.LENGTH_SHORT) = showToast(getString(stringResource), duration)
 
 suspend fun getAppsList(
     context: Context,

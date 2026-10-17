@@ -631,4 +631,7 @@
     <string name="ml_notif_send">Invia</string>
     <string name="ml_notif_sent">Risposta inviata</string>
     <string name="ml_notif_send_failed">Impossibile inviare la risposta</string>
+    <string name="ml_tile_info">Info</string>
+    <string name="ml_menu_add">Aggiungi</string>
+    <string name="ml_menu_tools">Strumenti</string>
 </resources>

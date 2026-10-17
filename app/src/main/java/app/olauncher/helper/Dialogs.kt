@@ -43,8 +43,9 @@ fun View.showPopupMenu(
 class OlDialog(context: Context) : AlertDialog(context) {
 
     private var blur: WindowBlur? = null
+    private var screenBlur: View? = null
 
-    /** Stronger blur of what's behind (px); null = the usual light one. */
+    /** Stronger blur of what's behind (px); null = the usual one. */
     var blurRadius: Int? = null
 
     fun showRespectingStatusBar() {
@@ -58,9 +59,13 @@ class OlDialog(context: Context) : AlertDialog(context) {
             window.clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
         blur = window?.let { WindowBlur(it, blurRadius).apply { fadeIn() } }
+        // The launcher's own screen out of focus too: works even where the system's blur is off
+        if (screenBlur == null) screenBlur = ScreenBlur.add(context, blurRadius ?: 14.dpToPx())
     }
 
     override fun dismiss() {
+        screenBlur?.let { ScreenBlur.remove(it) }
+        screenBlur = null
         val blur = blur ?: return super.dismiss()
         this.blur = null
         blur.fadeOut { super.dismiss() }
@@ -84,6 +89,7 @@ fun Context.createDialog(
     val dialog = OlDialog(this)
     val binding = DialogBaseBinding.inflate(LayoutInflater.from(dialog.context))
     binding.tvTitle.setText(title)
+    styleTitle(binding.tvTitle)
     binding.tvAction.setText(action)
     if (message != 0) {
         binding.tvMessage.setText(message)
@@ -120,4 +126,48 @@ fun Context.showMessageDialog(
     val dialog = createDialog(title, action, message = message, onAction = onAction)
     dialog.showRespectingStatusBar()
     return dialog
+}
+
+/**
+ * Blurs the activity under a dialog (Android 12+), ramping in. Dialogs on top of each other
+ * share it: the blur goes when the last one closes.
+ */
+object ScreenBlur {
+    private val open = java.util.WeakHashMap<View, Int>()
+
+    fun add(context: Context, radiusPx: Int): View? {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S || context.isEinkDisplay()) return null
+        val activity = context.findActivity() ?: return null
+        val content = activity.findViewById<View>(android.R.id.content) ?: return null
+        val count = open[content] ?: 0
+        open[content] = count + 1
+        if (count == 0) android.animation.ValueAnimator.ofFloat(1f, radiusPx.toFloat()).apply {
+            duration = 180
+            addUpdateListener {
+                val r = it.animatedValue as Float
+                if ((open[content] ?: 0) > 0 && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) content.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(r, r, android.graphics.Shader.TileMode.CLAMP))
+            }
+            start()
+        }
+        return content
+    }
+
+    fun remove(content: View) {
+        val count = (open[content] ?: 1) - 1
+        if (count > 0) {
+            open[content] = count
+            return
+        }
+        open.remove(content)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) content.setRenderEffect(null)
+    }
+
+    private fun Context.findActivity(): android.app.Activity? {
+        var c: Context? = this
+        while (c is android.content.ContextWrapper) {
+            if (c is android.app.Activity) return c
+            c = c.baseContext
+        }
+        return null
+    }
 }

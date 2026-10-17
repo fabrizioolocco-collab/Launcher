@@ -67,16 +67,16 @@ object NotificationsPopup {
         val dialog = OlDialog(context)
         val ctx = dialog.context
         val primary = ctx.getColorFromAttr(R.attr.primaryColor)
-        val surface = ctx.getColorFromAttr(R.attr.primaryInverseColor)
-        val line = ColorUtils.setAlphaComponent(primary, 0x22)
-        val secondary = ColorUtils.setAlphaComponent(primary, 0x99)
+        val surface = ctx.getColorFromAttr(R.attr.cardColor)
+        val line = ctx.getColorFromAttr(R.attr.cardLineColor)
+        val secondary = ctx.getColorFromAttr(R.attr.secondaryTextColor)
 
         val card = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = 24.dpToPx().toFloat()
                 setColor(surface)
-                setStroke(1.dpToPx(), ColorUtils.setAlphaComponent(primary, 0x30))
+                setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.cardStrokeColor))
             }
             clipToOutline = true
         }

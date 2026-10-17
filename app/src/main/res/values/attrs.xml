@@ -15,4 +15,9 @@
     <attr name="tileColor" format="color" />
     <attr name="accentColor" format="color" />
     <attr name="mainFontFamily" format="string" />
+    <!-- Cards (dialogs, menus, popups): a ground a bit off the screen's, a thin border, row lines -->
+    <attr name="cardColor" format="color" />
+    <attr name="cardStrokeColor" format="color" />
+    <attr name="cardLineColor" format="color" />
+    <attr name="secondaryTextColor" format="color" />
 </resources>
