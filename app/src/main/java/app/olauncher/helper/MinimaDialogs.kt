@@ -65,13 +65,20 @@ private fun Context.dialogTextView(styleRes: Int): TextView =
         setShadowLayer(0f, 0f, 0f, 0)
     }
 
-/** Wraps [content] in a ScrollView no taller than about half the screen. */
+/** Wraps [content] in a ScrollView as tall as it needs, up to about 3/4 of the screen (then it scrolls). */
+@Suppress("UNUSED_PARAMETER")
 private fun Context.limitedHeight(content: View, itemCount: Int): View {
-    val scroll = ScrollView(this)
+    val maxHeight = (getScreenDimensions(this).second * 0.75f).toInt() - 160.dpToPx()
+    val scroll = object : ScrollView(this) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            var limit = maxHeight.coerceAtLeast(200.dpToPx())
+            if (MeasureSpec.getMode(heightMeasureSpec) != MeasureSpec.UNSPECIFIED) limit = minOf(limit, MeasureSpec.getSize(heightMeasureSpec))
+            super.onMeasure(widthMeasureSpec, MeasureSpec.makeMeasureSpec(limit, MeasureSpec.AT_MOST))
+        }
+    }
+    scroll.isVerticalScrollBarEnabled = false
     scroll.addView(content)
-    val maxHeight = (getScreenDimensions(this).second * 0.5f).toInt()
-    val height = if (itemCount > 8) maxHeight else ViewGroup.LayoutParams.WRAP_CONTENT
-    scroll.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height).apply {
+    scroll.layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
         topMargin = 16.dpToPx()
         bottomMargin = 8.dpToPx()
     }
