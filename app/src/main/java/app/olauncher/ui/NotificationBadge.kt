@@ -3,7 +3,10 @@ package app.olauncher.ui
 import android.content.Context
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
+import android.graphics.Rect
 import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import app.olauncher.R
 import app.olauncher.data.AppModel
 import app.olauncher.helper.MenuEntry
@@ -30,9 +33,19 @@ object NotificationBadge {
         ColorMatrixColorFilter(ColorMatrix(row(r) + row(g) + row(b) + floatArrayOf(0f, 0f, 0f, 1f, 0f)))
     }
 
-    /** Red icon when [notified], normal otherwise. */
-    fun tint(drawable: Drawable, notified: Boolean): Drawable = drawable.mutate().apply {
-        colorFilter = if (notified) redFilter else null
+    /** Red rounded square drawn behind the icon of an app with notifications (same shape as the tiles). */
+    fun background(sizePx: Int): GradientDrawable = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        cornerRadius = sizePx * 0.27f
+        setColor(HomeSectionsController.NOTIFICATION_COLOR)
+    }
+
+    /** When [notified]: the icon on a red square, its dark parts red too; normal otherwise. */
+    fun tint(drawable: Drawable, notified: Boolean): Drawable {
+        val icon = drawable.mutate().apply { colorFilter = if (notified) redFilter else null }
+        if (!notified) return icon
+        val bounds = Rect(icon.bounds)
+        return LayerDrawable(arrayOf(background(bounds.width()), icon)).apply { this.bounds = bounds }
     }
 
     /** Notifications of [app] (tap opens, swipe dismisses) plus "Open app". */

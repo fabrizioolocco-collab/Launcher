@@ -385,6 +385,11 @@ class AppDrawerAdapter(
             cell.contentDescription = appModel.appLabel
             icon.setImageDrawable(null)
             icon.colorFilter = if (notificationCount > 0) NotificationBadge.redFilter else null
+            tile.background = when {
+                notificationCount > 0 -> NotificationBadge.background(style.iconSizePx)
+                style.tiles -> app.olauncher.ui.widgets.IconTiles.drawable(cell.context, style.iconSizePx)
+                else -> null
+            }
             if (!spacer) style.iconLoader(appModel, icon, icon.layoutParams.width)
             cell.setOnClickListener {
                 if (spacer) return@setOnClickListener

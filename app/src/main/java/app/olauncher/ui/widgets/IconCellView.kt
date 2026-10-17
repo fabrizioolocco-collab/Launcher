@@ -59,7 +59,9 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         label.isVisible = showLabel
         contentDescription = text
         iconFrame.layoutParams = LinearLayout.LayoutParams(iconSize, iconSize)
-        iconFrame.background = if (tile) IconTiles.drawable(context, iconSize) else null
+        tileOn = tile
+        tileSize = iconSize
+        updateFrame()
         val inner = if (tile) (iconSize * IconTiles.ICON_FRACTION).toInt() else iconSize
         icon.layoutParams = LayoutParams(inner, inner, Gravity.CENTER)
     }
@@ -73,9 +75,21 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
     var onNotifiedTap: (() -> Unit)? = null
 
     private var notified = false
+    private var tileOn = false
+    private var tileSize = 0
+
+    /** Behind the icon: red when the app has notifications, else the tile (if on). */
+    private fun updateFrame() {
+        iconFrame.background = when {
+            notified && tileSize > 0 -> app.olauncher.ui.NotificationBadge.background(tileSize)
+            tileOn -> IconTiles.drawable(context, tileSize)
+            else -> null
+        }
+    }
 
     fun setNotified(value: Boolean) {
         notified = value
+        updateFrame()
         icon.colorFilter = if (value) app.olauncher.ui.NotificationBadge.redFilter else null
         label.setTextColor(if (value) HomeSectionsController.NOTIFICATION_COLOR else context.getColorFromAttr(R.attr.primaryColor))
     }
