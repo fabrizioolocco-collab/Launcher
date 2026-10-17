@@ -76,6 +76,10 @@ object NotificationsPopup {
             background = GradientDrawable().apply {
                 cornerRadius = 24.dpToPx().toFloat()
                 setColor(surface)
+            }
+            // The border on top: the rows' own backgrounds would hide it at the sides
+            foreground = GradientDrawable().apply {
+                cornerRadius = 24.dpToPx().toFloat()
                 setStroke(1.dpToPx(), ctx.getColorFromAttr(R.attr.cardStrokeColor))
             }
             clipToOutline = true
