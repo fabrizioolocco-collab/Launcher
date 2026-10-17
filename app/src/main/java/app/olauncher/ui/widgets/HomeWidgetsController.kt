@@ -319,7 +319,7 @@ class HomeWidgetsController(
 
     /** First row after everything on the grid. */
     private fun usedRows(): Int = maxOf(
-        widgets.filter { it.isApp }.maxOfOrNull { it.row + it.rowSpan } ?: 0,
+        widgets.filter { it.isApp && it.row >= 0 }.maxOfOrNull { it.row + it.rowSpan } ?: 0,
         blocks.filter { it.row >= 0 }.maxOfOrNull { it.row + it.rowSpan } ?: 0,
     )
 
@@ -362,6 +362,8 @@ class HomeWidgetsController(
                     widget.col = columns - 1
                     changed = true
                 }
+                // Added from the app drawer: placed once the grid and widgets are laid out
+                if (widget.row < 0) return@forEach
                 if (!DetoxManager.isAllowed(activity, widget.packageName.orEmpty())) return@forEach
                 // Apps not loaded yet, uninstalled or hidden: skip without deleting
                 val app = findApp(widget) ?: return@forEach
@@ -404,6 +406,55 @@ class HomeWidgetsController(
         if (changed) save()
         placeBlocks()
         updateBadges()
+        pendingPlaceTries = 0
+        placePendingApps()
+    }
+
+    private var pendingPlaceTries = 0
+
+    /**
+     * Gives a cell to the icons added from the app drawer (row -1): the first free cell not covered
+     * by a widget, else the first free cell, else below everything (clipped) with a "home full" toast.
+     * Needs the grid and the widget layer laid out, so it waits for them.
+     */
+    private fun placePendingApps() {
+        val pending = widgets.filter { it.isApp && it.row < 0 }
+        if (pending.isEmpty()) return
+        if (grid.height == 0 || free.width == 0) {
+            if (pendingPlaceTries++ < MAX_PLACE_TRIES) grid.post { placePendingApps() }
+            return
+        }
+        var full = false
+        pending.forEach { item ->
+            val spot = findFreeSpot(1, rowDivisions) { col, row -> !underWidget(col, row, rowDivisions) }
+                ?: findFreeSpot(1, rowDivisions)
+            if (spot == null) full = true
+            item.col = spot?.first ?: 0
+            item.row = spot?.second ?: usedRows()
+            if (!DetoxManager.isAllowed(activity, item.packageName.orEmpty())) return@forEach
+            findApp(item)?.let { grid.addView(iconView(item, it)) }
+        }
+        save()
+        updateBadges()
+        if (full) activity.showToast(activity.getString(R.string.ml_home_full))
+    }
+
+    /** True when the cell at ([col], [row]) is (even partly) under a widget of the free layer. */
+    private fun underWidget(col: Int, row: Int, rowSpan: Int): Boolean {
+        val g = IntArray(2)
+        val f = IntArray(2)
+        grid.getLocationOnScreen(g)
+        free.getLocationOnScreen(f)
+        val cell = cellPx()
+        val left = g[0] - f[0] + grid.paddingLeft + col * cell
+        val top = g[1] - f[1] + grid.rowTop(row)
+        val bottom = g[1] - f[1] + grid.rowTop(row + rowSpan)
+        val rect = android.graphics.Rect(left, top, left + cell, bottom)
+        return widgets.any {
+            !it.isApp && it.w > 0 && android.graphics.Rect.intersects(
+                rect, android.graphics.Rect(it.x.dpToPx(), it.y.dpToPx(), (it.x + it.w).dpToPx(), (it.y + it.h).dpToPx())
+            )
+        }
     }
 
     /** Called on resume: rebuilds only if the column or label setting changed meanwhile. */
@@ -472,16 +523,21 @@ class HomeWidgetsController(
      */
     private fun isFree(col: Int, row: Int, colSpan: Int, rowSpan: Int, except: Any?): Boolean =
         col >= 0 && row >= 0 && col + colSpan <= prefs.widgetColumns && grid.fits(row, rowSpan) &&
-                widgets.none { it !== except && it.isApp && overlaps(it, col, row, colSpan, rowSpan) } &&
+                widgets.none { it !== except && it.isApp && it.row >= 0 && overlaps(it, col, row, colSpan, rowSpan) } &&
                 blocks.none { it !== except && it.row >= 0 && row < it.row + it.rowSpan && it.row < row + rowSpan }
 
-    /** First free cell for an item of that size, or null when the home is full. */
-    private fun findFreeSpot(colSpan: Int, rowSpan: Int, except: Any? = null): Pair<Int, Int>? {
+    /** First free cell for an item of that size (also passing [accept]), or null when the home is full. */
+    private fun findFreeSpot(
+        colSpan: Int,
+        rowSpan: Int,
+        except: Any? = null,
+        accept: (col: Int, row: Int) -> Boolean = { _, _ -> true },
+    ): Pair<Int, Int>? {
         val columns = prefs.widgetColumns
         var row = 0
         while (grid.fits(row, rowSpan)) {
             for (col in 0..(columns - colSpan).coerceAtLeast(0))
-                if (isFree(col, row, colSpan, rowSpan, except)) return col to row
+                if (isFree(col, row, colSpan, rowSpan, except) && accept(col, row)) return col to row
             row++
         }
         return null
@@ -989,31 +1045,22 @@ class HomeWidgetsController(
 
         private const val NEWS_ID = "news"
 
+        /** Frames to wait for the home layout before placing icons added from the app drawer. */
+        private const val MAX_PLACE_TRIES = 20
+
         /**
          * Pins [app] on the main home grid from outside home (app drawer, folder shortcuts); the
          * home picks the change up when it's shown again. Returns false if it was already there.
          */
         fun addAppToHome(context: android.content.Context, app: AppModel.App): Boolean {
-            val prefs = Prefs(context)
             val repo = HomeWidgetsRepository(context, HomeWidgetsRepository.KEY)
             val items = repo.load()
             val user = app.user.toString()
             if (items.any { it.isApp && it.packageName == app.appPackage && it.user == user }) return false
-            val columns = prefs.widgetColumns
-            val blockRows = HomeSectionsRepository(context).load().map { it.row }.filter { it >= 0 }.toSet()
-            fun free(col: Int, row: Int) = (row until row + TOP_ROW_DIVISIONS).none { it in blockRows } &&
-                    items.none { it.isApp && col < it.col + it.colSpan && it.col < col + 1 && row < it.row + it.rowSpan && it.row < row + TOP_ROW_DIVISIONS }
-            fun firstFree(): Pair<Int, Int> {
-                var row = 0
-                while (true) {
-                    for (col in 0 until columns) if (free(col, row)) return col to row
-                    row++
-                }
-            }
-            val (col, row) = firstFree()
             items.add(
                 HomeWidget(
-                    appWidgetId = -1, col = col, row = row, colSpan = 1, rowSpan = TOP_ROW_DIVISIONS,
+                    // row -1: the home picks the cell, as it knows where the widgets are
+                    appWidgetId = -1, col = 0, row = -1, colSpan = 1, rowSpan = TOP_ROW_DIVISIONS,
                     packageName = app.appPackage, activityClassName = app.activityClassName, user = user,
                 )
             )
