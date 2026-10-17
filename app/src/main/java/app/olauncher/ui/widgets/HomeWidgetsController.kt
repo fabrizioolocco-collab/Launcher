@@ -179,6 +179,48 @@ class HomeWidgetsController(
         loadedRaw = raw
         widgets = repo.load()
         render()
+        grid.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) grid.post { fitToHeight() }
+        }
+    }
+
+    /**
+     * The grid got shorter (e.g. the clock was turned on) and the lowest icons or sections went
+     * past the bottom: removes as many empty rows above them as needed, so everything below the
+     * gap moves up together and stays visible.
+     */
+    private fun fitToHeight() {
+        if (grid.height == 0 || grid.editing) return
+        val bottom = usedRows()
+        if (bottom == 0 || grid.fits(0, bottom)) return
+        val overflow = grid.rowTop(bottom) - (grid.height - grid.paddingBottom)
+        var toRemove = (overflow + grid.rowSize() - 1) / grid.rowSize()
+        val icons = widgets.filter { it.isApp && it.row >= 0 }
+        fun empty(r: Int) = icons.none { r >= it.row && r < it.row + it.rowSpan } &&
+                blocks.none { it.row >= 0 && r >= it.row && r < it.row + it.rowSpan }
+        val movedBlocks = mutableSetOf<Block>()
+        var changed = false
+        // Lowest empty rows first: the gap right above the bottom content closes
+        for (r in bottom - 1 downTo 0) {
+            if (toRemove == 0) break
+            if (!empty(r)) continue
+            icons.filter { it.row > r }.forEach { it.row-- }
+            blocks.filter { it.row > r }.forEach { it.row--; movedBlocks += it }
+            toRemove--
+            changed = true
+        }
+        if (!changed) return
+        save()
+        movedBlocks.forEach { blockMoved(it) }
+        for (i in 0 until grid.childCount) {
+            val child = grid.getChildAt(i)
+            val params = child.layoutParams as? WidgetGridLayout.CellParams ?: continue
+            when (val tag = child.tag) {
+                is HomeWidget -> params.row = tag.row
+                is Block -> params.row = tag.row
+            }
+        }
+        grid.requestLayout()
     }
 
     /** Widgets and icons on home (sections excluded). */
