@@ -97,7 +97,11 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
     val secondary = ctx.getColorFromAttr(R.attr.secondaryTextColor)
     val line = ctx.getColorFromAttr(R.attr.cardLineColor)
     val container = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
-    val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+    // The dialog's padding is 24 at the start and 16 at the end: 8 more here keeps the groups centred
+    val list = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, 0, 8.dpToPx(), 0)
+    }
     val known = MenuIcons.known(ctx)
 
     fun run(entry: MenuEntry) {
