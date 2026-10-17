@@ -324,7 +324,7 @@
     <string name="ml_edit_trim_saving">Saving the trimmed video…</string>
     <string name="ml_edit_nothing">Nothing to save: trim or crop first</string>
     <string name="ml_edit_crop_saving">Re-encoding the cropped video, this takes a while…</string>
-    <string name="ml_edit_hint">Everything is saved together with ✓: crop, rotate and draw in any order.</string>
+    <string name="ml_edit_hint">Everything is saved together with Save: crop, rotate and draw in any order.</string>
     <!-- PDF tool -->
     <string name="ml_pdf_tool">PDF tool</string>
     <string name="ml_pdf_open_in">Open PDFs in</string>
@@ -367,7 +367,7 @@
     <string name="ml_pdf_edit_text">Edit text</string>
     <string name="ml_pdf_annotation">Annotation</string>
     <string name="ml_pdf_move_hint">Tap an annotation to select it: drag to move, rotate, resize or delete it</string>
-    <string name="ml_pdf_select_hint">Drag to move · ↻ rotate · ⤡ resize · ✕ delete</string>
+    <string name="ml_pdf_select_hint">Drag to move; the handles rotate, resize or delete</string>
     <string name="ml_pdf_pen">Pen</string>
     <string name="ml_pdf_highlighter">Highlighter</string>
     <string name="ml_pdf_save_as">Save as</string>

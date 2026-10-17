@@ -2,7 +2,6 @@ package app.olauncher.ui
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Typeface
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -15,10 +14,13 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.MimeTypeMap
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -34,6 +36,7 @@ import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
+import app.olauncher.helper.pillButton
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showTextInputDialog
@@ -47,7 +50,7 @@ import java.io.File
  * Simple file explorer for the phone storage: browse, open with the phone's apps, share, rename,
  * delete, copy and move.
  *
- * Each folder can have its own view (☰): list or grid with 2-6 columns, sort order (or a manual
+ * Each folder can have its own view (the sliders icon): list or grid with 2-6 columns, sort order (or a manual
  * order, set by dragging), what to show. Subfolders use the settings of the closest folder above
  * that has some ([FolderViewsRepository]).
  *
@@ -74,13 +77,17 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private class Clip(val files: List<File>, val move: Boolean)
 
+    /** A tool of the bottom bars: line icon, label, action. */
+    private class Tool(val icon: Int, val label: Int, val action: () -> Unit)
+
     private lateinit var title: TextView
     private lateinit var subtitle: TextView
     private lateinit var status: TextView
     private lateinit var list: RecyclerView
     private lateinit var pasteBar: LinearLayout
     private lateinit var pasteText: TextView
-    private lateinit var newFolder: TextView
+    private lateinit var newFolder: ImageView
+    private lateinit var emptyView: View
 
     private lateinit var location: Location
     private lateinit var views: FolderViewsRepository
@@ -94,7 +101,7 @@ open class FileExplorerActivity : AppCompatActivity() {
     private val selected = LinkedHashSet<String>()
     private val selecting get() = selected.isNotEmpty()
     private var loadedDir: String? = null
-    private lateinit var backButton: TextView
+    private lateinit var backButton: ImageView
     private lateinit var selectionBar: LinearLayout
     private lateinit var headerButtons: List<View>
     private var waitingAccess = false
@@ -142,155 +149,123 @@ open class FileExplorerActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- layout
 
     private fun buildLayout(): View {
-        val primary = getColorFromAttr(R.attr.primaryColor)
+        val primary = UiKit.primary(this)
+        val secondary = UiKit.secondary(this)
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20.dpToPx(), 0, 20.dpToPx(), 0)
         }
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(v.paddingLeft, bars.top + 16.dpToPx(), v.paddingRight, bars.bottom + 8.dpToPx())
+            v.setPadding(v.paddingLeft, bars.top + 8.dpToPx(), v.paddingRight, bars.bottom + 8.dpToPx())
             insets
         }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        val viewButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_explorer_view)) { showViewMenu() }
+        newFolder = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { askNewFolder() }
+        val bar = UiKit.appBar(this, "", onBack = { if (selecting) clearSelection() else goUp() }, actions = listOf(viewButton, newFolder))
+        bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 4.dpToPx())
+        backButton = bar.back
+        title = bar.title
+        subtitle = bar.subtitle
+        // The phone icon before the path
+        ContextCompat.getDrawable(this, R.drawable.ic_m_phone)?.mutate()?.let { d ->
+            d.setTint(secondary)
+            d.setBounds(0, 0, 14.dpToPx(), 14.dpToPx())
+            subtitle.setCompoundDrawablesRelative(d, null, null, null)
+            subtitle.compoundDrawablePadding = 4.dpToPx()
+            subtitle.gravity = Gravity.CENTER_VERTICAL
         }
-        backButton = TextView(this, null, 0, R.style.TextLarge).apply {
-            text = "←"
-            textSize = 26f
-            setPadding(0, 4.dpToPx(), 16.dpToPx(), 4.dpToPx())
-            isClickable = true
-            setOnClickListener { if (selecting) clearSelection() else goUp() }
-        }
-        header.addView(backButton)
-        title = TextView(this, null, 0, R.style.TextLarge).apply {
-            setTypeface(typeface, Typeface.BOLD)
-            textSize = 22f
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-        }
-        header.addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        newFolder = TextView(this, null, 0, R.style.TextLarge).apply {
-            text = "＋"
-            textSize = 24f
-            contentDescription = getString(R.string.ml_explorer_new_folder)
-            setPadding(16.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
-            isClickable = true
-            setOnClickListener { askNewFolder() }
-        }
-        val viewButton = TextView(this, null, 0, R.style.TextLarge).apply {
-            text = "☰"
-            textSize = 22f
-            contentDescription = getString(R.string.ml_explorer_view)
-            setPadding(16.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
-            isClickable = true
-            setOnClickListener { showViewMenu() }
-        }
-        header.addView(viewButton)
-        header.addView(newFolder)
         headerButtons = listOf(viewButton, newFolder)
-        root.addView(header)
-        subtitle = TextView(this, null, 0, R.style.TextSmall).apply {
-            alpha = 0.6f
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.START
-            setPadding(0, 2.dpToPx(), 0, 8.dpToPx())
-        }
-        root.addView(subtitle)
+        root.addView(bar.view)
         status = TextView(this, null, 0, R.style.TextSmall).apply {
-            alpha = 0.7f
-            setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
+            setTextColor(secondary)
+            setPadding(20.dpToPx(), 12.dpToPx(), 20.dpToPx(), 12.dpToPx())
             isVisible = false
         }
         root.addView(status)
+        val listArea = FrameLayout(this)
         list = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@FileExplorerActivity)
             adapter = EntriesAdapter()
             overScrollMode = View.OVER_SCROLL_NEVER
+            clipToPadding = false
+            setPadding(12.dpToPx(), 0, 12.dpToPx(), 8.dpToPx())
+            addItemDecoration(separators)
         }
         dragHelper.attachToRecyclerView(list)
-        root.addView(list, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        selectionBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundResource(R.drawable.rounded_rect_shade_color)
-            setPadding(4.dpToPx(), 2.dpToPx(), 4.dpToPx(), 2.dpToPx())
-            isVisible = false
-        }
+        listArea.addView(list, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        emptyView = UiKit.emptyState(this, R.drawable.ic_m_folder_open, getString(R.string.ml_explorer_empty)).apply { isVisible = false }
+        listArea.addView(emptyView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        root.addView(listArea, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        selectionBar = UiKit.toolBar(this).apply { isVisible = false }
         listOf(
-            R.string.ml_explorer_share to { shareSelected() },
-            R.string.ml_explorer_copy to { clipSelected(move = false) },
-            R.string.ml_explorer_move to { clipSelected(move = true) },
-            R.string.ml_explorer_delete to { deleteSelected() },
-            R.string.ml_explorer_more to { showSelectionMenu() },
-        ).forEach { (label, action) ->
-            selectionBar.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
-                setText(label)
-                gravity = Gravity.CENTER
-                maxLines = 1
-                setPadding(2.dpToPx(), 14.dpToPx(), 2.dpToPx(), 14.dpToPx())
-                isClickable = true
-                setOnClickListener { action() }
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            Tool(R.drawable.ic_m_share, R.string.ml_explorer_share) { shareSelected() },
+            Tool(R.drawable.ic_m_copy, R.string.ml_explorer_copy) { clipSelected(move = false) },
+            Tool(R.drawable.ic_m_move, R.string.ml_explorer_move) { clipSelected(move = true) },
+            Tool(R.drawable.ic_m_delete, R.string.ml_explorer_delete) { deleteSelected() },
+            Tool(R.drawable.ic_m_more, R.string.ml_explorer_more) { showSelectionMenu() },
+        ).forEach { tool ->
+            selectionBar.addView(UiKit.toolButton(this, tool.icon, getString(tool.label)) { tool.action() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         root.addView(selectionBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = 8.dpToPx()
+            setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 0)
         })
-        pasteBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundResource(R.drawable.rounded_rect_shade_color)
-            setPadding(16.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
+        pasteBar = UiKit.toolBar(this).apply {
+            orientation = LinearLayout.VERTICAL
             isVisible = false
         }
         pasteText = TextView(this, null, 0, R.style.TextSmall).apply {
+            setTextColor(primary)
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.MIDDLE
+            setPadding(12.dpToPx(), 10.dpToPx(), 12.dpToPx(), 2.dpToPx())
         }
-        pasteBar.addView(pasteText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        pasteBar.addView(TextView(this, null, 0, R.style.TextSmall).apply {
-            text = "＋"
-            textSize = 20f
-            contentDescription = getString(R.string.ml_explorer_new_folder)
-            setPadding(12.dpToPx(), 6.dpToPx(), 8.dpToPx(), 6.dpToPx())
-            isClickable = true
-            setOnClickListener { askNewFolder() }
-        })
-        pasteBar.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
-            setText(R.string.ml_explorer_paste)
-            setTextColor(primary)
-            setPadding(12.dpToPx(), 10.dpToPx(), 12.dpToPx(), 10.dpToPx())
-            isClickable = true
-            setOnClickListener { paste() }
-        })
-        pasteBar.addView(TextView(this, null, 0, R.style.TextSmall).apply {
-            text = "✕"
-            setPadding(12.dpToPx(), 10.dpToPx(), 8.dpToPx(), 10.dpToPx())
-            isClickable = true
-            setOnClickListener {
+        pasteBar.addView(pasteText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val pasteTools = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        listOf(
+            Tool(R.drawable.ic_m_paste, R.string.ml_explorer_paste) { paste() },
+            Tool(R.drawable.ic_m_add, R.string.ml_explorer_new_folder) { askNewFolder() },
+            Tool(R.drawable.ic_m_close, R.string.close) {
                 clip = null
                 updatePasteBar()
-            }
-        })
+            },
+        ).forEach { tool ->
+            pasteTools.addView(UiKit.toolButton(this, tool.icon, getString(tool.label)) { tool.action() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        pasteBar.addView(pasteTools, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(pasteBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = 8.dpToPx()
+            setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 0)
         })
-        if (pickMode) root.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
-            setText(R.string.ml_explorer_use_folder)
-            textSize = 17f
-            gravity = Gravity.CENTER
-            setBackgroundResource(R.drawable.rounded_rect_shade_color)
-            setPadding(16.dpToPx(), 14.dpToPx(), 16.dpToPx(), 14.dpToPx())
-            isClickable = true
-            setOnClickListener {
-                setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, location.dir.absolutePath))
-                finish()
-            }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = 8.dpToPx()
+        if (pickMode) root.addView(pillButton(this, getString(R.string.ml_explorer_use_folder), filled = true, color = primary) {
+            setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, location.dir.absolutePath))
+            finish()
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48.dpToPx()).apply {
+            setMargins(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 0)
         })
         return root
+    }
+
+    /** Thin lines between the rows of the list (none in the grid). */
+    private val separators = object : RecyclerView.ItemDecoration() {
+        private val paint = android.graphics.Paint()
+
+        override fun onDraw(c: android.graphics.Canvas, parent: RecyclerView, state: RecyclerView.State) {
+            if (view.grid) return
+            paint.color = UiKit.line(this@FileExplorerActivity)
+            // From the names (after the tile) to the right edge
+            val left = (parent.paddingLeft + 60.dpToPx()).toFloat()
+            val right = (parent.width - parent.paddingRight).toFloat()
+            val thickness = 1.dpToPx().coerceAtLeast(1).toFloat()
+            for (i in 0 until parent.childCount - 1) {
+                val child = parent.getChildAt(i)
+                val y = child.bottom + child.translationY
+                c.drawRect(left, y - thickness, right, y, paint)
+            }
+        }
     }
 
     // ---------------------------------------------------------------- navigation
@@ -343,7 +318,8 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun selectedFiles() = entries.filter { it.file.absolutePath in selected }
 
     private fun updateSelection() {
-        backButton.text = if (selecting) "✕" else "←"
+        backButton.setImageResource(if (selecting) R.drawable.ic_m_close else R.drawable.ic_m_arrow_back)
+        backButton.contentDescription = getString(if (selecting) R.string.close else R.string.ml_cal_back)
         selectionBar.isVisible = selecting
         headerButtons.forEach { it.isVisible = !selecting }
         if (selecting) {
@@ -465,7 +441,8 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private fun loadLocal(loc: Location) {
         title.text = if (loc.dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else loc.dir.name
-        subtitle.text = "📱 /" + relative(loc.dir)
+        emptyView.isVisible = false
+        subtitle.text = "/" + relative(loc.dir)
         subtitle.isVisible = true
         // An album folder (only photos and videos) shows no path, like the album grid
         lifecycleScope.launch {
@@ -489,7 +466,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         setEntries(files.filter { view.showHidden || !it.name.startsWith(".") }.map { f ->
             Entry(f.name, f.isDirectory, if (f.isDirectory) 0 else f.length(), f.lastModified(), f, mimeOf(f.name))
         })
-        showStatus(if (entries.isEmpty()) getString(R.string.ml_explorer_empty) else null)
+        showStatus(null)
+        emptyView.isVisible = entries.isEmpty()
     }
 
     // ---------------------------------------------------------------- view settings
@@ -634,7 +612,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
     }
 
-    /** Album covers found so far (folder path → newest photo/video, or null when not an album). */
+    /** Album covers found so far (folder path -> newest photo/video, or null when not an album). */
     private val albumCovers = HashMap<String, File?>()
 
     private suspend fun albumCover(dir: File): File? {
@@ -760,13 +738,7 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- list
 
-    private fun glyphOf(entry: Entry) = when {
-        entry.isFolder -> "📁"
-        entry.mime?.startsWith("image/") == true -> "🖼️"
-        entry.mime?.startsWith("video/") == true -> "🎬"
-        entry.mime?.startsWith("audio/") == true -> "🎵"
-        else -> "📄"
-    }
+    private fun kindOf(entry: Entry) = UiKit.kindOf(entry.name, entry.mime, entry.isFolder)
 
     private fun shownName(entry: Entry) =
         if (view.showExtension || entry.isFolder || !entry.name.contains('.')) entry.name else entry.name.substringBeforeLast('.')
@@ -774,13 +746,20 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun hasThumbnail(entry: Entry) = view.showThumbnails && !entry.isFolder &&
             (entry.mime?.startsWith("image/") == true || entry.mime?.startsWith("video/") == true)
 
-    private fun roundedImage() = android.widget.ImageView(this).apply {
-        scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
-        clipToOutline = true
-        outlineProvider = object : android.view.ViewOutlineProvider() {
-            override fun getOutline(v: View, outline: android.graphics.Outline) =
-                outline.setRoundRect(0, 0, v.width, v.height, 10.dpToPx().toFloat())
+    /** Thumbnail with 12 dp rounded corners (clipped to its background). */
+    private fun roundedImage() = ImageView(this).apply {
+        scaleType = ImageView.ScaleType.CENTER_CROP
+        background = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = 12.dpToPx().toFloat()
+            setColor(UiKit.card(this@FileExplorerActivity))
         }
+        clipToOutline = true
+    }
+
+    /** Subtle fill of a selected row. */
+    private fun selectedFill() = android.graphics.drawable.GradientDrawable().apply {
+        cornerRadius = 12.dpToPx().toFloat()
+        setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.primary(this@FileExplorerActivity), 0x18))
     }
 
     private inner class EntriesAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -791,73 +770,87 @@ open class FileExplorerActivity : AppCompatActivity() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder =
             object : RecyclerView.ViewHolder(if (viewType == 1) gridCell(parent) else listRow(parent)) {}
 
+        /** The icon box of a row or cell: file tile (0), thumbnail (1), selection badge (2). */
+        private fun iconBox(ctx: Context, box: FrameLayout) = box.apply {
+            addView(FrameLayout(ctx), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(roundedImage(), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(FrameLayout(ctx).apply { isVisible = false }, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END
+            ).apply { setMargins(0, 6.dpToPx(), 6.dpToPx(), 0) })
+        }
+
         private fun listRow(parent: ViewGroup): View {
-            val row = LinearLayout(parent.context).apply {
+            val ctx = parent.context
+            val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
+                setPadding(8.dpToPx(), 10.dpToPx(), 8.dpToPx(), 10.dpToPx())
                 isClickable = true
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
-            val icon = android.widget.FrameLayout(parent.context)
-            icon.addView(TextView(parent.context, null, 0, R.style.TextLarge).apply {
-                textSize = 20f
-                gravity = Gravity.CENTER
-            }, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            icon.addView(roundedImage(), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            row.addView(icon, LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply { marginEnd = 12.dpToPx() })
-            val texts = LinearLayout(parent.context).apply { orientation = LinearLayout.VERTICAL }
-            texts.addView(TextView(parent.context, null, 0, R.style.TextLarge).apply {
-                textSize = 17f
+            row.addView(iconBox(ctx, FrameLayout(ctx)), LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply { marginEnd = 12.dpToPx() })
+            val texts = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
+            texts.addView(TextView(ctx, null, 0, R.style.TextLarge).apply {
+                textSize = 16f
+                setTextColor(UiKit.primary(ctx))
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.MIDDLE
             })
-            texts.addView(TextView(parent.context, null, 0, R.style.TextSmall).apply {
-                alpha = 0.6f
+            texts.addView(TextView(ctx, null, 0, R.style.TextSmall).apply {
+                textSize = 13f
+                setTextColor(UiKit.secondary(ctx))
                 maxLines = 1
+                setPadding(0, 2.dpToPx(), 0, 0)
             })
             row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             return row
         }
 
         private fun gridCell(parent: ViewGroup): View {
+            val ctx = parent.context
             val width = (parent.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) - parent.paddingLeft - parent.paddingRight
             val side = width / view.columns
-            val cell = LinearLayout(parent.context).apply {
+            val cell = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(3.dpToPx(), 3.dpToPx(), 3.dpToPx(), 6.dpToPx())
                 isClickable = true
                 layoutParams = RecyclerView.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT)
             }
-            val box = android.widget.FrameLayout(parent.context).apply {
-                setBackgroundResource(R.drawable.rounded_rect_shade_color)
+            val box = FrameLayout(ctx).apply {
+                background = UiKit.border(ctx, 12, UiKit.card(ctx))
+                clipToOutline = true
             }
-            box.addView(TextView(parent.context, null, 0, R.style.TextLarge).apply {
-                textSize = (side / resources.displayMetrics.scaledDensity / 3).coerceIn(18f, 44f)
-                gravity = Gravity.CENTER
-            }, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            box.addView(roundedImage(), android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             val inner = side - 6.dpToPx()
-            cell.addView(box, LinearLayout.LayoutParams(inner, inner))
-            cell.addView(TextView(parent.context, null, 0, R.style.TextSmall).apply {
+            cell.addView(iconBox(ctx, box), LinearLayout.LayoutParams(inner, inner))
+            cell.addView(TextView(ctx, null, 0, R.style.TextSmall).apply {
+                setTextColor(UiKit.primary(ctx))
                 maxLines = 2
                 ellipsize = TextUtils.TruncateAt.END
                 gravity = Gravity.CENTER_HORIZONTAL
                 textSize = if (view.columns >= 5) 11f else 13f
-                setPadding(0, 4.dpToPx(), 0, 0)
+                setPadding(0, 6.dpToPx(), 0, 0)
             })
             return cell
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             val entry = entries[position]
+            val ctx = this@FileExplorerActivity
             val root = holder.itemView as LinearLayout
-            val iconBox = root.getChildAt(0) as android.widget.FrameLayout
-            val glyph = iconBox.getChildAt(0) as TextView
-            val image = iconBox.getChildAt(1) as android.widget.ImageView
+            val iconBox = root.getChildAt(0) as FrameLayout
+            val tileHolder = iconBox.getChildAt(0) as FrameLayout
+            val image = iconBox.getChildAt(1) as ImageView
+            val badge = iconBox.getChildAt(2) as FrameLayout
             val thumb = hasThumbnail(entry)
-            glyph.text = glyphOf(entry)
-            glyph.isVisible = !thumb
+            val kind = kindOf(entry)
+            if (tileHolder.tag != kind) {
+                tileHolder.tag = kind
+                tileHolder.removeAllViews()
+                val tileDp = if (view.grid) (iconBox.layoutParams.width / resources.displayMetrics.density * 0.5f).toInt().coerceIn(28, 64) else 40
+                val px = tileDp.dpToPx()
+                tileHolder.addView(UiKit.fileTile(ctx, kind, tileDp), FrameLayout.LayoutParams(px, px, Gravity.CENTER))
+            }
+            tileHolder.isVisible = !thumb
             image.isVisible = thumb
             val size = if (view.grid) iconBox.layoutParams.width.coerceAtLeast(64) else 40.dpToPx()
             if (thumb) MediaThumbnails.load(lifecycleScope, image, entry.file, size)
@@ -872,7 +865,7 @@ open class FileExplorerActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     val cover = albumCover(entry.file) ?: return@launch
                     if (image.tag != path) return@launch
-                    glyph.isVisible = false
+                    tileHolder.isVisible = false
                     image.isVisible = true
                     MediaThumbnails.load(lifecycleScope, image, cover, size)
                 }
@@ -886,15 +879,20 @@ open class FileExplorerActivity : AppCompatActivity() {
                 (texts.getChildAt(0) as TextView).text = shownName(entry)
                 val info = texts.getChildAt(1) as TextView
                 info.text = listOfNotNull(
-                    entry.size.takeIf { view.showSize && !entry.isFolder }?.let { Formatter.formatShortFileSize(this@FileExplorerActivity, it) },
-                    entry.modified.takeIf { view.showDate && it > 0 }?.let { DateFormat.getMediumDateFormat(this@FileExplorerActivity).format(it) },
+                    entry.size.takeIf { view.showSize && !entry.isFolder }?.let { Formatter.formatShortFileSize(ctx, it) },
+                    entry.modified.takeIf { view.showDate && it > 0 }?.let { DateFormat.getMediumDateFormat(ctx).format(it) },
                 ).joinToString(" · ")
                 info.isVisible = info.text.isNotEmpty()
             }
-            // Selected items are highlighted
-            if (entry.file.absolutePath in selected) root.setBackgroundResource(R.drawable.rounded_rect_shade_color)
-            else root.background = null
-            root.alpha = if (selecting && entry.file.absolutePath !in selected) 0.6f else 1f
+            // Selected items: a subtle fill in the list, a check badge in the grid
+            val isSelected = entry.file.absolutePath in selected
+            root.background = if (isSelected && !view.grid) selectedFill() else UiKit.ripple(ctx)
+            if (view.grid && selecting) {
+                badge.removeAllViews()
+                badge.addView(UiKit.checkBadge(ctx, isSelected, 24))
+                badge.isVisible = true
+            } else badge.isVisible = false
+            root.alpha = if (selecting && !isSelected) 0.6f else 1f
             root.setOnClickListener { onTap(entry) }
             // In manual order a long press drags the item (the menu opens if it isn't moved)
             if (view.sort == FolderView.SORT_MANUAL) root.setOnLongClickListener(null)

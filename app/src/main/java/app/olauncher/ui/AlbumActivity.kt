@@ -2,11 +2,11 @@ package app.olauncher.ui
 
 import android.content.Context
 import android.content.Intent
-import android.graphics.Typeface
+import android.content.res.ColorStateList
+import android.graphics.drawable.GradientDrawable
 import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Bundle
-import android.text.TextUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -56,8 +56,8 @@ class AlbumActivity : AppCompatActivity() {
     private val selecting get() = selected.isNotEmpty()
     private lateinit var title: TextView
     private lateinit var count: TextView
-    private lateinit var backButton: TextView
-    private lateinit var folderButton: TextView
+    private lateinit var backButton: ImageView
+    private lateinit var folderButton: ImageView
     private lateinit var selectionBar: LinearLayout
     private lateinit var grid: RecyclerView
 
@@ -107,79 +107,45 @@ class AlbumActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(0, bars.top + 12.dpToPx(), 0, bars.bottom)
+            v.setPadding(0, bars.top + 8.dpToPx(), 0, bars.bottom)
             insets
         }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(20.dpToPx(), 0, 16.dpToPx(), 8.dpToPx())
+        folderButton = UiKit.iconButton(this, R.drawable.ic_m_folder_open, getString(R.string.ml_search_open_folder)) {
+            FileExplorerActivity.openLocal(this@AlbumActivity, dir)
         }
-        backButton = TextView(this, null, 0, R.style.TextLarge).apply {
-            text = "←"
-            textSize = 26f
-            setPadding(0, 4.dpToPx(), 16.dpToPx(), 4.dpToPx())
-            isClickable = true
-            setOnClickListener { if (selecting) clearSelection() else finish() }
-        }
-        header.addView(backButton)
-        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        title = TextView(this, null, 0, R.style.TextLarge).apply {
-            textSize = 20f
-            setTypeface(typeface, Typeface.BOLD)
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.END
-        }
-        texts.addView(title)
-        count = TextView(this, null, 0, R.style.TextSmall).apply { alpha = 0.6f }
-        texts.addView(count)
-        header.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        folderButton = TextView(this, null, 0, R.style.TextLarge).apply {
-            text = "📂"
-            textSize = 20f
-            contentDescription = getString(R.string.ml_search_open_folder)
-            setPadding(16.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
-            isClickable = true
-            setOnClickListener { FileExplorerActivity.openLocal(this@AlbumActivity, dir) }
-        }
-        header.addView(folderButton)
-        root.addView(header)
+        val bar = UiKit.appBar(this, dir.name, onBack = { if (selecting) clearSelection() else finish() }, actions = listOf(folderButton))
+        bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 8.dpToPx())
+        backButton = bar.back
+        title = bar.title
+        count = bar.subtitle
+        root.addView(bar.view)
         grid = RecyclerView(this).apply {
             layoutManager = GridLayoutManager(this@AlbumActivity, COLUMNS)
             adapter = MediaAdapter()
             overScrollMode = View.OVER_SCROLL_NEVER
             clipToPadding = false
-            setPadding(2.dpToPx(), 0, 2.dpToPx(), 24.dpToPx())
+            setPadding(8.dpToPx(), 0, 8.dpToPx(), 24.dpToPx())
         }
         root.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        selectionBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundResource(R.drawable.rounded_rect_shade_color)
-            setPadding(4.dpToPx(), 2.dpToPx(), 4.dpToPx(), 2.dpToPx())
-            isVisible = false
-        }
+        selectionBar = UiKit.toolBar(this).apply { isVisible = false }
         listOf(
-            R.string.ml_explorer_share to { shareSelected() },
-            R.string.ml_explorer_copy to { pickDestination(move = false) },
-            R.string.ml_explorer_move to { pickDestination(move = true) },
-            R.string.ml_explorer_delete to { deleteSelected() },
-            R.string.ml_explorer_more to { showMore() },
-        ).forEach { (label, action) ->
-            selectionBar.addView(TextView(this, null, 0, R.style.TextSmallBold).apply {
-                setText(label)
-                gravity = Gravity.CENTER
-                maxLines = 1
-                setPadding(2.dpToPx(), 14.dpToPx(), 2.dpToPx(), 14.dpToPx())
-                isClickable = true
-                setOnClickListener { action() }
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            Tool(R.drawable.ic_m_share, R.string.ml_explorer_share) { shareSelected() },
+            Tool(R.drawable.ic_m_copy, R.string.ml_explorer_copy) { pickDestination(move = false) },
+            Tool(R.drawable.ic_m_move, R.string.ml_explorer_move) { pickDestination(move = true) },
+            Tool(R.drawable.ic_m_delete, R.string.ml_explorer_delete) { deleteSelected() },
+            Tool(R.drawable.ic_m_more, R.string.ml_explorer_more) { showMore() },
+        ).forEach { tool ->
+            selectionBar.addView(UiKit.toolButton(this, tool.icon, getString(tool.label)) { tool.action() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
         root.addView(selectionBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 8.dpToPx())
         })
         return root
     }
+
+    /** A tool of the selection bar: line icon, label, action. */
+    private class Tool(val icon: Int, val label: Int, val action: () -> Unit)
 
     // ---------------------------------------------------------------- selection
 
@@ -198,7 +164,8 @@ class AlbumActivity : AppCompatActivity() {
     private fun selectedFiles() = media.filter { it.absolutePath in selected }
 
     private fun updateSelection() {
-        backButton.text = if (selecting) "✕" else "←"
+        backButton.setImageResource(if (selecting) R.drawable.ic_m_close else R.drawable.ic_m_arrow_back)
+        backButton.contentDescription = getString(if (selecting) R.string.close else R.string.ml_cal_back)
         title.text = if (selecting) getString(R.string.ml_explorer_selected, selected.size) else dir.name
         count.text = getString(R.string.ml_album_count, media.size)
         count.isVisible = !selecting
@@ -352,34 +319,30 @@ class AlbumActivity : AppCompatActivity() {
             }
             cell.addView(ImageView(parent.context).apply {
                 scaleType = ImageView.ScaleType.CENTER_CROP
-                setBackgroundColor(0x22888888)
+                // Rounded corners: clipped to the background's outline
+                background = GradientDrawable().apply {
+                    cornerRadius = 12.dpToPx().toFloat()
+                    setColor(0x22888888)
+                }
                 clipToOutline = true
-                outlineProvider = object : android.view.ViewOutlineProvider() {
-                    override fun getOutline(view: View, outline: android.graphics.Outline) =
-                        outline.setRoundRect(0, 0, view.width, view.height, 10.dpToPx().toFloat())
-                }
             }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            cell.addView(TextView(parent.context).apply {
-                text = "▶"
-                textSize = 22f
-                setTextColor(0xFFFFFFFF.toInt())
-                setShadowLayer(6f, 0f, 0f, 0xAA000000.toInt())
-                isVisible = false
-            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-            // Selection mark
-            cell.addView(TextView(parent.context).apply {
-                text = "✓"
-                textSize = 14f
-                gravity = Gravity.CENTER
-                setTextColor(0xFFFFFFFF.toInt())
-                background = android.graphics.drawable.GradientDrawable().apply {
-                    shape = android.graphics.drawable.GradientDrawable.OVAL
-                    setColor(0xFF2E7D32.toInt())
-                    setStroke(2.dpToPx(), 0xFFFFFFFF.toInt())
+            // Play mark of the videos: a line icon in a small dark circle
+            cell.addView(FrameLayout(parent.context).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0x99000000.toInt())
                 }
+                addView(ImageView(parent.context).apply {
+                    setImageResource(R.drawable.ic_m_play)
+                    imageTintList = ColorStateList.valueOf(0xFFFFFFFF.toInt())
+                }, FrameLayout.LayoutParams(18.dpToPx(), 18.dpToPx(), Gravity.CENTER))
                 isVisible = false
-            }, FrameLayout.LayoutParams(24.dpToPx(), 24.dpToPx(), Gravity.TOP or Gravity.END).apply {
-                setMargins(0, 6.dpToPx(), 6.dpToPx(), 0)
+            }, FrameLayout.LayoutParams(34.dpToPx(), 34.dpToPx(), Gravity.CENTER))
+            // Selection mark (a check badge, filled when selected)
+            cell.addView(FrameLayout(parent.context).apply { isVisible = false }, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END
+            ).apply {
+                setMargins(0, 8.dpToPx(), 8.dpToPx(), 0)
             })
             return object : RecyclerView.ViewHolder(cell) {}
         }
@@ -388,11 +351,13 @@ class AlbumActivity : AppCompatActivity() {
             val file = media[position]
             val cell = holder.itemView as FrameLayout
             val image = cell.getChildAt(0) as ImageView
-            val play = cell.getChildAt(1) as TextView
-            val mark = cell.getChildAt(2) as TextView
+            val play = cell.getChildAt(1)
+            val mark = cell.getChildAt(2) as FrameLayout
             val isSelected = file.absolutePath in selected
             play.isVisible = mimeOf(file.name)?.startsWith("video/") == true
-            mark.isVisible = isSelected
+            mark.removeAllViews()
+            if (selecting) mark.addView(UiKit.checkBadge(this@AlbumActivity, isSelected, 24))
+            mark.isVisible = selecting
             image.alpha = if (selecting && !isSelected) 0.6f else 1f
             image.scaleX = if (isSelected) 0.9f else 1f
             image.scaleY = image.scaleX

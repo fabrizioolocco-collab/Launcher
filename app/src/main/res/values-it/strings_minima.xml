@@ -318,7 +318,7 @@
     <string name="ml_edit_trim_saving">Salvo il video tagliato…</string>
     <string name="ml_edit_nothing">Niente da salvare: prima taglia o ritaglia</string>
     <string name="ml_edit_crop_saving">Ricomprimo il video ritagliato, ci vuole un po\'…</string>
-    <string name="ml_edit_hint">Si salva tutto insieme con ✓: ritaglia, ruota e disegna nell\'ordine che vuoi.</string>
+    <string name="ml_edit_hint">Si salva tutto insieme con Salva: ritaglia, ruota e disegna nell\'ordine che vuoi.</string>
     <!-- PDF tool -->
     <string name="ml_pdf_tool">Strumento PDF</string>
     <string name="ml_pdf_open_in">Apri i PDF in</string>
@@ -361,7 +361,7 @@
     <string name="ml_pdf_edit_text">Modifica testo</string>
     <string name="ml_pdf_annotation">Annotazione</string>
     <string name="ml_pdf_move_hint">Tocca un\'annotazione per selezionarla: trascina per spostarla, ruotarla, ridimensionarla o eliminarla</string>
-    <string name="ml_pdf_select_hint">Trascina per spostare · ↻ ruota · ⤡ ridimensiona · ✕ elimina</string>
+    <string name="ml_pdf_select_hint">Trascina per spostare; le maniglie ruotano, ridimensionano o eliminano</string>
     <string name="ml_pdf_pen">Penna</string>
     <string name="ml_pdf_highlighter">Evidenziatore</string>
     <string name="ml_pdf_save_as">Salva con nome</string>
