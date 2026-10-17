@@ -70,6 +70,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private var uiScope = MainScope()
     private lateinit var sections: HomeSectionsController
+    private lateinit var dock: DockController
     private lateinit var widgets: HomeWidgetsController
     private lateinit var detox: DetoxController
     private lateinit var search: HomeSearchController
@@ -129,6 +130,20 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         viewModel.homeApps.value?.let { widgets.setApps(it) }
         widgets.render()
 
+        dock = DockController(
+            context = requireContext(),
+            container = binding.dock,
+            prefs = prefs,
+            scope = uiScope,
+            onLaunch = { app -> launchHomeApp(app) },
+            pickImage = { callback ->
+                onImagePicked = callback
+                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onChanged = { sections.render() },
+        )
+        viewModel.homeApps.value?.let { dock.setApps(it) }
+
         sections = HomeSectionsController(
             context = requireContext(),
             grid = widgets,
@@ -136,7 +151,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             prefs = prefs,
             scope = uiScope,
             onLaunch = { app -> launchHomeApp(app) },
-            gridAppKeys = { widgets.appKeys() },
+            gridAppKeys = { widgets.appKeys() + dock.appKeys() },
+            dock = dock,
             pickImage = { callback ->
                 onImagePicked = callback
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
@@ -167,7 +183,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             modeButton = binding.searchMode,
             resultsScroll = binding.searchResultsScroll,
             results = binding.searchResults,
-            homeViews = listOf(binding.homeScroll),
+            homeViews = listOf(binding.homeScroll, binding.dockSlot),
             prefs = prefs,
             scope = uiScope,
             apps = {
@@ -325,14 +341,17 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
         viewModel.homeApps.observe(viewLifecycleOwner) {
             widgets.setApps(it)
+            dock.setApps(it)
             sections.setApps(it)
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             widgets.setNotifications(it)
+            dock.setNotifications(it)
             sections.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {
             widgets.render()
+            dock.render()
             sections.render()
             detox.updateBar()
         }

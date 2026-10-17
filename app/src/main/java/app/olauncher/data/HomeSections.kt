@@ -65,8 +65,17 @@ class HomeSectionsRepository(context: Context) {
     fun isInitialized(): Boolean = prefs.contains(KEY_SECTIONS)
 
     /** Apps pinned on home outside any section, in the user's order. */
-    fun loadUngrouped(): MutableList<SectionApp> {
-        val raw = prefs.getString(KEY_UNGROUPED, null) ?: return mutableListOf()
+    fun loadUngrouped(): MutableList<SectionApp> = loadApps(KEY_UNGROUPED)
+
+    fun saveUngrouped(apps: List<SectionApp>) = saveApps(KEY_UNGROUPED, apps)
+
+    /** The apps of the dock, the bar above the search, left to right. */
+    fun loadDock(): MutableList<SectionApp> = loadApps(KEY_DOCK)
+
+    fun saveDock(apps: List<SectionApp>) = saveApps(KEY_DOCK, apps)
+
+    private fun loadApps(key: String): MutableList<SectionApp> {
+        val raw = prefs.getString(key, null) ?: return mutableListOf()
         return try {
             val array = JSONArray(raw)
             MutableList(array.length()) { i ->
@@ -78,10 +87,10 @@ class HomeSectionsRepository(context: Context) {
         }
     }
 
-    fun saveUngrouped(apps: List<SectionApp>) {
+    private fun saveApps(key: String, apps: List<SectionApp>) {
         val array = JSONArray()
         apps.forEach { array.put(JSONObject().put("p", it.packageName).put("c", it.activityClassName ?: "").put("u", it.user)) }
-        prefs.edit { putString(KEY_UNGROUPED, array.toString()) }
+        prefs.edit { putString(key, array.toString()) }
     }
 
     private fun HomeSection.toJson() = JSONObject().apply {
@@ -123,5 +132,6 @@ class HomeSectionsRepository(context: Context) {
         private const val PREFS_FILE = "app.minimalauncher.sections"
         private const val KEY_SECTIONS = "SECTIONS"
         private const val KEY_UNGROUPED = "UNGROUPED"
+        private const val KEY_DOCK = "DOCK"
     }
 }

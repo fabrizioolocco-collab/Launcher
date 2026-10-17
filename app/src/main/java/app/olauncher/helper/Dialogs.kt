@@ -66,9 +66,18 @@ class OlDialog(context: Context) : AlertDialog(context) {
     override fun dismiss() {
         screenBlur?.let { ScreenBlur.remove(it) }
         screenBlur = null
-        val blur = blur ?: return super.dismiss()
+        val blur = blur ?: return safeDismiss()
         this.blur = null
-        blur.fadeOut { super.dismiss() }
+        blur.fadeOut { safeDismiss() }
+    }
+
+    /** The window may be gone already (its activity destroyed during the fade): nothing to close then. */
+    private fun safeDismiss() {
+        try {
+            if (isShowing) super.dismiss()
+        } catch (e: IllegalArgumentException) {
+            e.printStackTrace()
+        }
     }
 }
 

@@ -667,4 +667,11 @@
     <string name="ml_w_customize">Valori da mostrare</string>
     <string name="ml_w_customize_hint">Trascina dalla maniglia per riordinare, spegni quelli che non ti servono.</string>
     <string name="ml_w_drag">Trascina</string>
+    <string name="ml_dock_add">Aggiungi app alla dock…</string>
+    <string name="ml_dock_add_app">Aggiungi alla dock</string>
+    <string name="ml_dock_remove">Togli dalla dock</string>
+    <string name="ml_dock_move_left">Sposta a sinistra</string>
+    <string name="ml_dock_move_right">Sposta a destra</string>
+    <string name="ml_dock_already">Già nella dock</string>
+    <string name="ml_dock_full">La dock contiene al massimo %d app</string>
 </resources>

@@ -553,7 +553,8 @@ class TodoEditActivity : AppCompatActivity() {
     private fun confirmDelete() {
         showConfirmDialog(getString(R.string.ml_todo_delete), getString(R.string.ml_todo_delete_confirm, todo.title), getString(R.string.ml_todo_delete)) {
             TodoStore.delete(this, todo.id)
-            finish()
+            // After the dialog's fade, so it doesn't close on a window already gone
+            window.decorView.postDelayed({ if (!isFinishing) finish() }, 250)
         }
     }
 

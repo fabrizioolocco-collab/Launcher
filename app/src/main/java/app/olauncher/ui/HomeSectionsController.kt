@@ -65,6 +65,8 @@ class HomeSectionsController(
     private val pickImage: ((Uri) -> Unit) -> Unit,
     /** Keys (package|user) of apps placed as icons on the home grids (they show their own badge). */
     private val gridAppKeys: () -> Set<String> = { emptySet() },
+    /** The dock above the search bar: app menus offer to put an app there. */
+    private val dock: DockController? = null,
 ) {
     private val repo = HomeSectionsRepository(context)
     private var sections: MutableList<HomeSection> = mutableListOf()
@@ -305,6 +307,7 @@ class HomeSectionsController(
                 MenuEntry(context.getString(R.string.ml_add_widget)) { addWidget() },
                 MenuEntry(context.getString(R.string.ml_section_new)) { createSection(row = row) },
                 MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
+                MenuEntry(context.getString(R.string.ml_dock_add)) { dock?.showAddDialog() },
                 MenuEntry(context.getString(R.string.ml_parking_menu), section = context.getString(R.string.ml_menu_tools)) { parking() },
                 MenuEntry(context.getString(R.string.ml_news_zone_show)) { grid.showNewsStrip() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },
@@ -343,6 +346,7 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_copy_to)) {
             pickOtherSection(sectionIndex) { target -> copyApp(sectionApp, target, removeFrom = null) }
         }
+        dockEntry(app)?.let { entries += it }
         entries += MenuEntry(context.getString(R.string.ml_app_remove_from_section)) {
             section.apps.removeAll { it.samePackageAndUser(sectionApp) }
             save()
@@ -372,6 +376,13 @@ class HomeSectionsController(
         return entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage)
     }
 
+    /** "Add to dock", unless it's there already or full. */
+    private fun dockEntry(app: AppModel.App): MenuEntry? {
+        val dock = dock ?: return null
+        if (dock.contains(app) || dock.isFull()) return null
+        return MenuEntry(context.getString(R.string.ml_dock_add_app)) { dock.add(app) }
+    }
+
     /** Menu of an app shown only because of its notifications. */
     private fun showLooseAppMenu(app: AppModel.App) {
         val sectionApp = SectionApp.from(app)
@@ -386,6 +397,7 @@ class HomeSectionsController(
                 openAppInfo(context, app.user, app.appPackage)
             },
         )
+        dockEntry(app)?.let { entries.add(1, it) }
         context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
     }
 

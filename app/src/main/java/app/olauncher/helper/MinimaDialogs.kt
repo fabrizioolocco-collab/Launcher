@@ -354,6 +354,11 @@ object MenuIcons {
             s(R.string.ml_todo_category_delete) to Look(R.drawable.ic_m_delete, destructive = true),
             s(R.string.ml_todo_edit) to Look(R.drawable.ic_m_rename),
             s(R.string.ml_todo_duplicate) to Look(R.drawable.ic_m_copy),
+            s(R.string.ml_dock_add) to Look(R.drawable.ic_m_dock),
+            s(R.string.ml_dock_add_app) to Look(R.drawable.ic_m_dock),
+            s(R.string.ml_dock_remove) to Look(R.drawable.ic_m_remove, destructive = true),
+            s(R.string.ml_dock_move_left) to Look(R.drawable.ic_m_left),
+            s(R.string.ml_dock_move_right) to Look(R.drawable.ic_m_right),
         )
         cache = locale to map
         return map

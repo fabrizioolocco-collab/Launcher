@@ -673,4 +673,11 @@
     <string name="ml_w_customize">Values shown</string>
     <string name="ml_w_customize_hint">Drag by the handle to reorder, switch off what you don\'t need.</string>
     <string name="ml_w_drag">Drag</string>
+    <string name="ml_dock_add">Add app to dock…</string>
+    <string name="ml_dock_add_app">Add to dock</string>
+    <string name="ml_dock_remove">Remove from dock</string>
+    <string name="ml_dock_move_left">Move left</string>
+    <string name="ml_dock_move_right">Move right</string>
+    <string name="ml_dock_already">Already in the dock</string>
+    <string name="ml_dock_full">The dock holds up to %d apps</string>
 </resources>
