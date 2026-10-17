@@ -484,12 +484,17 @@ class AppDrawerFragment : BaseFragment() {
         }
         val rows = prefs.drawerRows
         val height = binding.recyclerView.height
-        val cellHeight = if (rows > 0 && height > 0) ((height - binding.recyclerView.paddingTop - binding.recyclerView.paddingBottom) / rows -
-                (if (cards) AppDrawerAdapter.GridViewHolder.CARD_GAP_DP.dpToPx() else 0)).coerceAtLeast(48.dpToPx()) else 0
+        val gap = if (cards) AppDrawerAdapter.GridViewHolder.CARD_GAP_DP.dpToPx() else 0
+        val cellHeight = when {
+            rows > 0 && height > 0 -> ((height - binding.recyclerView.paddingTop - binding.recyclerView.paddingBottom) / rows - gap).coerceAtLeast(48.dpToPx())
+            // Square cards: as tall as they are wide
+            cards && rows <= 0 -> (cellWidth - gap).coerceAtLeast(48.dpToPx())
+            else -> 0
+        }
         adapter.grid = AppDrawerAdapter.GridStyle(cellHeight, iconSize, prefs.drawerLabels, prefs.iconTiles, { appModel, view, size ->
             loadGridIcon(appModel, view, size)
         }, cards = cards)
-        if (rows > 0 && height == 0) {
+        if ((rows > 0 && height == 0) || (cards && binding.recyclerView.width == 0)) {
             // Measure first, then size the cells to the rows
             binding.recyclerView.doOnLayout { if (_binding != null) applyGridStyle() }
             return

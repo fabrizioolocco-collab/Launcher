@@ -102,6 +102,7 @@ class HomeWidgetsController(
     private var renderedColumns = 0
     private var renderedLabels = false
     private var renderedTiles = false
+    private var renderedCards = false
     private var renderedIconSize = 0
 
     /**
@@ -319,9 +320,10 @@ class HomeWidgetsController(
         apps.forEach { app ->
             val view = IconCellView(activity) { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
             // Same icon size as on the home, so the strip looks like one more grid row
-            val size = homeIconSize(view, false)
-            view.bind(app.appLabel, false, size, tile)
-            view.setNotified(true)
+            val card = prefs.drawerCards
+            val size = homeIconSize(view, false, card)
+            view.bind(app.appLabel, false, size, tile, card)
+            view.setNotified(notifications[NotificationRepository.key(app.appPackage, app.user.toString())]?.count?.coerceAtLeast(1) ?: 1)
             view.setTag(R.id.ml_swipe_app, app)
             view.touch.listener = object : GridItemListener {
                 override fun onLongPress(view: View) {}
@@ -332,7 +334,7 @@ class HomeWidgetsController(
             newsView.row.addView(view, android.widget.LinearLayout.LayoutParams(cell - 2 * gap, android.view.ViewGroup.LayoutParams.MATCH_PARENT).apply {
                 if (newsView.row.childCount > 0) leftMargin = 2 * gap
             })
-            val bitmapSize = view.bitmapSizeFor(size, tile)
+            val bitmapSize = view.bitmapSizeFor(size, tile, card)
             scope.launch {
                 val bitmap = withContext(Dispatchers.IO) {
                     IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, bitmapSize)
@@ -409,7 +411,7 @@ class HomeWidgetsController(
         for (i in 0 until grid.childCount) {
             val view = grid.getChildAt(i) as? IconCellView ?: continue
             val item = view.tag as HomeWidget
-            view.setNotified((notifications[NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty())]?.count ?: 0) > 0)
+            view.setNotified(notifications[NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty())]?.count ?: 0)
         }
     }
 
@@ -430,6 +432,7 @@ class HomeWidgetsController(
         renderedColumns = columns
         renderedLabels = showLabels
         renderedTiles = prefs.iconTiles
+        renderedCards = prefs.drawerCards
         renderedIconSize = prefs.homeIconSize
         val removed = mutableListOf<HomeWidget>()
         var changed = false
@@ -545,7 +548,7 @@ class HomeWidgetsController(
 
     /** Called on resume: rebuilds only if the column or label setting changed meanwhile. */
     fun refreshIfNeeded() {
-        if (renderedColumns != prefs.widgetColumns || renderedLabels != showLabels || renderedTiles != prefs.iconTiles || renderedIconSize != prefs.homeIconSize) render()
+        if (renderedColumns != prefs.widgetColumns || renderedLabels != showLabels || renderedTiles != prefs.iconTiles || renderedCards != prefs.drawerCards || renderedIconSize != prefs.homeIconSize) render()
     }
 
     private fun ceilDiv(a: Int, b: Int) = (a + b - 1) / b
@@ -575,9 +578,11 @@ class HomeWidgetsController(
     }
 
     /** The home icon size setting (dp) wins over the automatic size from the cell. */
-    private fun homeIconSize(view: IconCellView, showLabel: Boolean): Int =
-        if (prefs.homeIconSize > 0) prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - 4.dpToPx())
-        else view.iconSizeFor(cellPx(), showLabel)
+    private fun homeIconSize(view: IconCellView, showLabel: Boolean, card: Boolean = false): Int = when {
+        prefs.homeIconSize > 0 -> prefs.homeIconSize.dpToPx().coerceAtMost(cellPx() - (if (card) 24 else 4).dpToPx())
+        card -> view.cardIconSizeFor(cellPx(), showLabel)
+        else -> view.iconSizeFor(cellPx(), showLabel)
+    }
 
     private fun iconView(item: HomeWidget, app: AppModel.App): View {
         val view = IconCellView(activity) { onLaunchApp(app) }
@@ -587,12 +592,14 @@ class HomeWidgetsController(
         view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, rowDivisions)
         val showLabel = showLabels
         val tile = prefs.iconTiles
-        val size = homeIconSize(view, showLabel)
-        view.bind(app.appLabel, showLabel, size, tile)
+        // Cards like the app drawer's (the same setting)
+        val card = prefs.drawerCards
+        val size = homeIconSize(view, showLabel, card)
+        view.bind(app.appLabel, showLabel, size, tile, card)
         view.touch.listener = dragListener(null)
         val iconPack = prefs.iconPack
         val context = activity.applicationContext
-        val bitmapSize = view.bitmapSizeFor(size, tile)
+        val bitmapSize = view.bitmapSizeFor(size, tile, card)
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, bitmapSize)
