@@ -54,6 +54,7 @@ import app.olauncher.helper.showToast
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import app.olauncher.ui.bookmarks.BookmarksUi
+import app.olauncher.ui.bookmarks.SamsungBrowser
 import app.olauncher.ui.widgets.HomeWidgetsController
 import app.olauncher.ui.widgets.WidgetGridLayout
 import java.text.SimpleDateFormat
@@ -184,7 +185,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             modeButton = binding.searchMode,
             resultsScroll = binding.searchResultsScroll,
             results = binding.searchResults,
-            homeViews = listOf(binding.homeScroll, binding.dockSlot, binding.bookmarksButton),
+            homeViews = listOf(binding.homeScroll, binding.dockSlot, binding.bookmarksButton, binding.tabsButton),
             prefs = prefs,
             scope = uiScope,
             apps = {
@@ -205,6 +206,16 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             val ime = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, ime)
             insets
+        }
+
+        // Samsung Internet's open tabs, left of the search (only with the browser installed)
+        // Without it the button goes (removed, so the search page doesn't bring it back)
+        if (SamsungBrowser.installed(requireContext()) == null) (binding.tabsButton.parent as? ViewGroup)?.removeView(binding.tabsButton)
+        else binding.tabsButton.isVisible = true
+        binding.tabsButton.setOnClickListener { SamsungBrowser.openTabs(requireContext()) }
+        binding.tabsButton.setOnLongClickListener {
+            SamsungBrowser.chooseTabsShortcut(requireContext())
+            true
         }
 
         // Bookmarks: the panel opens just above the search row; a long press adds the copied address

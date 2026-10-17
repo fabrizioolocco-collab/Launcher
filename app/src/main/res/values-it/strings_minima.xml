@@ -712,4 +712,8 @@
     <string name="ml_bm_saved">Preferito salvato</string>
     <string name="ml_bm_cant_open">Impossibile aprire la pagina</string>
     <string name="ml_bm_share_label">Preferiti</string>
+    <string name="ml_sb_tabs">Schede di Samsung Internet</string>
+    <string name="ml_sb_missing">Samsung Internet non è installato</string>
+    <string name="ml_sb_open_app">Apri il browser (ultima scheda)</string>
+    <string name="ml_sb_choose">Il tasto schede apre</string>
 </resources>

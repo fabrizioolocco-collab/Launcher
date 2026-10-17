@@ -273,7 +273,9 @@ object BookmarksUi {
         val siblings = BookmarkStore.bookmarksIn(ctx, b.folder)
         val index = siblings.indexOfFirst { it.id == b.id }
         val browsers = browsers(ctx)
-        val browserName = browsers.firstOrNull { it.first == b.browser }?.second ?: ctx.getString(R.string.ml_bm_browser_default)
+        val defaultName = SamsungBrowser.installed(ctx)?.let { pkg -> browsers.firstOrNull { it.first == pkg }?.second }
+            ?: ctx.getString(R.string.ml_bm_browser_default)
+        val browserName = browsers.firstOrNull { it.first == b.browser }?.second ?: defaultName
         val entries = mutableListOf(
             MenuEntry(ctx.getString(R.string.ml_bm_edit), icon = R.drawable.ic_m_rename) { showForm(ctx, b) { refresh() } },
             MenuEntry(ctx.getString(R.string.ml_bm_move), icon = R.drawable.ic_m_move) {
@@ -299,7 +301,7 @@ object BookmarksUi {
                 })
             }
             entries += MenuEntry(ctx.getString(R.string.ml_bm_browser), value = browserName, icon = R.drawable.ic_m_settings) {
-                ctx.showMenuDialog(ctx.getString(R.string.ml_bm_browser), listOf("" to ctx.getString(R.string.ml_bm_browser_default)).plus(browsers).map { (pkg, name) ->
+                ctx.showMenuDialog(ctx.getString(R.string.ml_bm_browser), listOf("" to "${ctx.getString(R.string.ml_bm_browser_default)} ($defaultName)").plus(browsers).map { (pkg, name) ->
                     MenuEntry(name, checked = null) {
                         BookmarkStore.saveBookmark(ctx, b.copy(browser = pkg))
                         refresh()
@@ -546,7 +548,9 @@ object BookmarksUi {
 
     fun open(ctx: Context, b: Bookmark, browser: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(b.url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (browser.isNotEmpty()) intent.setPackage(browser)
+        // Samsung Internet unless the bookmark has a browser of its own
+        val pkg = browser.ifEmpty { SamsungBrowser.installed(ctx).orEmpty() }
+        if (pkg.isNotEmpty()) intent.setPackage(pkg)
         try {
             ctx.startActivity(intent)
         } catch (e: Exception) {

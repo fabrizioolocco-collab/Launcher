@@ -718,4 +718,8 @@
     <string name="ml_bm_saved">Bookmark saved</string>
     <string name="ml_bm_cant_open">Cannot open the page</string>
     <string name="ml_bm_share_label">Bookmarks</string>
+    <string name="ml_sb_tabs">Samsung Internet tabs</string>
+    <string name="ml_sb_missing">Samsung Internet is not installed</string>
+    <string name="ml_sb_open_app">Open the browser (last tab)</string>
+    <string name="ml_sb_choose">Tabs button opens</string>
 </resources>
