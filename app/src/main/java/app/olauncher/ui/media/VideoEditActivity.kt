@@ -209,9 +209,9 @@ class VideoEditActivity : AppCompatActivity() {
         if (r.left <= 0 && r.top <= 0 && r.right >= dw && r.bottom >= dh) return null
         // Map the displayed rectangle back to the stored frame
         val (l, t, w, h) = when (rotation) {
-            90 -> listOf(r.top, dh - r.right, r.height(), r.width())
+            90 -> listOf(r.top, dw - r.right, r.height(), r.width())
             180 -> listOf(dw - r.right, dh - r.bottom, r.width(), r.height())
-            270 -> listOf(dw - r.bottom, r.left, r.height(), r.width())
+            270 -> listOf(dh - r.bottom, r.left, r.height(), r.width())
             else -> listOf(r.left, r.top, r.width(), r.height())
         }
         return VideoCropper.Crop(l.coerceAtLeast(0), t.coerceAtLeast(0), w.coerceAtLeast(16), h.coerceAtLeast(16))

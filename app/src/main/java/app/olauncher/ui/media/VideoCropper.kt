@@ -73,6 +73,9 @@ class VideoCropper(private val src: File, private val dst: File) {
             gl.setCrop(crop, srcW, srcH)
 
             decoder = MediaCodec.createDecoderByType(inFormat.getString(MediaFormat.KEY_MIME)!!)
+            // The decoder would rotate the frames on the surface by the track's rotation: keep them as
+            // stored, the crop is in stored pixels and the rotation is carried over by the muxer
+            if (inFormat.containsKey(MediaFormat.KEY_ROTATION)) inFormat.setInteger(MediaFormat.KEY_ROTATION, 0)
             decoder.configure(inFormat, gl.decoderSurface, null, 0)
             decoder.start()
 
@@ -256,13 +259,16 @@ class VideoCropper(private val src: File, private val dst: File) {
         private fun floats(a: FloatArray): FloatBuffer =
             ByteBuffer.allocateDirect(a.size * 4).order(ByteOrder.nativeOrder()).asFloatBuffer().also { it.put(a).position(0) }
 
-        /** Texture coordinates of the crop rectangle (source pixels). */
+        /**
+         * Texture coordinates of the crop rectangle (source pixels, top-left origin). Texture v grows
+         * upwards, so the bottom vertices take the crop's bottom edge.
+         */
         fun setCrop(crop: Crop, srcW: Int, srcH: Int) {
             val l = crop.left.toFloat() / srcW
             val r = (crop.left + crop.width).toFloat() / srcW
-            val t = crop.top.toFloat() / srcH
-            val b = (crop.top + crop.height).toFloat() / srcH
-            texCoords = floats(floatArrayOf(l, t, r, t, l, b, r, b))
+            val top = 1f - crop.top.toFloat() / srcH
+            val bottom = 1f - (crop.top + crop.height).toFloat() / srcH
+            texCoords = floats(floatArrayOf(l, bottom, r, bottom, l, top, r, top))
         }
 
         override fun onFrameAvailable(st: SurfaceTexture) {
