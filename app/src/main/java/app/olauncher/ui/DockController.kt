@@ -3,6 +3,7 @@ package app.olauncher.ui
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -116,7 +117,9 @@ class DockController(
     fun render() {
         container.removeAllViews()
         val shown = dock.mapNotNull { d -> findApp(d)?.let { d to it } }.take(max)
-        container.isVisible = shown.isNotEmpty()
+        // A dock with apps keeps its room even when none is shown (detox, apps not loaded yet):
+        // otherwise the home grid grows and shrinks with it and its icons get moved up for good
+        container.isVisible = dock.isNotEmpty()
         if (!container.isVisible) return
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -140,6 +143,7 @@ class DockController(
             val entry = shown.getOrNull(i)
             row.addView(if (entry == null) FrameLayout(context) else tile(i, entry.first, entry.second), lp)
         }
+        if (shown.isEmpty()) row.visibility = View.INVISIBLE
         container.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
