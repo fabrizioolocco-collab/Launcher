@@ -786,6 +786,4 @@
     <string name="ml_search_hint_all">Cerca app, contatti, file, web</string>
     <string name="ml_search_web_now">Cerca sul web</string>
     <string name="ml_search_tab_web">Web</string>
-    <string name="ml_search_browser_tabs">Schede aperte del browser</string>
-    <string name="ml_search_recent">Aperte di recente</string>
 </resources>

@@ -790,6 +790,4 @@
     <string name="ml_search_hint_all">Search apps, contacts, files, web</string>
     <string name="ml_search_web_now">Search the web</string>
     <string name="ml_search_tab_web">Web</string>
-    <string name="ml_search_browser_tabs">Open browser tabs</string>
-    <string name="ml_search_recent">Opened recently</string>
 </resources>

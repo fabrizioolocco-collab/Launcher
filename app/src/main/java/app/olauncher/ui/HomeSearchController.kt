@@ -33,10 +33,8 @@ import app.olauncher.data.AppModel
 import app.olauncher.data.Prefs
 import app.olauncher.data.BookmarkStore
 import app.olauncher.helper.DetoxManager
-import app.olauncher.helper.RecentApps
 import app.olauncher.helper.showKeyboard
 import app.olauncher.ui.bookmarks.BookmarksUi
-import app.olauncher.ui.bookmarks.SamsungBrowser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.MenuEntry
@@ -58,9 +56,9 @@ import java.text.Normalizer
 /**
  * Search bar at the bottom of home. Tapping it, or swiping up on home, opens the search page over
  * the blurred wallpaper: bar on top, with the bookmarks and the app grid next to it, results below.
- * Before typing: the browser's open tabs and the apps opened last. While typing: apps, contacts,
- * files and folders on the phone and Android settings, in tabs, and a Web tab with the matching
- * bookmarks and the web search. The globe in the bar searches the web at once.
+ * While typing: apps, contacts, files and folders on the phone and Android settings, in tabs, and
+ * a Web tab with the matching bookmarks and the web search. The search key and the globe in the
+ * bar search the web.
  * Files can be opened, or their folder (Solid Explorer when installed).
  */
 class HomeSearchController(
@@ -228,7 +226,6 @@ class HomeSearchController(
         job?.cancel()
         if (q.isEmpty()) {
             results.removeAllViews()
-            if (pageOpen) renderStart()
             return
         }
         job = scope.launch {
@@ -237,12 +234,11 @@ class HomeSearchController(
         }
     }
 
-    /** Search key: opens the first result of the tab shown, else searches the web. */
+    /** Search key: the web search, always (a result is a tap away). */
     private fun submit() {
         val q = query()
         if (q.isEmpty()) return
-        val first = (0 until results.childCount).map { results.getChildAt(it) }.firstOrNull { it.tag == RESULT }
-        if (first != null) first.performClick() else openWeb(q)
+        openWeb(q)
     }
 
     /** The web search of [q] (Google's page when empty), in Samsung Internet when installed. */
@@ -388,89 +384,10 @@ class HomeSearchController(
         })
     }
 
-    /** Before typing: the browser's open tabs (Samsung Internet) and the apps opened last. */
-    private fun renderStart() {
-        results.removeAllViews()
-        if (SamsungBrowser.installed(activity) != null) {
-            results.addView(LinearLayout(activity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                background = UiKit.cardBackground(activity, 24)
-                setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
-                minimumHeight = 52.dpToPx()
-                isClickable = true
-                isFocusable = true
-                foreground = UiKit.ripple(activity)
-                setOnClickListener {
-                    SamsungBrowser.openTabs(activity)
-                    leave()
-                }
-                setOnLongClickListener {
-                    SamsungBrowser.chooseTabsShortcut(activity)
-                    true
-                }
-                addView(UiKit.icon(activity, R.drawable.ic_m_tabs, UiKit.primary(activity), 20).apply {
-                    (layoutParams as LinearLayout.LayoutParams).marginEnd = 12.dpToPx()
-                })
-                addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-                    setText(R.string.ml_search_browser_tabs)
-                    textSize = 15f
-                })
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 8.dpToPx()
-            })
-        }
-        val recent = RecentApps.of(activity, apps()).filter { DetoxManager.isAllowed(activity, it.appPackage) }.take(RECENT)
-        if (recent.isEmpty()) return
-        results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-            text = activity.getString(R.string.ml_search_recent).uppercase()
-            textSize = 12f
-            letterSpacing = 0.08f
-            setTypeface(typeface, Typeface.BOLD)
-            alpha = 0.7f
-            setPadding(4.dpToPx(), 20.dpToPx(), 0, 10.dpToPx())
-        })
-        val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
-        recent.forEach { app ->
-            row.addView(LinearLayout(activity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                isClickable = true
-                isFocusable = true
-                foreground = UiKit.roundRipple(activity)
-                setOnClickListener {
-                    launchApp(app)
-                    leave()
-                }
-                val icon = android.widget.ImageView(activity)
-                addView(icon, LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()))
-                addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-                    text = app.appLabel
-                    textSize = 12f
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                    gravity = Gravity.CENTER
-                    setPadding(0, 6.dpToPx(), 0, 0)
-                })
-                val size = 48.dpToPx()
-                val ctx = activity.applicationContext
-                val iconPack = prefs.iconPack
-                scope.launch {
-                    val bitmap = withContext(Dispatchers.IO) {
-                        IconPackManager.getIcon(ctx, app.appPackage, app.activityClassName, app.user, iconPack, size)
-                    } ?: return@launch
-                    icon.setImageBitmap(bitmap)
-                }
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        }
-        // Fewer than five: same width each, from the left
-        repeat(RECENT - recent.size) { row.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f)) }
-        results.addView(row)
-    }
-
     /** Chips "Apps 3 · Files 12 … · Web", Web with the number of bookmarks found. */
     private fun tabBar(q: String, found: Found, visible: List<Tab>, current: Tab) {
-        val chips = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+        // In rows, all in sight however many
+        val chips = FlowLayout(activity)
         visible.forEach { t ->
             val count = found.rows(t).size
             chips.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
@@ -486,15 +403,12 @@ class HomeSearchController(
                     render(q, found)
                     resultsScroll.scrollTo(0, 0)
                 }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            }, ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                 marginEnd = 4.dpToPx()
+                bottomMargin = 4.dpToPx()
             })
         }
-        results.addView(android.widget.HorizontalScrollView(activity).apply {
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(chips)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        results.addView(chips, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             bottomMargin = 4.dpToPx()
         })
     }
@@ -931,7 +845,6 @@ class HomeSearchController(
     companion object {
         private const val RESULT = "result"
         private const val MAX_APPS = 30
-        private const val RECENT = 5
         private const val MAX_CONTACTS = 30
         private const val MAX_FILES = 300
         private const val MAX_FOLDERS = 80
