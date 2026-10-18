@@ -194,7 +194,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             appsButton = binding.appsButton,
             resultsScroll = binding.searchResultsScroll,
             results = binding.searchResults,
-            homeViews = listOf(binding.homeScroll, binding.dockSlot),
+            homeViews = listOf(binding.homeScroll, binding.dockSlot, binding.detoxButton),
             prefs = prefs,
             scope = uiScope,
             apps = {
@@ -457,6 +457,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private fun initClickListeners() {
         binding.lock.setOnClickListener(this)
+        binding.detoxButton.setOnClickListener { detox.open() }
         // Home button for recents feature disabled
         // binding.recents.setOnClickListener(this)
         binding.clock.setOnClickListener(this)

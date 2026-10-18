@@ -10,7 +10,6 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.isVisible
 import app.olauncher.R
@@ -30,8 +29,9 @@ import kotlin.math.ceil
 
 /**
  * The page that takes the place of home while a detox session runs: the time left with a progress
- * bar on top, then the allowed apps as rows sharing the rest of the page (taller the fewer they
- * are), each with the count of its notifications; "End" opens the session menu.
+ * bar on top, then the allowed apps sharing the rest of the page, all in sight however many they
+ * are (rows, taller the fewer they are; more columns when they don't fit), each with the count of
+ * its notifications; "End" opens the session menu.
  */
 class DetoxPage(
     private val page: FrameLayout,
@@ -69,7 +69,7 @@ class DetoxPage(
     private val ends = smallText().apply { gravity = Gravity.END }
     private val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private val listBox = FrameLayout(context)
-    private var rows: List<View> = emptyList()
+    private var shown: List<AppModel.App> = emptyList()
 
     init {
         page.setBackgroundColor(context.getColorFromAttr(R.attr.primaryInverseColor))
@@ -105,14 +105,10 @@ class DetoxPage(
             addView(ends, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }, matchWrap(top = 10))
 
-        listBox.addView(ScrollView(context).apply {
-            isVerticalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(list, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        // The rows share the room left: their height is known once the box is laid out
-        listBox.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
-            if (bottom - top != oldBottom - oldTop) listBox.post { sizeRows() }
+        listBox.addView(list, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // The apps share the room left: laid out again once its size is known or changes
+        listBox.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (bottom - top != oldBottom - oldTop || right - left != oldRight - oldLeft) listBox.post { layoutApps() }
         }
         column.addView(listBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply {
             topMargin = 24.dpToPx()
@@ -237,62 +233,139 @@ class DetoxPage(
     }
 
     private fun renderApps() {
+        shown = allowedApps()
+        layoutApps()
+    }
+
+    /**
+     * Every app in sight, no scrolling: one column of rows (56 to 140 dp tall) while they fit,
+     * else as few columns as needed for tiles of at least 56 dp, else the tiles shrink.
+     */
+    private fun layoutApps() {
         list.removeAllViews()
-        val shown = allowedApps()
         if (shown.isEmpty()) {
             list.addView(TextView(context, null, 0, R.style.TextSmall).apply {
                 text = context.getString(R.string.ml_detox_empty_whitelist_hint)
                 textSize = 15f
                 setTextColor(secondary)
             })
-            rows = emptyList()
             return
         }
-        rows = shown.map { app -> row(app).also { list.addView(it) } }
-        sizeRows()
-    }
-
-    /** Rows share the box's height, between 56 and 140 dp each; past that the list scrolls. */
-    private fun sizeRows() {
-        if (rows.isEmpty() || listBox.height == 0) return
+        val height = listBox.height
+        if (height == 0) return
         val gap = 10.dpToPx()
-        val each = ((listBox.height - gap * (rows.size - 1)) / rows.size).coerceIn(56.dpToPx(), 140.dpToPx())
-        rows.forEachIndexed { i, row ->
-            row.layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, each).apply {
-                topMargin = if (i == 0) 0 else gap
-            }
+        val n = shown.size
+        fun tileHeight(columns: Int): Int {
+            val lines = (n + columns - 1) / columns
+            return (height - gap * (lines - 1)) / lines
         }
-        list.requestLayout()
+        var columns = 1
+        while (columns < MAX_COLUMNS && tileHeight(columns) < 56.dpToPx()) columns++
+        val each = tileHeight(columns).coerceAtMost(140.dpToPx())
+        shown.chunked(columns).forEachIndexed { i, line ->
+            val lineView = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            line.forEachIndexed { j, app ->
+                val tile = if (columns == 1) row(app) else tile(app, each, columns)
+                lineView.addView(tile, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply {
+                    if (j > 0) marginStart = gap
+                })
+            }
+            // Keep the columns of a short last line
+            repeat(columns - line.size) {
+                lineView.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f).apply { marginStart = gap })
+            }
+            list.addView(lineView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, each).apply {
+                if (i > 0) topMargin = gap
+            })
+        }
     }
 
-    private fun row(app: AppModel.App): View {
-        val count = notifications[NotificationRepository.key(app.appPackage, app.user.toString())]?.count ?: 0
-        val iconSize = 24.dpToPx()
-        val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
-        val iconBox = FrameLayout(context).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = 12.dpToPx().toFloat()
-                setColor(context.getColorFromAttr(R.attr.tileColor))
-            }
-            addView(icon, FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER))
-        }
+    private fun notificationCount(app: AppModel.App) =
+        notifications[NotificationRepository.key(app.appPackage, app.user.toString())]?.count ?: 0
+
+    private fun loadIcon(app: AppModel.App, into: ImageView, sizePx: Int) {
         val iconPack = prefs.iconPack
         val appContext = context.applicationContext
         scope.launch {
             val bitmap = withContext(Dispatchers.IO) {
-                IconPackManager.getIcon(appContext, app.appPackage, app.activityClassName, app.user, iconPack, iconSize)
+                IconPackManager.getIcon(appContext, app.appPackage, app.activityClassName, app.user, iconPack, sizePx)
             } ?: return@launch
-            icon.setImageDrawable(IconPackManager.toDrawable(context, bitmap, iconSize))
+            into.setImageDrawable(IconPackManager.toDrawable(context, bitmap, sizePx))
         }
+    }
+
+    private fun iconBox(app: AppModel.App, iconSize: Int) = FrameLayout(context).apply {
+        background = GradientDrawable().apply {
+            cornerRadius = 12.dpToPx().toFloat()
+            setColor(context.getColorFromAttr(R.attr.tileColor))
+        }
+        val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
+        addView(icon, FrameLayout.LayoutParams(iconSize, iconSize, Gravity.CENTER))
+        loadIcon(app, icon, iconSize)
+    }
+
+    private fun badge(count: Int, sizeDp: Int) = TextView(context, null, 0, R.style.TextSmall).apply {
+        text = if (count > 99) "99+" else count.toString()
+        textSize = if (sizeDp >= 28) 14f else 11f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(android.graphics.Color.WHITE)
+        gravity = Gravity.CENTER
+        minWidth = sizeDp.dpToPx()
+        setPadding((sizeDp / 4).dpToPx(), 0, (sizeDp / 4).dpToPx(), 0)
+        includeFontPadding = false
+        background = GradientDrawable().apply {
+            cornerRadius = (sizeDp / 2).dpToPx().toFloat()
+            setColor(NotificationBadge.NOTIFICATION_COLOR)
+        }
+    }
+
+    /** Tap: the app, or first its notifications when it has some. */
+    private fun View.opens(app: AppModel.App) {
+        isClickable = true
+        contentDescription = app.appLabel
+        background = UiKit.cardBackground(context, 20)
+        foreground = UiKit.ripple(context)
+        setOnClickListener {
+            if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
+            else onLaunch(app)
+        }
+    }
+
+    /** Several columns: the icon (badge on its corner) with the name below while there is room. */
+    private fun tile(app: AppModel.App, heightPx: Int, columns: Int): View {
+        val count = notificationCount(app)
+        val withName = heightPx >= 76.dpToPx()
+        val boxSize = (heightPx - (if (withName) 34 else 12).dpToPx()).coerceIn(24.dpToPx(), 48.dpToPx())
+        val box = FrameLayout(context).apply {
+            addView(iconBox(app, boxSize * 3 / 5), FrameLayout.LayoutParams(boxSize, boxSize, Gravity.CENTER))
+            if (count > 0) addView(badge(count, 18), FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 18.dpToPx(), Gravity.TOP or Gravity.END))
+        }
+        return LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            setPadding(6.dpToPx(), 0, 6.dpToPx(), 0)
+            opens(app)
+            addView(box, LinearLayout.LayoutParams(boxSize + 12.dpToPx(), boxSize + 6.dpToPx()))
+            if (withName) addView(TextView(context, null, 0, R.style.TextSmall).apply {
+                text = app.appLabel
+                textSize = if (columns == 2) 15f else 13f
+                setTextColor(primary)
+                gravity = Gravity.CENTER
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 4.dpToPx() })
+        }
+    }
+
+    /** One column: icon, name and notification count in a row. */
+    private fun row(app: AppModel.App): View {
+        val count = notificationCount(app)
         return LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(20.dpToPx(), 0, 16.dpToPx(), 0)
-            background = UiKit.cardBackground(context, 20)
-            foreground = UiKit.ripple(context)
-            isClickable = true
-            contentDescription = app.appLabel
-            addView(iconBox, LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()))
+            opens(app)
+            addView(iconBox(app, 24.dpToPx()), LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()))
             addView(TextView(context, null, 0, R.style.TextDefault).apply {
                 text = app.appLabel
                 textSize = 20f
@@ -301,23 +374,11 @@ class DetoxPage(
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 16.dpToPx() })
-            if (count > 0) addView(TextView(context, null, 0, R.style.TextSmall).apply {
-                text = if (count > 99) "99+" else count.toString()
-                textSize = 14f
-                setTypeface(typeface, Typeface.BOLD)
-                setTextColor(android.graphics.Color.WHITE)
-                gravity = Gravity.CENTER
-                minWidth = 28.dpToPx()
-                setPadding(8.dpToPx(), 0, 8.dpToPx(), 0)
-                background = GradientDrawable().apply {
-                    cornerRadius = 14.dpToPx().toFloat()
-                    setColor(NotificationBadge.NOTIFICATION_COLOR)
-                }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 28.dpToPx()).apply { marginStart = 12.dpToPx() })
-            setOnClickListener {
-                if (count > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
-                else onLaunch(app)
-            }
+            if (count > 0) addView(badge(count, 28), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 28.dpToPx()).apply { marginStart = 12.dpToPx() })
         }
+    }
+
+    private companion object {
+        const val MAX_COLUMNS = 4
     }
 }

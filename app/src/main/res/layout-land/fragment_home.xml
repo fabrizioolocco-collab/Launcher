@@ -213,6 +213,19 @@
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
+            <!-- Detox: start a session (or its menu while one runs) -->
+            <ImageView
+                android:id="@+id/detoxButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_search_pill"
+                android:contentDescription="@string/ml_detox"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="13dp"
+                android:src="@drawable/ic_m_detox"
+                app:tint="?attr/primaryColor" />
+
             <LinearLayout
                 android:id="@+id/searchBar"
                 android:layout_width="0dp"
