@@ -430,8 +430,9 @@ class AppDrawerFragment : BaseFragment() {
         val ctx = requireContext()
         binding.search.hideKeyboard()
         val entries = mutableListOf<MenuEntry>()
-        if (appModel is AppModel.App && tabs?.showingHidden == true && binding.search.query.isNullOrBlank()) {
-            // "Hidden" tab: bring the app back (hidden apps can still be placed on home)
+        val hidden = appModel is AppModel.App && flag == Constants.FLAG_LAUNCH_APP && DrawerTabsRepository.key(appModel) in prefs.hiddenApps
+        if (appModel is AppModel.App && (hidden || tabs?.showingHidden == true && binding.search.query.isNullOrBlank())) {
+            // A hidden app, in the "Hidden" tab or found by the search: bring it back (hidden apps can still be placed on home)
             entries += addToHomeEntry(appModel)
             entries += MenuEntry(getString(R.string.adapter_show)) { unhide(appModel) }
             entries += changeIconEntry(appModel)
