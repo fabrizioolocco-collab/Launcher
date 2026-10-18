@@ -208,6 +208,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             // Home button for recents feature disabled
             // R.id.homeButtonRecents -> toggleHomeButtonRecents()
             R.id.autoShowKeyboard -> toggleKeyboardText()
+            R.id.swipeUpAction -> {
+                prefs.swipeUpSearch = !prefs.swipeUpSearch
+                populateKeyboardText()
+            }
             R.id.showIcons -> toggleShowIcons()
             R.id.iconTiles -> {
                 prefs.iconTiles = !prefs.iconTiles
@@ -381,6 +385,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.aboutOlauncher.setOnClickListener(this)
         binding.moreFeatures.setOnClickListener(this)
         binding.autoShowKeyboard.setOnClickListener(this)
+        binding.swipeUpAction.setOnClickListener(this)
         binding.toggleLock.setOnClickListener(this)
         // Home button for recents feature disabled
         // binding.homeButtonRecents.setOnClickListener(this)
@@ -941,6 +946,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     private fun populateKeyboardText() {
         if (prefs.autoShowKeyboard) binding.autoShowKeyboard.text = getString(R.string.on)
         else binding.autoShowKeyboard.text = getString(R.string.off)
+        binding.swipeUpAction.setText(if (prefs.swipeUpSearch) R.string.ml_swipe_up_search else R.string.ml_swipe_up_apps)
     }
 
     private fun populateWallpaperText() {

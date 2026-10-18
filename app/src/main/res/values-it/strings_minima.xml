@@ -780,4 +780,12 @@
     <string name="ml_tab_in">in %1$s</string>
     <string name="ml_tab_drop_hint">Lasciala tra le app, o su una tab per spostarla lì</string>
     <string name="ml_tab_hidden_done">%1$s nascosta</string>
+    <string name="ml_swipe_up_action">Swipe su apre</string>
+    <string name="ml_swipe_up_search">Ricerca</string>
+    <string name="ml_swipe_up_apps">Lista app</string>
+    <string name="ml_search_hint_all">Cerca app, contatti, file, web</string>
+    <string name="ml_search_web_now">Cerca sul web</string>
+    <string name="ml_search_tab_web">Web</string>
+    <string name="ml_search_browser_tabs">Schede aperte del browser</string>
+    <string name="ml_search_recent">Aperte di recente</string>
 </resources>

@@ -55,8 +55,6 @@ import app.olauncher.helper.setPlainWallpaperByTheme
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
-import app.olauncher.ui.bookmarks.BookmarksUi
-import app.olauncher.ui.bookmarks.SamsungBrowser
 import app.olauncher.ui.widgets.HomeWidgetsController
 import app.olauncher.ui.widgets.WidgetGridLayout
 import java.text.SimpleDateFormat
@@ -187,10 +185,12 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             bar = binding.searchRow,
             input = binding.searchInput,
             clear = binding.searchClear,
-            modeButton = binding.searchMode,
+            webButton = binding.searchWeb,
+            bookmarksButton = binding.bookmarksButton,
+            appsButton = binding.appsButton,
             resultsScroll = binding.searchResultsScroll,
             results = binding.searchResults,
-            homeViews = listOf(binding.homeScroll, binding.dockSlot, binding.bookmarksButton, binding.tabsButton),
+            homeViews = listOf(binding.homeScroll, binding.dockSlot),
             prefs = prefs,
             scope = uiScope,
             apps = {
@@ -200,6 +200,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             launchApp = { app -> launchHomeApp(app) },
             requestPermission = { permissionRequest.launch(it) },
             keepScreen = { viewModel.keepCurrentScreen = it },
+            openAppList = { showAppList(Constants.FLAG_LAUNCH_APP) },
         )
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -211,28 +212,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             val ime = insets.getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom
             v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, ime)
             insets
-        }
-
-        // Samsung Internet's open tabs, left of the search (only with the browser installed)
-        // Without it the button goes (removed, so the search page doesn't bring it back)
-        if (SamsungBrowser.installed(requireContext()) == null) (binding.tabsButton.parent as? ViewGroup)?.removeView(binding.tabsButton)
-        else binding.tabsButton.isVisible = true
-        binding.tabsButton.setOnClickListener { SamsungBrowser.openTabs(requireContext()) }
-        binding.tabsButton.setOnLongClickListener {
-            SamsungBrowser.chooseTabsShortcut(requireContext())
-            true
-        }
-
-        // Bookmarks: the panel opens just above the search row; a long press adds the copied address
-        binding.bookmarksButton.setOnClickListener { v ->
-            val loc = IntArray(2)
-            binding.searchRow.getLocationOnScreen(loc)
-            val bottom = (v.rootView.height - loc[1] + 10.dpToPx()).coerceAtLeast(0)
-            BookmarksUi.showPanel(requireContext(), bottom)
-        }
-        binding.bookmarksButton.setOnLongClickListener {
-            BookmarksUi.showForm(requireContext(), BookmarksUi.fromClipboard(requireContext())) {}
-            true
         }
 
         detox = DetoxController(
@@ -416,7 +395,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private fun initSwipeTouchListener() {
         binding.homeScroll.callbacks = object : HomeScrollView.GestureCallbacks {
-            override fun onSwipeUp() = showAppList(Constants.FLAG_LAUNCH_APP)
+            // The search page (over the blurred wallpaper), or the app list, per settings
+            override fun onSwipeUp() = if (prefs.swipeUpSearch) search.openWithKeyboard() else showAppList(Constants.FLAG_LAUNCH_APP)
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
             override fun onSwipeLeft() = openSwipeLeftApp()
             override fun onSwipeRight() = openSwipeRightApp()
@@ -747,6 +727,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private fun showLongPressToast() = requireContext().showToast(getString(R.string.long_press_to_select_app))
 
     override fun onDestroyView() {
+        // The search page dims and blurs the window: never leave it so
+        if (::search.isInitialized) search.close()
         super.onDestroyView()
         uiScope.cancel()
         widgets.release()

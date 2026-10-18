@@ -17,6 +17,7 @@ class Prefs(context: Context) {
     private val LOCK_MODE = "LOCK_MODE"
     private val HOME_APPS_NUM = "HOME_APPS_NUM"
     private val AUTO_SHOW_KEYBOARD = "AUTO_SHOW_KEYBOARD"
+    private val SWIPE_UP_SEARCH = "SWIPE_UP_SEARCH"
     private val KEYBOARD_MESSAGE = "KEYBOARD_MESSAGE"
     private val DAILY_WALLPAPER = "DAILY_WALLPAPER"
     private val DAILY_WALLPAPER_URL = "DAILY_WALLPAPER_URL"
@@ -292,6 +293,11 @@ class Prefs(context: Context) {
     var lockModeOn: Boolean
         get() = prefs.getBoolean(LOCK_MODE, false)
         set(value) = prefs.edit { putBoolean(LOCK_MODE, value).apply() }
+
+    /** Swipe up on home: the search page (true) or the app list. */
+    var swipeUpSearch: Boolean
+        get() = prefs.getBoolean(SWIPE_UP_SEARCH, true)
+        set(value) = prefs.edit { putBoolean(SWIPE_UP_SEARCH, value).apply() }
 
     var autoShowKeyboard: Boolean
         get() = prefs.getBoolean(AUTO_SHOW_KEYBOARD, false)

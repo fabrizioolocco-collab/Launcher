@@ -216,8 +216,7 @@
                 android:paddingBottom="8dp" />
         </ScrollView>
 
-        <!-- Search bar: Google or phone (switch on the right) -->
-        <!-- Search bar and, next to it, the bookmarks (the row moves as one with the search page) -->
+        <!-- Search bar (the globe searches the web); on the search page also the bookmarks and the app grid -->
         <LinearLayout
             android:id="@+id/searchRow"
             android:layout_width="match_parent"
@@ -227,20 +226,6 @@
             android:layout_marginBottom="24dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
-
-            <!-- Samsung Internet's open tabs -->
-            <ImageView
-                android:id="@+id/tabsButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="10dp"
-                android:background="@drawable/bg_search_pill"
-                android:contentDescription="@string/ml_sb_tabs"
-                android:foreground="?attr/selectableItemBackgroundBorderless"
-                android:padding="13dp"
-                android:src="@drawable/ic_m_tabs"
-                android:visibility="gone"
-                app:tint="?attr/primaryColor" />
 
             <LinearLayout
                 android:id="@+id/searchBar"
@@ -269,7 +254,7 @@
                     android:layout_height="match_parent"
                     android:layout_weight="1"
                     android:background="@android:color/transparent"
-                    android:hint="@string/ml_search_hint_web"
+                    android:hint="@string/ml_search_hint_all"
                     android:imeOptions="actionSearch"
                     android:importantForAutofill="no"
                     android:inputType="text"
@@ -289,18 +274,15 @@
                     android:paddingHorizontal="10dp"
                     android:visibility="gone" />
 
-                <TextView
-                    android:id="@+id/searchMode"
-                    style="@style/TextSmallBold"
-                    android:layout_width="wrap_content"
-                    android:layout_height="match_parent"
-                    android:gravity="center"
-                    android:drawableEnd="@drawable/ic_m_swap_small"
-                    android:drawablePadding="6dp"
-                    android:drawableTint="?attr/primaryColor"
-                    android:paddingHorizontal="12dp"
-                    android:textSize="14sp"
-                    tools:text="Google" />
+                <ImageView
+                    android:id="@+id/searchWeb"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/ml_search_web_now"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_m_globe"
+                    app:tint="?attr/primaryColor" />
             </LinearLayout>
 
             <ImageView
@@ -313,6 +295,21 @@
                 android:foreground="?attr/selectableItemBackgroundBorderless"
                 android:padding="13dp"
                 android:src="@drawable/ic_m_star"
+                android:visibility="gone"
+                app:tint="?attr/primaryColor" />
+
+            <!-- The app grid, from the search page -->
+            <ImageView
+                android:id="@+id/appsButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:layout_marginStart="10dp"
+                android:background="@drawable/bg_search_pill"
+                android:contentDescription="@string/ml_all_apps"
+                android:foreground="?attr/selectableItemBackgroundBorderless"
+                android:padding="13dp"
+                android:src="@drawable/ic_m_grid"
+                android:visibility="gone"
                 app:tint="?attr/primaryColor" />
         </LinearLayout>
     </LinearLayout>

@@ -20,6 +20,7 @@ import androidx.work.WorkManager
 import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
+import app.olauncher.helper.RecentApps
 import app.olauncher.helper.SingleLiveEvent
 import app.olauncher.helper.FolderShortcuts
 import app.olauncher.helper.ParkingShortcut
@@ -90,8 +91,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Constants.FLAG_LAUNCH_APP -> {
                 when (appModel) {
                     is AppModel.PinnedShortcut -> launchShortcut(appModel)
-                    is AppModel.App ->
+                    is AppModel.App -> {
+                        RecentApps.record(appContext, appModel)
                         launchApp(appModel.appPackage, appModel.activityClassName, appModel.user)
+                    }
 
                     else -> {}
                 }

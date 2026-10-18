@@ -31,7 +31,12 @@ import androidx.core.view.isVisible
 import app.olauncher.R
 import app.olauncher.data.AppModel
 import app.olauncher.data.Prefs
+import app.olauncher.data.BookmarkStore
 import app.olauncher.helper.DetoxManager
+import app.olauncher.helper.RecentApps
+import app.olauncher.helper.showKeyboard
+import app.olauncher.ui.bookmarks.BookmarksUi
+import app.olauncher.ui.bookmarks.SamsungBrowser
 import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.MenuEntry
@@ -51,11 +56,12 @@ import java.net.URLEncoder
 import java.text.Normalizer
 
 /**
- * Search bar at the bottom of home. Tapping it opens the search page: bar on top, results below.
- * The button on the right switches between:
- * - Google: the search key opens the results in the browser;
- * - Phone: apps, contacts, files and folders on the phone and Android settings, listed
- *   while typing. Files can be opened, or their folder (Solid Explorer when installed).
+ * Search bar at the bottom of home. Tapping it, or swiping up on home, opens the search page over
+ * the blurred wallpaper: bar on top, with the bookmarks and the app grid next to it, results below.
+ * Before typing: the browser's open tabs and the apps opened last. While typing: apps, contacts,
+ * files and folders on the phone and Android settings, in tabs, and a Web tab with the matching
+ * bookmarks and the web search. The globe in the bar searches the web at once.
+ * Files can be opened, or their folder (Solid Explorer when installed).
  */
 class HomeSearchController(
     private val activity: Activity,
@@ -63,7 +69,11 @@ class HomeSearchController(
     private val bar: View,
     private val input: EditText,
     private val clear: TextView,
-    private val modeButton: TextView,
+    /** The globe in the bar: the text on the web, in one tap. */
+    private val webButton: View,
+    /** Next to the bar on the search page. */
+    private val bookmarksButton: View,
+    private val appsButton: View,
     private val resultsScroll: ScrollView,
     private val results: LinearLayout,
     /** Views replaced by the search page (home list, bottom area). */
@@ -76,11 +86,9 @@ class HomeSearchController(
     private val requestPermission: (String) -> Unit,
     /** Called before opening another screen that should come back here (permission settings, sign-in). */
     private val keepScreen: (Boolean) -> Unit,
+    /** The app grid. */
+    private val openAppList: () -> Unit,
 ) {
-    enum class Mode { WEB, PHONE }
-
-    // Older versions had a separate OneDrive mode (2)
-    private var mode = if (prefs.searchMode == 0) Mode.WEB else Mode.PHONE
     private var job: Job? = null
 
     /** True while waiting for a permission or sign-in screen: keep the page when home stops. */
@@ -92,11 +100,19 @@ class HomeSearchController(
     val isActive get() = pageOpen
 
     init {
-        modeButton.setOnClickListener {
-            mode = if (mode == Mode.WEB) Mode.PHONE else Mode.WEB
-            prefs.searchMode = mode.ordinal
-            updateMode()
-            onQueryChanged()
+        webButton.setOnClickListener { openWeb(query()) }
+        bookmarksButton.setOnClickListener {
+            leave()
+            BookmarksUi.showPanel(activity, 16.dpToPx())
+        }
+        // A long press adds the copied address
+        bookmarksButton.setOnLongClickListener {
+            BookmarksUi.showForm(activity, BookmarksUi.fromClipboard(activity)) {}
+            true
+        }
+        appsButton.setOnClickListener {
+            close()
+            openAppList()
         }
         clear.setOnClickListener { close() }
         input.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) openPage() }
@@ -112,22 +128,11 @@ class HomeSearchController(
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) = onQueryChanged()
         })
-        updateMode()
         // OneDrive search was removed: forget its old sign-in
         activity.deleteSharedPreferences("app.minimalauncher.onedrive")
     }
 
     private fun query() = input.text.toString().trim()
-
-    // ---------------------------------------------------------------- mode
-
-    private fun updateMode() {
-        modeButton.text = activity.getString(
-            R.string.ml_search_mode_format,
-            activity.getString(if (mode == Mode.WEB) R.string.ml_search_web else R.string.ml_search_phone)
-        )
-        input.setHint(if (mode == Mode.WEB) R.string.ml_search_hint_web else R.string.ml_search_hint_phone)
-    }
 
     // ---------------------------------------------------------------- page
 
@@ -147,7 +152,25 @@ class HomeSearchController(
         results.gravity = Gravity.TOP
         resultsScroll.isVisible = true
         clear.isVisible = true
+        bookmarksButton.isVisible = true
+        appsButton.isVisible = true
+        setBlur(true)
         onQueryChanged()
+    }
+
+    /** Swipe up on home: the search page with the keyboard open. */
+    fun openWithKeyboard() {
+        openPage()
+        input.requestFocus()
+        input.showKeyboard()
+    }
+
+    /** The wallpaper behind the search page: blurred (Android 12+, where the phone allows it) and dimmed. */
+    private fun setBlur(on: Boolean) {
+        val window = activity.window ?: return
+        val dim = androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.card(activity), 0x99)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(if (on) dim else android.graphics.Color.TRANSPARENT))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) window.setBackgroundBlurRadius(if (on) 48.dpToPx() else 0)
     }
 
     /** Clears the query and brings home back. */
@@ -169,6 +192,9 @@ class HomeSearchController(
         }
         bar.requestLayout()
         clear.isVisible = false
+        bookmarksButton.isVisible = false
+        appsButton.isVisible = false
+        setBlur(false)
         homeViews.forEach { it.isVisible = true }
     }
 
@@ -200,8 +226,9 @@ class HomeSearchController(
     private fun onQueryChanged() {
         val q = query()
         job?.cancel()
-        if (q.isEmpty() || mode == Mode.WEB) {
+        if (q.isEmpty()) {
             results.removeAllViews()
+            if (pageOpen) renderStart()
             return
         }
         job = scope.launch {
@@ -210,20 +237,17 @@ class HomeSearchController(
         }
     }
 
-    /** Search key: Google opens the browser, Phone opens the first result. */
+    /** Search key: opens the first result of the tab shown, else searches the web. */
     private fun submit() {
         val q = query()
         if (q.isEmpty()) return
-        if (mode == Mode.WEB) {
-            openWeb(q)
-            return
-        }
-        (0 until results.childCount).map { results.getChildAt(it) }
-            .firstOrNull { it.tag == RESULT }?.performClick()
+        val first = (0 until results.childCount).map { results.getChildAt(it) }.firstOrNull { it.tag == RESULT }
+        if (first != null) first.performClick() else openWeb(q)
     }
 
+    /** The web search of [q] (Google's page when empty), in Samsung Internet when installed. */
     private fun openWeb(q: String) {
-        val url = "https://www.google.com/search?q=" + URLEncoder.encode(q, "UTF-8")
+        val url = if (q.isEmpty()) "https://www.google.com" else "https://www.google.com/search?q=" + URLEncoder.encode(q, "UTF-8")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
         // Samsung Internet when installed, otherwise the default browser
         try {
@@ -249,7 +273,7 @@ class HomeSearchController(
     private enum class Kind(val tile: UiKit.FileKind?) {
         APP(null), CONTACT(UiKit.FileKind.CONTACT), SETTING(UiKit.FileKind.SETTINGS), FILE(UiKit.FileKind.DOC),
         FOLDER(UiKit.FileKind.FOLDER), ALBUM(UiKit.FileKind.WALLPAPER), PHOTO(UiKit.FileKind.IMAGE),
-        VIDEO(UiKit.FileKind.VIDEO), MUSIC(UiKit.FileKind.AUDIO)
+        VIDEO(UiKit.FileKind.VIDEO), MUSIC(UiKit.FileKind.AUDIO), BOOKMARK(null), WEB(null)
     }
 
     private class Row(
@@ -276,6 +300,8 @@ class HomeSearchController(
         FILES(R.string.ml_search_files), FOLDERS(R.string.ml_search_tab_folders), ALBUMS(R.string.ml_search_tab_albums),
         PHOTOS(R.string.ml_search_tab_photos), VIDEOS(R.string.ml_search_tab_videos), MUSIC(R.string.ml_search_tab_music),
         DOCUMENTS(R.string.ml_search_tab_documents), SETTINGS(R.string.ml_search_settings),
+        /** Always there, last: the web search and the matching bookmarks. */
+        WEB(R.string.ml_search_tab_web),
     }
 
     /** Tab chosen by the user; kept while typing as long as it has results. */
@@ -288,6 +314,7 @@ class HomeSearchController(
         val folders: List<Row>,
         val albums: List<Row>,
         val settings: List<Row>,
+        val bookmarks: List<Row>,
     ) {
         fun rows(tab: Tab): List<Row> = when (tab) {
             Tab.APPS -> apps
@@ -300,9 +327,10 @@ class HomeSearchController(
             Tab.MUSIC -> files.orEmpty().filter { it.kind == Kind.MUSIC }
             Tab.DOCUMENTS -> files.orEmpty().filter { it.isDocument }
             Tab.SETTINGS -> settings
+            Tab.WEB -> bookmarks
         }
 
-        val total get() = apps.size + contacts.orEmpty().size + files.orEmpty().size + folders.size + albums.size + settings.size
+        val total get() = apps.size + contacts.orEmpty().size + files.orEmpty().size + folders.size + albums.size + settings.size + bookmarks.size
     }
 
     private suspend fun searchPhone(q: String) {
@@ -320,42 +348,134 @@ class HomeSearchController(
         val fileRows = if (filesOk) withContext(Dispatchers.IO) { files(q) } else null
         val (folderRows, albumRows) = if (filesOk) withContext(Dispatchers.IO) { folders(key) } else emptyList<Row>() to emptyList()
         val settingRows = settings().filter { normalize(it.title).contains(key) }
-        render(q, Found(appRows, contactRows, fileRows, folderRows, albumRows, settingRows))
+        val bookmarkRows = withContext(Dispatchers.IO) { BookmarkStore.bookmarks(ctx) }
+            .filter { normalize(it.title).contains(key) || it.url.lowercase().contains(key) }
+            .map { b ->
+                Row(Kind.BOOKMARK, b.title.ifBlank { b.url }, Uri.parse(b.url).host ?: b.url) {
+                    BookmarksUi.open(activity, b, b.browser)
+                    leave()
+                }
+            }
+        render(q, Found(appRows, contactRows, fileRows, folderRows, albumRows, settingRows, bookmarkRows))
     }
 
     private fun render(q: String, found: Found) {
         results.removeAllViews()
         val missingContacts = found.contacts == null
         val missingFiles = found.files == null
-        // Tabs with results, plus Contacts / Files when their permission is missing (to ask it)
+        // Tabs with results, plus Contacts / Files when their permission is missing (to ask it), and Web
         val visible = Tab.entries.filter {
-            found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles)
+            it == Tab.WEB || found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles)
         }
-        val current = tab?.takeIf { it in visible } ?: visible.firstOrNull { found.rows(it).isNotEmpty() } ?: visible.firstOrNull()
-        if (current != null) tabBar(q, found, visible, current)
+        val current = tab?.takeIf { it in visible } ?: visible.firstOrNull { it != Tab.WEB && found.rows(it).isNotEmpty() } ?: Tab.WEB
+        tabBar(q, found, visible, current)
         when {
             current == Tab.CONTACTS && missingContacts -> permissionRow(R.string.ml_search_allow_contacts) {
                 requestPermission(Manifest.permission.READ_CONTACTS)
             }
             current == Tab.FILES && missingFiles -> permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
             current == Tab.ALBUMS -> albumGrid(found.rows(current))
-            current != null -> found.rows(current).forEach { results.addView(rowView(it)) }
+            current == Tab.WEB -> {
+                results.addView(rowView(Row(Kind.WEB, activity.getString(R.string.ml_search_on_google, q)) { openWeb(q) }))
+                found.bookmarks.forEach { results.addView(rowView(it)) }
+            }
+            else -> found.rows(current).forEach { results.addView(rowView(it)) }
         }
-        if (current == null || found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+        if (found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
             setText(R.string.ml_search_no_results)
             alpha = 0.6f
             setPadding(0, 16.dpToPx(), 0, 4.dpToPx())
         })
-        footer(activity.getString(R.string.ml_search_on_google, q)) { openWeb(q) }
     }
 
-    /** Chips "Apps 3 · Files 12 …". */
+    /** Before typing: the browser's open tabs (Samsung Internet) and the apps opened last. */
+    private fun renderStart() {
+        results.removeAllViews()
+        if (SamsungBrowser.installed(activity) != null) {
+            results.addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                background = UiKit.cardBackground(activity, 24)
+                setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
+                minimumHeight = 52.dpToPx()
+                isClickable = true
+                isFocusable = true
+                foreground = UiKit.ripple(activity)
+                setOnClickListener {
+                    SamsungBrowser.openTabs(activity)
+                    leave()
+                }
+                setOnLongClickListener {
+                    SamsungBrowser.chooseTabsShortcut(activity)
+                    true
+                }
+                addView(UiKit.icon(activity, R.drawable.ic_m_tabs, UiKit.primary(activity), 20).apply {
+                    (layoutParams as LinearLayout.LayoutParams).marginEnd = 12.dpToPx()
+                })
+                addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+                    setText(R.string.ml_search_browser_tabs)
+                    textSize = 15f
+                })
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = 8.dpToPx()
+            })
+        }
+        val recent = RecentApps.of(activity, apps()).filter { DetoxManager.isAllowed(activity, it.appPackage) }.take(RECENT)
+        if (recent.isEmpty()) return
+        results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+            text = activity.getString(R.string.ml_search_recent).uppercase()
+            textSize = 12f
+            letterSpacing = 0.08f
+            setTypeface(typeface, Typeface.BOLD)
+            alpha = 0.7f
+            setPadding(4.dpToPx(), 20.dpToPx(), 0, 10.dpToPx())
+        })
+        val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+        recent.forEach { app ->
+            row.addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                isClickable = true
+                isFocusable = true
+                foreground = UiKit.roundRipple(activity)
+                setOnClickListener {
+                    launchApp(app)
+                    leave()
+                }
+                val icon = android.widget.ImageView(activity)
+                addView(icon, LinearLayout.LayoutParams(48.dpToPx(), 48.dpToPx()))
+                addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+                    text = app.appLabel
+                    textSize = 12f
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    gravity = Gravity.CENTER
+                    setPadding(0, 6.dpToPx(), 0, 0)
+                })
+                val size = 48.dpToPx()
+                val ctx = activity.applicationContext
+                val iconPack = prefs.iconPack
+                scope.launch {
+                    val bitmap = withContext(Dispatchers.IO) {
+                        IconPackManager.getIcon(ctx, app.appPackage, app.activityClassName, app.user, iconPack, size)
+                    } ?: return@launch
+                    icon.setImageBitmap(bitmap)
+                }
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        // Fewer than five: same width each, from the left
+        repeat(RECENT - recent.size) { row.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f)) }
+        results.addView(row)
+    }
+
+    /** Chips "Apps 3 · Files 12 … · Web", Web with the number of bookmarks found. */
     private fun tabBar(q: String, found: Found, visible: List<Tab>, current: Tab) {
         val chips = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
         visible.forEach { t ->
             val count = found.rows(t).size
             chips.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-                text = activity.getString(R.string.ml_search_tab_format, activity.getString(t.label), count)
+                text = if (t == Tab.WEB && count == 0) activity.getString(t.label)
+                else activity.getString(R.string.ml_search_tab_format, activity.getString(t.label), count)
                 setTypeface(typeface, if (t == current) Typeface.BOLD else Typeface.NORMAL)
                 alpha = if (t == current) 1f else 0.6f
                 if (t == current) setBackgroundResource(R.drawable.rounded_rect_shade_color)
@@ -661,6 +781,14 @@ class HomeSearchController(
                 MediaThumbnails.load(scope, it, thumb, 44.dpToPx(), row.uri)
             }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply { marginEnd = 12.dpToPx() })
 
+            row.kind == Kind.WEB || row.kind == Kind.BOOKMARK -> addView(
+                UiKit.icon(activity, if (row.kind == Kind.WEB) R.drawable.ic_m_globe else R.drawable.ic_m_star, UiKit.primary(activity), 24),
+                LinearLayout.LayoutParams(24.dpToPx(), 24.dpToPx()).apply {
+                    marginStart = 10.dpToPx()
+                    marginEnd = 22.dpToPx()
+                }
+            )
+
             row.kind != Kind.APP -> {
                 // Files: the tile of their type (PDF, document, ...)
                 val tile = if (row.kind == Kind.FILE) UiKit.kindOf(row.title, row.mime, false) else row.kind.tile ?: UiKit.FileKind.DOC
@@ -797,22 +925,13 @@ class HomeSearchController(
         }, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun footer(text: String, onClick: () -> Unit) {
-        results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-            this.text = text
-            alpha = 0.8f
-            setPadding(0, 20.dpToPx(), 0, 8.dpToPx())
-            isClickable = true
-            setOnClickListener { onClick() }
-        })
-    }
-
     private fun normalize(s: CharSequence) = Normalizer.normalize(s, Normalizer.Form.NFD)
         .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "").lowercase()
 
     companion object {
         private const val RESULT = "result"
         private const val MAX_APPS = 30
+        private const val RECENT = 5
         private const val MAX_CONTACTS = 30
         private const val MAX_FILES = 300
         private const val MAX_FOLDERS = 80
