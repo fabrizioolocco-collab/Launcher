@@ -31,6 +31,7 @@ import app.olauncher.helper.ParkingShortcut
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
+import app.olauncher.helper.uninstallEntry
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getScreenDimensions
@@ -951,6 +952,8 @@ class HomeWidgetsController(
                 MenuEntry(activity.getString(R.string.ml_app_info)) {
                     openAppInfo(activity, app.user, app.appPackage)
                 },
+                // As in the app drawer; with app info it also gives the menu its tiles on top
+                activity.uninstallEntry(app.appPackage, app.user),
             ).let { base ->
                 if (FolderShortcuts.isFolder(app.appPackage))
                     base.filter { it.label != activity.getString(R.string.ml_app_info) } +
