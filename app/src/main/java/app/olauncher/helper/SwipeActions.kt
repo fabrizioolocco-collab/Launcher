@@ -9,6 +9,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.edit
 import app.olauncher.R
+import app.olauncher.ui.FileExplorerActivity
 import app.olauncher.data.AppModel
 import org.json.JSONObject
 
@@ -166,7 +167,7 @@ object SwipeActions {
         }
         folderPicker?.let { picker ->
             entries += MenuEntry(context.getString(R.string.ml_swipe_open_folder)) {
-                picker { path -> save(Action(TYPE_FOLDER, app.olauncher.ui.FileExplorerActivity.folderName(context, path), uri = path)) }
+                picker { path -> save(Action(TYPE_FOLDER, FileExplorerActivity.folderName(context, path), uri = path)) }
             }
         }
         filePicker?.let { picker ->
