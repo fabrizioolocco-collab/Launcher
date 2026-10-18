@@ -21,9 +21,11 @@ import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
+import app.olauncher.helper.AppRename
 import app.olauncher.helper.openAppInfo
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
+import app.olauncher.helper.uninstallEntry
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -186,9 +188,11 @@ class DockController(
         entries += MenuEntry(context.getString(R.string.ml_change_icon)) {
             IconChooser.show(context, app, scope, pickImage) { render() }
         }
+        AppRename.menuEntry(context, app)?.let { entries += it }
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, app.user, app.appPackage)
         }
+        context.uninstallEntry(app.appPackage, app.user)?.let { entries += it }
         context.showMenuDialog(app.appLabel, entries, header = AppNotificationsView.create(context, app))
     }
 

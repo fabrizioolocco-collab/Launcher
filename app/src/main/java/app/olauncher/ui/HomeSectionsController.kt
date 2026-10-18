@@ -42,6 +42,7 @@ import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
+import app.olauncher.helper.uninstallEntry
 import app.olauncher.ui.widgets.HomeWidgetsController
 import app.olauncher.ui.widgets.SectionBlockView
 import kotlinx.coroutines.CoroutineScope
@@ -358,6 +359,8 @@ class HomeSectionsController(
         entries += MenuEntry(context.getString(R.string.ml_app_info)) {
             openAppInfo(context, getUserHandleFromString(context, sectionApp.user), sectionApp.packageName)
         }
+        // As in the app drawer; with app info it also gives the menu its tiles on top
+        context.uninstallEntry(app.appPackage, app.user)?.let { entries += it }
         context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
     }
 
@@ -403,6 +406,7 @@ class HomeSectionsController(
                 openAppInfo(context, app.user, app.appPackage)
             },
         )
+        context.uninstallEntry(app.appPackage, app.user)?.let { entries += it }
         dockEntry(app)?.let { entries.add(1, it) }
         context.showMenuDialog(app.appLabel, appMenuTail(app, entries), header = AppNotificationsView.create(context, app))
     }

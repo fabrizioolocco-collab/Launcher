@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
-import android.os.Process
 import android.text.Spannable
 import android.view.LayoutInflater
 import android.view.View
@@ -47,13 +46,12 @@ import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.isEinkDisplay
 import app.olauncher.helper.isSystemAnimationsDisabled
-import app.olauncher.helper.isSystemApp
 import app.olauncher.helper.openAppInfo
 import app.olauncher.helper.openSearch
 import app.olauncher.helper.openUrl
 import app.olauncher.helper.showKeyboard
 import app.olauncher.helper.showToast
-import app.olauncher.helper.uninstall
+import app.olauncher.helper.uninstallApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -232,16 +230,7 @@ class AppDrawerFragment : BaseFragment() {
                             )
                         }
 
-                    is AppModel.App -> {
-                        if (appModel.user != Process.myUserHandle()) {
-                            openAppInfo(requireContext(), appModel.user, appModel.appPackage)
-                        } else if (requireContext().isSystemApp(appModel.appPackage, appModel.user)) {
-                            requireContext().showToast(getString(R.string.system_app_cannot_delete))
-                            openAppInfo(requireContext(), appModel.user, appModel.appPackage)
-                        } else {
-                            requireContext().uninstall(appModel.appPackage)
-                        }
-                    }
+                    is AppModel.App -> requireContext().uninstallApp(appModel.appPackage, appModel.user)
                 }
                 viewModel.getAppList()
             },

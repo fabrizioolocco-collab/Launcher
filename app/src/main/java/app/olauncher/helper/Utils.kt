@@ -617,6 +617,24 @@ fun Context.uninstall(packageName: String) {
     startActivity(intent)
 }
 
+/** "Uninstall" for an app menu; none for the launcher's own shortcuts (folders, parking, test apps), which aren't installed. */
+fun Context.uninstallEntry(packageName: String, user: UserHandle): MenuEntry? {
+    if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName) || TestNotifications.isFake(packageName)) return null
+    return MenuEntry(getString(R.string.delete)) { uninstallApp(packageName, user) }
+}
+
+/** Uninstalls an app; work profile and system apps (which can't be removed from here) open app info instead. */
+fun Context.uninstallApp(packageName: String, user: UserHandle) {
+    if (user != android.os.Process.myUserHandle()) {
+        openAppInfo(this, user, packageName)
+    } else if (isSystemApp(packageName, user)) {
+        showToast(getString(R.string.system_app_cannot_delete))
+        openAppInfo(this, user, packageName)
+    } else {
+        uninstall(packageName)
+    }
+}
+
 @ColorInt
 fun Context.getColorFromAttr(
     @AttrRes attrColor: Int,
