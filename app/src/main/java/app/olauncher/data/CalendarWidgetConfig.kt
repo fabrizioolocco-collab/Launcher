@@ -29,6 +29,8 @@ data class CalendarTextStyle(
 class CalendarWidgetConfig {
     /** Calendar ids to show; empty = every calendar visible in the calendar app. */
     var calendars: Set<Long> = emptySet()
+    /** Color chosen for a calendar's events, by calendar id (missing = the calendar's own color). */
+    var calendarColors: Map<Long, Int> = emptyMap()
     var pastMode = PAST_DIM
     /** Days listed from the selected one (1 = only that day). */
     var days = 1
@@ -70,6 +72,7 @@ class CalendarWidgetConfig {
 
     fun toJson(): JSONObject = JSONObject()
         .put("cal", JSONArray(calendars.toList()))
+        .put("cc", JSONObject().also { o -> calendarColors.forEach { (id, color) -> o.put(id.toString(), color) } })
         .put("past", pastMode)
         .put("days", days)
         .put("hdr", showHeader)
@@ -118,6 +121,8 @@ class CalendarWidgetConfig {
         fun fromJson(o: JSONObject): CalendarWidgetConfig = CalendarWidgetConfig().apply {
             val cal = o.optJSONArray("cal")
             calendars = if (cal == null) emptySet() else (0 until cal.length()).map { cal.getLong(it) }.toSet()
+            val cc = o.optJSONObject("cc")
+            calendarColors = cc?.keys()?.asSequence()?.mapNotNull { k -> k.toLongOrNull()?.let { it to cc.getInt(k) } }?.toMap().orEmpty()
             pastMode = o.optInt("past", PAST_DIM)
             days = o.optInt("days", 1).coerceIn(1, 14)
             showHeader = o.optBoolean("hdr", true)

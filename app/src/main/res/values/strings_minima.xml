@@ -433,6 +433,8 @@
     <string name="ml_cal_calendars_title">Calendars to show</string>
     <string name="ml_cal_color">Color: %s</string>
     <string name="ml_cal_color_title">Color</string>
+    <string name="ml_cal_colors">Calendar colors</string>
+    <string name="ml_cal_color_calendar">Calendar color</string>
     <string name="ml_cal_days">Days shown: %d</string>
     <string name="ml_cal_days_ago">%d days ago</string>
     <string name="ml_cal_days_short">%d d</string>

@@ -24,6 +24,7 @@ object CalendarEvents {
         val end: Long,
         val allDay: Boolean,
         val color: Int,
+        val calendarId: Long,
         val startDay: Int,
         val endDay: Int,
     )
@@ -104,6 +105,7 @@ object CalendarEvents {
                     CalendarContract.Instances.START_DAY,
                     CalendarContract.Instances.END_DAY,
                     CalendarContract.Instances.SELF_ATTENDEE_STATUS,
+                    CalendarContract.Instances.CALENDAR_ID,
                 ),
                 selection.toString(), null, null
             )?.use { c ->
@@ -119,7 +121,8 @@ object CalendarEvents {
                         begin = begin,
                         end = end,
                         allDay = allDay,
-                        color = c.getInt(5),
+                        color = config.calendarColors[c.getLong(9)] ?: c.getInt(5),
+                        calendarId = c.getLong(9),
                         startDay = c.getInt(6),
                         // A timed event ending at midnight doesn't show on the next day
                         endDay = if (allDay) c.getInt(7) else julianDay(if (end > begin) end - 1 else end),

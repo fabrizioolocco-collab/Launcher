@@ -47,6 +47,9 @@ object CalendarWidgetSettings {
                 MenuEntry(activity.getString(R.string.ml_cal_calendars, calendarsLabel(activity, c))) {
                     pickCalendars(activity, view, scope, reopen)
                 },
+                MenuEntry(activity.getString(R.string.ml_cal_colors)) {
+                    pickCalendarColors(activity, view, scope, reopen)
+                },
                 MenuEntry(activity.getString(R.string.ml_cal_todo_filter, filterNames[c.todoFilter])) {
                     choose(activity, activity.getString(R.string.ml_cal_todo_filter_title), filterNames, c.todoFilter) { i ->
                         view.updateConfig { it.todoFilter = i }
@@ -171,6 +174,40 @@ object CalendarWidgetSettings {
                 view.updateConfig { cfg -> cfg.calendars = selected.map { calendars[it].id }.toSet() }
                 then()
             }
+        }
+    }
+
+    /** The calendars (those shown by the widget) with their color; a tap changes it, Default = the calendar's own. */
+    private fun pickCalendarColors(activity: Activity, view: CalendarWidgetView, scope: CoroutineScope, back: () -> Unit) {
+        if (!CalendarEvents.hasPermission(activity)) {
+            activity.showToast(activity.getString(R.string.ml_cal_permission))
+            return
+        }
+        scope.launch {
+            val chosen = view.config.calendars
+            val calendars = withContext(Dispatchers.IO) { CalendarEvents.calendars(activity.applicationContext) }
+                .filter { if (chosen.isEmpty()) it.visible else it.id in chosen }
+            if (calendars.isEmpty()) {
+                activity.showToast(activity.getString(R.string.ml_cal_no_calendars))
+                return@launch
+            }
+            val reopen = { pickCalendarColors(activity, view, scope, back) }
+            activity.showMenuDialog(
+                activity.getString(R.string.ml_cal_colors),
+                calendars.map { cal ->
+                    val custom = view.config.calendarColors[cal.id]
+                    val name = if (cal.account.isBlank() || cal.account == cal.name) cal.name else "${cal.name}  ·  ${cal.account}"
+                    val value = if (custom == null) activity.getString(R.string.ml_cal_color_calendar) else colorLabel(activity, custom)
+                    MenuEntry(name, value = value, dot = custom ?: (cal.color or 0xFF000000.toInt())) {
+                        activity.showColorPickerDialog(name, custom ?: (cal.color or 0xFF000000.toInt()), activity.getString(R.string.ml_cal_color_calendar)) { color ->
+                            view.updateConfig { cfg ->
+                                cfg.calendarColors = if (color == 0) cfg.calendarColors - cal.id else cfg.calendarColors + (cal.id to (color or 0xFF000000.toInt()))
+                            }
+                            reopen()
+                        }
+                    }
+                } + MenuEntry(activity.getString(R.string.ml_cal_back)) { back() }
+            )
         }
     }
 

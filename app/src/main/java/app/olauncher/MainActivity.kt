@@ -136,6 +136,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun dispatchTouchEvent(ev: android.view.MotionEvent): Boolean {
+        app.olauncher.ui.widgets.CalendarWidgetView.onHomeTouch(ev)
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onStart() {
         super.onStart()
         restartLauncherOrCheckTheme()

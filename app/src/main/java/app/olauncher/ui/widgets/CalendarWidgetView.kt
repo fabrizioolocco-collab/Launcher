@@ -253,6 +253,15 @@ class CalendarWidgetView(
         }.start()
     }
 
+    /** A touch on home at [rawX], [rawY]: outside the widget it brings the widget back to today. */
+    private fun touchedAt(rawX: Int, rawY: Int) {
+        if (offset == 0 || !isShown) return
+        val loc = IntArray(2).also { getLocationOnScreen(it) }
+        if (rawX in loc[0] until loc[0] + width && rawY in loc[1] until loc[1] + height) return
+        offset = 0
+        reload()
+    }
+
     /** Forward ([direction] 1) or back (-1) by as many days as are shown. */
     private fun moveDays(direction: Int) {
         offset += direction * config.days
@@ -344,6 +353,7 @@ class CalendarWidgetView(
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        attached += this
         TodoStore.addListener(todoListener)
         observe()
         reload()
@@ -352,6 +362,7 @@ class CalendarWidgetView(
     }
 
     override fun onDetachedFromWindow() {
+        attached -= this
         TodoStore.removeListener(todoListener)
         handler.removeCallbacks(tick)
         if (observing) {
@@ -866,5 +877,13 @@ class CalendarWidgetView(
         private const val WEATHER_HOURS = 7
         private const val UNDO_MS = 4_000L
         private val FILTER_NAMES = listOf(R.string.ml_cal_todo_show_all, R.string.ml_cal_todo_hide_done, R.string.ml_cal_todo_hide_all)
+
+        private val attached = mutableSetOf<CalendarWidgetView>()
+
+        /** Every touch on home (from the activity): the widgets showing another day go back to today, unless touched themselves. */
+        fun onHomeTouch(ev: MotionEvent) {
+            if (ev.actionMasked != MotionEvent.ACTION_DOWN) return
+            attached.toList().forEach { it.touchedAt(ev.rawX.toInt(), ev.rawY.toInt()) }
+        }
     }
 }
