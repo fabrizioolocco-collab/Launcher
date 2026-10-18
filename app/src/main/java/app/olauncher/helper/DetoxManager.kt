@@ -27,6 +27,7 @@ object DetoxManager {
     private const val PREFS = "app.minimalauncher.detox"
     private const val KEY_WHITELIST = "WHITELIST"
     private const val KEY_END = "END_TIME"
+    private const val KEY_START = "START_TIME"
     private const val KEY_STRICT = "STRICT"
     private const val KEY_EXIT_REQUESTED = "EXIT_REQUESTED_AT"
     private const val KEY_LAST_MINUTES = "LAST_MINUTES"
@@ -95,9 +96,16 @@ object DetoxManager {
 
     fun lastMinutes(context: Context) = prefs(context).getInt(KEY_LAST_MINUTES, 30)
 
+    /** When the running session started (sessions started before it was saved: from their length). */
+    fun startTime(context: Context): Long =
+        prefs(context).getLong(KEY_START, 0L).takeIf { it > 0 }
+            ?: (endTime(context) - lastMinutes(context) * 60_000L)
+
     fun start(context: Context, minutes: Int, strict: Boolean) {
         prefs(context).edit {
-            putLong(KEY_END, System.currentTimeMillis() + minutes * 60_000L)
+            val now = System.currentTimeMillis()
+            putLong(KEY_START, now)
+            putLong(KEY_END, now + minutes * 60_000L)
             putBoolean(KEY_STRICT, strict)
             putLong(KEY_EXIT_REQUESTED, 0L)
             putInt(KEY_LAST_MINUTES, minutes)

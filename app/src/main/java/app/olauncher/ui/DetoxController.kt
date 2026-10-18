@@ -40,7 +40,10 @@ import app.olauncher.listener.DeviceAdmin
  */
 class DetoxController(
     private val activity: Activity,
-    private val bar: TextView,
+    /** Takes the place of home while a session runs. */
+    private val page: DetoxPage,
+    /** Called when the page appears (closes the search over home). */
+    private val onPageShown: () -> Unit,
     /** Opens the launcher chooser to set MinimaLauncher as default home. */
     private val setDefaultLauncher: () -> Unit,
     /** Called before opening a system screen, so the launcher doesn't jump back home meanwhile. */
@@ -58,10 +61,6 @@ class DetoxController(
     private var permissionsDialog: OlDialog? = null
     private var permissionsRefresh: (() -> Unit)? = null
 
-    init {
-        bar.setOnClickListener { onBarClick() }
-    }
-
     fun onResume() {
         handler.removeCallbacks(ticker)
         handler.post(ticker)
@@ -75,25 +74,8 @@ class DetoxController(
         updateBar()
     }
 
-    /** Header indicator: hidden when idle (detox starts from the home menu); a timer icon and "1h 20m" while a session runs. */
-    fun updateBar() {
-        val ctx = activity
-        if (!DetoxManager.isActive(ctx)) {
-            bar.visibility = View.GONE
-            return
-        }
-        bar.visibility = View.VISIBLE
-        bar.alpha = 1f
-        bar.textSize = 16f
-        bar.text = DetoxManager.formatDuration(DetoxManager.remainingMs(ctx))
-        val size = (bar.textSize * 1.1f).toInt()
-        val icon = androidx.core.content.ContextCompat.getDrawable(ctx, R.drawable.ic_m_timer)?.mutate()?.apply {
-            setTint(bar.currentTextColor)
-            setBounds(0, 0, size, size)
-        }
-        bar.compoundDrawablePadding = 6.dpToPx()
-        bar.setCompoundDrawablesRelative(icon, null, null, null)
-    }
+    /** Shows the detox page while a session runs (and refreshes its time), hides it when idle. */
+    fun updateBar() = page.update(onPageShown)
 
     /** Full session status: remaining time, paused notifications, exit countdown. */
     private fun statusText(): String {
@@ -113,6 +95,9 @@ class DetoxController(
     private fun onBarClick() {
         if (DetoxManager.isActive(activity)) showSessionMenu() else showStartDialog()
     }
+
+    /** The page's End button. */
+    fun openSessionMenu() = showSessionMenu()
 
     // ---------------------------------------------------------------- start
 

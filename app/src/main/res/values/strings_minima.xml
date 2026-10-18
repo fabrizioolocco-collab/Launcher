@@ -100,6 +100,10 @@
     <string name="ml_detox_allowed">Allowed in detox</string>
     <string name="ml_detox_whitelist_locked">Strict session running: allowed apps can\'t be changed</string>
     <string name="ml_detox_admin_disable_warning">A detox session is running.</string>
+    <string name="ml_detox_left">left</string>
+    <string name="ml_detox_started_at">Started at %1$s</string>
+    <string name="ml_detox_ends_at">Ends at %1$s</string>
+    <string name="ml_detox_end_short">End</string>
     <string name="ml_permissions">Permissions</string>
     <string name="ml_welcome_title">Welcome</string>
     <string name="ml_welcome_message">Tap each item to grant the permission. They are needed for badges, detox and strict mode.</string>

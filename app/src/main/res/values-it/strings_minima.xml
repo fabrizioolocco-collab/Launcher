@@ -99,6 +99,10 @@
     <string name="ml_detox_allowed">Consentita in detox</string>
     <string name="ml_detox_whitelist_locked">Sessione strict in corso: le app consentite non si possono cambiare</string>
     <string name="ml_detox_admin_disable_warning">È in corso una sessione detox.</string>
+    <string name="ml_detox_left">rimanenti</string>
+    <string name="ml_detox_started_at">Iniziato alle %1$s</string>
+    <string name="ml_detox_ends_at">Finisce alle %1$s</string>
+    <string name="ml_detox_end_short">Termina</string>
     <string name="ml_permissions">Permessi</string>
     <string name="ml_welcome_title">Benvenuto</string>
     <string name="ml_welcome_message">Tocca ogni voce per concedere il permesso. Servono per badge, detox e strict mode.</string>

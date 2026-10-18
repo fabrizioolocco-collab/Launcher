@@ -115,19 +115,6 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <!-- Detox: icon at the top right; remaining time while a session runs -->
-                    <TextView
-                        android:id="@+id/detoxBar"
-                        style="@style/TextDefault"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="top|end"
-                        android:layout_marginTop="40dp"
-                        android:layout_marginEnd="74dp"
-                        android:contentDescription="Detox"
-                        android:padding="6dp"
-                        android:text="@string/ml_detox_start_label"
-                        android:textSize="22sp" />
                 </FrameLayout>
 
 
@@ -326,5 +313,12 @@
         android:ellipsize="end"
         android:maxLines="1"
         android:text="@string/set_as_default_launcher_u"
+        android:visibility="gone" />
+
+    <!-- Detox: while a session runs this page takes the place of home (filled by DetoxPage) -->
+    <FrameLayout
+        android:id="@+id/detoxPage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:visibility="gone" />
 </FrameLayout>

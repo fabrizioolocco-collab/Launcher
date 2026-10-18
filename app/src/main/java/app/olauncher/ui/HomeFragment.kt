@@ -75,6 +75,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private lateinit var dock: DockController
     private lateinit var widgets: HomeWidgetsController
     private lateinit var detox: DetoxController
+    private lateinit var detoxPage: DetoxPage
     private lateinit var search: HomeSearchController
 
     private val permissionRequest = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -214,9 +215,18 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             insets
         }
 
+        detoxPage = DetoxPage(
+            page = binding.detoxPage,
+            prefs = prefs,
+            scope = uiScope,
+            onLaunch = { app -> launchHomeApp(app) },
+            onEnd = { detox.openSessionMenu() },
+        )
+        viewModel.homeApps.value?.let { detoxPage.setApps(it) }
         detox = DetoxController(
             activity = requireActivity(),
-            bar = binding.detoxBar,
+            page = detoxPage,
+            onPageShown = { if (search.isActive) search.close() },
             setDefaultLauncher = { viewModel.resetLauncherLiveData.call() },
             keepScreen = { viewModel.keepCurrentScreen = it },
         )
@@ -351,16 +361,19 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             widgets.setApps(it)
             dock.setApps(it)
             news.setApps(it)
+            detoxPage.setApps(it)
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             widgets.setNotifications(it)
             dock.setNotifications(it)
             news.setNotifications(it)
+            detoxPage.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {
             widgets.render()
             dock.render()
             news.render()
+            detoxPage.refreshApps()
             detox.updateBar()
         }
         DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }

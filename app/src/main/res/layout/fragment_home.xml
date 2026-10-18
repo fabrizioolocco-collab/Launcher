@@ -300,22 +300,6 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Detox: remaining time at the top right while a session runs; started from the home menu.
-         Over the home, not in its header: showing it must not change the grid's height -->
-    <TextView
-        android:id="@+id/detoxBar"
-        style="@style/TextDefault"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top|end"
-        android:layout_marginTop="40dp"
-        android:layout_marginEnd="24dp"
-        android:contentDescription="Detox"
-        android:padding="6dp"
-        android:text="@string/ml_detox_start_label"
-        android:textSize="16sp"
-        android:visibility="gone" />
-
     <TextView
         android:id="@+id/firstRunTips"
         style="@style/TextSmall"
@@ -341,5 +325,12 @@
         android:ellipsize="end"
         android:maxLines="1"
         android:text="@string/set_as_default_launcher_u"
+        android:visibility="gone" />
+
+    <!-- Detox: while a session runs this page takes the place of home (filled by DetoxPage) -->
+    <FrameLayout
+        android:id="@+id/detoxPage"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:visibility="gone" />
 </FrameLayout>
