@@ -41,6 +41,7 @@ import app.olauncher.helper.pillButton
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showDropdown
 import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showProgressDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.scanner.ScannerActivity
@@ -110,6 +111,8 @@ open class FileExplorerActivity : AppCompatActivity() {
     private lateinit var title: TextView
     private lateinit var subtitle: TextView
     private lateinit var status: TextView
+    private lateinit var statusRow: LinearLayout
+    private lateinit var statusSpinner: android.widget.ProgressBar
     private lateinit var list: RecyclerView
     private lateinit var pasteBar: LinearLayout
     private lateinit var pasteText: TextView
@@ -240,12 +243,24 @@ open class FileExplorerActivity : AppCompatActivity() {
         subtitle.gravity = Gravity.CENTER_VERTICAL
         headerButtons = listOf(viewButton, newFolder)
         root.addView(bar.view)
-        status = TextView(this, null, 0, R.style.TextSmall).apply {
-            setTextColor(secondary)
+        // Status line, with a spinning circle while something loads or runs
+        statusRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(20.dpToPx(), 12.dpToPx(), 20.dpToPx(), 12.dpToPx())
             isVisible = false
         }
-        root.addView(status)
+        statusSpinner = android.widget.ProgressBar(this).apply {
+            isIndeterminate = true
+            indeterminateTintList = android.content.res.ColorStateList.valueOf(primary)
+            isVisible = false
+        }
+        statusRow.addView(statusSpinner, LinearLayout.LayoutParams(18.dpToPx(), 18.dpToPx()).apply { marginEnd = 10.dpToPx() })
+        status = TextView(this, null, 0, R.style.TextSmall).apply {
+            setTextColor(secondary)
+        }
+        statusRow.addView(status, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        root.addView(statusRow)
         val listArea = FrameLayout(this)
         list = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@FileExplorerActivity)
@@ -481,10 +496,12 @@ open class FileExplorerActivity : AppCompatActivity() {
         showMenuDialog(getString(R.string.ml_explorer_selected, chosen.size), items)
     }
 
-    private fun showStatus(text: String?, onClick: (() -> Unit)? = null) {
-        status.isVisible = text != null
+    /** The status line; [busy] shows the spinning circle (loading, an operation running). */
+    private fun showStatus(text: String?, busy: Boolean = false, onClick: (() -> Unit)? = null) {
+        statusRow.isVisible = text != null
+        statusSpinner.isVisible = busy
         status.text = text
-        if (onClick != null) status.setOnClickListener { onClick() } else status.setOnClickListener(null)
+        if (onClick != null) statusRow.setOnClickListener { onClick() } else statusRow.setOnClickListener(null)
     }
 
     private fun setEntries(list: List<Entry>, sort: Boolean = true) {
@@ -599,7 +616,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             return
         }
         if (clear) setEntries(emptyList())
-        showStatus(getString(R.string.ml_explorer_loading))
+        showStatus(getString(R.string.ml_explorer_loading), busy = true)
         lifecycleScope.launch {
             val items = withContext(Dispatchers.IO) { oneDrive.children(loc.id) }
             if (location != loc) return@launch
@@ -771,11 +788,41 @@ open class FileExplorerActivity : AppCompatActivity() {
      */
     private fun withLocalFiles(chosen: List<Entry>, action: (List<File>) -> Unit) {
         if (chosen.all { it.file != null }) return action(chosen.mapNotNull { it.file })
-        showStatus(getString(R.string.ml_onedrive_downloading, chosen.singleOrNull()?.name ?: chosen.size.toString()))
+        // A dialog with the progress, so a slow download doesn't look stuck; Cancel stops it
+        val total = chosen.sumOf { it.cloud?.size ?: 0L }
+        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
+        val dialog = showProgressDialog(getString(R.string.ml_onedrive_downloading_title), chosen.singleOrNull()?.name ?: "") { cancelled.set(true) }
+        var lastUpdate = 0L
+        fun progress(done: Long) {
+            val now = System.currentTimeMillis()
+            if (now - lastUpdate < 100) return
+            lastUpdate = now
+            runOnUiThread {
+                if (total <= 0) return@runOnUiThread dialog.setProgress(null)
+                dialog.setProgress(done.toFloat() / total)
+                dialog.setMessage(listOfNotNull(
+                    chosen.singleOrNull()?.name,
+                    getString(R.string.ml_onedrive_progress, Formatter.formatShortFileSize(this, done), Formatter.formatShortFileSize(this, total)),
+                ).joinToString("\n"))
+            }
+        }
         lifecycleScope.launch {
             val folder = location as? Location.Cloud
-            val files = withContext(Dispatchers.IO) { chosen.map { it.file ?: it.cloud?.let { item -> oneDrive.downloadToCache(item) } } }
-            showStatus(null)
+            var before = 0L
+            val files = withContext(Dispatchers.IO) {
+                chosen.map { entry ->
+                    if (cancelled.get()) return@map null
+                    entry.file ?: entry.cloud?.let { item ->
+                        val start = before
+                        oneDrive.downloadToCache(item) { done ->
+                            progress(start + done)
+                            !cancelled.get()
+                        }.also { before = start + item.size }
+                    }
+                }
+            }
+            dialog.dismiss()
+            if (cancelled.get()) return@launch
             if (files.any { it == null }) {
                 showToast(getString(R.string.ml_onedrive_download_failed))
                 return@launch
@@ -916,7 +963,7 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     /** Runs a file operation off the main thread, then reloads the folder. */
     private fun run(label: String, then: ((Boolean) -> Unit)? = null, op: () -> Boolean) {
-        showStatus(getString(R.string.ml_explorer_working, label))
+        showStatus(getString(R.string.ml_explorer_working, label), busy = true)
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
                 try {

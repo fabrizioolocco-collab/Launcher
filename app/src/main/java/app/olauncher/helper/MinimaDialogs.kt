@@ -15,6 +15,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.view.isVisible
@@ -457,6 +458,64 @@ fun Context.showStatusDialog(title: String, message: String, action: String, onA
     binding.tvAction.setOnClickListener { onAction() }
     dialog.showRespectingStatusBar()
     return StatusDialog(dialog, binding)
+}
+
+/** Progress of a long operation (e.g. a download): a message, an animated bar and Cancel. */
+class ProgressDialog(private val dialog: OlDialog, private val message: TextView, private val bar: ProgressBar) {
+    private var finished = false
+
+    fun setMessage(text: String) {
+        message.text = text
+    }
+
+    /** [fraction] from 0 to 1, or null while the total is unknown (the bar then runs back and forth). */
+    fun setProgress(fraction: Float?) {
+        if (fraction == null) {
+            bar.isIndeterminate = true
+            return
+        }
+        bar.isIndeterminate = false
+        bar.progress = (fraction.coerceIn(0f, 1f) * bar.max).toInt()
+    }
+
+    /** Closes it at the end of the operation (without counting as Cancel). */
+    fun dismiss() {
+        finished = true
+        dialog.dismiss()
+    }
+
+    internal fun onCancel(action: () -> Unit) = dialog.setOnDismissListener { if (!finished) action() }
+}
+
+fun Context.showProgressDialog(title: String, message: String, onCancel: () -> Unit): ProgressDialog {
+    val (dialog, binding) = baseDialog(title)
+    val ctx = dialog.context
+    val primary = ctx.getColorFromAttr(R.attr.primaryColor)
+    binding.tvMessage.text = message
+    binding.tvMessage.isVisible = true
+    binding.tvMessage.setTextColor(ctx.getColorFromAttr(R.attr.secondaryTextColor))
+    val bar = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+        max = 1000
+        isIndeterminate = true
+        progressTintList = ColorStateList.valueOf(primary)
+        indeterminateTintList = ColorStateList.valueOf(primary)
+        progressBackgroundTintList = ColorStateList.valueOf(androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x30))
+    }
+    val content = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, 4.dpToPx(), 8.dpToPx(), 0)
+    }
+    content.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    // Cancel closes the dialog: the dismiss listener tells the caller
+    content.addView(pillButton(ctx, ctx.getString(R.string.ml_todo_cancel), filled = false, color = primary) { dialog.dismiss() },
+        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48.dpToPx()).apply { topMargin = 16.dpToPx() })
+    binding.contentContainer.addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    binding.contentContainer.isVisible = true
+    dialog.setCanceledOnTouchOutside(false)
+    return ProgressDialog(dialog, binding.tvMessage, bar).apply {
+        onCancel(onCancel)
+        dialog.showRespectingStatusBar()
+    }
 }
 
 /** Confirmation with a message and one action. */

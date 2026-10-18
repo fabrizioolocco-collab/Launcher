@@ -210,8 +210,9 @@
     <string name="ml_onedrive_connected">OneDrive collegato</string>
     <string name="ml_onedrive_failed">Accesso a OneDrive non riuscito</string>
     <string name="ml_onedrive_disconnect">Scollega OneDrive</string>
-    <string name="ml_onedrive_downloading">Scarico %1$s…</string>
     <string name="ml_onedrive_uploading">Salvataggio su OneDrive</string>
+    <string name="ml_onedrive_downloading_title">Download da OneDrive</string>
+    <string name="ml_onedrive_progress">%1$s di %2$s</string>
     <string name="ml_onedrive_download_failed">Download da OneDrive non riuscito</string>
     <string name="ml_explorer_reconnect">Per modificare i file su OneDrive collegalo di nuovo e consenti la modifica.</string>
     <string name="ml_explorer_phone_storage">Memoria interna</string>

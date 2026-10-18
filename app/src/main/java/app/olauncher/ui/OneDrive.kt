@@ -289,15 +289,33 @@ class OneDrive(private val context: Context) {
         }
     }
 
-    /** Downloads [item] to [target]. */
-    fun downloadTo(item: Item, target: File): Boolean {
+    /** Downloads [item] to [target]; [progress] gets the bytes so far and stops the download by returning false. */
+    fun downloadTo(item: Item, target: File, progress: ((Long) -> Boolean)? = null): Boolean {
         val token = accessToken() ?: return false
         val request = okhttp3.Request.Builder().url(itemUrl(item.id) + "/content").header("Authorization", "Bearer $token").build()
         return try {
             http.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return false
-                response.body?.byteStream()?.use { input -> target.outputStream().use { input.copyTo(it) } } ?: return false
-                true
+                val input = response.body?.byteStream() ?: return false
+                var stopped = false
+                input.use {
+                    target.outputStream().use { out ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            total += n
+                            if (progress != null && !progress(total)) {
+                                stopped = true
+                                break
+                            }
+                        }
+                    }
+                }
+                if (stopped) target.delete()
+                !stopped
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -318,13 +336,13 @@ class OneDrive(private val context: Context) {
     }
 
     /** Downloads [item] into the app cache so a local app (or the built-in viewers) can open it; null on errors. */
-    fun downloadToCache(item: Item): File? {
+    fun downloadToCache(item: Item, progress: ((Long) -> Boolean)? = null): File? {
         val dir = File(cacheDir, item.id.replace(Regex("[^A-Za-z0-9_-]"), "_")).apply {
             deleteRecursively()
             mkdirs()
         }
         val target = File(dir, item.name.replace('/', '_'))
-        return if (downloadTo(item, target)) target else null
+        return if (downloadTo(item, target, progress)) target else null
     }
 
     /** Removes the files downloaded to open or share them. */
