@@ -129,6 +129,8 @@ open class FileExplorerActivity : AppCompatActivity() {
     private var view = FolderView()
     private var viewSource: File? = null
     private var entries: MutableList<Entry> = mutableListOf()
+    /** Names the user hid in the folder shown (see [hideSelected]). */
+    private var hiddenNames: Set<String> = emptySet()
     private var clip: Clip? = null
 
     /** Multiple selection (paths), started by a long press. */
@@ -516,6 +518,11 @@ open class FileExplorerActivity : AppCompatActivity() {
                 askRename(entry)
             }
         }
+        // Hide keeps the files where they are: they just leave the list (back with "Hidden files" in the view)
+        val allHidden = chosen.isNotEmpty() && chosen.all { it.name in hiddenNames }
+        items += MenuEntry(getString(if (allHidden) R.string.ml_explorer_unhide else R.string.ml_explorer_hide)) {
+            hideSelected(chosen, hide = !allHidden)
+        }
         items += MenuEntry(getString(R.string.ml_explorer_select_all)) {
             entries.forEach { selected.add(it.key) }
             updateSelection()
@@ -528,6 +535,13 @@ open class FileExplorerActivity : AppCompatActivity() {
         showMenuDialog(getString(R.string.ml_explorer_selected, chosen.size), items)
     }
 
+    private fun hideSelected(chosen: List<Entry>, hide: Boolean) {
+        views.setHidden(viewDir, chosen.map { it.name }, hide)
+        selected.clear()
+        if (hide && !view.showHidden) showToast(getString(R.string.ml_explorer_hidden_hint))
+        load()
+    }
+
     /** The status line; [busy] shows the spinning circle (loading, an operation running). */
     private fun showStatus(text: String?, busy: Boolean = false, onClick: (() -> Unit)? = null) {
         statusRow.isVisible = text != null
@@ -535,6 +549,9 @@ open class FileExplorerActivity : AppCompatActivity() {
         status.text = text
         if (onClick != null) statusRow.setOnClickListener { onClick() } else statusRow.setOnClickListener(null)
     }
+
+    /** Hidden: a dot name, or hidden by the user in this folder. */
+    private fun isHidden(name: String) = name.startsWith(".") || name in hiddenNames
 
     private fun setEntries(list: List<Entry>, sort: Boolean = true) {
         entries = (if (sort) sorted(list) else list).toMutableList()
@@ -592,6 +609,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         showStatus(null)
         view = FolderView()
         viewSource = null
+        hiddenNames = emptySet()
         setEntries(listOf(
             Entry(getString(R.string.ml_search_phone), true, 0, 0, root = Location.Local(storageRoot), info = getString(R.string.ml_explorer_phone_storage)),
             Entry(getString(R.string.ml_search_onedrive), true, 0, 0, root = cloudRoot(),
@@ -618,13 +636,14 @@ open class FileExplorerActivity : AppCompatActivity() {
             view = v
             viewSource = source
         }
+        hiddenNames = views.hidden(loc.dir)
         val files = loc.dir.listFiles()
         if (files == null) {
             setEntries(emptyList())
             showStatus(getString(R.string.ml_explorer_cannot_read))
             return
         }
-        setEntries(files.filter { view.showHidden || !it.name.startsWith(".") }.map { f ->
+        setEntries(files.filter { view.showHidden || !isHidden(it.name) }.map { f ->
             Entry(f.name, f.isDirectory, if (f.isDirectory) 0 else f.length(), f.lastModified(), f, mimeOf(f.name))
         })
         showStatus(null)
@@ -642,6 +661,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             view = v
             viewSource = source
         }
+        hiddenNames = views.hidden(viewDirOf(loc))
         if (!oneDrive.isConnected()) {
             setEntries(emptyList())
             // Why the sign-in was lost, if it was (e.g. Microsoft refused to renew it)
@@ -660,7 +680,7 @@ open class FileExplorerActivity : AppCompatActivity() {
                 showStatus(getString(R.string.ml_onedrive_error) + reason) { oneDrive.connect() }
                 return@launch
             }
-            setEntries(items.filter { view.showHidden || !it.name.startsWith(".") }.map {
+            setEntries(items.filter { view.showHidden || !isHidden(it.name) }.map {
                 Entry(it.name, it.isFolder, it.size, it.modified, mime = it.mimeType ?: mimeOf(it.name), cloud = it)
             })
             showStatus(null)
@@ -949,6 +969,11 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun askRename(entry: Entry) {
         if (needsWriteAccess(listOf(entry))) return
         showTextInputDialog(getString(R.string.rename), entry.name, entry.name, getString(R.string.ml_save)) { name ->
+            // A hidden item stays hidden under its new name
+            if (entry.name in hiddenNames) {
+                views.setHidden(viewDir, listOf(entry.name), hide = false)
+                views.setHidden(viewDir, listOf(name), hide = true)
+            }
             run(getString(R.string.rename)) {
                 entry.file?.let { it.renameTo(File(it.parentFile, name)) }
                     ?: entry.cloud?.let { oneDrive.rename(it.id, name) } ?: false
@@ -1256,7 +1281,12 @@ open class FileExplorerActivity : AppCompatActivity() {
                 badge.addView(UiKit.checkBadge(ctx, isSelected, 24))
                 badge.isVisible = true
             } else badge.isVisible = false
-            root.alpha = if (selecting && !isSelected) 0.6f else 1f
+            // Hidden items (shown with "Hidden files" on) are faded
+            root.alpha = when {
+                selecting && !isSelected -> 0.6f
+                entry.root == null && isHidden(entry.name) -> 0.45f
+                else -> 1f
+            }
             root.setOnClickListener { onTap(entry) }
             // In manual order a long press drags the item (the menu opens if it isn't moved)
             if (view.sort == FolderView.SORT_MANUAL && entry.root == null) root.setOnLongClickListener(null)

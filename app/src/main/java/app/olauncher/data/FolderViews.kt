@@ -85,8 +85,22 @@ class FolderViewsRepository(context: Context) {
     fun saveManualOrder(dir: File, names: List<String>) =
         prefs.edit { putString(KEY_ORDER + path(dir), JSONArray(names).toString()) }
 
+    /** Names hidden in [dir] by the user (shown only with "Hidden files" on), files kept as they are. */
+    fun hidden(dir: File): Set<String> = try {
+        val array = JSONArray(prefs.getString(KEY_HIDDEN + path(dir), "[]"))
+        List(array.length()) { array.getString(it) }.toSet()
+    } catch (e: Exception) {
+        emptySet()
+    }
+
+    fun setHidden(dir: File, names: Collection<String>, hide: Boolean) {
+        val now = if (hide) hidden(dir) + names else hidden(dir) - names.toSet()
+        prefs.edit { if (now.isEmpty()) remove(KEY_HIDDEN + path(dir)) else putString(KEY_HIDDEN + path(dir), JSONArray(now.toList()).toString()) }
+    }
+
     companion object {
         private const val KEY_VIEW = "view:"
         private const val KEY_ORDER = "order:"
+        private const val KEY_HIDDEN = "hidden:"
     }
 }

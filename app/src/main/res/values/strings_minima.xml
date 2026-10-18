@@ -299,6 +299,9 @@
     <string name="ml_explorer_use_folder">Use this folder</string>
     <string name="ml_explorer_selected">%1$d selected</string>
     <string name="ml_explorer_select_all">Select all</string>
+    <string name="ml_explorer_hide">Hide</string>
+    <string name="ml_explorer_unhide">Show</string>
+    <string name="ml_explorer_hidden_hint">Hidden. Turn on \"Hidden files\" in the view (sliders icon) to see them again</string>
     <string name="ml_explorer_more">More</string>
     <string name="ml_explorer_delete_many_confirm">Delete %1$d items? This cannot be undone.</string>
     <string name="ml_explorer_copying_many">Copy: %1$d items</string>
