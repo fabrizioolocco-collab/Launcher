@@ -35,6 +35,9 @@ import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.HttpURLConnection
+import java.net.URL
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -80,8 +83,17 @@ class CompassActivity : AppCompatActivity(), SensorEventListener {
     private var gpsAltitude: Double? = null
     private var pressure: Float? = null
 
-    /** Sea-level pressure that makes the barometer agree with the GPS, once there is a good fix. */
+    private var gpsVertical: Float? = null
+
+    /** Sea-level pressure that makes the barometer an altimeter: from a good GPS fix, or from the weather. */
     private var seaLevelPressure: Float? = null
+    private var calibratedOnGps = false
+    private var calibratedOnWeather = false
+
+    /** Height of the ground at [groundAt], from the elevation model. */
+    private var ground: Double? = null
+    private var groundAt: Location? = null
+    private var lookingUp = false
 
     private val prefs by lazy { getSharedPreferences("compass", Context.MODE_PRIVATE) }
 
@@ -358,15 +370,22 @@ class CompassActivity : AppCompatActivity(), SensorEventListener {
 
     private fun startLocation() {
         if (!hasLocationPermission()) return
+        // GPS for the altitude; network and fused find the position indoors too (as Maps does)
+        val providers = mutableListOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) providers += LocationManager.FUSED_PROVIDER
         try {
-            val last = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
+            val last = (providers + LocationManager.PASSIVE_PROVIDER)
                 .mapNotNull { runCatching { locations.getLastKnownLocation(it) }.getOrNull() }
                 .maxByOrNull { it.time }
             if (last != null && location == null) setPlace(last)
-            if (locations.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                locations.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1000L, 0f, locationListener, Looper.getMainLooper())
-            } else if (locations.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                locations.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 5000L, 0f, locationListener, Looper.getMainLooper())
+            providers.forEach { provider ->
+                try {
+                    if (locations.isProviderEnabled(provider)) {
+                        locations.requestLocationUpdates(provider, 1000L, 0f, locationListener, Looper.getMainLooper())
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
         } catch (e: SecurityException) {
             e.printStackTrace()
@@ -374,29 +393,33 @@ class CompassActivity : AppCompatActivity(), SensorEventListener {
         renderAltitude()
     }
 
-    /** Position for the declination and the coordinates (any fix, also an old one). */
+    /** Position for the declination, the coordinates and the ground height (any fix, also an old one). */
     private fun setPlace(fix: Location) {
+        val current = location
+        // A rough fix (network) does not replace a recent precise one (GPS)
+        if (current != null && fix.accuracy > current.accuracy * 2 && fix.time - current.time < 30_000) return
         location = fix
         declination = GeomagneticField(fix.latitude.toFloat(), fix.longitude.toFloat(), fix.altitude.toFloat(), System.currentTimeMillis()).declination
         updateNorthMode()
         showHeading()
+        lookUpGround(fix)
+        renderAltitude()
     }
 
     private fun onLocation(fix: Location) {
         setPlace(fix)
-        if (!fix.hasAltitude()) {
-            renderAltitude()
-            return
-        }
+        if (!fix.hasAltitude() || fix.provider == LocationManager.NETWORK_PROVIDER) return
+        val vertical = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && fix.hasVerticalAccuracy()) fix.verticalAccuracyMeters else null
+        if (vertical != null && vertical > 50f) return
         lifecycleScope.launch {
             // The GPS gives the height above the ellipsoid: on Android 14+ turned into height above sea level
             val msl = withContext(Dispatchers.Default) { seaLevelAltitude(fix) }
-            if (location !== fix) return@launch
             gpsAltitude = msl
-            val vertical = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && fix.hasVerticalAccuracy()) fix.verticalAccuracyMeters else null
+            gpsVertical = vertical
             val p = pressure
             if (p != null && vertical != null && vertical < 12f) {
                 seaLevelPressure = (p / (1 - msl / 44330.0).pow(5.255)).toFloat()
+                calibratedOnGps = true
             }
             renderAltitude()
         }
@@ -414,13 +437,67 @@ class CompassActivity : AppCompatActivity(), SensorEventListener {
         return fix.altitude
     }
 
+    /**
+     * Height of the ground at [fix] (90 m elevation model) and the sea-level pressure there now,
+     * from Open-Meteo: an altitude also indoors, where the GPS finds no satellites, and the
+     * reference that turns the barometer into an altimeter. Again after moving 500 m.
+     */
+    private fun lookUpGround(fix: Location) {
+        val previous = groundAt
+        if (lookingUp || previous != null && previous.distanceTo(fix) < 500f) return
+        lookingUp = true
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val url = String.format(
+                        Locale.US,
+                        "https://api.open-meteo.com/v1/forecast?latitude=%.5f&longitude=%.5f&current=pressure_msl",
+                        fix.latitude, fix.longitude
+                    )
+                    val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 15_000
+                        readTimeout = 20_000
+                    }
+                    val body = conn.inputStream.bufferedReader().use { it.readText() }
+                    conn.disconnect()
+                    val json = JSONObject(body)
+                    val elevation = json.optDouble("elevation").takeIf { !it.isNaN() }
+                    val msl = json.optJSONObject("current")?.optDouble("pressure_msl")?.takeIf { !it.isNaN() }
+                    elevation to msl
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    null
+                }
+            }
+            lookingUp = false
+            if (result == null) return@launch
+            groundAt = fix
+            ground = result.first
+            val msl = result.second
+            if (msl != null && !calibratedOnGps) {
+                seaLevelPressure = msl.toFloat()
+                calibratedOnWeather = true
+            }
+            renderAltitude()
+        }
+    }
+
     private fun renderAltitude() {
         val p = pressure
         val baro = p?.let { SensorManager.getAltitude(seaLevelPressure ?: SensorManager.PRESSURE_STANDARD_ATMOSPHERE, it) }
         val gps = gpsAltitude
         val fix = location
-        // With a barometer calibrated on the GPS, its reading is the steadier one
-        val main = if (baro != null && seaLevelPressure != null) baro.toDouble() else gps ?: baro?.toDouble()
+        val terrain = ground
+        // A calibrated barometer is the steadiest (and sees the floor you are on), then a good GPS fix,
+        // then the ground under the position, last the barometer on the standard atmosphere
+        val goodGps = gps != null && (gpsVertical ?: 0f) <= 25f
+        val main = when {
+            baro != null && seaLevelPressure != null -> baro.toDouble()
+            goodGps -> gps
+            terrain != null -> terrain
+            gps != null -> gps
+            else -> baro?.toDouble()
+        }
         altitude.text = main?.let { getString(R.string.ml_compass_meters, it.roundToInt()) } ?: "—"
 
         val info = mutableListOf<String>()
@@ -428,20 +505,25 @@ class CompassActivity : AppCompatActivity(), SensorEventListener {
             !hasLocationPermission() -> info += getString(R.string.ml_compass_no_location)
             gps != null -> {
                 var s = getString(R.string.ml_compass_gps, gps.roundToInt())
-                if (fix != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && fix.hasVerticalAccuracy()) {
-                    s += " ±" + fix.verticalAccuracyMeters.roundToInt() + " m"
-                }
+                gpsVertical?.let { s += " ±" + it.roundToInt() + " m" }
                 info += s
             }
-            else -> info += getString(R.string.ml_compass_searching)
+            fix == null -> info += getString(R.string.ml_compass_searching)
+            else -> info += getString(R.string.ml_compass_no_gps)
         }
+        if (terrain != null) info += getString(R.string.ml_compass_ground, terrain.roundToInt())
         if (fix != null) info += coordinates(fix)
         altitudeInfo.text = info.joinToString(" · ")
 
         pressureInfo.isVisible = p != null
         if (p != null && baro != null) {
-            pressureInfo.text = getString(R.string.ml_compass_pressure, p.roundToInt()) + " · " +
-                getString(if (seaLevelPressure != null) R.string.ml_compass_baro else R.string.ml_compass_baro_std, baro.roundToInt())
+            pressureInfo.text = getString(R.string.ml_compass_pressure, p.roundToInt()) + " · " + getString(
+                when {
+                    calibratedOnGps -> R.string.ml_compass_baro
+                    calibratedOnWeather -> R.string.ml_compass_baro_weather
+                    else -> R.string.ml_compass_baro_std
+                }, baro.roundToInt()
+            )
         }
     }
 

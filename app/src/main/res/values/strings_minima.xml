@@ -785,11 +785,14 @@
     <string name="ml_compass_altitude">Altitude</string>
     <string name="ml_compass_meters">%1$d m</string>
     <string name="ml_compass_gps">GPS %1$d m</string>
-    <string name="ml_compass_searching">Searching for GPS…</string>
+    <string name="ml_compass_searching">Searching for the position…</string>
     <string name="ml_compass_no_location">Allow the location for the altitude</string>
     <string name="ml_compass_pressure">Pressure %1$d hPa</string>
     <string name="ml_compass_baro">barometer %1$d m</string>
     <string name="ml_compass_baro_std">barometer ≈ %1$d m (not calibrated)</string>
     <string name="ml_move_to_tab">Move to tab…</string>
     <string name="ml_tab_moved">%1$s moved to %2$s</string>
+    <string name="ml_compass_no_gps">GPS: no satellites (indoors?)</string>
+    <string name="ml_compass_ground">ground %1$d m (map)</string>
+    <string name="ml_compass_baro_weather">barometer %1$d m (calibrated on the weather)</string>
 </resources>
