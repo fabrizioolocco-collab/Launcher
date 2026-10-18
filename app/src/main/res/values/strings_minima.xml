@@ -219,7 +219,6 @@
     <string name="ml_explorer_delete_confirm">Delete «%1$s»? This cannot be undone.</string>
     <string name="ml_explorer_into_itself">A folder can\'t go inside itself</string>
     <!-- Search result tabs -->
-    <string name="ml_search_tab_format" translatable="false">%1$s %2$d</string>
     <string name="ml_search_tab_folders">Folders</string>
     <string name="ml_search_tab_albums">Albums</string>
     <string name="ml_search_tab_photos">Photos</string>
@@ -789,5 +788,7 @@
     <string name="ml_swipe_up_apps">App list</string>
     <string name="ml_search_hint_all">Search apps, contacts, files, web</string>
     <string name="ml_search_web_now">Search the web</string>
-    <string name="ml_search_tab_web">Web</string>
+    <string name="ml_search_tab_bookmarks">Bookmarks</string>
+    <string name="ml_search_tab_other_files">Other files</string>
+    <string name="ml_search_page_hint">Apps, contacts, files, photos and settings.\nEnter searches the web.</string>
 </resources>

@@ -785,5 +785,7 @@
     <string name="ml_swipe_up_apps">Lista app</string>
     <string name="ml_search_hint_all">Cerca app, contatti, file, web</string>
     <string name="ml_search_web_now">Cerca sul web</string>
-    <string name="ml_search_tab_web">Web</string>
+    <string name="ml_search_tab_bookmarks">Preferiti</string>
+    <string name="ml_search_tab_other_files">Altri file</string>
+    <string name="ml_search_page_hint">App, contatti, file, foto e impostazioni.\nInvio per cercare sul web.</string>
 </resources>

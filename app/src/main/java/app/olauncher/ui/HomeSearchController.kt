@@ -14,7 +14,13 @@ import android.provider.ContactsContract
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.provider.Settings
+import android.graphics.drawable.GradientDrawable
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import android.text.TextUtils
 import android.text.TextWatcher
 import android.view.Gravity
@@ -56,9 +62,8 @@ import java.text.Normalizer
 /**
  * Search bar at the bottom of home. Tapping it, or swiping up on home, opens the search page over
  * the blurred wallpaper: bar on top, with the bookmarks and the app grid next to it, results below.
- * While typing: apps, contacts, files and folders on the phone and Android settings, in tabs, and
- * a Web tab with the matching bookmarks and the web search. The search key and the globe in the
- * bar search the web.
+ * While typing: apps, contacts, files and folders on the phone, Android settings and the matching
+ * bookmarks, in tabs. The search key and the globe in the bar search the web.
  * Files can be opened, or their folder (Solid Explorer when installed).
  */
 class HomeSearchController(
@@ -226,6 +231,7 @@ class HomeSearchController(
         job?.cancel()
         if (q.isEmpty()) {
             results.removeAllViews()
+            if (pageOpen) results.addView(UiKit.emptyState(activity, R.drawable.ic_m_search, activity.getString(R.string.ml_search_page_hint)))
             return
         }
         job = scope.launch {
@@ -291,13 +297,16 @@ class HomeSearchController(
     }
 
     /** Result tabs, each with its count; only those with results are shown. */
-    private enum class Tab(val label: Int) {
-        APPS(R.string.ml_search_group_apps), CONTACTS(R.string.ml_search_contacts),
-        FILES(R.string.ml_search_files), FOLDERS(R.string.ml_search_tab_folders), ALBUMS(R.string.ml_search_tab_albums),
-        PHOTOS(R.string.ml_search_tab_photos), VIDEOS(R.string.ml_search_tab_videos), MUSIC(R.string.ml_search_tab_music),
-        DOCUMENTS(R.string.ml_search_tab_documents), SETTINGS(R.string.ml_search_settings),
-        /** Always there, last: the web search and the matching bookmarks. */
-        WEB(R.string.ml_search_tab_web),
+    private enum class Tab(val label: Int, val icon: Int) {
+        APPS(R.string.ml_search_group_apps, R.drawable.ic_m_grid), CONTACTS(R.string.ml_search_contacts, R.drawable.ic_m_contact),
+        PHOTOS(R.string.ml_search_tab_photos, R.drawable.ic_m_image), VIDEOS(R.string.ml_search_tab_videos, R.drawable.ic_m_video),
+        MUSIC(R.string.ml_search_tab_music, R.drawable.ic_m_audio), DOCUMENTS(R.string.ml_search_tab_documents, R.drawable.ic_m_doc),
+        /** The files that are none of the above (or the files access to ask). */
+        FILES(R.string.ml_search_tab_other_files, R.drawable.ic_m_file),
+        FOLDERS(R.string.ml_search_tab_folders, R.drawable.ic_m_folder), ALBUMS(R.string.ml_search_tab_albums, R.drawable.ic_m_image),
+        SETTINGS(R.string.ml_search_settings, R.drawable.ic_m_settings),
+        /** The matching bookmarks, only when there are some (the web search is the search key). */
+        WEB(R.string.ml_search_tab_bookmarks, R.drawable.ic_m_star),
     }
 
     /** Tab chosen by the user; kept while typing as long as it has results. */
@@ -315,7 +324,7 @@ class HomeSearchController(
         fun rows(tab: Tab): List<Row> = when (tab) {
             Tab.APPS -> apps
             Tab.CONTACTS -> contacts.orEmpty()
-            Tab.FILES -> files.orEmpty()
+            Tab.FILES -> files.orEmpty().filter { it.kind == Kind.FILE && !it.isDocument }
             Tab.FOLDERS -> folders
             Tab.ALBUMS -> albums
             Tab.PHOTOS -> files.orEmpty().filter { it.kind == Kind.PHOTO }
@@ -359,44 +368,158 @@ class HomeSearchController(
         results.removeAllViews()
         val missingContacts = found.contacts == null
         val missingFiles = found.files == null
-        // Tabs with results, plus Contacts / Files when their permission is missing (to ask it), and Web
+        // Tabs with results, plus Contacts / Files when their permission is missing (to ask it)
         val visible = Tab.entries.filter {
-            it == Tab.WEB || found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles)
+            found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles)
         }
-        val current = tab?.takeIf { it in visible } ?: visible.firstOrNull { it != Tab.WEB && found.rows(it).isNotEmpty() } ?: Tab.WEB
-        tabBar(q, found, visible, current)
-        when {
+        val current = tab?.takeIf { it in visible } ?: visible.firstOrNull { found.rows(it).isNotEmpty() } ?: visible.firstOrNull()
+        if (current != null) tabBar(q, found, visible, current, missingFiles)
+        val key = normalize(q)
+        if (current != null) when {
             current == Tab.CONTACTS && missingContacts -> permissionRow(R.string.ml_search_allow_contacts) {
                 requestPermission(Manifest.permission.READ_CONTACTS)
             }
             current == Tab.FILES && missingFiles -> permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
             current == Tab.ALBUMS -> albumGrid(found.rows(current))
-            current == Tab.WEB -> {
-                results.addView(rowView(Row(Kind.WEB, activity.getString(R.string.ml_search_on_google, q)) { openWeb(q) }))
-                found.bookmarks.forEach { results.addView(rowView(it)) }
-            }
-            else -> found.rows(current).forEach { results.addView(rowView(it)) }
+            current == Tab.APPS -> appGrid(found.rows(current), key)
+            else -> card(found.rows(current), key)
         }
-        if (found.total == 0) results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-            setText(R.string.ml_search_no_results)
-            alpha = 0.6f
-            setPadding(0, 16.dpToPx(), 0, 4.dpToPx())
+        // Nothing on the phone: the web is the search key, or this button
+        if (found.total == 0) results.addView(UiKit.emptyState(
+            activity, R.drawable.ic_m_globe, activity.getString(R.string.ml_search_no_results),
+            activity.getString(R.string.ml_search_on_google, q),
+        ) { openWeb(q) })
+    }
+
+    /** Rows in a card over the blurred wallpaper, a thin line between them. */
+    private fun card(rows: List<Row>, key: String) {
+        if (rows.isEmpty()) return
+        val box = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            background = translucentCard()
+            setPadding(12.dpToPx(), 4.dpToPx(), 12.dpToPx(), 4.dpToPx())
+        }
+        rows.forEachIndexed { i, row ->
+            if (i > 0) box.addView(View(activity).apply { setBackgroundColor(UiKit.line(activity)) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1).apply { marginStart = 54.dpToPx() })
+            box.addView(rowView(row, key))
+        }
+        results.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 6.dpToPx()
+            bottomMargin = 16.dpToPx()
         })
     }
 
-    /** Chips "Apps 3 · Files 12 … · Web", Web with the number of bookmarks found. */
-    private fun tabBar(q: String, found: Found, visible: List<Tab>, current: Tab) {
+    private fun translucentCard() = GradientDrawable().apply {
+        cornerRadius = 20.dpToPx().toFloat()
+        setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.card(activity), 0xCC))
+        setStroke(1.dpToPx(), UiKit.stroke(activity))
+    }
+
+    /** Apps tab: icons in four columns, name below, in a card. */
+    private fun appGrid(rows: List<Row>, key: String) {
+        val box = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            background = translucentCard()
+            setPadding(6.dpToPx(), 10.dpToPx(), 6.dpToPx(), 6.dpToPx())
+        }
+        val ctx = activity.applicationContext
+        val iconPack = prefs.iconPack
+        val size = 48.dpToPx()
+        rows.chunked(APP_COLUMNS).forEach { line ->
+            val row = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+            line.forEach { r ->
+                val app = r.app ?: return@forEach
+                row.addView(LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    setPadding(2.dpToPx(), 6.dpToPx(), 2.dpToPx(), 8.dpToPx())
+                    isClickable = true
+                    isFocusable = true
+                    background = UiKit.ripple(activity)
+                    tag = RESULT
+                    setOnClickListener { r.onClick() }
+                    val icon = android.widget.ImageView(activity)
+                    addView(icon, LinearLayout.LayoutParams(size, size))
+                    scope.launch {
+                        val bitmap = withContext(Dispatchers.IO) {
+                            IconPackManager.getIcon(ctx, app.appPackage, app.activityClassName, app.user, iconPack, size)
+                        } ?: return@launch
+                        icon.setImageDrawable(IconPackManager.toDrawable(ctx, bitmap, size))
+                    }
+                    addView(TextView(activity, null, 0, R.style.TextSmall).apply {
+                        text = highlight(r.title, key)
+                        textSize = 12.5f
+                        gravity = Gravity.CENTER
+                        maxLines = 2
+                        ellipsize = TextUtils.TruncateAt.END
+                        setPadding(0, 6.dpToPx(), 0, 0)
+                    })
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            }
+            // Keep the columns of a short last line
+            repeat(APP_COLUMNS - line.size) { row.addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f)) }
+            box.addView(row)
+        }
+        results.addView(box, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 6.dpToPx()
+            bottomMargin = 16.dpToPx()
+        })
+    }
+
+    /** [text] with the part matching [key] (accents ignored) in bold. */
+    private fun highlight(text: String, key: String): CharSequence {
+        if (key.isEmpty()) return text
+        // The folded text, and where each of its characters comes from
+        val folded = StringBuilder()
+        val from = mutableListOf<Int>()
+        text.forEachIndexed { i, c ->
+            normalize(c.toString()).forEach { folded.append(it); from += i }
+        }
+        val start = folded.indexOf(key)
+        if (start < 0) return text
+        val end = from[start + key.length - 1] + 1
+        return SpannableStringBuilder(text).apply {
+            setSpan(StyleSpan(Typeface.BOLD), from[start], end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
+    /** Pills with icon, name and count: the chosen one filled, the others in the cards' style. */
+    private fun tabBar(q: String, found: Found, visible: List<Tab>, current: Tab, missingFiles: Boolean) {
         // In rows, all in sight however many
         val chips = FlowLayout(activity)
+        val primary = UiKit.primary(activity)
+        val card = UiKit.card(activity)
         visible.forEach { t ->
             val count = found.rows(t).size
+            val selected = t == current
+            val color = if (selected) card else primary
             chips.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
-                text = if (t == Tab.WEB && count == 0) activity.getString(t.label)
-                else activity.getString(R.string.ml_search_tab_format, activity.getString(t.label), count)
-                setTypeface(typeface, if (t == current) Typeface.BOLD else Typeface.NORMAL)
-                alpha = if (t == current) 1f else 0.6f
-                if (t == current) setBackgroundResource(R.drawable.rounded_rect_shade_color)
-                setPadding(12.dpToPx(), 6.dpToPx(), 12.dpToPx(), 6.dpToPx())
+                // Without the files access the tab asks for all the files
+                val label = activity.getString(if (t == Tab.FILES && missingFiles) R.string.ml_search_files else t.label)
+                text = SpannableStringBuilder(label).apply {
+                    if (count > 0) {
+                        val start = length
+                        append("  ").append(count.toString())
+                        setSpan(RelativeSizeSpan(0.85f), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        setSpan(ForegroundColorSpan(androidx.core.graphics.ColorUtils.setAlphaComponent(color, 0xA0)),
+                            start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                setTextColor(color)
+                setTypeface(typeface, if (selected) Typeface.BOLD else Typeface.NORMAL)
+                background = if (selected) GradientDrawable().apply {
+                    cornerRadius = 18.dpToPx().toFloat()
+                    setColor(primary)
+                } else translucentCard().apply { cornerRadius = 18.dpToPx().toFloat() }
+                ContextCompat.getDrawable(activity, t.icon)?.mutate()?.let { d ->
+                    d.setBounds(0, 0, 16.dpToPx(), 16.dpToPx())
+                    d.setTint(color)
+                    setCompoundDrawablesRelative(d, null, null, null)
+                    compoundDrawablePadding = 6.dpToPx()
+                }
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(12.dpToPx(), 7.dpToPx(), 14.dpToPx(), 7.dpToPx())
                 isClickable = true
                 setOnClickListener {
                     tab = t
@@ -404,8 +527,8 @@ class HomeSearchController(
                     resultsScroll.scrollTo(0, 0)
                 }
             }, ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                marginEnd = 4.dpToPx()
-                bottomMargin = 4.dpToPx()
+                marginEnd = 6.dpToPx()
+                bottomMargin = 6.dpToPx()
             })
         }
         results.addView(chips, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
@@ -677,12 +800,13 @@ class HomeSearchController(
         rows.forEach { results.addView(rowView(it)) }
     }
 
-    private fun rowView(row: Row): View = LinearLayout(activity).apply {
+    private fun rowView(row: Row, key: String = ""): View = LinearLayout(activity).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
+        setPadding(0, 8.dpToPx(), 0, 8.dpToPx())
         isClickable = true
         isFocusable = true
+        background = UiKit.ripple(activity)
         tag = RESULT
         setOnClickListener { row.onClick() }
         if (row.file != null) setOnLongClickListener {
@@ -695,11 +819,20 @@ class HomeSearchController(
                 MediaThumbnails.load(scope, it, thumb, 44.dpToPx(), row.uri)
             }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply { marginEnd = 12.dpToPx() })
 
+            row.kind == Kind.CONTACT -> addView(avatar(row.title), LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply {
+                marginStart = 2.dpToPx()
+                marginEnd = 14.dpToPx()
+            })
+
             row.kind == Kind.WEB || row.kind == Kind.BOOKMARK -> addView(
-                UiKit.icon(activity, if (row.kind == Kind.WEB) R.drawable.ic_m_globe else R.drawable.ic_m_star, UiKit.primary(activity), 24),
-                LinearLayout.LayoutParams(24.dpToPx(), 24.dpToPx()).apply {
-                    marginStart = 10.dpToPx()
-                    marginEnd = 22.dpToPx()
+                UiKit.fileTile(activity, UiKit.FileKind.CLOUD, 40).apply {
+                    (getChildAt(0) as android.widget.ImageView).setImageResource(
+                        if (row.kind == Kind.WEB) R.drawable.ic_m_globe else R.drawable.ic_m_star
+                    )
+                },
+                LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply {
+                    marginStart = 2.dpToPx()
+                    marginEnd = 14.dpToPx()
                 }
             )
 
@@ -714,8 +847,8 @@ class HomeSearchController(
         }
         val texts = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
         val title = TextView(activity, null, 0, R.style.TextLarge).apply {
-            text = row.title
-            textSize = 18f
+            text = highlight(row.title, key)
+            textSize = 17f
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
             gravity = Gravity.CENTER_VERTICAL
@@ -731,6 +864,20 @@ class HomeSearchController(
         }
         addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         row.app?.let { app -> loadIcon(title, app) }
+    }
+
+    /** A contact: the initial in a circle, its color picked from the name. */
+    private fun avatar(name: String) = TextView(activity).apply {
+        val color = AVATAR_COLORS[Math.floorMod(name.hashCode(), AVATAR_COLORS.size)]
+        text = name.trim().firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "#"
+        textSize = 16f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(color)
+        gravity = Gravity.CENTER
+        background = GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(androidx.core.graphics.ColorUtils.setAlphaComponent(color, 0x33))
+        }
     }
 
     private fun roundedImage() = android.widget.ImageView(activity).apply {
@@ -845,6 +992,10 @@ class HomeSearchController(
     companion object {
         private const val RESULT = "result"
         private const val MAX_APPS = 30
+        private const val APP_COLUMNS = 4
+        private val AVATAR_COLORS = intArrayOf(
+            0xFF5B9BD5.toInt(), 0xFF9C7BD6.toInt(), 0xFFE09A4F.toInt(), 0xFFE0675E.toInt(), 0xFF4FB38A.toInt(), 0xFFD66BA0.toInt(),
+        )
         private const val MAX_CONTACTS = 30
         private const val MAX_FILES = 300
         private const val MAX_FOLDERS = 80
