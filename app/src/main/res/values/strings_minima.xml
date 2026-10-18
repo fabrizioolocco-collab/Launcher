@@ -218,6 +218,7 @@
     <string name="ml_onedrive_uploading">Saving to OneDrive</string>
     <string name="ml_onedrive_downloading_title">Downloading from OneDrive</string>
     <string name="ml_onedrive_progress">%1$s of %2$s</string>
+    <string name="ml_onedrive_reason">Reason: %1$s</string>
     <string name="ml_onedrive_download_failed">Download from OneDrive failed</string>
     <string name="ml_explorer_reconnect">To change files on OneDrive, connect it again and allow editing.</string>
     <string name="ml_explorer_phone_storage">Internal storage</string>

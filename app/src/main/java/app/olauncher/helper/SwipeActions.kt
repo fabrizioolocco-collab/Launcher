@@ -79,7 +79,7 @@ object SwipeActions {
         val launcherApps = context.getSystemService(LauncherApps::class.java)
         try {
             when (action.type) {
-                TYPE_FOLDER -> FolderShortcuts.openPath(context, java.io.File(action.uri ?: return false))
+                TYPE_FOLDER -> FolderShortcuts.openStored(context, action.uri ?: return false)
 
                 TYPE_APP -> {
                     val pkg = action.packageName ?: return false
@@ -166,7 +166,7 @@ object SwipeActions {
         }
         folderPicker?.let { picker ->
             entries += MenuEntry(context.getString(R.string.ml_swipe_open_folder)) {
-                picker { path -> save(Action(TYPE_FOLDER, java.io.File(path).name, uri = path)) }
+                picker { path -> save(Action(TYPE_FOLDER, app.olauncher.ui.FileExplorerActivity.folderName(context, path), uri = path)) }
             }
         }
         filePicker?.let { picker ->

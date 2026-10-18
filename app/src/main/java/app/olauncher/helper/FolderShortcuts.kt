@@ -75,7 +75,13 @@ object FolderShortcuts {
 
     fun open(context: Context, packageName: String) {
         val folder = get(context, packageName) ?: return
-        openPath(context, File(folder.path), folder.inExplorer)
+        openStored(context, folder.path, folder.inExplorer)
+    }
+
+    /** Opens a stored folder path: a phone folder, or a OneDrive folder (always in the built-in explorer). */
+    fun openStored(context: Context, path: String, inExplorer: Boolean = true) {
+        if (FileExplorerActivity.isCloudPath(path)) FileExplorerActivity.openCloudPath(context, path)
+        else openPath(context, File(path), inExplorer)
     }
 
     /** Opens a phone folder in the built-in explorer or in the file manager. */
@@ -122,8 +128,9 @@ object FolderShortcuts {
     /** Long-press menu entries of a folder shortcut: opener, rename, delete. */
     fun menuEntries(context: Context, app: AppModel.App, onChanged: () -> Unit): List<MenuEntry> {
         val folder = get(context, app.appPackage) ?: return emptyList()
-        return listOf(
-            MenuEntry(
+        return listOfNotNull(
+            // OneDrive folders open only in the built-in explorer
+            if (FileExplorerActivity.isCloudPath(folder.path)) null else MenuEntry(
                 context.getString(
                     R.string.ml_folder_opens_in,
                     context.getString(if (folder.inExplorer) R.string.ml_explorer else R.string.ml_file_manager)

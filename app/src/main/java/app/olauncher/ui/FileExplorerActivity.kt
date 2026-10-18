@@ -67,6 +67,10 @@ open class FileExplorerActivity : AppCompatActivity() {
     /** Folder picker mode (see [FolderPickerActivity]): a bar returns the folder shown. */
     protected open val pickMode = false
 
+    /** OneDrive offered too: always when browsing, in picker mode when asked ([EXTRA_ALLOW_CLOUD], e.g. home folders). */
+    private val allowCloud get() = !pickMode || intent?.getBooleanExtra(EXTRA_ALLOW_CLOUD, false) == true
+    private var useButton: View? = null
+
 
     /** Where we are: the roots list, a phone folder or a OneDrive folder (id null = root). */
     private sealed class Location {
@@ -156,6 +160,24 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private fun cloudRoot() = Location.Cloud(null, getString(R.string.ml_search_onedrive), null)
 
+    /** A OneDrive folder as a path that can be stored: "onedrive:" + its chain of folders (id, name) from the root. */
+    private fun cloudPathOf(loc: Location.Cloud): String {
+        val chain = generateSequence(loc) { it.parent }.filter { it.id != null }.toList().reversed()
+        val array = org.json.JSONArray()
+        chain.forEach { array.put(org.json.JSONObject().put("id", it.id).put("name", it.name)) }
+        return CLOUD_PREFIX + array
+    }
+
+    private fun cloudLocationOf(path: String): Location.Cloud? = try {
+        val array = org.json.JSONArray(path.removePrefix(CLOUD_PREFIX))
+        (0 until array.length()).fold(cloudRoot()) { parent, i ->
+            val o = array.getJSONObject(i)
+            Location.Cloud(o.getString("id"), o.optString("name"), parent)
+        }
+    } catch (e: Exception) {
+        null
+    }
+
     /** Identity of a place, for the back gesture and the selection ("" = the roots, above everything). */
     private fun keyOf(loc: Location): String = when (loc) {
         Location.Roots -> ""
@@ -213,8 +235,9 @@ open class FileExplorerActivity : AppCompatActivity() {
     }
 
     private fun startLocation(intent: Intent?): Location {
+        intent?.getStringExtra(EXTRA_CLOUD_PATH)?.let { path -> cloudLocationOf(path)?.let { return it } }
         intent?.getStringExtra(EXTRA_LOCAL_PATH)?.let { return Location.Local(File(it)) }
-        if (pickMode) return Location.Local(storageRoot)
+        if (pickMode && !allowCloud) return Location.Local(storageRoot)
         if (intent?.getBooleanExtra(EXTRA_CLOUD, false) == true) return cloudRoot()
         return Location.Roots
     }
@@ -319,12 +342,20 @@ open class FileExplorerActivity : AppCompatActivity() {
         root.addView(pasteBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 0)
         })
-        if (pickMode) root.addView(pillButton(this, getString(R.string.ml_explorer_use_folder), filled = true, color = primary) {
-            setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, ((location as? Location.Local)?.dir ?: storageRoot).absolutePath))
+        if (pickMode) useButton = pillButton(this, getString(R.string.ml_explorer_use_folder), filled = true, color = primary) {
+            // A OneDrive folder comes back as a "onedrive:" path (see cloudPathOf)
+            val path = when (val loc = location) {
+                is Location.Cloud -> cloudPathOf(loc)
+                is Location.Local -> loc.dir.absolutePath
+                Location.Roots -> return@pillButton
+            }
+            setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, path))
             finish()
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48.dpToPx()).apply {
-            setMargins(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 0)
-        })
+        }.also {
+            root.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48.dpToPx()).apply {
+                setMargins(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 0)
+            })
+        }
         return root
     }
 
@@ -363,7 +394,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             Location.Roots -> null
             is Location.Local ->
                 if (loc.dir.absolutePath != storageRoot.absolutePath) Location.Local(loc.dir.parentFile ?: storageRoot)
-                else if (pickMode) null else Location.Roots
+                else if (!allowCloud) null else Location.Roots
             is Location.Cloud -> loc.parent ?: Location.Roots
         }
         if (up == null) finish() else open(up)
@@ -424,6 +455,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         backButton.contentDescription = getString(if (selecting) R.string.close else R.string.ml_cal_back)
         selectionBar.isVisible = selecting
         headerButtons.forEach { it.isVisible = !selecting && location != Location.Roots }
+        useButton?.isVisible = location != Location.Roots
         if (selecting) {
             title.text = getString(R.string.ml_explorer_selected, selected.size)
             pasteBar.isVisible = false
@@ -612,7 +644,9 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
         if (!oneDrive.isConnected()) {
             setEntries(emptyList())
-            showStatus(getString(R.string.ml_onedrive_connect)) { oneDrive.connect() }
+            // Why the sign-in was lost, if it was (e.g. Microsoft refused to renew it)
+            val reason = oneDrive.lastSignInError()?.let { "\n" + getString(R.string.ml_onedrive_reason, it) }.orEmpty()
+            showStatus(getString(R.string.ml_onedrive_connect) + reason) { oneDrive.connect() }
             return
         }
         if (clear) setEntries(emptyList())
@@ -622,7 +656,8 @@ open class FileExplorerActivity : AppCompatActivity() {
             if (location != loc) return@launch
             if (items == null) {
                 setEntries(emptyList())
-                showStatus(getString(R.string.ml_onedrive_error)) { oneDrive.connect() }
+                val reason = oneDrive.lastSignInError()?.let { "\n" + getString(R.string.ml_onedrive_reason, it) }.orEmpty()
+                showStatus(getString(R.string.ml_onedrive_error) + reason) { oneDrive.connect() }
                 return@launch
             }
             setEntries(items.filter { view.showHidden || !it.name.startsWith(".") }.map {
@@ -1235,6 +1270,28 @@ open class FileExplorerActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_LOCAL_PATH = "local_path"
         const val EXTRA_CLOUD = "cloud"
+        /** A OneDrive folder to open, as made by [cloudPathOf] (e.g. a home folder shortcut). */
+        const val EXTRA_CLOUD_PATH = "cloud_path"
+        /** Folder picker: OneDrive folders can be picked too (they come back as "onedrive:" paths). */
+        const val EXTRA_ALLOW_CLOUD = "allow_cloud"
+        const val CLOUD_PREFIX = "onedrive:"
+
+        fun isCloudPath(path: String?) = path?.startsWith(CLOUD_PREFIX) == true
+
+        /** Name of the folder a path (phone or OneDrive) stands for. */
+        fun folderName(context: Context, path: String): String =
+            if (!isCloudPath(path)) File(path).name
+            else try {
+                val chain = org.json.JSONArray(path.removePrefix(CLOUD_PREFIX))
+                if (chain.length() == 0) context.getString(R.string.ml_search_onedrive) else chain.getJSONObject(chain.length() - 1).optString("name")
+            } catch (e: Exception) {
+                context.getString(R.string.ml_search_onedrive)
+            }
+
+        fun openCloudPath(context: Context, path: String) = context.startActivity(
+            Intent(context, FileExplorerActivity::class.java).putExtra(EXTRA_CLOUD_PATH, path)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
 
         /** Virtual folder the OneDrive view settings are saved under. */
         private val CLOUD_VIEWS = File("/onedrive")

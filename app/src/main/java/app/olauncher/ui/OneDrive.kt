@@ -46,13 +46,16 @@ class OneDrive(private val context: Context) {
 
     fun isConnected(): Boolean = prefs.getString(KEY_REFRESH, null) != null
 
-    fun disconnect() = prefs.edit { clear() }
+    fun disconnect() = prefs.edit(commit = true) { clear() }
+
+    /** Microsoft's reason for the last failed sign-in or renewal (kept until one succeeds), or null. */
+    fun lastSignInError(): String? = prefs.getString(KEY_ERROR, null)
 
     /** Starts the Microsoft sign-in in the browser; true when it opened it. */
     fun connect(): Boolean {
         val verifier = randomString()
         val state = randomString()
-        prefs.edit { putString(KEY_VERIFIER, verifier).putString(KEY_STATE, state) }
+        prefs.edit(commit = true) { putString(KEY_VERIFIER, verifier).putString(KEY_STATE, state) }
         val challenge = base64Url(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray()))
         val url = Uri.parse("$AUTHORITY/authorize").buildUpon()
             .appendQueryParameter("client_id", CLIENT_ID)
@@ -113,19 +116,25 @@ class OneDrive(private val context: Context) {
         http.newCall(request).execute().use { response ->
             val text = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                lastError = "HTTP ${response.code}: " + try {
-                    val err = JSONObject(text)
-                    listOf(err.optString("error"), err.optString("error_description").substringBefore("\r").substringBefore("\n"))
-                        .filter { it.isNotBlank() }.joinToString(": ")
+                val err = try {
+                    JSONObject(text)
                 } catch (e: Exception) {
-                    ""
+                    JSONObject()
                 }
-                // A rejected refresh token means the user must sign in again
-                if (refreshing && response.code in 400..499) prefs.edit { remove(KEY_REFRESH) }
+                lastError = "HTTP ${response.code}: " + listOf(err.optString("error"), err.optString("error_description").substringBefore("\r").substringBefore("\n"))
+                    .filter { it.isNotBlank() }.joinToString(": ")
+                // Only a refresh token Microsoft rejects (expired, revoked) means signing in again;
+                // other errors (network, server) keep it for the next try
+                prefs.edit(commit = true) {
+                    putString(KEY_ERROR, lastError)
+                    if (refreshing && err.optString("error") == "invalid_grant") remove(KEY_REFRESH)
+                }
                 false
             } else {
                 val json = JSONObject(text)
-                prefs.edit {
+                // Written at once: an update installed right after signing in must find the sign-in
+                prefs.edit(commit = true) {
+                    remove(KEY_ERROR)
                     putString(KEY_ACCESS, json.getString("access_token"))
                     putLong(KEY_EXPIRES, System.currentTimeMillis() + (json.optLong("expires_in", 3600) - 60) * 1000)
                     json.optString("refresh_token").takeIf { it.isNotBlank() }?.let { putString(KEY_REFRESH, it) }
@@ -374,6 +383,7 @@ class OneDrive(private val context: Context) {
         private const val KEY_EXPIRES = "EXPIRES"
         private const val KEY_VERIFIER = "VERIFIER"
         private const val KEY_STATE = "STATE"
+        private const val KEY_ERROR = "ERROR"
     }
 }
 
