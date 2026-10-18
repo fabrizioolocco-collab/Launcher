@@ -2,11 +2,15 @@ package app.olauncher.data
 
 import android.content.Context
 import androidx.core.content.edit
+import app.olauncher.BuildConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/** A user-made tab of the app drawer. [apps] holds "package|UserHandle.toString()" keys. */
+/**
+ * A user-made tab of the app drawer. [apps] holds "package|UserHandle.toString()" keys
+ * ("package/activity|user" for the launcher's own apps, see [DrawerTabsRepository.key]).
+ */
 data class DrawerTab(
     val id: String = UUID.randomUUID().toString(),
     var name: String,
@@ -46,7 +50,7 @@ class DrawerTabsRepository(context: Context) {
                     id = o.getString("id"),
                     name = o.optString("name"),
                     enabled = o.optBoolean("enabled", true),
-                    apps = MutableList(apps.length()) { apps.getString(it) }.toMutableSet(),
+                    apps = MutableList(apps.length()) { apps.getString(it) }.flatMap { migrate(it) }.toMutableSet(),
                 )
             }
         } catch (e: Exception) {
@@ -65,6 +69,17 @@ class DrawerTabsRepository(context: Context) {
         prefs.edit { putString(KEY_TABS, array.toString()) }
     }
 
+    /**
+     * Before, the launcher's own apps (File, ToDo, Scanner) shared one key: the old key stands for
+     * the three of them, as it did then.
+     */
+    private fun migrate(key: String): List<String> {
+        val prefix = BuildConfig.APPLICATION_ID + "|"
+        if (!key.startsWith(prefix)) return listOf(key)
+        val user = key.removePrefix(prefix)
+        return LEGACY_OWN_APPS.map { "${BuildConfig.APPLICATION_ID}/$it|$user" }
+    }
+
     companion object {
         const val ALL_ID = "all"
         const val HIDDEN_ID = "hidden"
@@ -73,6 +88,13 @@ class DrawerTabsRepository(context: Context) {
         private const val KEY_ALL_ENABLED = "ALL_ENABLED"
         private const val KEY_SELECTED = "SELECTED"
 
-        fun key(app: AppModel) = "${app.appPackage}|${app.user}"
+        private val LEGACY_OWN_APPS = listOf("app.olauncher.FilesAlias", "app.olauncher.TodoAlias", "app.olauncher.ScannerAlias")
+
+        /** The launcher's own apps all have its package, so they are told apart by their activity. */
+        fun key(app: AppModel): String {
+            val activity = (app as? AppModel.App)?.activityClassName
+            return if (app.appPackage == BuildConfig.APPLICATION_ID && activity != null) "${app.appPackage}/$activity|${app.user}"
+            else "${app.appPackage}|${app.user}"
+        }
     }
 }

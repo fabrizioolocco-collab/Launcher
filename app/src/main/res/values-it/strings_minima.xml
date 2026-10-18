@@ -152,7 +152,6 @@
     <string name="ml_tab_disable">Disattiva</string>
     <string name="ml_tab_delete">Elimina tab</string>
     <string name="ml_tab_delete_confirm">Eliminare il tab \"%1$s\"? Le app restano installate.</string>
-    <string name="ml_add_to_tab">Aggiungi a tab…</string>
     <string name="ml_tabs_settings">Tab della lista app</string>
     <string name="ml_tab_hidden">Nascoste</string>
     <string name="ml_tab_hidden_on">Mostra tab Nascoste</string>
@@ -649,8 +648,6 @@
     <string name="ml_pdf_default_already">È già l\'app per i PDF</string>
     <string name="ml_pdf_default_clear">Un\'altra app apre i PDF: nella sua pagina tocca \"Apri per impostazione predefinita\" → \"Cancella impostazioni predefinite\", poi apri un PDF e scegli MinimaLauncher → Sempre</string>
     <string name="ml_pdf_default_pick">Scegli MinimaLauncher e tocca \"Sempre\"</string>
-    <string name="ml_tab_back_to_all">Riporta in Tutte (togli dalla tab)</string>
-    <string name="ml_tab_back_to_all_done">%s è di nuovo in Tutte</string>
     <string name="ml_notif_clear_all">Cancella tutte</string>
     <string name="ml_notif_clear">Cancella</string>
     <string name="ml_notif_reply">Rispondi</string>
@@ -787,4 +784,6 @@
     <string name="ml_compass_pressure">Pressione %1$d hPa</string>
     <string name="ml_compass_baro">barometro %1$d m</string>
     <string name="ml_compass_baro_std">barometro ≈ %1$d m (non calibrato)</string>
+    <string name="ml_move_to_tab">Sposta in tab…</string>
+    <string name="ml_tab_moved">%1$s spostata in %2$s</string>
 </resources>

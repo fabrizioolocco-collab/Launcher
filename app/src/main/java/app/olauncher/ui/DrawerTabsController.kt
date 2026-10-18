@@ -22,6 +22,7 @@ import app.olauncher.helper.showToast
 /**
  * Tab bar of the app drawer: "All" (can be turned off) plus the user's tabs, each switchable on/off.
  * Tap a tab to show its apps; long press for rename / edit apps / move / turn off / delete;
+ * an app in no tab shown (none, or only turned-off ones) is in "All".
  * "+" creates a tab. Search always looks through all apps (handled by the fragment).
  *
  * Tabs without apps are not shown. With a single tab left the bar is hidden and "+" moves next to
@@ -87,9 +88,9 @@ class DrawerTabsController(
     fun filter(apps: List<AppModel>): List<AppModel> = appsOf(selectedId(), apps)
 
     private fun appsOf(id: String, apps: List<AppModel>): List<AppModel> {
-        // "All" lists what is in no other tab: an app is either hidden, in a tab, or here
+        // "All" lists what is in no other tab shown: an app is either hidden, in a tab, or here
         if (id == DrawerTabsRepository.ALL_ID) {
-            val placed = tabs.flatMap { it.apps }.toHashSet()
+            val placed = tabs.filter { it.enabled }.flatMap { it.apps }.toHashSet()
             return apps.filter { DrawerTabsRepository.key(it) !in placed }
         }
         if (id == DrawerTabsRepository.HIDDEN_ID) return hiddenApps()
@@ -282,28 +283,27 @@ class DrawerTabsController(
         }
     }
 
-    /** The tabs [app] is in (then it isn't in "All"). */
-    fun tabsOf(app: AppModel): List<DrawerTab> = tabs.filter { DrawerTabsRepository.key(app) in it.apps }
-
-    /** From the app menu: takes [app] out of every tab, so it's back in "All". */
-    fun backToAll(app: AppModel) {
+    /**
+     * From the app menu: moves [app] to "All" or to one of the tabs shown (or a new one), out of
+     * every other tab. The place it is in now is ticked.
+     */
+    fun showMoveToTab(app: AppModel.App) {
         val key = DrawerTabsRepository.key(app)
-        tabs.forEach { it.apps.remove(key) }
-        save()
-        context.showToast(context.getString(R.string.ml_tab_back_to_all_done, app.appLabel))
-    }
-
-    /** From the app menu: add [app] to a tab (or a new one). */
-    fun showAddToTab(app: AppModel.App) {
-        val key = DrawerTabsRepository.key(app)
-        fun addTo(tab: DrawerTab) {
-            tab.apps.add(key)
+        // Only the tabs in the bar: turned-off tabs, and tabs left without apps, are not offered
+        val visible = visibleIds()
+        val shown = tabs.filter { it.id in visible }
+        val current = tabs.filter { it.enabled && key in it.apps }
+        fun moveTo(tab: DrawerTab?) {
+            tabs.forEach { it.apps.remove(key) }
+            if (tab != null) tab.apps.add(key) else repo.allEnabled = true
             save()
-            context.showToast(context.getString(R.string.ml_added_to_section, tab.name))
+            context.showToast(context.getString(R.string.ml_tab_moved, app.appLabel, tab?.name ?: context.getString(R.string.ml_tab_all)))
         }
-        val entries = tabs.map { tab -> MenuEntry(tab.name) { addTo(tab) } } +
-                MenuEntry(context.getString(R.string.ml_tab_new_ellipsis)) { createTab { addTo(it) } }
-        context.showMenuDialog(context.getString(R.string.ml_tab), entries)
+        val check = "✓"
+        val entries = listOf(MenuEntry(context.getString(R.string.ml_tab_all), value = if (current.isEmpty()) check else null) { moveTo(null) }) +
+                shown.map { tab -> MenuEntry(tab.name, value = if (tab in current) check else null) { moveTo(tab) } } +
+                MenuEntry(context.getString(R.string.ml_tab_new_ellipsis)) { createTab(then = { moveTo(it) }) }
+        context.showMenuDialog(context.getString(R.string.ml_move_to_tab), entries)
     }
 
     companion object {
