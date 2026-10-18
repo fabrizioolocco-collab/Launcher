@@ -72,6 +72,16 @@ object DetoxManager {
 
     // ---------------------------------------------------------------- whitelist
 
+    /**
+     * How [app] is listed among the allowed apps: its package, except the launcher's own apps
+     * (File, ToDo...), which share one package and are told apart by their activity. Folder
+     * shortcuts have a package of their own.
+     */
+    fun whitelistKey(app: app.olauncher.data.AppModel.App): String =
+        if (app.appPackage == BuildConfig.APPLICATION_ID && !app.activityClassName.isNullOrEmpty())
+            "${app.appPackage}/${app.activityClassName}"
+        else app.appPackage
+
     fun whitelist(context: Context): Set<String> =
         prefs(context).getStringSet(KEY_WHITELIST, emptySet()).orEmpty().toSet()
 

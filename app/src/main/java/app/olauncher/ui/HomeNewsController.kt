@@ -122,9 +122,10 @@ class HomeNewsController(
             val info = context.getString(R.string.ml_app_info)
             return entries.filter { it.label != info } +
                     FolderShortcuts.menuEntries(context, app) { SwipeActions.onFoldersChanged?.invoke() } +
-                    SwipeActions.menuEntries(context, app) { apps }
+                    SwipeActions.menuEntries(context, app) { apps } +
+                    DetoxController.whitelistEntry(context, app)
         }
-        return entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app.appPackage)
+        return entries + SwipeActions.menuEntries(context, app) { apps } + DetoxController.whitelistEntry(context, app)
     }
 
     /** "Add to dock", unless it's there already or full. */

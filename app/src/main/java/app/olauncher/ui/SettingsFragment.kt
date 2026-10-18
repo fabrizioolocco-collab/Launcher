@@ -552,14 +552,16 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             return
         }
         viewModel.viewModelScope.launch {
-            val apps = getAppsList(ctx, prefs, includeRegularApps = true, includeHiddenApps = true)
-                .filterIsInstance<AppModel.App>()
-                .distinctBy { it.appPackage }
+            // The launcher's own apps one by one, and the folders made as shortcuts on home
+            val apps = (getAppsList(ctx, prefs, includeRegularApps = true, includeHiddenApps = true)
+                .filterIsInstance<AppModel.App>() + app.olauncher.helper.FolderShortcuts.asApps(ctx))
+                .distinctBy { DetoxManager.whitelistKey(it) }
+                .sortedBy { it.appLabel.lowercase() }
             val current = DetoxManager.whitelist(ctx)
             val labels = apps.map { it.appLabel }
-            val checked = apps.indices.filter { apps[it].appPackage in current }.toSet()
+            val checked = apps.indices.filter { DetoxManager.whitelistKey(apps[it]) in current }.toSet()
             ctx.showMultiSelectDialog(getString(R.string.ml_detox_whitelist), labels, checked, getString(R.string.ml_done)) { selected ->
-                if (!DetoxManager.setWhitelist(ctx, selected.map { apps[it].appPackage }.toSet()))
+                if (!DetoxManager.setWhitelist(ctx, selected.map { DetoxManager.whitelistKey(apps[it]) }.toSet()))
                     ctx.showToast(getString(R.string.ml_detox_whitelist_locked))
                 if (_binding != null) populateTextStyle()
             }

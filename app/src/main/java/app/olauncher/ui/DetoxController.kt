@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.view.isVisible
 import app.olauncher.R
+import app.olauncher.data.AppModel
 import app.olauncher.data.Constants
 import app.olauncher.databinding.DialogBaseBinding
 import app.olauncher.helper.DetoxManager
@@ -351,12 +352,17 @@ class DetoxController(
 
     companion object {
         /** App menu switch: allowed during detox or not. Locked while a strict session runs. */
-        fun whitelistEntry(context: Context, packageName: String) = MenuEntry(
+        fun whitelistEntry(context: Context, app: AppModel.App): MenuEntry {
+            val key = DetoxManager.whitelistKey(app)
+            return whitelistEntry(context, key)
+        }
+
+        private fun whitelistEntry(context: Context, key: String) = MenuEntry(
             context.getString(R.string.ml_detox_allowed),
-            checked = packageName in DetoxManager.whitelist(context),
+            checked = key in DetoxManager.whitelist(context),
             onToggle = { on ->
                 val list = DetoxManager.whitelist(context)
-                val ok = DetoxManager.setWhitelist(context, if (on) list + packageName else list - packageName)
+                val ok = DetoxManager.setWhitelist(context, if (on) list + key else list - key)
                 if (!ok) context.showToast(context.getString(R.string.ml_detox_whitelist_locked))
                 ok
             },

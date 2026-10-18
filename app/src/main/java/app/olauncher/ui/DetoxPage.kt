@@ -215,14 +215,15 @@ class DetoxPage(
     // ---------------------------------------------------------------- apps
 
     /**
-     * The whitelisted apps (one per package, the own profile first) plus the phone, always allowed,
-     * in alphabetical order.
+     * The apps allowed in detox (the launcher's own apps and the home's folders included; one each,
+     * the own profile first) plus the phone, always allowed, in alphabetical order.
      */
     private fun allowedApps(): List<AppModel.App> {
-        val wanted = DetoxManager.whitelist(context) + listOfNotNull(defaultDialer())
-        return apps.filter { it.appPackage in wanted && DetoxManager.isAllowed(context, it.appPackage) }
+        val wanted = DetoxManager.whitelist(context)
+        val dialer = defaultDialer()
+        return apps.filter { (DetoxManager.whitelistKey(it) in wanted || it.appPackage == dialer) && DetoxManager.isAllowed(context, it.appPackage) }
             .sortedBy { it.user != android.os.Process.myUserHandle() }
-            .distinctBy { it.appPackage }
+            .distinctBy { DetoxManager.whitelistKey(it) }
             .sortedBy { it.appLabel.lowercase() }
     }
 

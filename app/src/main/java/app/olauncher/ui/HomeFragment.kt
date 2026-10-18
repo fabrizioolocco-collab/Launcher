@@ -764,7 +764,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         ctx.uninstallEntry(app.appPackage, app.user)?.let { entries += it }
         ctx.showMenuDialog(
             app.appLabel,
-            entries + DetoxController.whitelistEntry(ctx, app.appPackage),
+            entries + DetoxController.whitelistEntry(ctx, app),
             header = AppNotificationsView.create(ctx, app),
         )
     }

@@ -932,8 +932,9 @@ class HomeWidgetsController(
             ).let { base ->
                 if (FolderShortcuts.isFolder(app.appPackage))
                     base.filter { it.label != activity.getString(R.string.ml_app_info) } +
-                            FolderShortcuts.menuEntries(activity, app) { SwipeActions.onFoldersChanged?.invoke() }
-                else base + DetoxController.whitelistEntry(activity, app.appPackage)
+                            FolderShortcuts.menuEntries(activity, app) { SwipeActions.onFoldersChanged?.invoke() } +
+                            DetoxController.whitelistEntry(activity, app)
+                else base + DetoxController.whitelistEntry(activity, app)
             } + SwipeActions.menuEntries(activity, app) { apps },
             header = AppNotificationsView.create(activity, app),
         )
