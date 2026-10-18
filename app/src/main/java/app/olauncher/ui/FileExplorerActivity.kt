@@ -19,6 +19,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -96,6 +97,12 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private class Clip(val entries: List<Entry>, val move: Boolean)
 
+    /**
+     * A OneDrive file opened from its copy in the cache: when the explorer comes back, the copy (if
+     * edited) and files saved next to it (copies made by the editors) go back to [folder].
+     */
+    private class Opened(val file: File, val folder: Location.Cloud, var modified: Long, var names: Set<String>)
+
     /** A tool of the bottom bars: line icon, label, action. */
     private class Tool(val icon: Int, val label: Int, val action: () -> Unit)
 
@@ -125,6 +132,22 @@ open class FileExplorerActivity : AppCompatActivity() {
     private lateinit var selectionBar: LinearLayout
     private lateinit var headerButtons: List<View>
     private var waitingAccess = false
+    private val opened = mutableListOf<Opened>()
+
+    /** OneDrive folder a scan is being made for. */
+    private var scanFolder: Location.Cloud? = null
+
+    /** A scan made for OneDrive comes back as a PDF in the cache: it is uploaded to the folder it was made for. */
+    private val scanLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val folder = scanFolder ?: return@registerForActivityResult
+        scanFolder = null
+        val pdf = result.data?.getStringExtra(ScannerActivity.EXTRA_PDF_PATH)?.let { File(it) } ?: return@registerForActivityResult
+        run(getString(R.string.ml_onedrive_uploading)) {
+            val ok = oneDrive.upload(pdf, folder.id)
+            pdf.parentFile?.deleteRecursively()
+            ok
+        }
+    }
 
     private val storageRoot: File get() = Environment.getExternalStorageDirectory()
 
@@ -179,7 +202,10 @@ open class FileExplorerActivity : AppCompatActivity() {
         if (waitingAccess) {
             waitingAccess = false
             load()
-        } else if (!firstResume && ::location.isInitialized && location is Location.Local) load() // back from the viewer/editor: show saved copies
+        } else if (!firstResume && ::location.isInitialized) {
+            // Back from the viewer/editor: edited OneDrive files go back; phone folders show saved copies
+            if (!syncBack() && location is Location.Local) load()
+        }
         firstResume = false
     }
 
@@ -204,9 +230,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             insets
         }
         val viewButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_explorer_view)) { showViewMenu() }
-        newFolder = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) {
-            if (pickMode || location is Location.Cloud) askNewFolder() else showAddMenu()
-        }
+        newFolder = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { if (pickMode) askNewFolder() else showAddMenu() }
         val bar = UiKit.appBar(this, "", onBack = { if (selecting) clearSelection() else goUp() }, actions = listOf(viewButton, newFolder))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 4.dpToPx())
         backButton = bar.back
@@ -749,11 +773,40 @@ open class FileExplorerActivity : AppCompatActivity() {
         if (chosen.all { it.file != null }) return action(chosen.mapNotNull { it.file })
         showStatus(getString(R.string.ml_onedrive_downloading, chosen.singleOrNull()?.name ?: chosen.size.toString()))
         lifecycleScope.launch {
+            val folder = location as? Location.Cloud
             val files = withContext(Dispatchers.IO) { chosen.map { it.file ?: it.cloud?.let { item -> oneDrive.downloadToCache(item) } } }
             showStatus(null)
-            if (files.any { it == null }) showToast(getString(R.string.ml_onedrive_download_failed))
-            else action(files.filterNotNull())
+            if (files.any { it == null }) {
+                showToast(getString(R.string.ml_onedrive_download_failed))
+                return@launch
+            }
+            if (folder != null) chosen.zip(files).filter { it.first.cloud != null }.forEach { (_, f) ->
+                val file = f ?: return@forEach
+                opened += Opened(file, folder, file.lastModified(), file.parentFile?.list()?.toSet().orEmpty())
+            }
+            action(files.filterNotNull())
         }
+    }
+
+    /**
+     * Uploads OneDrive files edited since they were opened (replacing them) and files saved next to
+     * them; true when there was something to upload (the folder reloads afterwards).
+     */
+    private fun syncBack(): Boolean {
+        val uploads = mutableListOf<Triple<File, Location.Cloud, Boolean>>()
+        for (o in opened) {
+            val dir = o.file.parentFile ?: continue
+            if (o.file.exists() && o.file.lastModified() != o.modified) uploads += Triple(o.file, o.folder, true)
+            val names = dir.list()?.toSet().orEmpty()
+            (names - o.names).forEach { uploads += Triple(File(dir, it), o.folder, false) }
+            o.modified = o.file.lastModified()
+            o.names = names
+        }
+        if (uploads.isEmpty()) return false
+        run(getString(R.string.ml_onedrive_uploading)) {
+            uploads.map { (file, folder, replace) -> file.isFile && oneDrive.upload(file, folder.id, replace) }.all { it }
+        }
+        return true
     }
 
     /** True (and asks to connect again) when changing OneDrive needs an editing permission the sign-in lacks. */
@@ -802,6 +855,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uriFor(file), mime ?: "*/*")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // A OneDrive copy can be edited by the app that opens it: the changes go back when returning here
+        if (file.absolutePath.startsWith(File(cacheDir, "onedrive").absolutePath + "/")) intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         try {
             startActivity(if (chooser) Intent.createChooser(intent, file.name) else intent)
         } catch (e: Exception) {
@@ -823,7 +878,14 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun showAddMenu() {
         newFolder.showDropdown(listOf(
             MenuEntry(getString(R.string.ml_explorer_new_folder), icon = R.drawable.ic_m_folder) { askNewFolder() },
-            MenuEntry(getString(R.string.ml_scan_start), icon = R.drawable.ic_m_scan) { ScannerActivity.open(this, viewDir) },
+            MenuEntry(getString(R.string.ml_scan_start), icon = R.drawable.ic_m_scan) {
+                val loc = location
+                if (loc !is Location.Cloud) ScannerActivity.open(this, viewDir)
+                else if (!needsWriteAccess()) {
+                    scanFolder = loc
+                    scanLauncher.launch(ScannerActivity.namedIntent(this))
+                }
+            },
         ))
     }
 
@@ -958,8 +1020,8 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun shownName(entry: Entry) =
         if (view.showExtension || entry.isFolder || !entry.name.contains('.')) entry.name else entry.name.substringBeforeLast('.')
 
-    private fun hasThumbnail(entry: Entry) = view.showThumbnails && !entry.isFolder && entry.file != null &&
-            (entry.mime?.startsWith("image/") == true || entry.mime?.startsWith("video/") == true)
+    private fun hasThumbnail(entry: Entry) = view.showThumbnails && !entry.isFolder && (entry.cloud?.thumbnail != null ||
+            entry.file != null && (entry.mime?.startsWith("image/") == true || entry.mime?.startsWith("video/") == true))
 
     /** Thumbnail with 12 dp rounded corners (clipped to its background). */
     private fun roundedImage() = ImageView(this).apply {
@@ -1069,7 +1131,11 @@ open class FileExplorerActivity : AppCompatActivity() {
             image.isVisible = thumb
             val size = if (view.grid) iconBox.layoutParams.width.coerceAtLeast(64) else 40.dpToPx()
             if (thumb && entry.file != null) MediaThumbnails.load(lifecycleScope, image, entry.file, size)
-            else {
+            else if (thumb && entry.cloud != null) {
+                val item = entry.cloud
+                val url = (if (size > 200) item.thumbnailLarge else null) ?: item.thumbnail
+                MediaThumbnails.loadBytes(lifecycleScope, image, "onedrive:${item.id}:${item.modified}", size) { url?.let { oneDrive.thumbnailBytes(it) } }
+            } else {
                 image.tag = null
                 image.setImageBitmap(null)
             }

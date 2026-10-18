@@ -37,6 +37,9 @@ class OneDrive(private val context: Context) {
         val mimeType: String?,
         val size: Long,
         val modified: Long,
+        /** Thumbnail addresses (photos, videos, documents), small (~176 px) and large (~800 px). */
+        val thumbnail: String? = null,
+        val thumbnailLarge: String? = null,
     )
 
     private val prefs = context.getSharedPreferences("app.minimalauncher.onedrive", Context.MODE_PRIVATE)
@@ -169,14 +172,20 @@ class OneDrive(private val context: Context) {
 
     private fun itemUrl(id: String?) = if (id == null) "$GRAPH/root" else "$GRAPH/items/${Uri.encode(id)}"
 
-    private fun parseItem(o: JSONObject) = Item(
-        id = o.optString("id"),
-        name = o.optString("name"),
-        isFolder = o.has("folder"),
-        mimeType = o.optJSONObject("file")?.optString("mimeType")?.ifBlank { null },
-        size = o.optLong("size"),
-        modified = parseDate(o.optString("lastModifiedDateTime")),
-    )
+    private fun parseItem(o: JSONObject): Item {
+        val thumbs = o.optJSONArray("thumbnails")?.optJSONObject(0)
+        fun thumb(size: String) = thumbs?.optJSONObject(size)?.optString("url")?.ifBlank { null }
+        return Item(
+            id = o.optString("id"),
+            name = o.optString("name"),
+            isFolder = o.has("folder"),
+            mimeType = o.optJSONObject("file")?.optString("mimeType")?.ifBlank { null },
+            size = o.optLong("size"),
+            modified = parseDate(o.optString("lastModifiedDateTime")),
+            thumbnail = thumb("medium") ?: thumb("small"),
+            thumbnailLarge = thumb("large") ?: thumb("medium"),
+        )
+    }
 
     private fun parseDate(iso: String): Long = try {
         SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
@@ -188,7 +197,7 @@ class OneDrive(private val context: Context) {
     /** Content of a folder ([folderId] null for the root), or null on errors (e.g. expired sign-in). */
     fun children(folderId: String?): List<Item>? {
         val list = mutableListOf<Item>()
-        var url: String? = itemUrl(folderId) + "/children?\$top=200&\$select=$ITEM_FIELDS"
+        var url: String? = itemUrl(folderId) + "/children?\$top=200&\$expand=thumbnails"
         while (url != null && list.size < 2000) {
             val page = call("GET", url) ?: return null
             val values = page.optJSONArray("value") ?: break
@@ -230,13 +239,17 @@ class OneDrive(private val context: Context) {
         JSONObject().put("name", name).put("folder", JSONObject()).put("@microsoft.graph.conflictBehavior", "rename"),
     )?.let { parseItem(it) }
 
-    /** Uploads a local file into [parentId] (null = root); big files go in chunks. */
-    fun upload(file: File, parentId: String?): Boolean {
+    /**
+     * Uploads a local file into [parentId] (null = root); big files go in chunks. A file with the same
+     * name is replaced with [replace] (an edited copy going back), otherwise the upload gets a new name.
+     */
+    fun upload(file: File, parentId: String?, replace: Boolean = false): Boolean {
         val token = accessToken() ?: return false
         val target = itemUrl(parentId) + ":/" + Uri.encode(file.name) + ":"
+        val conflict = if (replace) "replace" else "rename"
         return try {
             if (file.length() <= SMALL_UPLOAD) {
-                val request = okhttp3.Request.Builder().url("$target/content?@microsoft.graph.conflictBehavior=rename")
+                val request = okhttp3.Request.Builder().url("$target/content?@microsoft.graph.conflictBehavior=$conflict")
                     .header("Authorization", "Bearer $token")
                     .put(file.asRequestBody("application/octet-stream".toMediaType()))
                     .build()
@@ -244,7 +257,7 @@ class OneDrive(private val context: Context) {
             } else {
                 val session = call(
                     "POST", "$target/createUploadSession",
-                    JSONObject().put("item", JSONObject().put("@microsoft.graph.conflictBehavior", "rename")),
+                    JSONObject().put("item", JSONObject().put("@microsoft.graph.conflictBehavior", conflict)),
                 ) ?: return false
                 val uploadUrl = session.optString("uploadUrl").ifBlank { return false }
                 val total = file.length()
@@ -293,6 +306,17 @@ class OneDrive(private val context: Context) {
         }
     }
 
+    /** Image bytes of a thumbnail address (pre-signed by OneDrive; Graph addresses get the sign-in). */
+    fun thumbnailBytes(url: String): ByteArray? {
+        val builder = okhttp3.Request.Builder().url(url)
+        if (Uri.parse(url).host == "graph.microsoft.com") accessToken()?.let { builder.header("Authorization", "Bearer $it") }
+        return try {
+            http.newCall(builder.build()).execute().use { if (it.isSuccessful) it.body?.bytes() else null }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** Downloads [item] into the app cache so a local app (or the built-in viewers) can open it; null on errors. */
     fun downloadToCache(item: Item): File? {
         val dir = File(cacheDir, item.id.replace(Regex("[^A-Za-z0-9_-]"), "_")).apply {
@@ -323,7 +347,6 @@ class OneDrive(private val context: Context) {
         private const val SCOPES = "Files.ReadWrite offline_access"
         private const val OLD_SCOPES = "Files.Read offline_access"
         private const val GRAPH = "https://graph.microsoft.com/v1.0/me/drive"
-        private const val ITEM_FIELDS = "id,name,folder,file,size,lastModifiedDateTime"
         private const val SMALL_UPLOAD = 4L * 1024 * 1024
         private const val CHUNK = 320 * 1024 * 16
 

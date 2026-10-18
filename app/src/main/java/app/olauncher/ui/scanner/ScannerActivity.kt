@@ -50,7 +50,8 @@ import java.util.Locale
  * screen reviews them: drag to reorder, tap for rotate, scan again or delete, "Add" for more pages.
  * The bar picks colour or black and white, A4 or the photo's size, and the searchable text (OCR).
  * "Save" asks for a name and a folder and writes the PDF. With [EXTRA_PICK] (from the PDF tool's
- * pages) the PDF goes to the cache and its path comes back as [EXTRA_PDF_PATH].
+ * pages) the PDF goes to the cache and its path comes back as [EXTRA_PDF_PATH]. With [EXTRA_NAMED] (the
+ * explorer on OneDrive) "Save" asks only for the name and returns the PDF the same way, for uploading.
  */
 class ScannerActivity : AppCompatActivity() {
 
@@ -62,6 +63,7 @@ class ScannerActivity : AppCompatActivity() {
     private var a4 = true
     private var searchable = true
     private var pickMode = false
+    private var namedMode = false
     /** While the PDF is being made: everything else waits. */
     private var busy = false
     /** Saved and not changed since: leaving doesn't ask. */
@@ -131,6 +133,7 @@ class ScannerActivity : AppCompatActivity() {
         a4 = prefs.getBoolean(KEY_A4, true)
         searchable = prefs.getBoolean(KEY_OCR, true)
         pickMode = intent.getBooleanExtra(EXTRA_PICK, false)
+        namedMode = intent.getBooleanExtra(EXTRA_NAMED, false)
         if (savedInstanceState != null) {
             sessionDir = File(savedInstanceState.getString(STATE_SESSION) ?: newSession().absolutePath).apply { mkdirs() }
             val paths = savedInstanceState.getStringArray(STATE_PAGES) ?: emptyArray()
@@ -336,6 +339,17 @@ class ScannerActivity : AppCompatActivity() {
             return
         }
         val stamp = SimpleDateFormat("yyyy-MM-dd HH.mm", Locale.getDefault()).format(Date())
+        if (namedMode) {
+            showTextInputDialog(getString(R.string.ml_scan_save), getString(R.string.ml_scan_default_name, stamp), getString(R.string.ml_pdf_file_name), getString(R.string.ml_save)) { name ->
+                val clean = name.trim().removeSuffix(".pdf").removeSuffix(".PDF").replace('/', '_').ifBlank { return@showTextInputDialog }
+                build(File(cacheDir, "scan/named-${System.currentTimeMillis()}/$clean.pdf")) { pdf ->
+                    saved = true
+                    setResult(RESULT_OK, Intent().putExtra(EXTRA_PDF_PATH, pdf.absolutePath))
+                    finish()
+                }
+            }
+            return
+        }
         val dir = startDir()
         showTextInputDialog(getString(R.string.ml_scan_save), getString(R.string.ml_scan_default_name, stamp), getString(R.string.ml_pdf_file_name), getString(R.string.ml_pdf_choose_folder)) { name ->
             val clean = name.trim().removeSuffix(".pdf").removeSuffix(".PDF").replace('/', '_').ifBlank { return@showTextInputDialog }
@@ -512,6 +526,8 @@ class ScannerActivity : AppCompatActivity() {
         /** Return the pages as a PDF in the cache instead of saving it. */
         const val EXTRA_PICK = "pick"
         const val EXTRA_PDF_PATH = "pdf_path"
+        /** Ask only for the name and return the PDF (in the cache) as [EXTRA_PDF_PATH]. */
+        const val EXTRA_NAMED = "named"
 
         private const val PREFS = "app.minimalauncher.scanner"
         private const val KEY_BW = "bw"
@@ -531,5 +547,7 @@ class ScannerActivity : AppCompatActivity() {
         )
 
         fun pickIntent(context: Context) = Intent(context, ScannerActivity::class.java).putExtra(EXTRA_PICK, true)
+
+        fun namedIntent(context: Context) = Intent(context, ScannerActivity::class.java).putExtra(EXTRA_NAMED, true)
     }
 }
