@@ -290,6 +290,8 @@ class HomeSearchController(
         val uri: Uri? = null,
         /** Albums: the photo or video shown as cover. */
         val cover: File? = null,
+        /** Contacts: their id (long press menu). */
+        val contactId: Long? = null,
         val onClick: () -> Unit,
     ) {
         val isDocument
@@ -576,7 +578,7 @@ class HomeSearchController(
                     val name = c.getString(2) ?: continue
                     val number = c.getString(3)
                     val contactUri = ContactsContract.Contacts.getLookupUri(id, lookup)
-                    rows += Row(Kind.CONTACT, name, number) { open(Intent(Intent.ACTION_VIEW, contactUri)) }
+                    rows += Row(Kind.CONTACT, name, number, contactId = id) { open(Intent(Intent.ACTION_VIEW, contactUri)) }
                 }
             }
         } catch (e: Exception) {
@@ -809,8 +811,8 @@ class HomeSearchController(
         background = UiKit.ripple(activity)
         tag = RESULT
         setOnClickListener { row.onClick() }
-        if (row.file != null) setOnLongClickListener {
-            showItemMenu(row)
+        if (row.file != null || row.contactId != null) setOnLongClickListener {
+            if (row.contactId != null) showContactMenu(row) else showItemMenu(row)
             true
         }
         val thumb = row.file?.takeIf { row.kind == Kind.PHOTO || row.kind == Kind.VIDEO }
@@ -963,6 +965,128 @@ class HomeSearchController(
         })
     }
 
+    /** What a contact can be reached with: numbers, e-mails and its WhatsApp / Telegram chats. */
+    private class ContactWays(
+        val phones: List<String>,
+        val emails: List<String>,
+        /** Data rows (id to mimetype) opening the chat in WhatsApp or Telegram. */
+        val whatsApp: Pair<Long, String>?,
+        val telegram: Pair<Long, String>?,
+        /** Whether the app adds its rows to the contacts at all: if not, the chat is opened by number. */
+        val whatsAppSyncs: Boolean,
+        val telegramSyncs: Boolean,
+    )
+
+    private fun contactWays(id: Long): ContactWays {
+        val phones = linkedMapOf<String, String>()
+        val emails = linkedSetOf<String>()
+        var whatsApp: Pair<Long, String>? = null
+        var telegram: Pair<Long, String>? = null
+        val projection = arrayOf(ContactsContract.Data._ID, ContactsContract.Data.MIMETYPE, ContactsContract.Data.DATA1)
+        try {
+            activity.contentResolver.query(
+                ContactsContract.Data.CONTENT_URI, projection, "${ContactsContract.Data.CONTACT_ID} = ?", arrayOf(id.toString()), null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val dataId = c.getLong(0)
+                    val mime = c.getString(1) ?: continue
+                    val value = c.getString(2)?.trim().orEmpty()
+                    when (mime) {
+                        ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> if (value.isNotEmpty())
+                            phones.putIfAbsent(android.telephony.PhoneNumberUtils.normalizeNumber(value), value)
+                        ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE -> if (value.isNotEmpty()) emails += value
+                        in WHATSAPP_CHATS -> if (whatsApp == null || mime == WHATSAPP_CHATS[0]) whatsApp = dataId to mime
+                        TELEGRAM_CHAT -> if (telegram == null) telegram = dataId to mime
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return ContactWays(
+            phones.values.toList(), emails.toList(), whatsApp, telegram,
+            whatsAppSyncs = whatsApp != null || anyRow(WHATSAPP_CHATS), telegramSyncs = telegram != null || anyRow(listOf(TELEGRAM_CHAT)),
+        )
+    }
+
+    private fun anyRow(mimes: List<String>) = try {
+        activity.contentResolver.query(
+            ContactsContract.Data.CONTENT_URI, arrayOf(ContactsContract.Data._ID),
+            "${ContactsContract.Data.MIMETYPE} IN (${mimes.joinToString { "?" }})", mimes.toTypedArray(), null
+        )?.use { it.moveToFirst() } ?: false
+    } catch (e: Exception) {
+        false
+    }
+
+    private fun installed(pkg: String) = try {
+        activity.packageManager.getPackageInfo(pkg, 0)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
+    }
+
+    /** The number with its country prefix and no "+", for the links of the chat apps; null if it can't tell. */
+    private fun internationalDigits(number: String): String? {
+        val iso = activity.getSystemService(android.telephony.TelephonyManager::class.java)
+            ?.let { it.networkCountryIso.ifBlank { it.simCountryIso } }
+            ?.uppercase().orEmpty().ifBlank { java.util.Locale.getDefault().country }
+        val e164 = android.telephony.PhoneNumberUtils.formatNumberToE164(number, iso)
+            ?: android.telephony.PhoneNumberUtils.normalizeNumber(number).takeIf { it.startsWith("+") }
+        return e164?.removePrefix("+")?.takeIf { it.length > 6 }
+    }
+
+    /** Long press on a contact: call, SMS, WhatsApp, Telegram and e-mail, only the ones it has. */
+    private fun showContactMenu(row: Row) {
+        val id = row.contactId ?: return
+        scope.launch {
+            val ways = withContext(Dispatchers.IO) { contactWays(id) }
+            val entries = mutableListOf<MenuEntry>()
+            // With more numbers or addresses each shows its own on the right
+            val manyPhones = ways.phones.size > 1
+            ways.phones.forEach { number ->
+                entries += MenuEntry(activity.getString(R.string.ml_contact_call), value = number.takeIf { manyPhones }, icon = R.drawable.ic_m_call) {
+                    open(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel", number, null)))
+                }
+            }
+            ways.phones.forEach { number ->
+                entries += MenuEntry(activity.getString(R.string.ml_contact_sms), value = number.takeIf { manyPhones }, icon = R.drawable.ic_m_sms) {
+                    open(Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", number, null)))
+                }
+            }
+            val first = ways.phones.firstOrNull()
+            val whatsApp = ways.whatsApp?.let { (dataId, mime) ->
+                Intent(Intent.ACTION_VIEW).setDataAndType(ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, dataId), mime)
+            } ?: WHATSAPP_PACKAGES.takeIf { !ways.whatsAppSyncs }?.firstOrNull { installed(it) }?.let { pkg ->
+                first?.let { internationalDigits(it) }?.let { Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$it")).setPackage(pkg) }
+            }
+            whatsApp?.let { intent -> entries += MenuEntry(WHATSAPP, icon = R.drawable.ic_m_chat) { open(intent) } }
+            val telegram = ways.telegram?.let { (dataId, mime) ->
+                Intent(Intent.ACTION_VIEW).setDataAndType(ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, dataId), mime)
+            } ?: TELEGRAM_PACKAGES.takeIf { !ways.telegramSyncs }?.firstOrNull { installed(it) }?.let { pkg ->
+                first?.let { internationalDigits(it) }?.let { Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?phone=$it")).setPackage(pkg) }
+            }
+            telegram?.let { intent -> entries += MenuEntry(TELEGRAM, icon = R.drawable.ic_m_send) { open(intent) } }
+            val manyEmails = ways.emails.size > 1
+            ways.emails.forEach { address ->
+                entries += MenuEntry(activity.getString(R.string.ml_contact_email), value = address.takeIf { manyEmails }, icon = R.drawable.ic_m_mail) {
+                    open(Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", address, null)))
+                }
+            }
+            entries += MenuEntry(activity.getString(R.string.ml_contact_open), icon = R.drawable.ic_m_contact) { row.onClick() }
+            activity.showMenuDialog(row.title, entries, header = { dialog ->
+                // The only number or address, under the name
+                listOfNotNull(first?.takeIf { !manyPhones }, ways.emails.singleOrNull()).takeIf { it.isNotEmpty() }?.let { lines ->
+                    TextView(dialog.context, null, 0, R.style.TextSmall).apply {
+                        text = lines.joinToString("\n")
+                        alpha = 0.6f
+                        setTextColor(dialog.context.getColorFromAttr(R.attr.primaryColor))
+                        setPadding(0, 8.dpToPx(), 0, 4.dpToPx())
+                    }
+                }
+            })
+        }
+    }
+
     private fun loadIcon(view: TextView, app: AppModel.App) {
         val size = (view.textSize * 1.3f).toInt()
         view.compoundDrawablePadding = 14.dpToPx()
@@ -997,6 +1121,15 @@ class HomeSearchController(
             0xFF5B9BD5.toInt(), 0xFF9C7BD6.toInt(), 0xFFE09A4F.toInt(), 0xFFE0675E.toInt(), 0xFF4FB38A.toInt(), 0xFFD66BA0.toInt(),
         )
         private const val MAX_CONTACTS = 30
+        private const val WHATSAPP = "WhatsApp"
+        private const val TELEGRAM = "Telegram"
+        /** Rows WhatsApp adds to the contacts: the chat first, then WhatsApp Business. */
+        private val WHATSAPP_CHATS = listOf(
+            "vnd.android.cursor.item/vnd.com.whatsapp.profile", "vnd.android.cursor.item/vnd.com.whatsapp.w4b.profile",
+        )
+        private const val TELEGRAM_CHAT = "vnd.android.cursor.item/vnd.org.telegram.messenger.android.profile"
+        private val WHATSAPP_PACKAGES = listOf("com.whatsapp", "com.whatsapp.w4b")
+        private val TELEGRAM_PACKAGES = listOf("org.telegram.messenger", "org.telegram.messenger.web", "org.thunderdog.challegram")
         private const val MAX_FILES = 300
         private const val MAX_FOLDERS = 80
         private val GALLERIES = listOf("org.fossify.gallery", "com.simplemobiletools.gallery.pro")

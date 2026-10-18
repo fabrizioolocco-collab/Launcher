@@ -226,6 +226,10 @@
     <string name="ml_search_open">Apri</string>
     <string name="ml_search_copy_path">Copia percorso</string>
     <string name="ml_search_path_copied">Percorso copiato</string>
+    <string name="ml_contact_call">Telefona</string>
+    <string name="ml_contact_sms">SMS</string>
+    <string name="ml_contact_email">Email</string>
+    <string name="ml_contact_open">Apri contatto</string>
     <!-- App swipe actions -->
     <string name="ml_swipe_up">Swipe su</string>
     <string name="ml_swipe_down">Swipe giù</string>
