@@ -208,6 +208,17 @@
     <string name="ml_search_open_folder">Open folder</string>
     <!-- File explorer -->
     <string name="ml_explorer">Files</string>
+    <string name="ml_search_onedrive">OneDrive</string>
+    <string name="ml_onedrive_connect">Connect OneDrive</string>
+    <string name="ml_onedrive_personal">Personal Microsoft account</string>
+    <string name="ml_onedrive_error">OneDrive is not responding: tap to sign in again</string>
+    <string name="ml_onedrive_connected">OneDrive connected</string>
+    <string name="ml_onedrive_failed">OneDrive sign-in failed</string>
+    <string name="ml_onedrive_disconnect">Disconnect OneDrive</string>
+    <string name="ml_onedrive_downloading">Downloading %1$s…</string>
+    <string name="ml_onedrive_download_failed">Download from OneDrive failed</string>
+    <string name="ml_explorer_reconnect">To change files on OneDrive, connect it again and allow editing.</string>
+    <string name="ml_explorer_phone_storage">Internal storage</string>
     <string name="ml_file_manager">File manager</string>
     <string name="ml_phone_folders">Open phone folders in</string>
     <string name="ml_explorer_new_folder">New folder</string>

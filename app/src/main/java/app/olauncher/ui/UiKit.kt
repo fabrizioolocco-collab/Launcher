@@ -189,6 +189,7 @@ object UiKit {
         DOC(R.drawable.ic_m_doc, 0),
         PHONE(R.drawable.ic_m_phone, 0),
         SDCARD(R.drawable.ic_m_sdcard, 0),
+        CLOUD(R.drawable.ic_m_cloud_line, 0xFF5B9BD5.toInt()),
         CONTACT(R.drawable.ic_m_contact, 0),
         SETTINGS(R.drawable.ic_m_settings, 0),
         WALLPAPER(R.drawable.ic_m_image, 0xFF5B9BD5.toInt()),

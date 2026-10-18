@@ -62,7 +62,7 @@
         android:theme="@style/AppTheme"
         tools:ignore="UnusedAttribute">
 
-        <!-- Built-in file explorer for the phone storage, also listed as "File" in the app list -->
+        <!-- Built-in file explorer (phone and OneDrive), also listed as "File" in the app list -->
         <activity
             android:name=".ui.FileExplorerActivity"
             android:exported="false"
@@ -70,6 +70,26 @@
             android:launchMode="singleTask"
             android:taskAffinity="app.minimalauncher.files"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- OneDrive sign-in: Microsoft redirects here (see OneDrive) -->
+        <activity
+            android:name=".ui.OneDriveAuthActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data
+                    android:host="auth"
+                    android:scheme="minimalauncher" />
+            </intent-filter>
+        </activity>
 
         <!-- The explorer as a folder picker (folder shortcuts, swipe actions) -->
         <activity
