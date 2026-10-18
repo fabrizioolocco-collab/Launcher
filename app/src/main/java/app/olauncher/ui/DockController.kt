@@ -10,9 +10,9 @@ import android.widget.LinearLayout
 import androidx.core.view.isVisible
 import app.olauncher.R
 import app.olauncher.data.AppModel
-import app.olauncher.data.HomeSectionsRepository
+import app.olauncher.data.PinnedApp
+import app.olauncher.data.PinnedAppsRepository
 import app.olauncher.data.Prefs
-import app.olauncher.data.SectionApp
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.IconChooser
@@ -46,8 +46,8 @@ class DockController(
     /** Called when the dock's apps change (their notifications move between dock and home). */
     private val onChanged: () -> Unit = {},
 ) {
-    private val repo = HomeSectionsRepository(context)
-    private var dock: MutableList<SectionApp> = repo.loadDock()
+    private val repo = PinnedAppsRepository(context)
+    private var dock: MutableList<PinnedApp> = repo.loadDock()
     private var apps: List<AppModel.App> = emptyList()
     private var notifications: Map<String, AppNotifications> = emptyMap()
 
@@ -65,7 +65,7 @@ class DockController(
     /** Keys (package|user) of the dock's apps: they show their notifications here, not on home. */
     fun appKeys(): Set<String> = dock.map { NotificationRepository.key(it.packageName, it.user) }.toSet()
 
-    fun contains(app: AppModel.App) = dock.any { it.samePackageAndUser(SectionApp.from(app)) }
+    fun contains(app: AppModel.App) = dock.any { it.samePackageAndUser(PinnedApp.from(app)) }
 
     /** As many apps as the home grid has columns (6 by default), so the tiles line up with it. */
     private val max get() = prefs.widgetColumns
@@ -78,7 +78,7 @@ class DockController(
             contains(app) -> context.showToast(context.getString(R.string.ml_dock_already))
             isFull() -> context.showToast(context.getString(R.string.ml_dock_full, max))
             else -> {
-                dock += SectionApp.from(app)
+                dock += PinnedApp.from(app)
                 save()
             }
         }
@@ -102,7 +102,7 @@ class DockController(
         onChanged()
     }
 
-    private fun findApp(dockApp: SectionApp): AppModel.App? {
+    private fun findApp(dockApp: PinnedApp): AppModel.App? {
         if (!DetoxManager.isAllowed(context, dockApp.packageName)) return null
         return apps.firstOrNull { dockApp.matches(it) }
             ?: apps.firstOrNull { it.appPackage == dockApp.packageName && it.user.toString() == dockApp.user }
@@ -143,13 +143,13 @@ class DockController(
         container.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun tile(index: Int, dockApp: SectionApp, app: AppModel.App) = ImageView(context).apply {
+    private fun tile(index: Int, dockApp: PinnedApp, app: AppModel.App) = ImageView(context).apply {
         val notified = notificationCount(app) > 0
         background = GradientDrawable().apply {
             cornerRadius = 16.dpToPx().toFloat()
             if (notified) {
                 setColor(TILE_RED)
-                setStroke(1.dpToPx(), HomeSectionsController.NOTIFICATION_COLOR)
+                setStroke(1.dpToPx(), NotificationBadge.NOTIFICATION_COLOR)
             } else setColor(context.getColorFromAttr(R.attr.tileColor))
         }
         foreground = UiKit.ripple(context)
@@ -175,7 +175,7 @@ class DockController(
         }
     }
 
-    private fun showAppMenu(index: Int, dockApp: SectionApp, app: AppModel.App) {
+    private fun showAppMenu(index: Int, dockApp: PinnedApp, app: AppModel.App) {
         val position = dock.indexOfFirst { it.samePackageAndUser(dockApp) }.takeIf { it >= 0 } ?: index
         val entries = mutableListOf<MenuEntry>()
         if (position > 0) entries += MenuEntry(context.getString(R.string.ml_dock_move_left)) { move(position, -1) }

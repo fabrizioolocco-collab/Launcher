@@ -20,7 +20,7 @@ import java.util.UUID
 
 /**
  * Folder shortcuts on home: each one is shown as a pseudo-app (package "folder:<id>"), so it can sit
- * in sections, outside groups or in the bottom area, get a custom icon and swipe actions. Tapping it
+ * on the home grid, get a custom icon and swipe actions. Tapping it
  * opens the folder in the built-in explorer or in the file manager (Solid Explorer).
  */
 object FolderShortcuts {

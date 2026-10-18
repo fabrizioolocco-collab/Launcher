@@ -30,7 +30,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- Home: clock/date header, then the user's sections. Scrolls; gestures handled by HomeScrollView -->
+        <!-- Home: clock/date header, then the home grid. Scrolls; gestures handled by HomeScrollView -->
         <app.olauncher.ui.HomeScrollView
             android:id="@+id/homeScroll"
             android:layout_width="match_parent"
@@ -145,17 +145,17 @@
                     android:visibility="gone" />
 
                 <TextView
-                    android:id="@+id/noSectionsHint"
+                    android:id="@+id/emptyHomeHint"
                     style="@style/TextSmall"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginHorizontal="24dp"
                     android:alpha="0.6"
                     android:layout_marginTop="24dp"
-                    android:text="@string/ml_home_no_sections_hint"
+                    android:text="@string/ml_home_empty_hint"
                     android:visibility="gone" />
 
-                <!-- The home grid: app icons and sections, all movable; fills the rest of the screen -->
+                <!-- The home grid: app icons and the news strip, all movable; fills the rest of the screen -->
                 <app.olauncher.ui.widgets.WidgetGridLayout
                     android:id="@+id/widgetsLayout"
                     android:layout_width="match_parent"

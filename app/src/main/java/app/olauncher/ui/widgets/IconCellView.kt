@@ -15,7 +15,7 @@ import androidx.core.view.isVisible
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
-import app.olauncher.ui.HomeSectionsController
+import app.olauncher.ui.NotificationBadge
 
 /**
  * An app icon placed on a [WidgetGridLayout] (bottom area): icon centered in its cell, optional
@@ -171,7 +171,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         updateFrame()
         // On a card the card turns red and the icon stays as it is
         icon.colorFilter = if (notified && !cardOn) app.olauncher.ui.NotificationBadge.redFilter else null
-        label.setTextColor(if (notified && !cardOn) HomeSectionsController.NOTIFICATION_COLOR else context.getColorFromAttr(R.attr.primaryColor))
+        label.setTextColor(if (notified && !cardOn) NotificationBadge.NOTIFICATION_COLOR else context.getColorFromAttr(R.attr.primaryColor))
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = touch.intercept(ev)

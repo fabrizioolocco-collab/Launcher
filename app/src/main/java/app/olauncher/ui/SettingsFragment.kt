@@ -216,9 +216,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 populateTextStyle()
             }
             R.id.iconPack -> showIconPackMenu(view)
-            R.id.sectionFont -> showFontMenu(view, prefs.sectionFont) { prefs.sectionFont = it }
             R.id.appFont -> showFontMenu(view, prefs.appFont) { prefs.appFont = it }
-            R.id.sectionTextSize -> showTextSizeMenu(view) { prefs.sectionTextSize = it }
             R.id.appTextSize -> showTextSizeMenu(view) { prefs.appTextSize = it }
             R.id.notificationAccess -> NotificationRepository.openAccessSettings(requireContext())
             R.id.newsOrder -> showNewsOrderMenu(view)
@@ -262,12 +260,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.drawerTextSize -> showTextSizeMenu(view) { prefs.drawerTextSize = it }
             R.id.drawerLabels -> {
                 prefs.drawerLabels = !prefs.drawerLabels
-                populateTextStyle()
-            }
-            R.id.homeColumns -> view.showPopupMenu(
-                configure = { menu -> (1..6).forEach { menu.add(Menu.NONE, it, it, it.toString()) } }
-            ) { item ->
-                prefs.homeColumns = item.itemId
                 populateTextStyle()
             }
             R.id.homeLabels -> {
@@ -399,9 +391,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.showIcons.setOnClickListener(this)
         binding.iconTiles.setOnClickListener(this)
         binding.iconPack.setOnClickListener(this)
-        binding.sectionFont.setOnClickListener(this)
         binding.appFont.setOnClickListener(this)
-        binding.sectionTextSize.setOnClickListener(this)
         binding.appTextSize.setOnClickListener(this)
         binding.notificationAccess.setOnClickListener(this)
         binding.newsOrder.setOnClickListener(this)
@@ -413,7 +403,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.drawerFont.setOnClickListener(this)
         binding.drawerTextSize.setOnClickListener(this)
         binding.drawerLabels.setOnClickListener(this)
-        binding.homeColumns.setOnClickListener(this)
         binding.homeLabels.setOnClickListener(this)
         binding.homeIconSize.setOnClickListener(this)
         binding.tabsSettings.setOnClickListener(this)
@@ -485,12 +474,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
     private fun populateTextStyle() {
         val ctx = requireContext()
-        binding.sectionFont.text = FontManager.label(ctx, prefs.sectionFont)
         binding.appFont.text = FontManager.label(ctx, prefs.appFont)
-        binding.sectionTextSize.text = sizeLabel(prefs.sectionTextSize)
         binding.appTextSize.text = sizeLabel(prefs.appTextSize)
         binding.widgetColumns.text = prefs.widgetColumns.toString()
-        binding.homeColumns.text = prefs.homeColumns.toString()
         binding.homeLabels.setText(if (prefs.homeShowLabels) R.string.on else R.string.off)
         binding.homeIconSize.text = if (prefs.homeIconSize > 0) prefs.homeIconSize.toString() else getString(R.string.ml_default)
         binding.phoneFolders?.setText(if (prefs.phoneFoldersInExplorer) R.string.ml_explorer else R.string.ml_file_manager)

@@ -38,7 +38,6 @@ class AppDrawerAdapter(
     private val appRenameListener: (AppModel, String) -> Unit,
     private val privateSpaceToggleListener: () -> Unit = {},
     private val privateSpaceSettingsListener: () -> Unit = {},
-    private val appSectionListener: (AppModel) -> Unit = {},
     private val iconLoader: ((AppModel, TextView) -> Unit)? = null,
     private val titleStyler: ((TextView) -> Unit)? = null,
     private val badgeCount: ((AppModel) -> Int)? = null,
@@ -232,7 +231,6 @@ class AppDrawerAdapter(
                     appInfoListener,
                     appHideListener,
                     appRenameListener,
-                    appSectionListener,
                     iconLoader,
                     titleStyler,
                     badgeCount?.invoke(appModel) ?: 0,
@@ -337,7 +335,6 @@ class AppDrawerAdapter(
     fun delete(app: AppModel) = appDeleteListener(app)
     fun toggleHidden(app: AppModel, position: Int) = appHideListener(app, position)
     fun rename(app: AppModel, label: String) = appRenameListener(app, label)
-    fun addToSection(app: AppModel) = appSectionListener(app)
     val isHiddenList get() = flag == Constants.FLAG_HIDDEN_APPS
 
     /** Rebinds visible rows so notification badges reflect the latest counts. */
@@ -474,8 +471,8 @@ class AppDrawerAdapter(
                 if (appModel.isNew) append(" ✦")
                 if (appModel.user != myUserHandle) append(" ●")
             }
-            title.text = if (notified && !style.cards) HomeSectionsController.badgeText(appModel.appLabel, -1) else label
-            if (notified && !style.cards) title.setTextColor(HomeSectionsController.NOTIFICATION_COLOR) else title.setTextColor(defaultTitleColors)
+            title.text = if (notified && !style.cards) NotificationBadge.badgeText(appModel.appLabel, -1) else label
+            if (notified && !style.cards) title.setTextColor(NotificationBadge.NOTIFICATION_COLOR) else title.setTextColor(defaultTitleColors)
             titleStyler?.invoke(title)
             // A card's name is a little quieter than the icon
             if (style.cards) {
@@ -544,7 +541,6 @@ class AppDrawerAdapter(
             appInfoListener: (AppModel) -> Unit,
             appHideListener: (AppModel, Int) -> Unit,
             appRenameListener: (AppModel, String) -> Unit,
-            appSectionListener: (AppModel) -> Unit,
             iconLoader: ((AppModel, TextView) -> Unit)?,
             titleStyler: ((TextView) -> Unit)?,
             notificationCount: Int,
@@ -557,8 +553,8 @@ class AppDrawerAdapter(
 
             // Show indicators in title based on app type and state
             if (notificationCount > 0) {
-                appTitle.text = HomeSectionsController.badgeText(appModel.appLabel, -1)
-                appTitle.setTextColor(HomeSectionsController.NOTIFICATION_COLOR)
+                appTitle.text = NotificationBadge.badgeText(appModel.appLabel, -1)
+                appTitle.setTextColor(NotificationBadge.NOTIFICATION_COLOR)
             } else {
                 appTitle.text = buildString {
                     append(appModel.appLabel)
@@ -602,8 +598,6 @@ class AppDrawerAdapter(
                     appHideLayout.visibility = View.VISIBLE
                     // Only allow renaming non hidden apps
                     appRename.isVisible = flag != Constants.FLAG_HIDDEN_APPS
-                    // Home sections hold launchable apps only (not shortcuts); hidden apps are fine
-                    appSection.isVisible = (flag == Constants.FLAG_LAUNCH_APP || flag == Constants.FLAG_HIDDEN_APPS) && appModel is AppModel.App
                 }
                 true
             }
@@ -666,11 +660,6 @@ class AppDrawerAdapter(
                 }
             }
             appInfo.setOnClickListener { appInfoListener(appModel) }
-            appSection.setOnClickListener {
-                appHideLayout.visibility = View.GONE
-                appTitle.visibility = View.VISIBLE
-                appSectionListener(appModel)
-            }
             appDelete.setOnClickListener { appDeleteListener(appModel) }
             appMenuClose.setOnClickListener {
                 appHideLayout.visibility = View.GONE

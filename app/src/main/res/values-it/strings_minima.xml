@@ -7,28 +7,12 @@
     <string name="ml_delete">Elimina</string>
     <string name="ml_search">Cerca</string>
 
-    <string name="ml_section_new">Nuova sezione</string>
-    <string name="ml_section_new_ellipsis">+ Nuova sezione…</string>
-    <string name="ml_section_name_hint">Nome della sezione</string>
     <string name="ml_section_rename">Rinomina</string>
-    <string name="ml_section_edit_apps">Aggiungi o togli app</string>
     <string name="ml_move_up">Sposta su</string>
     <string name="ml_move_down">Sposta giù</string>
-    <string name="ml_section_delete">Elimina sezione</string>
-    <string name="ml_section_delete_confirm">Eliminare la sezione \"%1$s\"? Le app restano installate.</string>
-    <string name="ml_section_empty_hint">Vuota: tieni premuto il titolo per aggiungere app</string>
-    <string name="ml_home_no_sections_hint">Tieni premuto su uno spazio vuoto per aggiungere app, widget o sezioni</string>
-    <string name="ml_default_section_name">Preferiti</string>
-    <string name="ml_section">Sezione</string>
+    <string name="ml_home_empty_hint">Tieni premuto su uno spazio vuoto per aggiungere app o widget</string>
 
-    <string name="ml_app_move_to">Sposta in…</string>
-    <string name="ml_app_copy_to">Copia in…</string>
-    <string name="ml_app_remove_from_section">Togli da questa sezione</string>
     <string name="ml_app_info">Info app</string>
-    <string name="ml_add_to_section">Aggiungi a sezione…</string>
-    <string name="ml_already_in_section">Già presente in %1$s</string>
-    <string name="ml_added_to_section">Aggiunta a %1$s</string>
-    <string name="ml_no_other_sections">Non ci sono altre sezioni</string>
 
     <string name="ml_icons">Icone delle app</string>
     <string name="ml_icon_pack">Icon pack</string>
@@ -41,8 +25,6 @@
     <string name="ml_no_icon_packs">Nessun icon pack installato</string>
     <string name="ml_no_icons_in_pack">Questo icon pack non ha icone da scegliere</string>
     <string name="ml_default">Predefinito</string>
-    <string name="ml_section_font">Font titoli sezione</string>
-    <string name="ml_section_text_size">Dimensione titoli sezione</string>
     <string name="ml_app_font">Font nomi app</string>
     <string name="ml_app_text_size">Dimensione nomi app</string>
     <string name="ml_load_font">Carica font da file…</string>
@@ -51,9 +33,7 @@
     <string name="ml_notification_access">Accesso alle notifiche</string>
     <string name="ml_enabled">Attivo</string>
     <string name="ml_disabled">Non attivo</string>
-    <string name="ml_section_news">%1$d novità</string>
     <string name="ml_test_app_name">App di prova</string>
-    <string name="ml_test_section">Test</string>
     <string name="ml_test_channel">Notifiche di prova</string>
     <string name="ml_test_notification_text">Notifica di prova n. %1$d</string>
     <string name="ml_test_notification">Notifica di prova</string>
@@ -158,9 +138,8 @@
     <string name="ml_tab_hidden_off">Togli tab Nascoste</string>
     <string name="ml_choose_app">Scegli app…</string>
     <string name="ml_no_app">Nessuna app</string>
-    <string name="ml_home_columns">Colonne di app nelle sezioni</string>
     <string name="ml_home_labels">Nome delle app in home</string>
-    <string name="ml_home_icon_size">Dimensione icone in home (griglia e sezioni)</string>
+    <string name="ml_home_icon_size">Dimensione icone in home</string>
     <string name="ml_open_app">Apri app</string>
     <!-- Home search bar -->
     <string name="ml_search_web">Google</string>

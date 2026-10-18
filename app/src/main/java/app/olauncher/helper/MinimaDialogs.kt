@@ -323,16 +323,12 @@ object MenuIcons {
             s(R.string.adapter_show) to Look(R.drawable.ic_m_show),
             s(R.string.delete) to Look(R.drawable.ic_m_delete, destructive = true),
             s(R.string.ml_change_icon) to Look(R.drawable.ic_m_icon),
-            s(R.string.ml_add_to_section) to Look(R.drawable.ic_m_add_section),
+            s(R.string.ml_add_to_home) to Look(R.drawable.ic_m_app),
             s(R.string.ml_move_to_tab) to Look(R.drawable.ic_m_tab),
             s(R.string.ml_move_up) to Look(R.drawable.ic_m_up),
             s(R.string.ml_move_down) to Look(R.drawable.ic_m_down),
-            s(R.string.ml_app_move_to) to Look(R.drawable.ic_m_move),
-            s(R.string.ml_app_copy_to) to Look(R.drawable.ic_m_copy),
-            s(R.string.ml_app_remove_from_section) to Look(R.drawable.ic_m_remove),
             s(R.string.ml_add_app) to Look(R.drawable.ic_m_app),
             s(R.string.ml_add_widget) to Look(R.drawable.ic_m_widget),
-            s(R.string.ml_section_new) to Look(R.drawable.ic_m_section),
             s(R.string.ml_folder_new_ellipsis) to Look(R.drawable.ic_m_folder),
             s(R.string.ml_parking_menu) to Look(R.drawable.ic_m_parking),
             s(R.string.ml_news_zone_show) to Look(R.drawable.ic_m_news),
@@ -340,8 +336,6 @@ object MenuIcons {
             s(R.string.ml_detox) to Look(R.drawable.ic_m_detox),
             s(R.string.ml_settings) to Look(R.drawable.ic_m_settings),
             s(R.string.ml_section_rename) to Look(R.drawable.ic_m_rename),
-            s(R.string.ml_section_edit_apps) to Look(R.drawable.ic_m_app),
-            s(R.string.ml_section_delete) to Look(R.drawable.ic_m_delete, destructive = true),
             s(R.string.ml_tab_delete) to Look(R.drawable.ic_m_delete, destructive = true),
             s(R.string.ml_tab_edit_apps) to Look(R.drawable.ic_m_app),
             s(R.string.ml_tab_choose_apps) to Look(R.drawable.ic_m_app),
@@ -383,7 +377,7 @@ object MenuIcons {
 
 private const val SEARCH_THRESHOLD = 12
 
-/** Single-line text input, e.g. a section name. [onSave] gets the trimmed, non-blank text. */
+/** Single-line text input, e.g. a tab name. [onSave] gets the trimmed, non-blank text. */
 fun Context.showTextInputDialog(
     title: String,
     initial: String,

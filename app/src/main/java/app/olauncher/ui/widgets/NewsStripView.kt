@@ -3,6 +3,7 @@ package app.olauncher.ui.widgets
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -18,8 +19,13 @@ import app.olauncher.helper.getColorFromAttr
  * notifications appear as red tiles on the grid columns (scrolling sideways, one column at a time,
  * when they are more than the columns). Invisible while empty; a dashed outline shows where it is
  * while something is being moved or resized, or on request.
+ *
+ * The whole strip grabs the long press (the tiles inside don't drag by themselves): it drags the
+ * strip to another row, or shows where it is when released in place.
  */
-class NewsStripView(context: Context) : SectionBlockView(context) {
+class NewsStripView(context: Context) : LinearLayout(context) {
+
+    val touch = GridItemTouch(this)
 
     /** Width of one grid column: scrolling always comes to rest with the tiles on the columns. */
     var snapStep = 0
@@ -49,8 +55,11 @@ class NewsStripView(context: Context) : SectionBlockView(context) {
     private val hideOutline = Runnable { setOutlined(false) }
 
     init {
-        // The whole strip grabs the long press (the tiles inside don't drag by themselves)
-        header = this
+        orientation = VERTICAL
+        clipChildren = false
+        clipToPadding = false
+        // Counts as an interactive area for the home gestures (no home menu on a long press here)
+        isClickable = true
         scroll.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val stack = FrameLayout(context)
         stack.addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -58,11 +67,9 @@ class NewsStripView(context: Context) : SectionBlockView(context) {
         addView(stack, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
 
-    /** Touches anywhere on the strip belong to it (so the long press moves it), header or not. */
-    override fun onInterceptTouchEvent(ev: android.view.MotionEvent): Boolean {
-        header = this
-        return super.onInterceptTouchEvent(ev)
-    }
+    override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = touch.intercept(ev)
+
+    override fun onTouchEvent(event: MotionEvent): Boolean = touch.touch(event)
 
     val isEmpty get() = row.childCount == 0
 

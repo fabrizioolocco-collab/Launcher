@@ -59,7 +59,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val screenTimeValue = MutableLiveData<String>()
 
     /**
-     * Apps that can live on home (sections, pinned apps, bottom area, widgets). Hidden apps are
+     * Apps that can live on home (grid icons, dock, news strip, widgets). Hidden apps are
      * included: hiding only takes an app out of the app drawer, not off the home screen.
      */
     val homeApps = MutableLiveData<List<AppModel.App>>()

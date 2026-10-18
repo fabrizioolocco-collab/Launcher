@@ -120,7 +120,7 @@ object NotificationsPopup {
             setPadding(7.dpToPx(), 0, 7.dpToPx(), 0)
             background = GradientDrawable().apply {
                 cornerRadius = 11.dpToPx().toFloat()
-                setColor(HomeSectionsController.NOTIFICATION_COLOR)
+                setColor(NotificationBadge.NOTIFICATION_COLOR)
             }
         }
         header.addView(count, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 22.dpToPx()))

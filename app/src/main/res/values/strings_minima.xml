@@ -8,29 +8,12 @@
     <string name="ml_delete">Delete</string>
     <string name="ml_search">Search</string>
 
-    <string name="ml_section_new">New section</string>
-    <string name="ml_section_new_ellipsis">+ New section…</string>
-    <string name="ml_section_name_hint">Section name</string>
     <string name="ml_section_rename">Rename</string>
-    <string name="ml_section_edit_apps">Add or remove apps</string>
     <string name="ml_move_up">Move up</string>
     <string name="ml_move_down">Move down</string>
-    <string name="ml_section_delete">Delete section</string>
-    <string name="ml_section_delete_confirm">Delete the section \"%1$s\"? The apps stay installed.</string>
-    <string name="ml_section_empty_hint">Empty: long press the title to add apps</string>
-    <string name="ml_home_no_sections_hint">Long press on empty space to add apps, widgets or sections</string>
-    <string name="ml_default_section_name">Favourites</string>
-    <string name="ml_section_header_format" translatable="false">%1$s  %2$s</string>
-    <string name="ml_section">Section</string>
+    <string name="ml_home_empty_hint">Long press on empty space to add apps or widgets</string>
 
-    <string name="ml_app_move_to">Move to…</string>
-    <string name="ml_app_copy_to">Copy to…</string>
-    <string name="ml_app_remove_from_section">Remove from this section</string>
     <string name="ml_app_info">App info</string>
-    <string name="ml_add_to_section">Add to section…</string>
-    <string name="ml_already_in_section">Already in %1$s</string>
-    <string name="ml_added_to_section">Added to %1$s</string>
-    <string name="ml_no_other_sections">There are no other sections</string>
 
     <string name="ml_icons">App icons</string>
     <string name="ml_icon_pack">Icon pack</string>
@@ -43,8 +26,6 @@
     <string name="ml_no_icon_packs">No icon pack installed</string>
     <string name="ml_no_icons_in_pack">This icon pack has no icons to choose from</string>
     <string name="ml_default">Default</string>
-    <string name="ml_section_font">Section title font</string>
-    <string name="ml_section_text_size">Section title size</string>
     <string name="ml_app_font">App name font</string>
     <string name="ml_app_text_size">App name size</string>
     <string name="ml_load_font">Load font from file…</string>
@@ -53,9 +34,7 @@
     <string name="ml_notification_access">Notification access</string>
     <string name="ml_enabled">Enabled</string>
     <string name="ml_disabled">Off</string>
-    <string name="ml_section_news">%1$d new</string>
     <string name="ml_test_app_name">Test app</string>
-    <string name="ml_test_section">Test</string>
     <string name="ml_test_channel">Test notifications</string>
     <string name="ml_test_notification_text">Test notification #%1$d</string>
     <string name="ml_test_notification">Test notification</string>
@@ -155,15 +134,13 @@
     <string name="ml_tab_delete">Delete tab</string>
     <string name="ml_tab_delete_confirm">Delete the tab \"%1$s\"? The apps stay installed.</string>
     <string name="ml_tabs_settings">App list tabs</string>
-    <string name="ml_home" translatable="false">Home</string>
     <string name="ml_tab_hidden">Hidden</string>
     <string name="ml_tab_hidden_on">Show the Hidden tab</string>
     <string name="ml_tab_hidden_off">Remove the Hidden tab</string>
     <string name="ml_choose_app">Choose app…</string>
     <string name="ml_no_app">No app</string>
-    <string name="ml_home_columns">App columns in sections</string>
     <string name="ml_home_labels">App names on home</string>
-    <string name="ml_home_icon_size">Icon size on home (grid and sections)</string>
+    <string name="ml_home_icon_size">Icon size on home</string>
     <string name="ml_open_app">Open app</string>
     <string name="ml_date_week" translatable="false">%1$s · W%2$d</string>
     <!-- Home search bar -->

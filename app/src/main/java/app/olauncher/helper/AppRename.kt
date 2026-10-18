@@ -8,7 +8,7 @@ import app.olauncher.data.DrawerTabsRepository
 import app.olauncher.data.Prefs
 
 /**
- * Renaming an app from its home menu (grid or section). The name is the same one the drawer's
+ * Renaming an app from its home menu (grid, dock or news strip). The name is the same one the drawer's
  * "Rename" sets, so the app shows it everywhere; an empty name gives it back its own.
  */
 object AppRename {

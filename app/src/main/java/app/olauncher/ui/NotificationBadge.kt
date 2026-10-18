@@ -4,9 +4,14 @@ import android.content.Context
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Rect
+import android.graphics.Typeface
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.LayerDrawable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
 import app.olauncher.R
 import app.olauncher.data.AppModel
 import app.olauncher.helper.MenuEntry
@@ -18,13 +23,30 @@ import app.olauncher.helper.showMenuDialog
  */
 object NotificationBadge {
 
+    /** Red used for apps that have notifications. */
+    const val NOTIFICATION_COLOR = 0xFFE53935.toInt()
+
+    /** "Name 3": name in bold followed by the count; just the name when there's nothing new. */
+    fun badgeText(label: String, count: Int): CharSequence {
+        if (count == 0) return label
+        // -1: bold name only (the count is shown in a pill)
+        if (count < 0) return SpannableStringBuilder().apply {
+            append(label, StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        return SpannableStringBuilder().apply {
+            append(label, StyleSpan(Typeface.BOLD), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            append("  ")
+            append(count.toString(), RelativeSizeSpan(0.75f), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+    }
+
     /**
      * Recolors by brightness: the dark background becomes the notification red, white parts
      * stay white (made for white-on-black icon packs, so the whole shape stands out; colored
      * icons turn into shades between red and white). Transparent parts stay transparent.
      */
     val redFilter: ColorMatrixColorFilter by lazy {
-        val c = HomeSectionsController.NOTIFICATION_COLOR
+        val c = NOTIFICATION_COLOR
         val r = ((c shr 16) and 0xFF) / 255f
         val g = ((c shr 8) and 0xFF) / 255f
         val b = (c and 0xFF) / 255f
@@ -38,7 +60,7 @@ object NotificationBadge {
         shape = GradientDrawable.RECTANGLE
         cornerRadius = sizePx * 0.27f
         setColor(TILE_RED)
-        setStroke((sizePx / 40).coerceAtLeast(2), HomeSectionsController.NOTIFICATION_COLOR)
+        setStroke((sizePx / 40).coerceAtLeast(2), NOTIFICATION_COLOR)
     }
 
     private const val TILE_RED = 0xFF7A1F1B.toInt()

@@ -790,7 +790,7 @@ class HomeSearchController(
     private fun permissionRow(text: Int, onClick: () -> Unit) {
         results.addView(TextView(activity, null, 0, R.style.TextSmall).apply {
             setText(text)
-            setTextColor(HomeSectionsController.NOTIFICATION_COLOR)
+            setTextColor(NotificationBadge.NOTIFICATION_COLOR)
             setPadding(0, 12.dpToPx(), 0, 12.dpToPx())
             isClickable = true
             setOnClickListener { onClick() }

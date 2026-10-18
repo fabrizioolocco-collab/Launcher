@@ -73,7 +73,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private val binding get() = _binding!!
 
     private var uiScope = MainScope()
-    private lateinit var sections: HomeSectionsController
+    private lateinit var news: HomeNewsController
     private lateinit var dock: DockController
     private lateinit var widgets: HomeWidgetsController
     private lateinit var detox: DetoxController
@@ -116,7 +116,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
         deviceManager = context?.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
 
-        // The main grid: widgets, app icons and sections share its cells
+        // The main grid: widgets, app icons and the news strip share its cells
         widgets = HomeWidgetsController(
             activity = requireActivity(),
             grid = binding.widgetsLayout,
@@ -144,17 +144,16 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 onImagePicked = callback
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
-            onChanged = { sections.render() },
+            onChanged = { news.render() },
         )
         viewModel.homeApps.value?.let { dock.setApps(it) }
 
-        sections = HomeSectionsController(
+        news = HomeNewsController(
             context = requireContext(),
             grid = widgets,
-            emptyHint = binding.noSectionsHint,
+            emptyHint = binding.emptyHomeHint,
             prefs = prefs,
             scope = uiScope,
-            onLaunch = { app -> launchHomeApp(app) },
             gridAppKeys = { widgets.appKeys() + dock.appKeys() },
             dock = dock,
             pickImage = { callback ->
@@ -162,7 +161,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
         )
-        viewModel.homeApps.value?.let { sections.setApps(it) }
+        viewModel.homeApps.value?.let { news.setApps(it) }
 
         // Swipe actions on home apps (set from their long-press menu)
         binding.homeScroll.appSwipe = object : HomeScrollView.AppSwipeHandler {
@@ -372,17 +371,17 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         viewModel.homeApps.observe(viewLifecycleOwner) {
             widgets.setApps(it)
             dock.setApps(it)
-            sections.setApps(it)
+            news.setApps(it)
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             widgets.setNotifications(it)
             dock.setNotifications(it)
-            sections.setNotifications(it)
+            news.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {
             widgets.render()
             dock.render()
-            sections.render()
+            news.render()
             detox.updateBar()
         }
         DetoxManager.pausedCount.observe(viewLifecycleOwner) { detox.setPausedCount(it) }
@@ -421,16 +420,12 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
             override fun onSwipeLeft() = openSwipeLeftApp()
             override fun onSwipeRight() = openSwipeRightApp()
-            override fun onEmptyTap() {
-                widgets.endEditing()
-                sections.collapseAll()
-            }
+            override fun onEmptyTap() = widgets.endEditing()
 
             override fun onEmptyLongPress(rawX: Float, rawY: Float) {
                 // New items land on the pressed cell when they fit there
                 val cell = binding.widgetsLayout.cellAt(rawX, rawY)
-                sections.showHomeMenu(
-                    row = cell?.second,
+                news.showHomeMenu(
                     openSettings = {
                         try {
                             findNavController().navigate(R.id.action_mainFragment_to_settingsFragment)
@@ -483,7 +478,6 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private fun setHomeAlignment(horizontalGravity: Int = prefs.homeAlignment) {
         binding.dateTimeLayout.gravity = horizontalGravity
-        sections.render()
     }
 
     private fun populateDateTime() {
@@ -516,7 +510,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             populateScreenTime()
 
-        sections.reload()
+        news.render()
     }
 
     private fun launchAppOrShortcut(
@@ -713,7 +707,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                     val folder = FolderShortcuts.add(ctx, path, name, inExplorer)
                     widgets.addApp(FolderShortcuts.toApp(folder))
                     viewModel.loadHomeApps()
-                    sections.reload()
+                    news.render()
                 }
                 // A OneDrive folder opens only in the built-in explorer: nothing to choose
                 if (FileExplorerActivity.isCloudPath(path)) return@showTextInputDialog add(true)

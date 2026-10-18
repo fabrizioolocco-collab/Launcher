@@ -12,19 +12,16 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
 import app.olauncher.R
 import app.olauncher.data.AppModel
-import app.olauncher.data.HomeSection
-import app.olauncher.data.HomeSectionsRepository
-import app.olauncher.data.SectionApp
 import kotlinx.coroutines.delay
 
 /**
- * Test tool: posts notifications that the launcher attributes to a fake "Test app", placed in a
- * "Test" section on home, to check badges and counters without waiting for real notifications.
+ * Test tool: posts notifications that the launcher attributes to a fake "Test app" (shown in the
+ * news strip), to check badges and counters without waiting for real notifications.
  * Android only lets an app post notifications as itself, so the fake app lives inside the launcher.
  *
  * A second tool ([sendMany]) fills the news strip: ten fake apps, each with a random icon from the
  * icon pack (or from an installed app without a pack), get one notification each. They are not
- * placed on home, so they show up only in the news strip.
+ * placed on home either, so they show up only in the news strip.
  */
 object TestNotifications {
 
@@ -36,7 +33,6 @@ object TestNotifications {
     private const val PREFS_FILE = "app.minimalauncher.test"
     private const val KEY_ENABLED = "ENABLED"
     private const val KEY_COUNTER = "COUNTER"
-    private const val SECTION_ID = "ml-test-section"
 
     private const val MANY_CHANNEL_ID = "ml_test_many"
     private const val MANY_PREFIX = "$FAKE_PACKAGE.fake"
@@ -68,7 +64,6 @@ object TestNotifications {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return false
         ensureChannel(context)
-        ensureTestSection(context)
 
         val n = prefs(context).getInt(KEY_COUNTER, 0) + 1
         prefs(context).edit {
@@ -239,16 +234,11 @@ object TestNotifications {
         prefs(context).edit { putInt(KEY_COUNTER, 0) }
     }
 
-    /** Clears notifications and removes the fake apps and the Test section from home. */
+    /** Clears notifications and removes the fake apps. */
     fun disable(context: Context) {
         clearNotifications(context)
         clearMany(context)
         prefs(context).edit { putBoolean(KEY_ENABLED, false) }
-        val repo = HomeSectionsRepository(context)
-        val sections = repo.load()
-        sections.removeAll { it.id == SECTION_ID }
-        sections.forEach { s -> s.apps.removeAll { it.packageName == FAKE_PACKAGE } }
-        repo.save(sections)
     }
 
     private fun ensureChannel(context: Context) {
@@ -269,15 +259,5 @@ object TestNotifications {
             NotificationChannel(MANY_CHANNEL_ID, context.getString(R.string.ml_test_many_channel), NotificationManager.IMPORTANCE_LOW)
                 .apply { setShowBadge(true) }
         )
-    }
-
-    private fun ensureTestSection(context: Context) {
-        val repo = HomeSectionsRepository(context)
-        val sections = repo.load()
-        val app = SectionApp(FAKE_PACKAGE, null, Process.myUserHandle().toString())
-        val section = sections.firstOrNull { it.id == SECTION_ID }
-            ?: HomeSection(id = SECTION_ID, name = context.getString(R.string.ml_test_section)).also { sections.add(it) }
-        if (!section.contains(app)) section.apps.add(app)
-        repo.save(sections)
     }
 }

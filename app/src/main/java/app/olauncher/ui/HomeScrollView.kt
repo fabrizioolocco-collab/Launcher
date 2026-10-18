@@ -19,7 +19,7 @@ import kotlin.math.abs
  * - Swipe up opens the drawer only if the list was already at the bottom when the finger went down,
  *   so a long home scrolls first and a further swipe opens the drawer.
  * - Swipe down opens the notification shade only if the list was already at the top.
- * - Long press / double tap count only on empty space, not on app rows or section headers.
+ * - Long press / double tap count only on empty space, not on app icons or the news strip.
  * - A fling cancels the tap on the row under the finger, so swiping never launches an app.
  * - A vertical swipe on an app with a swipe action (see [appSwipe]) runs it instead of scrolling;
  *   on other apps, or in a direction without an action, the list scrolls as usual.

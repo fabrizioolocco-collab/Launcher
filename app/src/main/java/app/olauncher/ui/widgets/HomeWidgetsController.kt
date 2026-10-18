@@ -16,7 +16,7 @@ import app.olauncher.data.CalendarWidgetRepository
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.data.HomeWidget
 import app.olauncher.data.HomeWidgetsRepository
-import app.olauncher.data.HomeSectionsRepository
+import app.olauncher.data.PinnedAppsRepository
 import app.olauncher.data.Prefs
 import app.olauncher.helper.AppNotifications
 import app.olauncher.helper.DetoxManager
@@ -45,11 +45,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * The home items: app icons and sections on the fixed [grid], widgets at free positions on [free],
- * the layer over the whole home.
- *
- * Sections are rendered by HomeSectionsController and handed over as [Block]s: the grid places them
- * (one logical row each, full width), lets the user drag them and reports their new row back.
+ * The home items: app icons and the news strip on the fixed [grid], widgets at free positions on
+ * [free], the layer over the whole home.
  *
  * Adding a widget: pick a provider from our list -> bind (asks the user if needed) -> configure
  * (if the widget has a setup screen) -> saved. Bind/configure results come back through
@@ -68,32 +65,25 @@ class HomeWidgetsController(
     private val pickImage: ((android.net.Uri) -> Unit) -> Unit = {},
 ) {
     /**
-     * A full-width block sharing the grid: a home section (as tall as its content, [autoHeight]) or
-     * the news strip ([rowSpan] logical rows).
+     * A full-width block sharing the grid, [rowSpan] logical rows tall: the news strip. The grid
+     * places it, lets the user drag it to another row and saves where it landed.
      */
     class Block(
-        val id: String,
         var row: Int,
-        val view: SectionBlockView,
         val rowSpan: Int = 1,
-        val autoHeight: Boolean = true,
         val onMenu: () -> Unit,
     )
 
     /** The news strip: apps with notifications, on a reserved and movable row of the grid. */
     private val newsView = NewsStripView(activity)
-    private val newsBlock = Block(NEWS_ID, prefs.newsRow, newsView, rowSpan = TOP_ROW_DIVISIONS, autoHeight = false) { newsView.flashOutline() }
-    private var sectionBlocks: List<Block> = emptyList()
+    private val newsBlock = Block(prefs.newsRow, rowSpan = TOP_ROW_DIVISIONS) { newsView.flashOutline() }
 
     private val manager = AppWidgetManager.getInstance(activity)
     private val host = sharedHost(activity)
     private val repo = HomeWidgetsRepository(activity, HomeWidgetsRepository.KEY)
     private var widgets = repo.load()
     private var loadedRaw = repo.raw()
-    private var blocks: List<Block> = emptyList()
-
-    /** A block landed on another row (dragged, or moved out of the way): persist it. */
-    var onBlockMoved: ((Block) -> Unit)? = null
+    private val blocks: List<Block> = listOf(newsBlock)
     private var apps: List<AppModel.App> = emptyList()
     private var appsSignature = ""
     private var notifications: Map<String, AppNotifications> = emptyMap()
@@ -126,8 +116,8 @@ class HomeWidgetsController(
         migrateUngroupedApps()
         migrateBottomArea()
         // Whenever the grid's height changes (first layout included: the dock, the clock, the
-        // search bar take their room), keep the lowest icons and sections on screen. Moving them is
-        // saved, so it waits for the height to settle (the keyboard opens and closes in steps).
+        // search bar take their room), keep the lowest icons and the news strip on screen. Moving
+        // them is saved, so it waits for the height to settle (the keyboard opens and closes in steps).
         grid.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             if (bottom - top != oldBottom - oldTop) {
                 grid.post { replaceNews() }
@@ -167,8 +157,8 @@ class HomeWidgetsController(
 
     /** One-time move of the apps once pinned on home as a list: they become icons on the grid. */
     private fun migrateUngroupedApps() {
-        val sectionsRepo = HomeSectionsRepository(activity)
-        val ungrouped = sectionsRepo.loadUngrouped()
+        val pinnedRepo = PinnedAppsRepository(activity)
+        val ungrouped = pinnedRepo.loadUngrouped()
         if (ungrouped.isEmpty()) return
         ungrouped.forEach { app ->
             if (widgets.any { it.isApp && it.packageName == app.packageName && it.user == app.user }) return@forEach
@@ -181,7 +171,7 @@ class HomeWidgetsController(
             widgets.add(item)
         }
         save()
-        sectionsRepo.saveUngrouped(emptyList())
+        pinnedRepo.saveUngrouped(emptyList())
     }
 
     private fun save() {
@@ -201,9 +191,9 @@ class HomeWidgetsController(
     }
 
     /**
-     * The grid got shorter (e.g. the clock was turned on) and the lowest icons or sections went
-     * past the bottom: removes as many empty rows above them as needed, so everything below the
-     * gap moves up together and stays visible.
+     * The grid got shorter (e.g. the clock was turned on) and the lowest icons or the news strip
+     * went past the bottom: removes as many empty rows above them as needed, so everything below
+     * the gap moves up together and stays visible.
      */
     private val fitRunnable = Runnable { fitToHeight() }
 
@@ -244,42 +234,27 @@ class HomeWidgetsController(
         grid.requestLayout()
     }
 
-    /** Widgets and icons on home (sections excluded). */
+    /** Widgets and icons on home. */
     fun itemCount(): Int = widgets.size
 
-    /** Shows [list] as the grid's sections, replacing the previous ones (the news strip stays). */
-    fun setBlocks(list: List<Block>) {
-        sectionBlocks = list
-        blocks = list + newsBlock
-        for (i in grid.childCount - 1 downTo 0) if (grid.getChildAt(i).tag is Block) grid.removeViewAt(i)
-        placeBlocks()
-    }
-
+    /** Puts the news strip on the grid (again), replacing its previous view. */
     private fun placeBlocks() {
-        val columns = prefs.widgetColumns
-        if (newsBlock.row < 0 && grid.height == 0) {
+        for (i in grid.childCount - 1 downTo 0) if (grid.getChildAt(i).tag is Block) grid.removeViewAt(i)
+        if (grid.height == 0 && prefs.newsRow < 0) {
             // The strip's first place is the lowest row: it needs the grid's height
-            grid.post { if (newsBlock.row < 0) setBlocks(sectionBlocks) }
+            grid.post { if (newsBlock.row < 0) placeBlocks() }
+            return
         }
-        blocks.forEach { block ->
-            if (block === newsBlock) {
-                if (grid.height == 0 && prefs.newsRow < 0) return@forEach
-                block.row = newsRow()
-                if (prefs.newsRow < 0) prefs.newsRow = block.row
-            } else if (block.row < 0 || !isFree(0, block.row, columns, block.rowSpan, block)) {
-                // No visible row left: the section goes below the others (clipped) rather than lost
-                block.row = findFreeSpot(columns, block.rowSpan, block)?.second ?: usedRows()
-                blockMoved(block)
-            }
-            block.view.tag = block
-            block.view.layoutParams = WidgetGridLayout.CellParams(0, block.row, columns, block.rowSpan).apply { autoHeight = block.autoHeight }
-            block.view.touch.listener = blockListener
-            grid.addView(block.view)
-        }
+        newsBlock.row = newsRow()
+        if (prefs.newsRow < 0) prefs.newsRow = newsBlock.row
+        newsView.tag = newsBlock
+        newsView.layoutParams = WidgetGridLayout.CellParams(0, newsBlock.row, prefs.widgetColumns, newsBlock.rowSpan)
+        newsView.touch.listener = blockListener
+        grid.addView(newsView)
     }
 
     private fun blockMoved(block: Block) {
-        if (block === newsBlock) prefs.newsRow = block.row else onBlockMoved?.invoke(block)
+        if (block === newsBlock) prefs.newsRow = block.row
     }
 
     /**
@@ -653,8 +628,8 @@ class HomeWidgetsController(
 
     /**
      * [except] is the item being moved (an app [HomeWidget] or a [Block]), which never blocks
-     * itself. Only icons and sections occupy the grid; widgets float over it. The cells must be
-     * visible: the home doesn't scroll.
+     * itself. Only icons and the news strip occupy the grid; widgets float over it. The cells must
+     * be visible: the home doesn't scroll.
      */
     /**
      * An icon whose app isn't there any more (uninstalled, or its activity gone) is not drawn: it
@@ -791,7 +766,7 @@ class HomeWidgetsController(
         }
     }
 
-    /** Sections move vertically only, one logical row at a time. */
+    /** The news strip moves vertically only, one logical row at a time. */
     private val blockListener = object : GridItemListener {
         override fun onLongPress(view: View) = startDrag(view)
 
@@ -1261,7 +1236,7 @@ class HomeWidgetsController(
     }
 
     companion object {
-        /** The grid's rows are half a column tall, so sections and icons pack tighter. */
+        /** The grid's rows are half a column tall, so icons pack tighter. */
         const val TOP_ROW_DIVISIONS = 2
 
         /** How long the grid's height must stay the same before the icons are moved to fit it. */
@@ -1273,7 +1248,6 @@ class HomeWidgetsController(
         /** Ids of the launcher's own widgets count down from here (Android's ids are positive). */
         private const val BUILTIN_FIRST_ID = -1000
 
-        private const val NEWS_ID = "news"
         /** How many rows away from its own row the news strip may go while that row is taken. */
         private const val MAX_NEWS_SHIFT = 64
 

@@ -54,6 +54,7 @@ import app.olauncher.helper.openUrl
 import app.olauncher.helper.showKeyboard
 import app.olauncher.helper.showToast
 import app.olauncher.helper.uninstallApp
+import app.olauncher.ui.widgets.HomeWidgetsController
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
@@ -295,12 +296,6 @@ class AppDrawerFragment : BaseFragment() {
                 viewModel.openPrivateSpaceSettings()
                 findNavController().popBackStack(R.id.mainFragment, false)
             },
-            appSectionListener = { appModel ->
-                if (appModel is AppModel.App) {
-                    binding.search.hideKeyboard()
-                    HomeSectionsController.showAddToSectionDialog(requireContext(), appModel)
-                }
-            },
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
             titleStyler = { view -> FontManager.apply(view, prefs.drawerFont, prefs.drawerTextSize) },
             longPressMenu = { appModel, position -> onAppLongPress(appModel, position) },
@@ -423,6 +418,13 @@ class AppDrawerFragment : BaseFragment() {
         }
     }
 
+    /** Pins the app as an icon on the home grid. */
+    private fun addToHomeEntry(appModel: AppModel.App) = MenuEntry(getString(R.string.ml_add_to_home)) {
+        requireContext().showToast(
+            getString(if (HomeWidgetsController.addAppToHome(requireContext(), appModel)) R.string.ml_added_to_home else R.string.ml_already_on_home)
+        )
+    }
+
     /** Same long-press menu as on home: the app's notifications on top, then its actions. */
     private fun showAppMenu(appModel: AppModel, position: Int) {
         val ctx = requireContext()
@@ -430,7 +432,7 @@ class AppDrawerFragment : BaseFragment() {
         val entries = mutableListOf<MenuEntry>()
         if (appModel is AppModel.App && tabs?.showingHidden == true && binding.search.query.isNullOrBlank()) {
             // "Hidden" tab: bring the app back (hidden apps can still be placed on home)
-            entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
+            entries += addToHomeEntry(appModel)
             entries += MenuEntry(getString(R.string.adapter_show)) { unhide(appModel) }
             entries += changeIconEntry(appModel)
             entries += MenuEntry(getString(R.string.ml_app_info)) { adapter.openInfo(appModel) }
@@ -439,7 +441,7 @@ class AppDrawerFragment : BaseFragment() {
             return
         }
         if (appModel is AppModel.App) {
-            entries += MenuEntry(getString(R.string.ml_add_to_section)) { adapter.addToSection(appModel) }
+            entries += addToHomeEntry(appModel)
             if (!adapter.isHiddenList) {
                 tabs?.let { t ->
                     entries += MenuEntry(getString(R.string.ml_move_to_tab)) { t.showMoveToTab(appModel) }

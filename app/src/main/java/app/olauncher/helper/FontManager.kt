@@ -16,8 +16,8 @@ import app.olauncher.R
 import java.io.File
 
 /**
- * Fonts selectable for section titles and app names: system families, fonts bundled in
- * res/font (Latin subsets of Google Fonts, OFL) and font files imported by the user.
+ * Fonts selectable for app names: system families, fonts bundled in res/font (Latin subsets of
+ * Google Fonts, OFL) and font files imported by the user.
  *
  * A font is identified by a string id stored in Prefs; "" means "keep the default style".
  */

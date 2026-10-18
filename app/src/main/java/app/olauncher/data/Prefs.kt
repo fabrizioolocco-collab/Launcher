@@ -124,12 +124,9 @@ class Prefs(context: Context) {
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val BOTTOM_LABELS = "BOTTOM_LABELS"
-    private val HOME_COLUMNS = "HOME_COLUMNS"
     private val HOME_SHOW_LABELS = "HOME_SHOW_LABELS"
     private val HOME_ICON_SIZE = "HOME_ICON_SIZE"
     private val LETTER_INDEX_MODE = "LETTER_INDEX_MODE"
-    private val SECTION_FONT = "SECTION_FONT"
-    private val SECTION_TEXT_SIZE = "SECTION_TEXT_SIZE"
     private val APP_FONT = "APP_FONT"
     private val APP_TEXT_SIZE = "APP_TEXT_SIZE"
     private val ICON_PACK = "ICON_PACK"
@@ -141,14 +138,6 @@ class Prefs(context: Context) {
         set(value) = prefs.edit { putBoolean(SHOW_ICONS, value) }
 
     /** Font ids from FontManager; "" keeps the default style. Sizes in sp, 0 keeps the default size. */
-    var sectionFont: String
-        get() = prefs.getString(SECTION_FONT, "").orEmpty()
-        set(value) = prefs.edit { putString(SECTION_FONT, value) }
-
-    var sectionTextSize: Int
-        get() = prefs.getInt(SECTION_TEXT_SIZE, 0)
-        set(value) = prefs.edit { putInt(SECTION_TEXT_SIZE, value) }
-
     var appFont: String
         get() = prefs.getString(APP_FONT, "").orEmpty()
         set(value) = prefs.edit { putString(APP_FONT, value) }
@@ -156,11 +145,6 @@ class Prefs(context: Context) {
     var appTextSize: Int
         get() = prefs.getInt(APP_TEXT_SIZE, 0)
         set(value) = prefs.edit { putInt(APP_TEXT_SIZE, value) }
-
-    /** Columns of apps in home sections (1-6). */
-    var homeColumns: Int
-        get() = prefs.getInt(HOME_COLUMNS, 1).coerceIn(1, 6)
-        set(value) = prefs.edit { putInt(HOME_COLUMNS, value.coerceIn(1, 6)) }
 
     var homeShowLabels: Boolean
         get() = prefs.getBoolean(HOME_SHOW_LABELS, true)
