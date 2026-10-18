@@ -775,4 +775,22 @@
     <string name="ml_scan_failed">The pages could not be added</string>
     <string name="ml_scan_crash_title">The scanner closed by itself last time</string>
     <string name="ml_scan_crash_copy">Copy the error</string>
+    <string name="ml_compass_app">Compass</string>
+    <string name="ml_compass_none">This phone has no compass sensor</string>
+    <string name="ml_compass_degrees">%1$d°</string>
+    <string name="ml_compass_cardinals">N, E, S, W</string>
+    <string name="ml_compass_points">N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSW, SW, WSW, W, WNW, NW, NNW</string>
+    <string name="ml_compass_west">W</string>
+    <string name="ml_compass_magnetic">Magnetic north</string>
+    <string name="ml_compass_true">True north (declination %1$s)</string>
+    <string name="ml_compass_true_waiting">True north (waiting for the position)</string>
+    <string name="ml_compass_calibrate">Compass not accurate: move the phone in a figure 8</string>
+    <string name="ml_compass_altitude">Altitude</string>
+    <string name="ml_compass_meters">%1$d m</string>
+    <string name="ml_compass_gps">GPS %1$d m</string>
+    <string name="ml_compass_searching">Searching for GPS…</string>
+    <string name="ml_compass_no_location">Allow the location for the altitude</string>
+    <string name="ml_compass_pressure">Pressure %1$d hPa</string>
+    <string name="ml_compass_baro">barometer %1$d m</string>
+    <string name="ml_compass_baro_std">barometer ≈ %1$d m (not calibrated)</string>
 </resources>

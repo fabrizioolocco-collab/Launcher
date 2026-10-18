@@ -769,4 +769,22 @@
     <string name="ml_scan_failed">Non è stato possibile aggiungere le pagine</string>
     <string name="ml_scan_crash_title">Lo scanner si è chiuso da solo l\'ultima volta</string>
     <string name="ml_scan_crash_copy">Copia l\'errore</string>
+    <string name="ml_compass_app">Bussola</string>
+    <string name="ml_compass_none">Questo telefono non ha il sensore della bussola</string>
+    <string name="ml_compass_degrees">%1$d°</string>
+    <string name="ml_compass_cardinals">N, E, S, O</string>
+    <string name="ml_compass_points">N, NNE, NE, ENE, E, ESE, SE, SSE, S, SSO, SO, OSO, O, ONO, NO, NNO</string>
+    <string name="ml_compass_west">O</string>
+    <string name="ml_compass_magnetic">Nord magnetico</string>
+    <string name="ml_compass_true">Nord geografico (declinazione %1$s)</string>
+    <string name="ml_compass_true_waiting">Nord geografico (in attesa della posizione)</string>
+    <string name="ml_compass_calibrate">Bussola poco precisa: muovi il telefono disegnando un 8</string>
+    <string name="ml_compass_altitude">Altitudine</string>
+    <string name="ml_compass_meters">%1$d m</string>
+    <string name="ml_compass_gps">GPS %1$d m</string>
+    <string name="ml_compass_searching">Ricerca GPS…</string>
+    <string name="ml_compass_no_location">Consenti la posizione per l\'altitudine</string>
+    <string name="ml_compass_pressure">Pressione %1$d hPa</string>
+    <string name="ml_compass_baro">barometro %1$d m</string>
+    <string name="ml_compass_baro_std">barometro ≈ %1$d m (non calibrato)</string>
 </resources>

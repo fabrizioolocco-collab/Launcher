@@ -284,6 +284,30 @@
             android:taskAffinity="app.minimalauncher.weather"
             android:theme="@style/ViewerTheme" />
 
+        <!-- Compass with degrees and altitude, also listed as "Compass" in the app list -->
+        <activity
+            android:name=".ui.compass.CompassActivity"
+            android:exported="false"
+            android:label="@string/ml_compass_app"
+            android:launchMode="singleTask"
+            android:screenOrientation="portrait"
+            android:taskAffinity="app.minimalauncher.compass"
+            android:theme="@style/ViewerTheme"
+            tools:ignore="DiscouragedApi,LockedOrientationActivity" />
+
+        <activity-alias
+            android:name=".CompassAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_compass_launcher"
+            android:label="@string/ml_compass_app"
+            android:targetActivity=".ui.compass.CompassActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <activity-alias
             android:name=".TodoAlias"
             android:exported="true"
