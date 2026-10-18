@@ -24,3 +24,8 @@
 # PdfBox loads fonts and resources by name
 -keep class com.tom_roush.pdfbox.** { *; }
 -dontwarn com.tom_roush.pdfbox.**
+# ML Kit document scanner: the Play services module calls back into the client classes by name
+-keep class com.google.mlkit.vision.documentscanner.** { *; }
+-keep class com.google.android.gms.internal.mlkit_vision_doc** { *; }
+-keep class com.google.mlkit.common.** { *; }
+-keep class com.google.android.gms.common.internal.safeparcel.** { *; }

@@ -754,4 +754,6 @@
     <string name="ml_scan_open_folder">Open folder</string>
     <string name="ml_scan_count">%1$d pages</string>
     <string name="ml_scan_failed">The pages could not be added</string>
+    <string name="ml_scan_crash_title">The scanner closed by itself last time</string>
+    <string name="ml_scan_crash_copy">Copy the error</string>
 </resources>

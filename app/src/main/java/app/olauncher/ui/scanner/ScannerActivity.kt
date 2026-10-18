@@ -82,7 +82,12 @@ class ScannerActivity : AppCompatActivity() {
     private lateinit var textTool: LinearLayout
 
     private val scanLauncher = registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
-        val uris = DocScanner.pages(result)
+        val uris = try {
+            DocScanner.pages(result)
+        } catch (e: Throwable) {
+            CrashLog.save(this, e)
+            emptyList()
+        }
         if (uris.isEmpty()) {
             redoPosition = -1
             if (!hadPages) finish()
@@ -90,6 +95,7 @@ class ScannerActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             val files = withContext(Dispatchers.IO) { DocScanner.copyInto(this@ScannerActivity, uris, sessionDir) }
+            if (files.isEmpty()) showToast(getString(R.string.ml_scan_failed))
             if (files.isEmpty()) return@launch
             hadPages = true
             if (redoPosition in pages.indices) {
@@ -119,6 +125,7 @@ class ScannerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashLog.install(this)
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         blackWhite = prefs.getBoolean(KEY_BW, false)
         a4 = prefs.getBoolean(KEY_A4, true)
@@ -147,7 +154,16 @@ class ScannerActivity : AppCompatActivity() {
                 else finish()
             }
         })
-        if (savedInstanceState == null) scan()
+        if (savedInstanceState == null) {
+            // The scanner closed by itself last time: show the error, to send it, then start
+            val crash = CrashLog.take(this)
+            if (crash != null) showConfirmDialog(getString(R.string.ml_scan_crash_title), crash.take(1200), getString(R.string.ml_scan_crash_copy)) {
+                val clipboard = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("MinimaLauncher", crash))
+                showToast(getString(R.string.ml_pdf_copied))
+            }.setOnDismissListener { if (!isFinishing && pages.isEmpty() && !hadPages) scan() }
+            else scan()
+        }
     }
 
     private fun newSession() = File(cacheDir, "scan/${System.currentTimeMillis()}").apply { mkdirs() }
