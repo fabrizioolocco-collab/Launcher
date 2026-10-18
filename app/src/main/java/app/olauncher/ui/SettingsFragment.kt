@@ -171,8 +171,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         populateTextStyle()
         populateProMessage()
         populateKeyboardText()
-        // MinimaLauncher: the drawer keyboard opens only when the search field is tapped
-        (binding.autoShowKeyboard.parent as? View)?.visibility = View.GONE
         populateScreenTimeOnOff()
         populateLockSettings()
         // Home button for recents feature disabled
@@ -223,13 +221,11 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.letterIndex -> showLetterIndexMenu(view)
             R.id.drawerLayout -> view.showPopupMenu(
                 configure = { menu ->
-                    menu.add(Menu.NONE, 0, 0, getString(R.string.ml_drawer_list))
-                    menu.add(Menu.NONE, 1, 1, getString(R.string.ml_drawer_grid))
-                    menu.add(Menu.NONE, 2, 2, getString(R.string.ml_drawer_cards))
+                    menu.add(Menu.NONE, 1, 0, getString(R.string.ml_drawer_grid))
+                    menu.add(Menu.NONE, 0, 1, getString(R.string.ml_drawer_list))
                 }
             ) { item ->
                 prefs.drawerGrid = item.itemId != 0
-                prefs.drawerCards = item.itemId == 2
                 populateTextStyle()
             }
             R.id.drawerColumns -> view.showPopupMenu(
@@ -489,7 +485,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.drawerLayout.setText(
             when {
                 !prefs.drawerGrid -> R.string.ml_drawer_list
-                prefs.drawerCards -> R.string.ml_drawer_cards
                 else -> R.string.ml_drawer_grid
             }
         )
@@ -880,14 +875,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             activity.recreate()
     }
 
+    /** Whether the keyboard opens with the app list (off: only when the search field is tapped). */
     private fun toggleKeyboardText() {
-        if (prefs.autoShowKeyboard && prefs.keyboardMessageShown.not()) {
-            viewModel.showDialog.postValue(Constants.Dialog.KEYBOARD)
-            prefs.keyboardMessageShown = true
-        } else {
-            prefs.autoShowKeyboard = !prefs.autoShowKeyboard
-            populateKeyboardText()
-        }
+        prefs.autoShowKeyboard = !prefs.autoShowKeyboard
+        populateKeyboardText()
     }
 
     private fun updateTheme(appTheme: Int) {

@@ -123,7 +123,7 @@
     <string name="ml_added_to_home">Added to home</string>
     <string name="ml_already_on_home">Already on home</string>
     <string name="ml_tab">Tab</string>
-    <string name="ml_tab_all">All</string>
+    <string name="ml_tab_all">Other</string>
     <string name="ml_tab_new">New tab</string>
     <string name="ml_tab_new_ellipsis">+ New tab…</string>
     <string name="ml_tab_name_hint">Tab name</string>

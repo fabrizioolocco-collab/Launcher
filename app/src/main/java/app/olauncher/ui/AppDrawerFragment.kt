@@ -373,16 +373,12 @@ class AppDrawerFragment : BaseFragment() {
             binding.recyclerView.adapter = adapter
             updateCombinedAppList()
         }
-        val view = when {
-            !prefs.drawerGrid -> getString(R.string.ml_drawer_list)
-            prefs.drawerCards -> getString(R.string.ml_drawer_cards)
-            else -> getString(R.string.ml_drawer_grid)
-        }
+        val view = getString(if (prefs.drawerGrid) R.string.ml_drawer_grid else R.string.ml_drawer_list)
         val entries = mutableListOf(
             MenuEntry("${getString(R.string.ml_drawer_view)}: $view") {
                 requireContext().showMenuDialog(getString(R.string.ml_drawer_view), listOf(
-                    MenuEntry(getString(R.string.ml_drawer_cards)) { prefs.drawerGrid = true; prefs.drawerCards = true; reload() },
-                    MenuEntry(getString(R.string.ml_drawer_grid)) { prefs.drawerGrid = true; prefs.drawerCards = false; reload() },
+                    // One grid, in the style it has (the cards, for most): no separate "cards" view to choose
+                    MenuEntry(getString(R.string.ml_drawer_grid)) { prefs.drawerGrid = true; reload() },
                     MenuEntry(getString(R.string.ml_drawer_list)) { prefs.drawerGrid = false; reload() },
                 ))
             },
@@ -482,6 +478,8 @@ class AppDrawerFragment : BaseFragment() {
             }
 
             override fun canDropOver(rv: RecyclerView, current: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                // Every app is listed A-Z: dragged, an app only goes onto a tab
+                if (tabs?.canReorder() != true) return false
                 val item = adapter.getItem(target.bindingAdapterPosition.takeIf { it >= 0 } ?: return false)
                 return item is AppModel.App && DrawerTabsRepository.key(item) in draggableKeys && !item.inNews
             }
@@ -807,7 +805,7 @@ class AppDrawerFragment : BaseFragment() {
         val count = apps.count { it is AppModel.App || it is AppModel.PinnedShortcut }
         val custom = tabs?.selectedHasOrder() == true
         val order = getString(if (custom) R.string.ml_order_custom else R.string.ml_order_az)
-        binding.drawerHeader.text = getString(R.string.ml_drawer_header, tabs?.selectedName() ?: getString(R.string.ml_tab_all), order, count)
+        binding.drawerHeader.text = getString(R.string.ml_drawer_header, tabs?.selectedName() ?: getString(R.string.ml_all_apps), order, count)
         // Apps dragged into place: a tap here goes back to A-Z
         binding.drawerHeader.setOnClickListener(if (!custom) null else View.OnClickListener {
             requireContext().showMenuDialog(tabs?.selectedName().orEmpty(), listOf(
@@ -918,7 +916,9 @@ class AppDrawerFragment : BaseFragment() {
     override fun onStart() {
         super.onStart()
         cachedIsCjkKeyboard = null
-        // MinimaLauncher: the keyboard opens only when the search field is tapped
+        // The keyboard opens with the list only when asked in settings, otherwise on a tap on the search field
+        if (flag == Constants.FLAG_LAUNCH_APP && prefs.autoShowKeyboard)
+            binding.search.postDelayed({ _binding?.search?.showKeyboard() }, 120)
     }
 
     override fun onStop() {

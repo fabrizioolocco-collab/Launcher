@@ -54,6 +54,12 @@ class DrawerTabsController(
     /** "+" next to the search field, while the bar is hidden. */
     private var searchPlus: View? = null
 
+    /**
+     * The tab chosen, null for none: the drawer opens on every app, a tap on a tab shows only its
+     * apps, a tap on it again every app.
+     */
+    private var selected: String? = null
+
     /** Tab id under the dragged app, highlighted. */
     private var hovered: String? = null
     private var dragging = false
@@ -72,14 +78,10 @@ class DrawerTabsController(
     /** True when the "Hidden" tab is the one shown. */
     val showingHidden get() = selectedId() == DrawerTabsRepository.HIDDEN_ID
 
-    fun selectedId(): String {
-        val visible = visibleIds()
-        val sel = repo.selected
-        return if (sel in visible) sel else visible.firstOrNull() ?: DrawerTabsRepository.ALL_ID
-    }
+    fun selectedId(): String? = selected?.takeIf { it in visibleIds() }
 
-    /** Name of the tab shown. */
-    fun selectedName(): String = nameOf(selectedId())
+    /** Name of the tab shown ("All apps" with none). */
+    fun selectedName(): String = selectedId()?.let { nameOf(it) } ?: context.getString(R.string.ml_all_apps)
 
     private fun nameOf(id: String) = when (id) {
         DrawerTabsRepository.ALL_ID -> context.getString(R.string.ml_tab_all)
@@ -87,18 +89,23 @@ class DrawerTabsController(
         else -> tabs.firstOrNull { it.id == id }?.name ?: context.getString(R.string.ml_tab_all)
     }
 
-    /** Whether the tab shown has its own order (apps dragged into place). */
-    fun selectedHasOrder() = repo.hasOrder(selectedId())
+    /** Whether the tab shown has its own order (apps dragged into place). Every app: always A-Z. */
+    fun selectedHasOrder() = selectedId()?.let { repo.hasOrder(it) } == true
+
+    /** Apps can be dragged into place only inside a tab (every app is listed A-Z). */
+    fun canReorder() = selectedId().let { it != null && it != DrawerTabsRepository.HIDDEN_ID }
 
     /** Back to A-Z in the tab shown. */
     fun resetSelectedOrder() {
-        repo.setOrder(selectedId(), emptyList())
+        val id = selectedId() ?: return
+        repo.setOrder(id, emptyList())
         onSelectionChanged()
     }
 
     /** Saves the order of the tab shown, after an app was dragged into place. */
     fun saveSelectedOrder(apps: List<AppModel>) {
-        repo.setOrder(selectedId(), apps.map { DrawerTabsRepository.key(it) })
+        val id = selectedId() ?: return
+        repo.setOrder(id, apps.map { DrawerTabsRepository.key(it) })
     }
 
     /** A new tab, as from "+". */
@@ -106,7 +113,7 @@ class DrawerTabsController(
 
     /** Apps to list in the selected tab, in its order. */
     fun filter(apps: List<AppModel>): List<AppModel> {
-        val id = selectedId()
+        val id = selectedId() ?: return apps
         return if (id == DrawerTabsRepository.HIDDEN_ID) appsOf(id, apps) else repo.sorted(id, appsOf(id, apps))
     }
 
@@ -152,7 +159,7 @@ class DrawerTabsController(
         visible.forEach { id ->
             bar.addView(chip(nameOf(id), id == selected, id).apply {
                 setOnClickListener {
-                    repo.selected = id
+                    this@DrawerTabsController.selected = if (this@DrawerTabsController.selected == id) null else id
                     render()
                     onSelectionChanged()
                 }
@@ -287,7 +294,7 @@ class DrawerTabsController(
         ) { name ->
             val tab = DrawerTab(name = name)
             tabs.add(tab)
-            repo.selected = tab.id
+            selected = tab.id
             save()
             if (then != null) then(tab) else chooseApps(tab)
         }
