@@ -85,6 +85,8 @@ class HomeSearchController(
     private val scope: CoroutineScope,
     private val apps: () -> List<AppModel.App>,
     private val launchApp: (AppModel.App) -> Unit,
+    /** Long press on an app found: its menu, as in the app list; [onChanged] after a change to it. */
+    private val appMenu: (app: AppModel.App, onChanged: () -> Unit) -> Unit,
     /** Asks a runtime permission; the search refreshes when the user answers. */
     private val requestPermission: (String) -> Unit,
     /** Called before opening another screen that should come back here (permission settings, sign-in). */
@@ -442,6 +444,11 @@ class HomeSearchController(
                     background = UiKit.ripple(activity)
                     tag = RESULT
                     setOnClickListener { r.onClick() }
+                    setOnLongClickListener {
+                        input.hideKeyboard()
+                        appMenu(app) { refresh() }
+                        true
+                    }
                     val icon = android.widget.ImageView(activity)
                     addView(icon, LinearLayout.LayoutParams(size, size))
                     scope.launch {

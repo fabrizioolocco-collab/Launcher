@@ -52,7 +52,10 @@ import app.olauncher.helper.openCalendar
 import app.olauncher.helper.openCameraApp
 import app.olauncher.helper.openDialerApp
 import app.olauncher.helper.setPlainWallpaperByTheme
+import app.olauncher.helper.IconChooser
+import app.olauncher.helper.openAppInfo
 import app.olauncher.helper.showToast
+import app.olauncher.helper.uninstallEntry
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import app.olauncher.ui.widgets.HomeWidgetsController
@@ -199,6 +202,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 viewModel.homeApps.value.orEmpty().filter { DrawerTabsRepository.key(it) !in hidden }
             },
             launchApp = { app -> launchHomeApp(app) },
+            appMenu = { app, onChanged -> showSearchAppMenu(app, onChanged) },
             requestPermission = { permissionRequest.launch(it) },
             keepScreen = { viewModel.keepCurrentScreen = it },
             openAppList = { showAppList(Constants.FLAG_LAUNCH_APP) },
@@ -727,6 +731,41 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private fun pickFolder(onPicked: (String) -> Unit) {
         onFolderPicked = onPicked
         folderPicker.launch(Intent(requireContext(), FolderPickerActivity::class.java).putExtra(FileExplorerActivity.EXTRA_ALLOW_CLOUD, true))
+    }
+
+    /**
+     * Long press on an app found by the search: the app list's menu (add to home or dock, change
+     * icon, rename, hide, info, uninstall, allowed in detox), its notifications on top.
+     */
+    private fun showSearchAppMenu(app: AppModel.App, onChanged: () -> Unit) {
+        val ctx = requireContext()
+        val entries = mutableListOf<MenuEntry>()
+        entries += MenuEntry(getString(R.string.ml_add_to_home)) {
+            val added = HomeWidgetsController.addAppToHome(ctx, app)
+            ctx.showToast(getString(if (added) R.string.ml_added_to_home else R.string.ml_already_on_home))
+            if (added) widgets.reloadIfChanged()
+        }
+        if (!dock.contains(app) && !dock.isFull()) entries += MenuEntry(getString(R.string.ml_dock_add_app)) { dock.add(app) }
+        entries += MenuEntry(getString(R.string.ml_change_icon)) {
+            IconChooser.show(ctx, app, uiScope, { callback ->
+                onImagePicked = callback
+                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }) { onChanged() }
+        }
+        AppRename.menuEntry(ctx, app)?.let { entries += it }
+        entries += MenuEntry(getString(R.string.adapter_hide)) {
+            prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { add(DrawerTabsRepository.key(app)) }
+            ctx.showToast(getString(R.string.ml_tab_hidden_done, app.appLabel))
+            viewModel.getAppList()
+            onChanged()
+        }
+        entries += MenuEntry(getString(R.string.ml_app_info)) { openAppInfo(ctx, app.user, app.appPackage) }
+        ctx.uninstallEntry(app.appPackage, app.user)?.let { entries += it }
+        ctx.showMenuDialog(
+            app.appLabel,
+            entries + DetoxController.whitelistEntry(ctx, app.appPackage),
+            header = AppNotificationsView.create(ctx, app),
+        )
     }
 
     /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
