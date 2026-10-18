@@ -20,6 +20,7 @@ import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import androidx.navigation.fragment.findNavController
 import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.Recycler
@@ -81,6 +82,21 @@ class AppDrawerFragment : BaseFragment() {
     private var notifications: Map<String, AppNotifications> = emptyMap()
     private val hideIndexRunnable = Runnable { _binding?.letterIndex?.isVisible = false }
 
+    /** Keys of the apps of the tab shown, the ones that can be dragged into place or onto a tab. */
+    private var draggableKeys: Set<String> = emptySet()
+    private lateinit var dragHelper: ItemTouchHelper
+
+    /** The app being dragged, where the finger is, how far it went and whether others moved. */
+    private var dragged: AppModel.App? = null
+    private var dragPosition = 0
+    private var dragX = 0f
+    private var dragY = 0f
+    private var dragDistance = 0f
+    private var dragReordered = false
+    private var dropTarget: String? = null
+    /** The list changed while dragging: rebuild it once the app is dropped. */
+    private var listUpdatePending = false
+
     private val viewModel: MainViewModel by activityViewModels()
     private var _binding: FragmentAppDrawerBinding? = null
     private val binding get() = _binding!!
@@ -119,6 +135,8 @@ class AppDrawerFragment : BaseFragment() {
                 allApps = { currentAppList.orEmpty().filterIsInstance<AppModel.App>() },
                 hiddenApps = { currentHiddenApps },
                 onSelectionChanged = { updateCombinedAppList() },
+                hideApp = { hide(it) },
+                manage = { manageTabs() },
             ).also { it.render() }
             updateCombinedAppList()
         }
@@ -285,7 +303,7 @@ class AppDrawerFragment : BaseFragment() {
             },
             iconLoader = { appModel, view -> loadIcon(appModel, view) },
             titleStyler = { view -> FontManager.apply(view, prefs.drawerFont, prefs.drawerTextSize) },
-            longPressMenu = { appModel, position -> showAppMenu(appModel, position) },
+            longPressMenu = { appModel, position -> onAppLongPress(appModel, position) },
             badgeTap = { appModel ->
                 if (appModel is AppModel.App) NotificationBadge.showNotifications(requireContext(), appModel) {
                     viewModel.selectedApp(appModel, Constants.FLAG_LAUNCH_APP)
@@ -299,6 +317,7 @@ class AppDrawerFragment : BaseFragment() {
 
         setupLayout()
         binding.recyclerView.adapter = adapter
+        initDrag()
         binding.recyclerView.addOnScrollListener(getRecyclerViewOnScrollListener())
         binding.recyclerView.itemAnimator = null
         if (requireContext().isEinkDisplay())
@@ -383,7 +402,7 @@ class AppDrawerFragment : BaseFragment() {
             reload()
             true
         })
-        entries += MenuEntry(getString(R.string.ml_tab_new)) { tabs?.newTab() }
+        if (tabs != null) entries += MenuEntry(getString(R.string.ml_tabs_manage)) { manageTabs() }
         requireContext().showMenuDialog(getString(R.string.ml_drawer_options), entries)
     }
 
@@ -424,6 +443,7 @@ class AppDrawerFragment : BaseFragment() {
             if (!adapter.isHiddenList) {
                 tabs?.let { t ->
                     entries += MenuEntry(getString(R.string.ml_move_to_tab)) { t.showMoveToTab(appModel) }
+                    entries += MenuEntry(getString(R.string.ml_tabs_manage)) { manageTabs() }
                 }
                 entries += changeIconEntry(appModel)
                 entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
@@ -439,6 +459,150 @@ class AppDrawerFragment : BaseFragment() {
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
             ctx.showMenuDialog(appModel.appLabel, entries)
         }
+    }
+
+    // ---------------------------------------------------------------- drag and drop
+
+    /**
+     * A long press on an app of the tab shown picks it up: dragged among the others it changes
+     * their order (saved for the tab), dropped on a tab (or "+") it moves there. Let go without
+     * moving, it opens the app's menu as before.
+     */
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun initDrag() {
+        dragHelper = ItemTouchHelper(object : ItemTouchHelper.Callback() {
+            override fun isLongPressDragEnabled() = false
+
+            override fun getMovementFlags(rv: RecyclerView, holder: RecyclerView.ViewHolder): Int {
+                val all = ItemTouchHelper.UP or ItemTouchHelper.DOWN or ItemTouchHelper.LEFT or ItemTouchHelper.RIGHT
+                return if (dragged != null) makeMovementFlags(all, 0) else 0
+            }
+
+            override fun canDropOver(rv: RecyclerView, current: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder): Boolean {
+                val item = adapter.getItem(target.bindingAdapterPosition.takeIf { it >= 0 } ?: return false)
+                return item is AppModel.App && DrawerTabsRepository.key(item) in draggableKeys && !item.inNews
+            }
+
+            override fun onMove(rv: RecyclerView, from: RecyclerView.ViewHolder, to: RecyclerView.ViewHolder): Boolean {
+                val a = from.bindingAdapterPosition
+                val b = to.bindingAdapterPosition
+                if (a < 0 || b < 0) return false
+                adapter.moveItem(a, b)
+                dragReordered = true
+                return true
+            }
+
+            override fun onChildDraw(
+                c: android.graphics.Canvas, rv: RecyclerView, holder: RecyclerView.ViewHolder,
+                dX: Float, dY: Float, actionState: Int, isCurrentlyActive: Boolean,
+            ) {
+                super.onChildDraw(c, rv, holder, dX, dY, actionState, isCurrentlyActive)
+                if (dragged == null || !isCurrentlyActive) return
+                dragDistance = maxOf(dragDistance, kotlin.math.hypot(dX, dY))
+                dropTarget = tabs?.targetAt(dragX, dragY)
+                holder.itemView.alpha = if (dropTarget != null) 0.6f else 1f
+            }
+
+            override fun clearView(rv: RecyclerView, holder: RecyclerView.ViewHolder) {
+                super.clearView(rv, holder)
+                holder.itemView.alpha = 1f
+                endDrag()
+            }
+
+            override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) = Unit
+        })
+        dragHelper.attachToRecyclerView(binding.recyclerView)
+        // Where the finger is, for the drop targets above the grid (the grid gets every move while dragging)
+        binding.recyclerView.setOnTouchListener { _, e ->
+            dragX = e.rawX
+            dragY = e.rawY
+            false
+        }
+        // A long press on the empty part of the grid: "Manage tabs"
+        val gestures = android.view.GestureDetector(requireContext(), object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onLongPress(e: android.view.MotionEvent) {
+                if (tabs == null || !binding.search.query.isNullOrBlank()) return
+                val child = binding.recyclerView.findChildViewUnder(e.x, e.y)
+                val item = child?.let { binding.recyclerView.getChildAdapterPosition(it) }?.takeIf { it >= 0 }?.let { adapter.getItem(it) }
+                if (child == null || item?.appPackage?.isEmpty() == true) {
+                    binding.recyclerView.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    manageTabs()
+                }
+            }
+        })
+        binding.recyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: android.view.MotionEvent): Boolean {
+                if (dragged == null) gestures.onTouchEvent(e)
+                return false
+            }
+        })
+    }
+
+    private fun canDrag(appModel: AppModel): Boolean =
+        tabs != null && appModel is AppModel.App && !appModel.inNews && binding.search.query.isNullOrBlank() &&
+                tabs?.showingHidden != true && DrawerTabsRepository.key(appModel) in draggableKeys
+
+    private fun onAppLongPress(appModel: AppModel, position: Int) {
+        val holder = binding.recyclerView.findViewHolderForAdapterPosition(position)
+        if (!canDrag(appModel) || holder == null) {
+            showAppMenu(appModel, position)
+            return
+        }
+        dragged = appModel as AppModel.App
+        dragPosition = position
+        dragDistance = 0f
+        dragReordered = false
+        dropTarget = null
+        binding.search.hideKeyboard()
+        adapter.beginDrag()
+        // The app is drawn above the tabs when dragged up there
+        binding.root.clipChildren = false
+        tabs?.setDragging(true)
+        binding.drawerHeader.text = getString(R.string.ml_tab_drop_hint)
+        dragHelper.startDrag(holder)
+    }
+
+    private fun endDrag() {
+        val app = dragged ?: return
+        dragged = null
+        tabs?.setDragging(false)
+        binding.root.clipChildren = true
+        val list = adapter.endDrag()
+        val target = dropTarget
+        dropTarget = null
+        when {
+            target != null -> tabs?.drop(app, target)
+            dragReordered -> tabs?.saveSelectedOrder(list.filter { it is AppModel.App && DrawerTabsRepository.key(it) in draggableKeys })
+            // Let go where it was picked up: the usual menu
+            dragDistance < 12.dpToPx() -> showAppMenu(app, dragPosition)
+        }
+        listUpdatePending = false
+        updateCombinedAppList()
+    }
+
+    private fun hide(app: AppModel.App) {
+        prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { add(DrawerTabsRepository.key(app)) }
+        requireContext().showToast(getString(R.string.ml_tab_hidden_done, app.appLabel))
+        viewModel.getAppList()
+        viewModel.getHiddenApps()
+    }
+
+    /** "Manage tabs": every tab, shown or not, "All" and "Hidden" included. */
+    private fun manageTabs() {
+        binding.search.hideKeyboard()
+        DrawerTabsManager.show(
+            requireContext(),
+            apps = currentAppList.orEmpty().filterIsInstance<AppModel.App>(),
+            hidden = currentHiddenApps.filterIsInstance<AppModel.App>(),
+            onChanged = {
+                tabs?.reload()
+                updateCombinedAppList()
+            },
+            onHiddenChanged = {
+                viewModel.getAppList()
+                viewModel.getHiddenApps()
+            },
+        )
     }
 
     private fun unhide(appModel: AppModel) {
@@ -600,18 +764,22 @@ class AppDrawerFragment : BaseFragment() {
 
     private fun updateCombinedAppList() {
         val ctx = context ?: return
+        if (dragged != null) {
+            listUpdatePending = true
+            return
+        }
         // During detox only allowed apps are listed (picking apps for settings is not affected)
         val detox = flag == Constants.FLAG_LAUNCH_APP && DetoxManager.isActive(ctx)
         val allowed = (currentAppList ?: return).filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
         val searching = !binding.search.query.isNullOrBlank()
         listBuiltForSearch = searching
-        tabs?.setApps(allowed)
         // Search looks through every app, the hidden ones included
         val searchPool = if (flag == Constants.FLAG_LAUNCH_APP)
             (allowed + currentHiddenApps).distinctBy { "${it.appPackage}|${it.user}|${(it as? AppModel.App)?.activityClassName}" }
         else allowed
         val apps = (if (searching) searchPool else tabs?.filter(allowed) ?: allowed)
             .filter { !detox || DetoxManager.isAllowed(ctx, it.appPackage) }
+        draggableKeys = if (searching) emptySet() else apps.filterIsInstance<AppModel.App>().map { DrawerTabsRepository.key(it) }.toSet()
         // "News" block removed: apps with notifications are shown on home instead
         val combined = apps.toMutableList()
 
@@ -634,7 +802,16 @@ class AppDrawerFragment : BaseFragment() {
         binding.drawerHeader.isVisible = show
         if (!show) return
         val count = apps.count { it is AppModel.App || it is AppModel.PinnedShortcut }
-        binding.drawerHeader.text = getString(R.string.ml_drawer_header, tabs?.selectedName() ?: getString(R.string.ml_tab_all), count)
+        val custom = tabs?.selectedHasOrder() == true
+        val order = getString(if (custom) R.string.ml_order_custom else R.string.ml_order_az)
+        binding.drawerHeader.text = getString(R.string.ml_drawer_header, tabs?.selectedName() ?: getString(R.string.ml_tab_all), order, count)
+        // Apps dragged into place: a tap here goes back to A-Z
+        binding.drawerHeader.setOnClickListener(if (!custom) null else View.OnClickListener {
+            requireContext().showMenuDialog(tabs?.selectedName().orEmpty(), listOf(
+                MenuEntry(getString(R.string.ml_tab_az)) { tabs?.resetSelectedOrder() }
+            ))
+        })
+        binding.drawerHeader.isClickable = custom
     }
 
     // ---------------------------------------------------------------- letter index

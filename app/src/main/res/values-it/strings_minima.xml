@@ -703,7 +703,7 @@
     <string name="ml_drawer_columns_short">Colonne</string>
     <string name="ml_drawer_labels_short">Nomi delle app</string>
     <string name="ml_drawer_options">Opzioni griglia</string>
-    <string name="ml_drawer_header">%1$s · A–Z · %2$d</string>
+    <string name="ml_drawer_header">%1$s · %2$s · %3$d</string>
     <string name="ml_bm_title">Preferiti</string>
     <string name="ml_bm_new">Nuovo</string>
     <string name="ml_bm_new_bookmark">Nuovo preferito</string>
@@ -789,4 +789,16 @@
     <string name="ml_compass_no_gps">GPS: nessun satellite (al chiuso?)</string>
     <string name="ml_compass_ground">terreno %1$d m (mappa)</string>
     <string name="ml_compass_baro_weather">barometro %1$d m (tarato sul meteo)</string>
+    <string name="ml_tabs_manage">Gestisci tab</string>
+    <string name="ml_tabs_manage_hint">Trascina ≡ per riordinare le tab; l\'interruttore mostra o nasconde una tab. Nella griglia tieni premuta un\'app e trascinala per cambiarle posto, oppure lasciala su una tab per spostarla lì.</string>
+    <string name="ml_tab_count">%1$d app</string>
+    <string name="ml_tab_empty">vuota</string>
+    <string name="ml_tab_choose_apps">Scegli le app</string>
+    <string name="ml_tab_az">Torna all\'ordine alfabetico</string>
+    <string name="ml_order_custom">ordine personale</string>
+    <string name="ml_order_az">A–Z</string>
+    <string name="ml_tab_hidden_choose">App nascoste</string>
+    <string name="ml_tab_in">in %1$s</string>
+    <string name="ml_tab_drop_hint">Lasciala tra le app, o su una tab per spostarla lì</string>
+    <string name="ml_tab_hidden_done">%1$s nascosta</string>
 </resources>

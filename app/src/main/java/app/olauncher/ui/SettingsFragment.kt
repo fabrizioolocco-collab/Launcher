@@ -283,7 +283,16 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 prefs.homeIconSize = item.itemId
                 populateTextStyle()
             }
-            R.id.tabsSettings -> DrawerTabsController.showTabsSettings(requireContext())
+            R.id.tabsSettings -> viewModel.viewModelScope.launch {
+                val ctx = context ?: return@launch
+                val apps = getAppsList(ctx, prefs, includeRegularApps = true, includeHiddenApps = false).filterIsInstance<AppModel.App>()
+                val hidden = getAppsList(ctx, prefs, includeRegularApps = false, includeHiddenApps = true).filterIsInstance<AppModel.App>()
+                if (!isAdded) return@launch
+                DrawerTabsManager.show(requireContext(), apps, hidden, onChanged = {}, onHiddenChanged = {
+                    viewModel.getAppList()
+                    viewModel.getHiddenApps()
+                })
+            }
             R.id.detoxWhitelist -> showDetoxWhitelist()
             R.id.phoneFolders -> {
                 prefs.phoneFoldersInExplorer = !prefs.phoneFoldersInExplorer

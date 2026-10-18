@@ -1,8 +1,10 @@
 package app.olauncher.ui
 
 import android.content.Context
+import android.graphics.Rect
 import android.graphics.Typeface
-import app.olauncher.helper.getColorFromAttr
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -13,20 +15,21 @@ import app.olauncher.data.DrawerTab
 import app.olauncher.data.DrawerTabsRepository
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
-import app.olauncher.helper.showConfirmDialog
+import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
 
 /**
- * Tab bar of the app drawer: "All" (can be turned off) plus the user's tabs, each switchable on/off.
- * Tap a tab to show its apps; long press for rename / edit apps / move / turn off / delete;
- * an app in no tab shown (none, or only turned-off ones) is in "All".
- * "+" creates a tab. Search always looks through all apps (handled by the fragment).
+ * Tab bar of the app drawer: "All", the user's tabs and "Hidden", each shown or not (see
+ * [DrawerTabsManager], opened by a long press on a tab). Tap a tab to show its apps, "+" creates
+ * one. An app is in one tab at most; an app in no tab shown is in "All". Every tab shown is in the
+ * bar, empty ones included, so an app can always be moved there. Search looks through all apps
+ * (handled by the fragment).
  *
- * Tabs without apps are not shown. With a single tab left the bar is hidden and "+" moves next to
- * the search field (a long press there opens the menu of that tab).
+ * While an app is dragged in the grid the chips (and "+") are drop targets: see [targetAt].
+ * With a single tab the bar is hidden and "+" moves next to the search field.
  */
 class DrawerTabsController(
     private val context: Context,
@@ -40,52 +43,72 @@ class DrawerTabsController(
     /** Hidden apps, listed by the "Hidden" tab. */
     private val hiddenApps: () -> List<AppModel>,
     private val onSelectionChanged: () -> Unit,
+    /** Hides an app (dropped on "Hidden"). */
+    private val hideApp: (AppModel.App) -> Unit,
+    /** "Manage tabs". */
+    private val manage: () -> Unit,
 ) {
     private val repo = DrawerTabsRepository(context)
     private var tabs = repo.load()
 
-    /** The apps the drawer lists (null until known): tabs left without any of them are not shown. */
-    private var available: List<AppModel>? = null
-
     /** "+" next to the search field, while the bar is hidden. */
     private var searchPlus: View? = null
 
-    /** Visible tabs in order: (All) + enabled user tabs + (Hidden), only those with apps. */
-    private fun visibleIds(): List<String> {
-        val ids = (if (repo.allEnabled) listOf(DrawerTabsRepository.ALL_ID) else emptyList()) + tabs.filter { it.enabled }.map { it.id } +
-                (if (repo.hiddenEnabled) listOf(DrawerTabsRepository.HIDDEN_ID) else emptyList())
-        val apps = available ?: return ids
-        return ids.filter { appsOf(it, apps).isNotEmpty() }
-    }
+    /** Tab id under the dragged app, highlighted. */
+    private var hovered: String? = null
+    private var dragging = false
 
-    /** Updates the apps the drawer lists; re-renders when that changes which tabs are shown. */
-    fun setApps(apps: List<AppModel>) {
-        val before = visibleIds()
-        available = apps
-        if (visibleIds() != before) render()
+    /** Visible tabs in order: (All) + enabled user tabs + (Hidden). */
+    private fun visibleIds(): List<String> =
+        (if (repo.allEnabled) listOf(DrawerTabsRepository.ALL_ID) else emptyList()) + tabs.filter { it.enabled }.map { it.id } +
+                (if (repo.hiddenEnabled) listOf(DrawerTabsRepository.HIDDEN_ID) else emptyList())
+
+    /** Reads the tabs again (after "Manage tabs"). */
+    fun reload() {
+        tabs = repo.load()
+        render()
     }
 
     /** True when the "Hidden" tab is the one shown. */
     val showingHidden get() = selectedId() == DrawerTabsRepository.HIDDEN_ID
 
-    private fun selectedId(): String {
+    fun selectedId(): String {
         val visible = visibleIds()
         val sel = repo.selected
         return if (sel in visible) sel else visible.firstOrNull() ?: DrawerTabsRepository.ALL_ID
     }
 
     /** Name of the tab shown. */
-    fun selectedName(): String = when (val id = selectedId()) {
+    fun selectedName(): String = nameOf(selectedId())
+
+    private fun nameOf(id: String) = when (id) {
         DrawerTabsRepository.ALL_ID -> context.getString(R.string.ml_tab_all)
         DrawerTabsRepository.HIDDEN_ID -> context.getString(R.string.ml_tab_hidden)
         else -> tabs.firstOrNull { it.id == id }?.name ?: context.getString(R.string.ml_tab_all)
     }
 
+    /** Whether the tab shown has its own order (apps dragged into place). */
+    fun selectedHasOrder() = repo.hasOrder(selectedId())
+
+    /** Back to A-Z in the tab shown. */
+    fun resetSelectedOrder() {
+        repo.setOrder(selectedId(), emptyList())
+        onSelectionChanged()
+    }
+
+    /** Saves the order of the tab shown, after an app was dragged into place. */
+    fun saveSelectedOrder(apps: List<AppModel>) {
+        repo.setOrder(selectedId(), apps.map { DrawerTabsRepository.key(it) })
+    }
+
     /** A new tab, as from "+". */
     fun newTab() = createTab()
 
-    /** Apps to list in the selected tab. */
-    fun filter(apps: List<AppModel>): List<AppModel> = appsOf(selectedId(), apps)
+    /** Apps to list in the selected tab, in its order. */
+    fun filter(apps: List<AppModel>): List<AppModel> {
+        val id = selectedId()
+        return if (id == DrawerTabsRepository.HIDDEN_ID) appsOf(id, apps) else repo.sorted(id, appsOf(id, apps))
+    }
 
     private fun appsOf(id: String, apps: List<AppModel>): List<AppModel> {
         // "All" lists what is in no other tab shown: an app is either hidden, in a tab, or here
@@ -107,18 +130,18 @@ class DrawerTabsController(
         searchPlus?.let { searchRow.removeView(it) }
         searchPlus = null
         if (single) {
-            searchPlus = chip("+", false).apply {
+            searchPlus = chip("+", false, PLUS_ID).apply {
                 minWidth = 48.dpToPx()
                 minHeight = 48.dpToPx()
                 setPadding(0, 0, 0, 0)
-                (background as? android.graphics.drawable.GradientDrawable)?.cornerRadius = 24.dpToPx().toFloat()
+                (background as? GradientDrawable)?.cornerRadius = 24.dpToPx().toFloat()
                 setOnClickListener { createTab() }
                 setOnLongClickListener {
-                    visible.firstOrNull()?.let { showTabMenu(it) }
+                    manage()
                     true
                 }
                 layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    gravity = Gravity.CENTER_VERTICAL
                     // The search field already leaves 16dp on its right
                     marginStart = (-4).dpToPx(); marginEnd = 16.dpToPx()
                 }
@@ -127,47 +150,41 @@ class DrawerTabsController(
             return
         }
         visible.forEach { id ->
-            val name = when (id) {
-                DrawerTabsRepository.ALL_ID -> context.getString(R.string.ml_tab_all)
-                DrawerTabsRepository.HIDDEN_ID -> context.getString(R.string.ml_tab_hidden)
-                else -> tabs.first { it.id == id }.name
-            }
-            bar.addView(chip(name, id == selected).apply {
+            bar.addView(chip(nameOf(id), id == selected, id).apply {
                 setOnClickListener {
                     repo.selected = id
                     render()
                     onSelectionChanged()
                 }
                 setOnLongClickListener {
-                    showTabMenu(id)
+                    manage()
                     true
                 }
             })
         }
-        bar.addView(chip("+", false).apply {
+        bar.addView(chip("+", false, PLUS_ID).apply {
             setOnClickListener { createTab() }
+            setOnLongClickListener {
+                manage()
+                true
+            }
         })
     }
 
     /**
      * A pill as wide as its name: the selected tab filled with the text colour, the others with a
-     * thin border. "+" is a round one.
+     * thin border. "+" is a round one. While an app is dragged the targets get a thicker border,
+     * the one under the finger is filled.
      */
-    private fun chip(text: String, selected: Boolean) = TextView(context, null, 0, R.style.TextSmall).apply {
+    private fun chip(text: String, selected: Boolean, id: String) = TextView(context, null, 0, R.style.TextSmall).apply {
         this.text = text
+        tag = id
         textSize = 13f
         maxLines = 1
         ellipsize = android.text.TextUtils.TruncateAt.END
-        gravity = android.view.Gravity.CENTER
+        gravity = Gravity.CENTER
         setTypeface(typeface, Typeface.BOLD)
-        val primary = context.getColorFromAttr(R.attr.primaryColor)
-        background = android.graphics.drawable.GradientDrawable().apply {
-            cornerRadius = 17.dpToPx().toFloat()
-            if (selected) setColor(primary)
-            else setStroke(1.dpToPx(), context.getColorFromAttr(R.attr.cardStrokeColor))
-        }
-        setTextColor(if (selected) context.getColorFromAttr(R.attr.cardColor) else primary)
-        if (!selected) alpha = 0.85f
+        styleChip(this, selected, false)
         val plus = text == "+"
         setPadding(if (plus) 0 else 14.dpToPx(), 0, if (plus) 0 else 14.dpToPx(), 0)
         minWidth = if (plus) 34.dpToPx() else 0
@@ -178,6 +195,78 @@ class DrawerTabsController(
         }
     }
 
+    private fun styleChip(view: TextView, selected: Boolean, target: Boolean) {
+        val primary = context.getColorFromAttr(R.attr.primaryColor)
+        val filled = selected && !dragging || target
+        val radius = if (view.tag == PLUS_ID && view.parent === searchRow) 24 else 17
+        view.background = GradientDrawable().apply {
+            cornerRadius = radius.dpToPx().toFloat()
+            if (filled) setColor(primary)
+            else if (dragging) setStroke(2.dpToPx(), primary)
+            else setStroke(1.dpToPx(), context.getColorFromAttr(R.attr.cardStrokeColor))
+        }
+        view.setTextColor(if (filled) context.getColorFromAttr(R.attr.cardColor) else primary)
+        view.alpha = if (filled || dragging) 1f else 0.85f
+        view.scaleX = if (target) 1.08f else 1f
+        view.scaleY = view.scaleX
+    }
+
+    private fun targets(): List<TextView> {
+        val list = mutableListOf<TextView>()
+        if (barContainer.visibility == View.VISIBLE) for (i in 0 until bar.childCount) (bar.getChildAt(i) as? TextView)?.let { list += it }
+        (searchPlus as? TextView)?.let { list += it }
+        return list
+    }
+
+    // ---------------------------------------------------------------- drag and drop
+
+    /** An app started or stopped being dragged in the grid: the chips become drop targets. */
+    fun setDragging(on: Boolean) {
+        dragging = on
+        hovered = null
+        val selected = selectedId()
+        targets().forEach { styleChip(it, it.tag == selected, false) }
+    }
+
+    /**
+     * The tab (or [PLUS_ID]) under the screen point [x], [y] while dragging, highlighted; null
+     * when none (or the tab shown, where the app already is).
+     */
+    fun targetAt(x: Float, y: Float): String? {
+        val rect = Rect()
+        val slop = 8.dpToPx()
+        val selected = selectedId()
+        val hit = targets().firstOrNull {
+            it.getGlobalVisibleRect(rect) && rect.apply { inset(-slop, -slop) }.contains(x.toInt(), y.toInt())
+        }?.tag as? String
+        val target = hit?.takeIf { it != selected }
+        if (target != hovered) {
+            hovered = target
+            targets().forEach { styleChip(it, it.tag == selected, it.tag == target) }
+            if (target != null) bar.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+        }
+        return target
+    }
+
+    /** [app] was dropped on [target] (a tab id or [PLUS_ID]). */
+    fun drop(app: AppModel.App, target: String) {
+        when (target) {
+            PLUS_ID -> createTab { moveTo(app, it) }
+            DrawerTabsRepository.HIDDEN_ID -> hideApp(app)
+            DrawerTabsRepository.ALL_ID -> moveTo(app, null)
+            else -> tabs.firstOrNull { it.id == target }?.let { moveTo(app, it) }
+        }
+    }
+
+    /** Moves [app] to [tab] (null: "All"), out of every other tab. */
+    private fun moveTo(app: AppModel.App, tab: DrawerTab?) {
+        val key = DrawerTabsRepository.key(app)
+        tabs.forEach { it.apps.remove(key) }
+        if (tab != null) tab.apps.add(key) else repo.allEnabled = true
+        save()
+        context.showToast(context.getString(R.string.ml_tab_moved, app.appLabel, tab?.name ?: context.getString(R.string.ml_tab_all)))
+    }
+
     private fun save() {
         repo.save(tabs)
         render()
@@ -186,8 +275,8 @@ class DrawerTabsController(
 
     // ---------------------------------------------------------------- tab operations
 
-    /** New tab; by default its apps are picked right away, since a tab without apps is not shown. */
-    private fun createTab(then: (DrawerTab) -> Unit = { editApps(it) }) {
+    /** New tab; by default its apps are picked right away. */
+    private fun createTab(then: ((DrawerTab) -> Unit)? = null) {
         context.showTextInputDialog(
             title = context.getString(R.string.ml_tab_new),
             initial = "",
@@ -198,87 +287,26 @@ class DrawerTabsController(
             tabs.add(tab)
             repo.selected = tab.id
             save()
-            then(tab)
+            if (then != null) then(tab) else chooseApps(tab)
         }
     }
 
-    private fun showTabMenu(id: String) {
-        if (id == DrawerTabsRepository.ALL_ID) {
-            context.showMenuDialog(
-                context.getString(R.string.ml_tab_all),
-                listOf(
-                    MenuEntry(context.getString(if (repo.hiddenEnabled) R.string.ml_tab_hidden_off else R.string.ml_tab_hidden_on)) {
-                        repo.hiddenEnabled = !repo.hiddenEnabled
-                        render()
-                        onSelectionChanged()
-                    },
-                    MenuEntry(context.getString(R.string.ml_tab_disable)) {
-                        repo.allEnabled = false
-                        render()
-                        onSelectionChanged()
-                    },
-                )
-            )
-            return
+    private fun chooseApps(tab: DrawerTab) {
+        val apps = allApps().distinctBy { DrawerTabsRepository.key(it) }.sortedBy { it.appLabel.lowercase() }
+        val labels = apps.map { app ->
+            val key = DrawerTabsRepository.key(app)
+            val elsewhere = tabs.filter { it !== tab && key in it.apps }.joinToString { it.name }
+            if (elsewhere.isEmpty()) app.appLabel else app.appLabel + " · " + context.getString(R.string.ml_tab_in, elsewhere)
         }
-        if (id == DrawerTabsRepository.HIDDEN_ID) {
-            context.showMenuDialog(
-                context.getString(R.string.ml_tab_hidden),
-                listOf(MenuEntry(context.getString(R.string.ml_tab_disable)) {
-                    repo.hiddenEnabled = false
-                    render()
-                    onSelectionChanged()
-                })
-            )
-            return
-        }
-        val tab = tabs.firstOrNull { it.id == id } ?: return
-        val index = tabs.indexOf(tab)
-        val entries = mutableListOf(
-            MenuEntry(context.getString(R.string.ml_section_rename)) {
-                context.showTextInputDialog(
-                    title = context.getString(R.string.ml_section_rename),
-                    initial = tab.name,
-                    hint = context.getString(R.string.ml_tab_name_hint),
-                    action = context.getString(R.string.ml_save),
-                ) { name ->
-                    tab.name = name
-                    save()
-                }
-            },
-            MenuEntry(context.getString(R.string.ml_tab_edit_apps)) { editApps(tab) },
-        )
-        if (index > 0) entries += MenuEntry(context.getString(R.string.ml_move_left)) {
-            tabs.add(index - 1, tabs.removeAt(index)); save()
-        }
-        if (index < tabs.lastIndex) entries += MenuEntry(context.getString(R.string.ml_move_right)) {
-            tabs.add(index + 1, tabs.removeAt(index)); save()
-        }
-        entries += MenuEntry(context.getString(R.string.ml_tab_disable)) {
-            tab.enabled = false
-            save()
-        }
-        entries += MenuEntry(context.getString(R.string.ml_tab_delete)) {
-            context.showConfirmDialog(
-                title = context.getString(R.string.ml_tab_delete),
-                message = context.getString(R.string.ml_tab_delete_confirm, tab.name),
-                action = context.getString(R.string.ml_delete),
-            ) {
-                tabs.remove(tab)
-                save()
-            }
-        }
-        context.showMenuDialog(tab.name, entries)
-    }
-
-    private fun editApps(tab: DrawerTab) {
-        val apps = allApps().distinctBy { DrawerTabsRepository.key(it) }
         val checked = apps.indices.filter { DrawerTabsRepository.key(apps[it]) in tab.apps }.toSet()
-        context.showMultiSelectDialog(tab.name, apps.map { it.appLabel }, checked, context.getString(R.string.ml_done)) { selected ->
-            // Keep keys of apps not listed now (e.g. hidden or temporarily unavailable)
-            val listed = apps.map { DrawerTabsRepository.key(it) }.toSet()
-            tab.apps.removeAll { it in listed }
-            tab.apps.addAll(selected.map { DrawerTabsRepository.key(apps[it]) })
+        context.showMultiSelectDialog(tab.name, labels, checked, context.getString(R.string.ml_done)) { selected ->
+            apps.forEachIndexed { i, app ->
+                val key = DrawerTabsRepository.key(app)
+                if (i in selected) {
+                    tabs.forEach { if (it !== tab) it.apps.remove(key) }
+                    tab.apps.add(key)
+                } else tab.apps.remove(key)
+            }
             save()
         }
     }
@@ -289,41 +317,17 @@ class DrawerTabsController(
      */
     fun showMoveToTab(app: AppModel.App) {
         val key = DrawerTabsRepository.key(app)
-        // Only the tabs in the bar: turned-off tabs, and tabs left without apps, are not offered
-        val visible = visibleIds()
-        val shown = tabs.filter { it.id in visible }
-        val current = tabs.filter { it.enabled && key in it.apps }
-        fun moveTo(tab: DrawerTab?) {
-            tabs.forEach { it.apps.remove(key) }
-            if (tab != null) tab.apps.add(key) else repo.allEnabled = true
-            save()
-            context.showToast(context.getString(R.string.ml_tab_moved, app.appLabel, tab?.name ?: context.getString(R.string.ml_tab_all)))
-        }
+        val shown = tabs.filter { it.enabled }
+        val current = shown.filter { key in it.apps }
         val check = "✓"
-        val entries = listOf(MenuEntry(context.getString(R.string.ml_tab_all), value = if (current.isEmpty()) check else null) { moveTo(null) }) +
-                shown.map { tab -> MenuEntry(tab.name, value = if (tab in current) check else null) { moveTo(tab) } } +
-                MenuEntry(context.getString(R.string.ml_tab_new_ellipsis)) { createTab(then = { moveTo(it) }) }
+        val entries = listOf(MenuEntry(context.getString(R.string.ml_tab_all), value = if (current.isEmpty()) check else null) { moveTo(app, null) }) +
+                shown.map { tab -> MenuEntry(tab.name, value = if (tab in current) check else null) { moveTo(app, tab) } } +
+                MenuEntry(context.getString(R.string.ml_tab_new_ellipsis)) { createTab { moveTo(app, it) } }
         context.showMenuDialog(context.getString(R.string.ml_move_to_tab), entries)
     }
 
     companion object {
-        /** Settings: turn each tab (and "All") on or off, hidden ones included. */
-        fun showTabsSettings(context: Context) {
-            val repo = DrawerTabsRepository(context)
-            val tabs = repo.load()
-            val labels = listOf(context.getString(R.string.ml_tab_all)) + tabs.map { it.name } + context.getString(R.string.ml_tab_hidden)
-            val hiddenIndex = labels.lastIndex
-            val checked = buildSet {
-                if (repo.allEnabled) add(0)
-                tabs.forEachIndexed { i, t -> if (t.enabled) add(i + 1) }
-                if (repo.hiddenEnabled) add(hiddenIndex)
-            }
-            context.showMultiSelectDialog(context.getString(R.string.ml_tabs_settings), labels, checked, context.getString(R.string.ml_done)) { selected ->
-                repo.allEnabled = 0 in selected
-                repo.hiddenEnabled = hiddenIndex in selected
-                tabs.forEachIndexed { i, t -> t.enabled = (i + 1) in selected }
-                repo.save(tabs)
-            }
-        }
+        /** Tag of the "+" chip, a drop target that makes a new tab. */
+        const val PLUS_ID = "+"
     }
 }

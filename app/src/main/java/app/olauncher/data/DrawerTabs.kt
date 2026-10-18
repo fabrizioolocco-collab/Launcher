@@ -58,6 +58,31 @@ class DrawerTabsRepository(context: Context) {
         }
     }
 
+    /** Order of the apps in a tab set by dragging them (keys); empty: A-Z. */
+    fun order(id: String): List<String> {
+        val raw = prefs.getString(KEY_ORDER + id, null) ?: return emptyList()
+        return try {
+            val array = JSONArray(raw)
+            List(array.length()) { array.getString(it) }.flatMap { migrate(it) }.distinct()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    fun setOrder(id: String, keys: List<String>) = prefs.edit {
+        if (keys.isEmpty()) remove(KEY_ORDER + id) else putString(KEY_ORDER + id, JSONArray(keys).toString())
+    }
+
+    fun hasOrder(id: String) = prefs.contains(KEY_ORDER + id)
+
+    /** [apps] in the tab's own order: those placed by hand first, the others after them A-Z. */
+    fun <T : AppModel> sorted(id: String, apps: List<T>): List<T> {
+        val order = order(id)
+        if (order.isEmpty()) return apps
+        val index = HashMap<String, Int>(order.size * 2).apply { order.forEachIndexed { i, k -> put(k, i) } }
+        return apps.sortedBy { index[key(it)] ?: Int.MAX_VALUE }
+    }
+
     fun save(tabs: List<DrawerTab>) {
         val array = JSONArray()
         tabs.forEach { t ->
@@ -87,6 +112,7 @@ class DrawerTabsRepository(context: Context) {
         private const val KEY_TABS = "TABS"
         private const val KEY_ALL_ENABLED = "ALL_ENABLED"
         private const val KEY_SELECTED = "SELECTED"
+        private const val KEY_ORDER = "ORDER_"
 
         /** The launcher's own apps from before the Compass, which shared one key. */
         val LEGACY_OWN_APPS = listOf("app.olauncher.FilesAlias", "app.olauncher.TodoAlias", "app.olauncher.ScannerAlias")

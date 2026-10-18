@@ -709,7 +709,7 @@
     <string name="ml_drawer_columns_short">Columns</string>
     <string name="ml_drawer_labels_short">App names</string>
     <string name="ml_drawer_options">Grid options</string>
-    <string name="ml_drawer_header">%1$s · A–Z · %2$d</string>
+    <string name="ml_drawer_header">%1$s · %2$s · %3$d</string>
     <string name="ml_bm_title">Bookmarks</string>
     <string name="ml_bm_new">New</string>
     <string name="ml_bm_new_bookmark">New bookmark</string>
@@ -795,4 +795,16 @@
     <string name="ml_compass_no_gps">GPS: no satellites (indoors?)</string>
     <string name="ml_compass_ground">ground %1$d m (map)</string>
     <string name="ml_compass_baro_weather">barometer %1$d m (calibrated on the weather)</string>
+    <string name="ml_tabs_manage">Manage tabs</string>
+    <string name="ml_tabs_manage_hint">Drag ≡ to reorder the tabs; the switch shows or hides one. In the app grid, hold an app and drag it to change its place, or drop it on a tab to move it there.</string>
+    <string name="ml_tab_count">%1$d apps</string>
+    <string name="ml_tab_empty">empty</string>
+    <string name="ml_tab_choose_apps">Choose apps</string>
+    <string name="ml_tab_az">Back to A–Z order</string>
+    <string name="ml_order_custom">own order</string>
+    <string name="ml_order_az">A–Z</string>
+    <string name="ml_tab_hidden_choose">Hidden apps</string>
+    <string name="ml_tab_in">in %1$s</string>
+    <string name="ml_tab_drop_hint">Drop it between the apps, or on a tab to move it there</string>
+    <string name="ml_tab_hidden_done">%1$s hidden</string>
 </resources>

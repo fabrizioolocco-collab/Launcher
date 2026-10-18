@@ -84,7 +84,7 @@ class AppDrawerAdapter(
             override fun areItemsTheSame(oldItem: AppModel, newItem: AppModel): Boolean = when {
                 oldItem is AppModel.App && newItem is AppModel.App ->
                     oldItem.appPackage == newItem.appPackage && oldItem.user == newItem.user &&
-                            oldItem.inNews == newItem.inNews
+                            oldItem.activityClassName == newItem.activityClassName && oldItem.inNews == newItem.inNews
 
                 oldItem is AppModel.ListHeader && newItem is AppModel.ListHeader -> oldItem.title == newItem.title
 
@@ -111,6 +111,50 @@ class AppDrawerAdapter(
 
     var appsList: MutableList<AppModel> = mutableListOf()
     var appFilteredList: MutableList<AppModel> = mutableListOf()
+
+    /**
+     * While an app is dragged: the list on screen, moved item by item (the differ's list only
+     * changes through a diff, too late for the drag).
+     */
+    private var dragList: MutableList<AppModel>? = null
+
+    public override fun getItem(position: Int): AppModel = dragList?.get(position) ?: super.getItem(position)
+
+    override fun getItemCount(): Int = dragList?.size ?: super.getItemCount()
+
+    fun beginDrag() {
+        dragList = currentList.toMutableList()
+    }
+
+    fun moveItem(from: Int, to: Int) {
+        val list = dragList ?: return
+        list.add(to, list.removeAt(from))
+        notifyItemMoved(from, to)
+    }
+
+    /**
+     * The list as left by the drag. It stays on screen until the next list is in the differ
+     * (see [show]): the moves the differ then reports already happened on screen.
+     */
+    fun endDrag(): List<AppModel> {
+        val list = dragList ?: return currentList
+        appsList = list.toMutableList()
+        appFilteredList = appsList
+        show(list.toList())
+        return list
+    }
+
+    /** [submitList], and back to the differ's list after a drag. */
+    @Suppress("NotifyDataSetChanged")
+    private fun show(list: List<AppModel>, then: (() -> Unit)? = null) {
+        submitList(list) {
+            if (dragList != null) {
+                dragList = null
+                notifyDataSetChanged()
+            }
+            then?.invoke()
+        }
+    }
 
     override fun getItemViewType(position: Int): Int {
         // The differ's list is what is on screen: always read items from it, never from a list that may be ahead of it
@@ -226,7 +270,7 @@ class AppDrawerAdapter(
                 results?.values?.let {
                     val items = it as MutableList<AppModel>
                     appFilteredList = items
-                    submitList(items.toList()) {
+                    show(items.toList()) {
                         autoLaunch()
                     }
                 }
@@ -273,14 +317,14 @@ class AppDrawerAdapter(
         )
         this.appsList = appsList
         this.appFilteredList = appsList
-        submitList(appsList.toList())
+        show(appsList.toList())
     }
 
     /** Takes an app out of the list on screen (hidden or uninstalled) without touching the differ's list in place. */
     fun remove(app: AppModel) {
         appsList.remove(app)
         appFilteredList = appFilteredList.filter { it !== app }.toMutableList()
-        submitList(appFilteredList.toList())
+        show(appFilteredList.toList())
     }
 
     fun launchFirstInList() {
