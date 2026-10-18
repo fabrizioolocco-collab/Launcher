@@ -588,7 +588,7 @@ class CalendarWidgetView(
             items.forEach { item ->
                 list.addView(
                     when (item) {
-                        is EventItem -> eventRow(item.event, now)
+                        is EventItem -> eventRow(item.event, day, now)
                         is TodoItem -> todoRow(item.todo, item.lateDays, now)
                         is DoneItem -> doneRow(item.done)
                     }
@@ -739,7 +739,7 @@ class CalendarWidgetView(
         }
     }
 
-    private fun eventRow(event: CalendarEvents.Event, now: Long): View {
+    private fun eventRow(event: CalendarEvents.Event, day: Int, now: Long): View {
         val ongoing = !event.allDay && now >= event.begin && now < event.end
         val past = isPast(event, now)
         val row = LinearLayout(activity).apply {
@@ -764,7 +764,7 @@ class CalendarWidgetView(
         }
         val extra = if (ongoing) Typeface.BOLD else Typeface.NORMAL
         line.addView(text(CalendarText.TIME, extra).apply {
-            text = timeLabel(event)
+            text = timeLabel(event, day)
             maxLines = 1
             if (config.text(CalendarText.TIME).color == 0) alpha = 0.7f
         })
@@ -806,10 +806,18 @@ class CalendarWidgetView(
     private fun isPast(event: CalendarEvents.Event, now: Long) =
         if (event.allDay) event.endDay < CalendarEvents.julianDay(now) else event.end <= now
 
-    private fun timeLabel(event: CalendarEvents.Event): String {
+    /** The times as seen on [day]: an event across midnight shows where it starts and where it ends. */
+    private fun timeLabel(event: CalendarEvents.Event, day: Int): String {
         if (event.allDay) return activity.getString(R.string.ml_cal_all_day)
         val format = android.text.format.DateFormat.getTimeFormat(activity)
-        return "${format.format(Date(event.begin))} - ${format.format(Date(event.end))}"
+        val begin = format.format(Date(event.begin))
+        val end = format.format(Date(event.end))
+        return when {
+            event.startDay == event.endDay -> "$begin - $end"
+            day <= event.startDay -> activity.getString(R.string.ml_cal_from, begin)
+            day >= event.endDay -> activity.getString(R.string.ml_cal_until, end)
+            else -> activity.getString(R.string.ml_cal_all_day)
+        }
     }
 
     private fun statusLabel(event: CalendarEvents.Event, now: Long, ongoing: Boolean, past: Boolean): String? {

@@ -461,6 +461,8 @@
     <string name="ml_cal_hours">%dh</string>
     <string name="ml_cal_hours_minutes">%1$dh %2$dm</string>
     <string name="ml_cal_in">in %s</string>
+    <string name="ml_cal_from">from %s</string>
+    <string name="ml_cal_until">until %s</string>
     <string name="ml_cal_in_days">In %d days</string>
     <string name="ml_cal_left">%s left</string>
     <string name="ml_cal_minutes">%d min</string>
