@@ -80,23 +80,23 @@
     </LinearLayout>
 
     <!-- Drawer tabs: All + user tabs, "+" to create -->
-    <HorizontalScrollView
+    <!-- In rows: every tab in sight, however many -->
+    <FrameLayout
         android:id="@+id/tabsScroll"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:fillViewport="true"
-        android:overScrollMode="never"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         android:paddingHorizontal="12dp"
-        android:scrollbars="none"
         android:visibility="gone">
 
-        <LinearLayout
+        <app.olauncher.ui.FlowLayout
             android:id="@+id/tabsBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-    </HorizontalScrollView>
+            android:clipChildren="false" />
+    </FrameLayout>
 
     <Space
         android:layout_width="match_parent"

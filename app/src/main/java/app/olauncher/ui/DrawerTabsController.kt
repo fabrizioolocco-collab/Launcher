@@ -33,7 +33,7 @@ import app.olauncher.helper.showToast
  */
 class DrawerTabsController(
     private val context: Context,
-    private val bar: LinearLayout,
+    private val bar: ViewGroup,
     /** The view holding [bar], hidden together with it. */
     private val barContainer: View,
     /** The row of the search field, where "+" goes while the bar is hidden. */
@@ -192,6 +192,8 @@ class DrawerTabsController(
         isLongClickable = true
         layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 34.dpToPx()).apply {
             marginStart = 4.dpToPx(); marginEnd = 4.dpToPx()
+            // Rows of tabs, when they do not fit on one
+            topMargin = 3.dpToPx(); bottomMargin = 3.dpToPx()
         }
     }
 

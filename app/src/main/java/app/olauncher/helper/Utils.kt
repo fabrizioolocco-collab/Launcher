@@ -107,7 +107,7 @@ suspend fun getAppsList(
             for (profile in userManager.userProfiles) {
                 if (isPrivateSpaceProfile(context, profile)) continue
                 for (app in launcherApps.getActivityList(null, profile)) {
-                    val appLabelShown = prefs.getAppRenameLabel(app.applicationInfo.packageName)
+                    val appLabelShown = prefs.getAppRenameLabel(DrawerTabsRepository.renameId(app.applicationInfo.packageName, app.componentName.className))
                         .ifBlank { app.label.toString() }
                     val appModel = AppModel.App(
                         appLabel = appLabelShown,

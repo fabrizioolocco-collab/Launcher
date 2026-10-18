@@ -282,7 +282,7 @@ class AppDrawerFragment : BaseFragment() {
             appRenameListener = { appModel, renameLabel ->
                 val identifier = when (appModel) {
                     is AppModel.PinnedShortcut -> appModel.identity
-                    is AppModel.App -> appModel.appPackage
+                    is AppModel.App -> DrawerTabsRepository.renameId(appModel.appPackage, appModel.activityClassName)
                     else -> return@AppDrawerAdapter
                 }
                 prefs.setAppRenameLabel(identifier, renameLabel)

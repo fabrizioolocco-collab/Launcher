@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.LauncherApps
 import app.olauncher.R
 import app.olauncher.data.AppModel
+import app.olauncher.data.DrawerTabsRepository
 import app.olauncher.data.Prefs
 
 /**
@@ -30,7 +31,7 @@ object AppRename {
             action = context.getString(R.string.ml_save),
             allowBlank = true,
         ) { label ->
-            Prefs(context).setAppRenameLabel(app.appPackage, label)
+            Prefs(context).setAppRenameLabel(DrawerTabsRepository.renameId(app.appPackage, app.activityClassName), label)
             onRenamed?.invoke()
         }
     }
