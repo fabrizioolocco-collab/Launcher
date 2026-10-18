@@ -28,6 +28,7 @@ import androidx.navigation.fragment.findNavController
 import app.olauncher.MainViewModel
 import app.olauncher.R
 import app.olauncher.data.AppModel
+import app.olauncher.data.DrawerTabsRepository
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentHomeBinding
@@ -195,7 +196,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             scope = uiScope,
             apps = {
                 val hidden = prefs.hiddenApps
-                viewModel.homeApps.value.orEmpty().filter { "${it.appPackage}|${it.user}" !in hidden }
+                viewModel.homeApps.value.orEmpty().filter { DrawerTabsRepository.key(it) !in hidden }
             },
             launchApp = { app -> launchHomeApp(app) },
             requestPermission = { permissionRequest.launch(it) },

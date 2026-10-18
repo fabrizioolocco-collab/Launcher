@@ -26,6 +26,7 @@ import androidx.recyclerview.widget.RecyclerView.Recycler
 import app.olauncher.MainViewModel
 import app.olauncher.R
 import app.olauncher.data.AppModel
+import app.olauncher.data.DrawerTabsRepository
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.FragmentAppDrawerBinding
@@ -244,9 +245,9 @@ class AppDrawerFragment : BaseFragment() {
                 val newSet = mutableSetOf<String>()
                 newSet.addAll(prefs.hiddenApps)
                 if (flag == Constants.FLAG_HIDDEN_APPS)
-                    newSet.remove(appModel.appPackage + "|" + appModel.user.toString())
+                    newSet.remove(DrawerTabsRepository.key(appModel))
                 else
-                    newSet.add(appModel.appPackage + "|" + appModel.user.toString())
+                    newSet.add(DrawerTabsRepository.key(appModel))
 
                 prefs.hiddenApps = newSet
                 if (newSet.isEmpty())
@@ -441,7 +442,7 @@ class AppDrawerFragment : BaseFragment() {
     }
 
     private fun unhide(appModel: AppModel) {
-        prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { remove(appModel.appPackage + "|" + appModel.user.toString()) }
+        prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { remove(DrawerTabsRepository.key(appModel)) }
         viewModel.getAppList()
         viewModel.getHiddenApps()
     }

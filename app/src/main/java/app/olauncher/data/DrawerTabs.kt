@@ -88,9 +88,13 @@ class DrawerTabsRepository(context: Context) {
         private const val KEY_ALL_ENABLED = "ALL_ENABLED"
         private const val KEY_SELECTED = "SELECTED"
 
-        private val LEGACY_OWN_APPS = listOf("app.olauncher.FilesAlias", "app.olauncher.TodoAlias", "app.olauncher.ScannerAlias")
+        /** The launcher's own apps from before the Compass, which shared one key. */
+        val LEGACY_OWN_APPS = listOf("app.olauncher.FilesAlias", "app.olauncher.TodoAlias", "app.olauncher.ScannerAlias")
 
-        /** The launcher's own apps all have its package, so they are told apart by their activity. */
+        /**
+         * Key of an app in the tabs and in the hidden apps. The launcher's own apps all have its
+         * package, so they are told apart by their activity.
+         */
         fun key(app: AppModel): String {
             val activity = (app as? AppModel.App)?.activityClassName
             return if (app.appPackage == BuildConfig.APPLICATION_ID && activity != null) "${app.appPackage}/$activity|${app.user}"

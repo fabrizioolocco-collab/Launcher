@@ -38,6 +38,7 @@ import androidx.core.net.toUri
 import app.olauncher.BuildConfig
 import app.olauncher.R
 import app.olauncher.data.AppModel
+import app.olauncher.data.DrawerTabsRepository
 import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.data.shortcutIdentity
@@ -95,6 +96,7 @@ suspend fun getAppsList(
 
         try {
             if (!Prefs(context).hiddenAppsUpdated) upgradeHiddenApps(Prefs(context))
+            splitOwnHiddenApps(Prefs(context))
             val hiddenApps = Prefs(context).hiddenApps
 
             val userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
@@ -125,7 +127,7 @@ suspend fun getAppsList(
                         app.componentName.className == "app.olauncher.CompassAlias"
                     ) {
                         // is this a hidden app?
-                        if (hiddenApps.contains(app.applicationInfo.packageName + "|" + profile.toString())) {
+                        if (hiddenApps.contains(DrawerTabsRepository.key(appModel))) {
                             if (includeHiddenApps) {
                                 appList.add(appModel)
                             }
@@ -219,6 +221,20 @@ private fun upgradeHiddenApps(prefs: Prefs) {
     }
     prefs.hiddenApps = newHiddenAppsSet
     prefs.hiddenAppsUpdated = true
+}
+
+/**
+ * The launcher's own apps (File, ToDo, Scanner) were hidden together under one key: that key now
+ * stands for the three of them, each shown again on its own.
+ */
+private fun splitOwnHiddenApps(prefs: Prefs) {
+    val legacy = BuildConfig.APPLICATION_ID + "|"
+    val hidden = prefs.hiddenApps
+    if (hidden.none { it.startsWith(legacy) }) return
+    prefs.hiddenApps = hidden.flatMap { key ->
+        if (!key.startsWith(legacy)) listOf(key)
+        else DrawerTabsRepository.LEGACY_OWN_APPS.map { "${BuildConfig.APPLICATION_ID}/$it|${key.removePrefix(legacy)}" }
+    }.toMutableSet()
 }
 
 fun isPackageInstalled(context: Context, packageName: String, userString: String): Boolean {
