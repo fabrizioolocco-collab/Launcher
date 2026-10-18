@@ -1,0 +1,25 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- A sheet between the four corners of the viewfinder, crossed by the scan line -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M42,38h18l8,8v24h-26z" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M32,40v-8h8M68,32h8v8M76,68v8h-8M40,76h-8v-8"
+        android:strokeWidth="4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M28,54h52"
+        android:strokeWidth="3"
+        android:strokeColor="#FF004D40"
+        android:strokeLineCap="round" />
+
+</vector>

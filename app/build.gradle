@@ -74,6 +74,7 @@ dependencies {
     implementation libs.pdfbox
     // OCR of scanned PDF pages (the model comes with Google Play services)
     implementation libs.mlkit.text.recognition
+    implementation libs.mlkit.document.scanner
 
     // Android lifecycle
     implementation libs.lifecycle.extensions

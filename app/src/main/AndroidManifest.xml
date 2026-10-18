@@ -159,6 +159,15 @@
             android:taskAffinity="app.minimalauncher.files"
             android:theme="@style/ViewerTheme" />
 
+        <!-- Document scanner (Google's scanner, then our review and PDF), also listed as "Scanner" in the app list -->
+        <activity
+            android:name=".ui.scanner.ScannerActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:exported="false"
+            android:label="@string/ml_scan_app"
+            android:taskAffinity="app.minimalauncher.scanner"
+            android:theme="@style/ViewerTheme" />
+
         <!-- Built-in photo/video viewer and editors -->
         <activity
             android:name=".ui.media.MediaViewerActivity"
@@ -189,6 +198,19 @@
             android:icon="@mipmap/ic_launcher"
             android:label="@string/ml_explorer"
             android:targetActivity=".ui.FileExplorerActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <activity-alias
+            android:name=".ScannerAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_scanner_launcher"
+            android:label="@string/ml_scan_app"
+            android:targetActivity=".ui.scanner.ScannerActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

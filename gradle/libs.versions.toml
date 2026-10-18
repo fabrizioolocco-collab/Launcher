@@ -13,6 +13,7 @@ recyclerview = "1.4.0"
 workRuntimeKtx = "2.10.1"
 junit = "4.13.2"
 mlkitTextRecognition = "19.0.1"
+mlkitDocumentScanner = "16.0.0"
 [libraries]
 appcompat = { module = "androidx.appcompat:appcompat", version.ref = "appcompat" }
 exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
@@ -29,3 +30,4 @@ recyclerview = { module = "androidx.recyclerview:recyclerview", version.ref = "r
 work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workRuntimeKtx" }
 junit = { module = "junit:junit", version.ref = "junit" }
 mlkit-text-recognition = { module = "com.google.android.gms:play-services-mlkit-text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-document-scanner = { module = "com.google.android.gms:play-services-mlkit-document-scanner", version.ref = "mlkitDocumentScanner" }

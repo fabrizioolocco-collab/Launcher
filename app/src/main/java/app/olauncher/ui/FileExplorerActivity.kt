@@ -38,9 +38,11 @@ import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.pillButton
 import app.olauncher.helper.showConfirmDialog
+import app.olauncher.helper.showDropdown
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
+import app.olauncher.ui.scanner.ScannerActivity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -160,7 +162,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             insets
         }
         val viewButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_explorer_view)) { showViewMenu() }
-        newFolder = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { askNewFolder() }
+        newFolder = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { if (pickMode) askNewFolder() else showAddMenu() }
         val bar = UiKit.appBar(this, "", onBack = { if (selecting) clearSelection() else goUp() }, actions = listOf(viewButton, newFolder))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 4.dpToPx())
         backButton = bar.back
@@ -662,6 +664,14 @@ open class FileExplorerActivity : AppCompatActivity() {
         showConfirmDialog(getString(R.string.ml_explorer_delete), getString(R.string.ml_explorer_delete_confirm, entry.name), getString(R.string.ml_explorer_delete)) {
             run(getString(R.string.ml_explorer_delete)) { entry.file.deleteRecursively() }
         }
+    }
+
+    /** "+": a new folder, or a scanned document saved (by default) in this folder. */
+    private fun showAddMenu() {
+        newFolder.showDropdown(listOf(
+            MenuEntry(getString(R.string.ml_explorer_new_folder), icon = R.drawable.ic_m_folder) { askNewFolder() },
+            MenuEntry(getString(R.string.ml_scan_start), icon = R.drawable.ic_m_scan) { ScannerActivity.open(this, location.dir) },
+        ))
     }
 
     private fun askNewFolder() {

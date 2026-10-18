@@ -68,7 +68,10 @@ import kotlin.math.sin
  */
 class PdfViewerActivity : AppCompatActivity() {
 
+    /** The pages shown and edited: [sourceFile], or a working copy with scanned pages added in "Pages". */
     private lateinit var file: File
+    /** The PDF that was opened: its name, folder and "replace" when saving. */
+    private lateinit var sourceFile: File
     private var renderer: PdfRenderer? = null
     private var total = 0
     private var layout = PageLayout(mutableListOf())
@@ -122,6 +125,19 @@ class PdfViewerActivity : AppCompatActivity() {
         val order = data.getIntArrayExtra(PdfPagesActivity.EXTRA_ORDER) ?: return@registerForActivityResult
         val keys = data.getIntArrayExtra(PdfPagesActivity.EXTRA_ROTATION_KEYS) ?: IntArray(0)
         val values = data.getIntArrayExtra(PdfPagesActivity.EXTRA_ROTATION_VALUES) ?: IntArray(0)
+        // Scanned pages were added: switch to the working copy (same indexes for the original pages)
+        data.getStringExtra(PdfPagesActivity.EXTRA_PATH)?.takeIf { it != file.absolutePath }?.let { path ->
+            val previous = file
+            file = File(path)
+            if (!openRenderer()) {
+                file = previous
+                openRenderer()
+                return@registerForActivityResult
+            }
+            pdfText = null
+            hits = emptyList()
+            hitIndex = -1
+        }
         layout = PageLayout(order.toMutableList(), keys.indices.associate { keys[it] to values[it] }.toMutableMap())
         renders.clear()
         pager.adapter?.notifyDataSetChanged()
@@ -213,6 +229,7 @@ class PdfViewerActivity : AppCompatActivity() {
 
     private fun start(opened: File) {
         file = opened
+        sourceFile = opened
         if (!openRenderer()) {
             showToast(getString(R.string.ml_pdf_cannot_open))
             finish()
@@ -272,7 +289,7 @@ class PdfViewerActivity : AppCompatActivity() {
         }
     }
 
-    private val fromCache get() = file.absolutePath.startsWith(cacheDir.absolutePath)
+    private val fromCache get() = sourceFile.absolutePath.startsWith(cacheDir.absolutePath)
 
     override fun onDestroy() {
         super.onDestroy()
@@ -292,11 +309,11 @@ class PdfViewerActivity : AppCompatActivity() {
             insets
         }
         appBar = UiKit.appBar(
-            this, file.name, { onBackPressedDispatcher.onBackPressed() },
+            this, sourceFile.name, { onBackPressedDispatcher.onBackPressed() },
             listOf(
                 UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_search)) { toggleSearch() },
                 UiKit.iconButton(this, R.drawable.ic_m_pages, getString(R.string.ml_pdf_pages)) { openPages() },
-                UiKit.iconButton(this, R.drawable.ic_m_share, getString(R.string.ml_explorer_share)) { share(file) },
+                UiKit.iconButton(this, R.drawable.ic_m_share, getString(R.string.ml_explorer_share)) { share(sourceFile) },
                 UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_pdf_save)) { save() },
             ),
         )
@@ -618,7 +635,7 @@ class PdfViewerActivity : AppCompatActivity() {
     private fun updateTitle() {
         val lm = pager.layoutManager as? LinearLayoutManager
         val pos = lm?.findFirstVisibleItemPosition()?.takeIf { it >= 0 } ?: 0
-        appBar.title.text = file.name
+        appBar.title.text = sourceFile.name
         UiKit.setSubtitle(appBar, getString(R.string.ml_pdf_page_of, pos + 1, layout.order.size))
     }
 
@@ -940,8 +957,8 @@ class PdfViewerActivity : AppCompatActivity() {
         select(null)
         setTool(Tool.NONE)
         val startDir = if (fromCache) android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).also { it.mkdirs() }
-        else file.parentFile!!
-        val suggested = if (fromCache) uniqueName(startDir, file.nameWithoutExtension) else uniqueName(startDir, file.nameWithoutExtension + " (1)")
+        else sourceFile.parentFile!!
+        val suggested = if (fromCache) uniqueName(startDir, sourceFile.nameWithoutExtension) else uniqueName(startDir, sourceFile.nameWithoutExtension + " (1)")
         showTextInputDialog(getString(R.string.ml_pdf_save_as), suggested, getString(R.string.ml_pdf_file_name), getString(R.string.ml_pdf_choose_folder)) { name ->
             val clean = name.trim().removeSuffix(".pdf").replace('/', '_').ifBlank { return@showTextInputDialog }
             pendingSaveName = "$clean.pdf"
@@ -972,8 +989,10 @@ class PdfViewerActivity : AppCompatActivity() {
                 showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_save)))
                 return@launch
             }
-            if (target.absolutePath == file.absolutePath) {
+            if (target.absolutePath == sourceFile.absolutePath) {
                 // Replaced the open file: show the saved version
+                file = sourceFile
+                pdfText = null
                 annotations.clear()
                 renders.clear()
                 openRenderer()
