@@ -173,9 +173,22 @@ object DetoxManager {
         if (packageName in ALWAYS_ALLOWED) return true
         if (TestNotifications.isFake(packageName)) return packageName in whitelist(context)
         if (packageName == defaultDialer(context)) return true
+        // The system's recent apps screen (e.g. Samsung's or Pixel's launcher), seen when closing an app
+        if (packageName == recentsPackage) return true
         if (packageName in inputMethods(context)) return true
         if (!isStrict(context) && packageName == "com.android.settings") return true
         return packageName in whitelist(context)
+    }
+
+    /** Package of the system's recent apps screen (Android 10+: the stock launcher's quickstep). */
+    private val recentsPackage: String? by lazy {
+        try {
+            val res = android.content.res.Resources.getSystem()
+            val id = res.getIdentifier("config_recentsComponentName", "string", "android")
+            if (id != 0) android.content.ComponentName.unflattenFromString(res.getString(id))?.packageName else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun defaultDialer(context: Context): String? = try {
