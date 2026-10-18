@@ -45,7 +45,12 @@ object ScanPdf {
     private const val MAX_SIDE = 2200
     private const val A4_W = 595.28f
     private const val A4_H = 841.89f
-    private val font = PDType1Font.HELVETICA
+    /**
+     * Lazy: PdfBox reads the font metrics from the app's assets, available only after
+     * [PDFBoxResourceLoader.init]; touched earlier (the thumbnails use this object too) the font
+     * class fails for good.
+     */
+    private val font by lazy { PDType1Font.HELVETICA }
 
     /** Writes [pages] to [target]; [progress] gets the page being made (1-based) and the count. Blocking. */
     fun write(context: Context, pages: List<ScanPage>, target: File, options: Options, progress: (Int, Int) -> Unit) {
