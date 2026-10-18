@@ -65,10 +65,14 @@ class DetoxController(
     fun onResume() {
         handler.removeCallbacks(ticker)
         handler.post(ticker)
+        page.startLockCountdown()
         permissionsRefresh?.invoke()
     }
 
-    fun onPause() = handler.removeCallbacks(ticker)
+    fun onPause() {
+        handler.removeCallbacks(ticker)
+        page.stopLockCountdown()
+    }
 
     fun setPausedCount(count: Int) {
         pausedCount = count

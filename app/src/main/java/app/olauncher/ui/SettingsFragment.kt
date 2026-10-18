@@ -43,6 +43,9 @@ import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.getAppsList
 import app.olauncher.helper.showMultiSelectDialog
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showColorPickerDialog
 import app.olauncher.data.AppModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -286,6 +289,25 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 })
             }
             R.id.detoxWhitelist -> showDetoxWhitelist()
+            R.id.detoxLock -> {
+                prefs.detoxLock = !prefs.detoxLock
+                populateTextStyle()
+            }
+            R.id.detoxLockSeconds -> {
+                val ctx = requireContext()
+                ctx.showMenuDialog(getString(R.string.ml_detox_lock_seconds), listOf(10, 15, 20, 30, 45, 60).map { s ->
+                    MenuEntry(getString(R.string.ml_detox_seconds, s)) {
+                        prefs.detoxLockSeconds = s
+                        if (_binding != null) populateTextStyle()
+                    }
+                })
+            }
+            R.id.detoxLockColor -> requireContext().showColorPickerDialog(
+                getString(R.string.ml_detox_lock_color), prefs.detoxLockColor, getString(R.string.ml_default),
+            ) { color ->
+                prefs.detoxLockColor = color
+                if (_binding != null) populateTextStyle()
+            }
             R.id.phoneFolders -> {
                 prefs.phoneFoldersInExplorer = !prefs.phoneFoldersInExplorer
                 populateTextStyle()
@@ -408,6 +430,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeIconSize.setOnClickListener(this)
         binding.tabsSettings.setOnClickListener(this)
         binding.detoxWhitelist.setOnClickListener(this)
+        binding.detoxLock.setOnClickListener(this)
+        binding.detoxLockSeconds.setOnClickListener(this)
+        binding.detoxLockColor.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
         binding.mediaViewer?.setOnClickListener(this)
         binding.pdfViewer?.setOnClickListener(this)
@@ -485,6 +510,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.pdfViewer?.setText(if (prefs.builtInPdf) R.string.ml_pdf_tool else R.string.ml_pdf_external)
         binding.autoLaunchSingle.setText(if (prefs.autoLaunchSingleResult) R.string.on else R.string.off)
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
+        binding.detoxLock.setText(if (prefs.detoxLock) R.string.on else R.string.off)
+        binding.detoxLockSeconds.text = getString(R.string.ml_detox_seconds, prefs.detoxLockSeconds)
+        binding.detoxLockColor.text = if (prefs.detoxLockColor == 0) getString(R.string.ml_default)
+        else "#%06X".format(prefs.detoxLockColor and 0xFFFFFF)
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
         binding.iconTiles.setText(if (prefs.iconTiles) R.string.on else R.string.off)
         binding.drawerLayout.setText(

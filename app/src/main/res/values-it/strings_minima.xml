@@ -103,6 +103,10 @@
     <string name="ml_detox_started_at">Iniziato alle %1$s</string>
     <string name="ml_detox_ends_at">Finisce alle %1$s</string>
     <string name="ml_detox_end_short">Termina</string>
+    <string name="ml_detox_lock">Blocca se non apri un\'app</string>
+    <string name="ml_detox_lock_seconds">Secondi per aprire un\'app</string>
+    <string name="ml_detox_lock_color">Colore barra di blocco</string>
+    <string name="ml_detox_seconds">%1$d s</string>
     <string name="ml_permissions">Permessi</string>
     <string name="ml_welcome_title">Benvenuto</string>
     <string name="ml_welcome_message">Tocca ogni voce per concedere il permesso. Servono per badge, detox e strict mode.</string>

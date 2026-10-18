@@ -122,6 +122,9 @@ class Prefs(context: Context) {
     private val SHOW_ICONS = "SHOW_ICONS"
     private val NEWS_SORT_BY_COUNT = "NEWS_SORT_BY_COUNT"
     private val AUTO_LAUNCH_SINGLE = "AUTO_LAUNCH_SINGLE"
+    private val DETOX_LOCK = "DETOX_LOCK"
+    private val DETOX_LOCK_SECONDS = "DETOX_LOCK_SECONDS"
+    private val DETOX_LOCK_COLOR = "DETOX_LOCK_COLOR"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val BOTTOM_LABELS = "BOTTOM_LABELS"
@@ -174,6 +177,20 @@ class Prefs(context: Context) {
     var autoLaunchSingleResult: Boolean
         get() = prefs.getBoolean(AUTO_LAUNCH_SINGLE, false)
         set(value) = prefs.edit { putBoolean(AUTO_LAUNCH_SINGLE, value) }
+
+    /** Detox page: lock the phone when no app is opened within [detoxLockSeconds]. */
+    var detoxLock: Boolean
+        get() = prefs.getBoolean(DETOX_LOCK, false)
+        set(value) = prefs.edit { putBoolean(DETOX_LOCK, value) }
+
+    var detoxLockSeconds: Int
+        get() = prefs.getInt(DETOX_LOCK_SECONDS, 15)
+        set(value) = prefs.edit { putInt(DETOX_LOCK_SECONDS, value) }
+
+    /** Color of the detox lock countdown bar; 0 = default. */
+    var detoxLockColor: Int
+        get() = prefs.getInt(DETOX_LOCK_COLOR, 0)
+        set(value) = prefs.edit { putInt(DETOX_LOCK_COLOR, value) }
 
     /** Drawer "News": false = most recent first, true = most notifications first. */
     /** PDFs: true = built-in viewer/editor, false = an external app. */

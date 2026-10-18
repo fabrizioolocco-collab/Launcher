@@ -31,7 +31,8 @@ import kotlin.math.ceil
  * The page that takes the place of home while a detox session runs: the time left with a progress
  * bar on top, then the allowed apps sharing the rest of the page, all in sight however many they
  * are (rows, taller the fewer they are; more columns when they don't fit), each with the count of
- * its notifications; "End" opens the session menu.
+ * its notifications; "End" opens the session menu. Optionally (Settings) a second bar empties in
+ * a few seconds and the phone is locked if no app was opened meanwhile.
  */
 class DetoxPage(
     private val page: FrameLayout,
@@ -39,6 +40,8 @@ class DetoxPage(
     private val scope: CoroutineScope,
     private val onLaunch: (AppModel.App) -> Unit,
     private val onEnd: () -> Unit,
+    /** Locks the phone: no app was opened in time. */
+    private val onLock: () -> Unit,
 ) {
     private val context: Context = page.context
     private val primary = context.getColorFromAttr(R.attr.primaryColor)
@@ -48,6 +51,20 @@ class DetoxPage(
     private var apps: List<AppModel.App> = emptyList()
     private var notifications: Map<String, AppNotifications> = emptyMap()
 
+    private val now = TextView(context, null, 0, R.style.TextDefault).apply {
+        textSize = 18f
+        setTypeface(typeface, Typeface.BOLD)
+        setTextColor(primary)
+    }
+    private val lockFill = View(context).apply {
+        pivotX = 0f
+        background = GradientDrawable().apply { cornerRadius = 3.dpToPx().toFloat() }
+    }
+    private val lockBar = FrameLayout(context).apply {
+        isVisible = false
+        addView(lockFill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+    }
+    private var lockAnimator: android.animation.ValueAnimator? = null
     private val remaining = TextView(context, null, 0, R.style.TextDefault).apply {
         textSize = 64f
         setTypeface(typeface, Typeface.BOLD)
@@ -80,7 +97,8 @@ class DetoxPage(
             orientation = LinearLayout.VERTICAL
             setPadding(20.dpToPx(), 56.dpToPx(), 20.dpToPx(), 24.dpToPx())
         }
-        column.addView(header())
+        column.addView(now)
+        column.addView(header(), matchWrap(top = 12))
         column.addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.BOTTOM
@@ -90,6 +108,7 @@ class DetoxPage(
                 bottomMargin = 8.dpToPx()
             })
         }, matchWrap(top = 12))
+        column.addView(lockBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 6.dpToPx()).apply { topMargin = 16.dpToPx() })
         column.addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             background = GradientDrawable().apply {
@@ -157,7 +176,10 @@ class DetoxPage(
         }
         foreground = UiKit.ripple(context)
         isClickable = true
-        setOnClickListener { onEnd() }
+        setOnClickListener {
+            stopLockCountdown()
+            onEnd()
+        }
     }
 
     // ---------------------------------------------------------------- state
@@ -167,10 +189,14 @@ class DetoxPage(
         val active = DetoxManager.isActive(context)
         val wasVisible = page.isVisible
         page.isVisible = active
-        if (!active) return
+        if (!active) {
+            stopLockCountdown()
+            return
+        }
         if (!wasVisible) {
             renderApps()
             onShown()
+            startLockCountdown()
         }
         updateTime()
     }
@@ -191,6 +217,47 @@ class DetoxPage(
         if (page.isVisible) renderApps()
     }
 
+    // ---------------------------------------------------------------- lock countdown
+
+    /**
+     * Each time the page comes up (unlocked, back from an app): if set, the lock bar empties in the
+     * chosen seconds and then the phone is locked. Opening an app, its notifications or the session
+     * menu stops it.
+     */
+    fun startLockCountdown() {
+        stopLockCountdown()
+        if (!prefs.detoxLock || !page.isVisible) return
+        val color = prefs.detoxLockColor.takeIf { it != 0 } ?: DEFAULT_LOCK_COLOR
+        (lockFill.background as GradientDrawable).setColor(color)
+        lockFill.scaleX = 1f
+        lockBar.isVisible = true
+        lockAnimator = android.animation.ValueAnimator.ofFloat(1f, 0f).apply {
+            duration = prefs.detoxLockSeconds * 1000L
+            interpolator = android.view.animation.LinearInterpolator()
+            addUpdateListener { lockFill.scaleX = it.animatedValue as Float }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                private var cancelled = false
+                override fun onAnimationCancel(animation: android.animation.Animator) {
+                    cancelled = true
+                }
+
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (cancelled) return
+                    lockAnimator = null
+                    lockBar.isVisible = false
+                    if (page.isVisible) onLock()
+                }
+            })
+            start()
+        }
+    }
+
+    fun stopLockCountdown() {
+        lockAnimator?.cancel()
+        lockAnimator = null
+        lockBar.isVisible = false
+    }
+
     private fun updateTime() {
         val left = DetoxManager.remainingMs(context)
         val start = DetoxManager.startTime(context)
@@ -208,6 +275,8 @@ class DetoxPage(
         (empty.layoutParams as LinearLayout.LayoutParams).weight = 1f - share
         fill.requestLayout()
         val time = DateFormat.getTimeFormat(context)
+        val date = DateFormat.format(DateFormat.getBestDateTimePattern(java.util.Locale.getDefault(), "EEEdMMM"), java.util.Date())
+        now.text = "${time.format(java.util.Date())}  ·  $date"
         started.text = context.getString(R.string.ml_detox_started_at, time.format(java.util.Date(start)))
         ends.text = context.getString(R.string.ml_detox_ends_at, time.format(java.util.Date(end)))
     }
@@ -327,6 +396,7 @@ class DetoxPage(
         background = UiKit.cardBackground(context, 20)
         foreground = UiKit.ripple(context)
         setOnClickListener {
+            stopLockCountdown()
             if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
             else onLaunch(app)
         }
@@ -381,5 +451,6 @@ class DetoxPage(
 
     private companion object {
         const val MAX_COLUMNS = 4
+        const val DEFAULT_LOCK_COLOR = 0xFFFF9800.toInt()
     }
 }

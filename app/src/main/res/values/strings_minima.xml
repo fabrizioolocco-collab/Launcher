@@ -104,6 +104,10 @@
     <string name="ml_detox_started_at">Started at %1$s</string>
     <string name="ml_detox_ends_at">Ends at %1$s</string>
     <string name="ml_detox_end_short">End</string>
+    <string name="ml_detox_lock">Lock if no app is opened</string>
+    <string name="ml_detox_lock_seconds">Seconds to open an app</string>
+    <string name="ml_detox_lock_color">Lock bar color</string>
+    <string name="ml_detox_seconds">%1$d s</string>
     <string name="ml_permissions">Permissions</string>
     <string name="ml_welcome_title">Welcome</string>
     <string name="ml_welcome_message">Tap each item to grant the permission. They are needed for badges, detox and strict mode.</string>

@@ -54,6 +54,7 @@ import app.olauncher.helper.openDialerApp
 import app.olauncher.helper.setPlainWallpaperByTheme
 import app.olauncher.helper.IconChooser
 import app.olauncher.helper.openAppInfo
+import app.olauncher.helper.isAccessServiceEnabled
 import app.olauncher.helper.showToast
 import app.olauncher.helper.uninstallEntry
 import kotlinx.coroutines.MainScope
@@ -225,6 +226,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             scope = uiScope,
             onLaunch = { app -> launchHomeApp(app) },
             onEnd = { detox.openSessionMenu() },
+            onLock = { lockScreen() },
         )
         viewModel.homeApps.value?.let { detoxPage.setApps(it) }
         detox = DetoxController(
@@ -617,6 +619,14 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             )
             e.printStackTrace()
         }
+    }
+
+    /** Locks like the side button: through the accessibility service, else as device admin. */
+    private fun lockScreen() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && isAccessServiceEnabled(requireContext()))
+            binding.lock.performClick()
+        else
+            lockPhone()
     }
 
     private fun lockPhone() {
