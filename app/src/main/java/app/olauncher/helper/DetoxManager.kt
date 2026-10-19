@@ -19,7 +19,8 @@ import app.olauncher.BuildConfig
  * - Strict sessions: no changes to timer or whitelist, Android Settings blocked (so permissions
  *   can't be revoked), and leaving early requires asking and then waiting [EXIT_WAIT_MS].
  * - Lockout: when the detox page's lock bar runs out several times in a row with no app opened,
- *   for a few minutes only calls and the wallet can be used (the session can't be ended meanwhile).
+ *   for a few minutes only calls and the lockout apps (the wallet by default) can be used and the
+ *   session can't be ended meanwhile. The "detox home" bar starts the same lockout, on its own.
  *
  * State is in SharedPreferences (wall-clock times) so it survives restarts and reboots.
  */
@@ -36,8 +37,11 @@ object DetoxManager {
     private const val KEY_LOCKOUT_END = "LOCKOUT_END"
     private const val KEY_MISSED_BARS = "MISSED_BARS"
     private const val KEY_MISSED_AT = "MISSED_AT"
+    private const val KEY_HOME_MISSED = "HOME_MISSED_BARS"
+    private const val KEY_HOME_MISSED_AT = "HOME_MISSED_AT"
+    private const val KEY_LOCKOUT_APPS = "LOCKOUT_APPS"
 
-    /** Payment apps usable during a lockout, besides the default tap-to-pay app. */
+    /** Lockout apps until they are chosen: the payment apps, besides the default tap-to-pay app. */
     private val WALLETS = setOf(
         "com.google.android.apps.walletnfcrel",
         "com.samsung.android.spay",
@@ -187,11 +191,50 @@ object DetoxManager {
     fun lockoutLeftMs(context: Context) = (lockoutEnd(context) - System.currentTimeMillis()).coerceAtLeast(0)
 
     /** Lock bars run out in a row; they count no more once [resetMinutes] passed since the last one. */
-    fun missedBars(context: Context, resetMinutes: Int): Int {
-        val missed = prefs(context).getInt(KEY_MISSED_BARS, 0)
+    fun missedBars(context: Context, resetMinutes: Int): Int = missed(context, KEY_MISSED_BARS, KEY_MISSED_AT, resetMinutes)
+
+    private fun missed(context: Context, key: String, keyAt: String, resetMinutes: Int): Int {
+        val missed = prefs(context).getInt(key, 0)
         if (missed == 0) return 0
-        val at = prefs(context).getLong(KEY_MISSED_AT, 0L)
+        val at = prefs(context).getLong(keyAt, 0L)
         return if (resetMinutes > 0 && System.currentTimeMillis() - at >= resetMinutes * 60_000L) 0 else missed
+    }
+
+    /** The detox home bar's missed bars, counted like [missedBars]. */
+    fun homeMissedBars(context: Context, resetMinutes: Int): Int = missed(context, KEY_HOME_MISSED, KEY_HOME_MISSED_AT, resetMinutes)
+
+    /**
+     * The detox home bar ran out with no app opened: after [after] times in a row (0 = never) a
+     * lockout of [minutes] starts, as a session of its own that ends with it. True when it did.
+     */
+    fun homeBarMissed(context: Context, after: Int, minutes: Int, resetMinutes: Int): Boolean {
+        if (isActive(context)) return false
+        val missed = homeMissedBars(context, resetMinutes) + 1
+        if (after <= 0 || missed < after || minutes <= 0) {
+            prefs(context).edit {
+                putInt(KEY_HOME_MISSED, missed)
+                putLong(KEY_HOME_MISSED_AT, System.currentTimeMillis())
+            }
+            return false
+        }
+        val now = System.currentTimeMillis()
+        prefs(context).edit {
+            putInt(KEY_HOME_MISSED, 0)
+            putLong(KEY_START, now)
+            putLong(KEY_END, now + minutes * 60_000L)
+            putLong(KEY_LOCKOUT_END, now + minutes * 60_000L)
+            putBoolean(KEY_STRICT, false)
+            putLong(KEY_EXIT_REQUESTED, 0L)
+            putInt(KEY_MISSED_BARS, 0)
+        }
+        changed()
+        NotificationListener.instance?.applyDetox()
+        return true
+    }
+
+    /** Home was left for something else: the detox home's missed bars start again from zero. */
+    fun homeBarUsed(context: Context) {
+        if (prefs(context).getInt(KEY_HOME_MISSED, 0) != 0) prefs(context).edit { putInt(KEY_HOME_MISSED, 0) }
     }
 
     /**
@@ -224,9 +267,28 @@ object DetoxManager {
         if (prefs(context).getInt(KEY_MISSED_BARS, 0) != 0) prefs(context).edit { putInt(KEY_MISSED_BARS, 0) }
     }
 
-    /** Usable during a lockout: the phone (and the calls' screens) and the wallet. */
+    /**
+     * The apps usable during a lockout besides the phone, as [whitelistKey]s: chosen in Settings,
+     * until then the wallet apps.
+     */
+    fun lockoutApps(context: Context): Set<String> {
+        val p = prefs(context)
+        if (p.contains(KEY_LOCKOUT_APPS)) return p.getStringSet(KEY_LOCKOUT_APPS, emptySet()).orEmpty().toSet()
+        return WALLETS + listOfNotNull(defaultPaymentApp(context))
+    }
+
+    fun setLockoutApps(context: Context, keys: Set<String>) {
+        prefs(context).edit { putStringSet(KEY_LOCKOUT_APPS, keys) }
+        changed()
+    }
+
+    /** Usable during a lockout: the phone (and the calls' screens) and the lockout apps. */
     fun isLockoutApp(context: Context, packageName: String): Boolean =
-        packageName == defaultDialer(context) || packageName in WALLETS || packageName == defaultPaymentApp(context)
+        packageName == defaultDialer(context) || lockoutApps(context).any { it == packageName || it.startsWith("$packageName/") }
+
+    /** On the lockout page: the phone and the lockout apps (the launcher's own ones one by one). */
+    fun isLockoutApp(context: Context, app: app.olauncher.data.AppModel.App): Boolean =
+        app.appPackage == defaultDialer(context) || whitelistKey(app) in lockoutApps(context)
 
     private fun defaultPaymentApp(context: Context): String? = try {
         Settings.Secure.getString(context.contentResolver, "nfc_payment_default_component")

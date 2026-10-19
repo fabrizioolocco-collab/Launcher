@@ -111,6 +111,12 @@
     <string name="ml_detox_lockout_after">Lock out after missed bars</string>
     <string name="ml_detox_lockout_minutes">Lockout minutes</string>
     <string name="ml_detox_lockout_reset">Missed bars reset after</string>
+    <string name="ml_lockout_apps">Apps during the lockout</string>
+    <string name="ml_home_detox">Detox home</string>
+    <string name="ml_home_detox_seconds">Detox home: seconds to open an app</string>
+    <string name="ml_home_detox_lockout_after">Detox home: lock out after missed bars</string>
+    <string name="ml_home_detox_lockout_minutes">Detox home: lockout minutes</string>
+    <string name="ml_home_detox_lockout_reset">Detox home: missed bars reset after</string>
     <string name="ml_alarm_vibrate_seconds">ToDo alarm: vibration only</string>
     <string name="ml_alarm_ramp_seconds">ToDo alarm: up to full volume</string>
     <string name="ml_detox_missed_bars">Missed bars %1$d/%2$d</string>

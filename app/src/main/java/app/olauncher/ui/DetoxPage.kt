@@ -334,7 +334,7 @@ class DetoxPage(
         val wanted = DetoxManager.whitelist(context)
         val dialer = defaultDialer()
         return apps.filter {
-            if (lockedOut) DetoxManager.isLockoutApp(context, it.appPackage)
+            if (lockedOut) DetoxManager.isLockoutApp(context, it)
             else (DetoxManager.whitelistKey(it) in wanted || it.appPackage == dialer) && DetoxManager.isAllowed(context, it.appPackage)
         }
             .sortedBy { it.user != android.os.Process.myUserHandle() }

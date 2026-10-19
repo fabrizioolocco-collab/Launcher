@@ -79,6 +79,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private lateinit var dock: DockController
     private lateinit var widgets: HomeWidgetsController
     private lateinit var detox: DetoxController
+    private lateinit var homeDetox: HomeDetoxBar
     private lateinit var detoxPage: DetoxPage
     private lateinit var search: HomeSearchController
 
@@ -237,6 +238,14 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             keepScreen = { viewModel.keepCurrentScreen = it },
         )
 
+        homeDetox = HomeDetoxBar(
+            root = binding.mainLayout,
+            prefs = prefs,
+            isCovered = { search.isActive },
+            onLock = { lockScreen() },
+        )
+        app.olauncher.ui.widgets.CalendarWidgetView.onTouched = { homeDetox.restart() }
+
         initObservers()
         setHomeAlignment(prefs.homeAlignment)
         initSwipeTouchListener()
@@ -250,6 +259,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     override fun onPause() {
         detox.onPause()
+        homeDetox.onPause()
         super.onPause()
     }
 
@@ -266,6 +276,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         widgets.refreshIfNeeded()
         widgets.onHomeResumed()
         detox.onResume()
+        homeDetox.onResume()
         search.onHomeResumed()
         if (!prefs.welcomeShown) {
             prefs.welcomeShown = true
@@ -796,6 +807,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         uiScope.cancel()
         widgets.release()
         detox.release()
+        homeDetox.release()
+        app.olauncher.ui.widgets.CalendarWidgetView.onTouched = null
         _binding = null
     }
 }

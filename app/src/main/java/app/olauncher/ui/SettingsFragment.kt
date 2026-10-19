@@ -300,6 +300,23 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.detoxLockoutAfter -> askNumber(R.string.ml_detox_lockout_after_hint, prefs.detoxLockoutAfter, 0..50) {
                 prefs.detoxLockoutAfter = it
             }
+            R.id.lockoutApps -> showLockoutApps()
+            R.id.homeDetox -> {
+                prefs.homeDetox = !prefs.homeDetox
+                populateTextStyle()
+            }
+            R.id.homeDetoxSeconds -> askNumber(R.string.ml_home_detox_seconds, prefs.homeDetoxSeconds, 3..600) {
+                prefs.homeDetoxSeconds = it
+            }
+            R.id.homeDetoxLockoutAfter -> askNumber(R.string.ml_detox_lockout_after_hint, prefs.homeDetoxLockoutAfter, 0..50) {
+                prefs.homeDetoxLockoutAfter = it
+            }
+            R.id.homeDetoxLockoutMinutes -> askNumber(R.string.ml_detox_lockout_minutes, prefs.homeDetoxLockoutMinutes, 1..240) {
+                prefs.homeDetoxLockoutMinutes = it
+            }
+            R.id.homeDetoxLockoutReset -> askNumber(R.string.ml_detox_lockout_reset, prefs.homeDetoxLockoutReset, 1..1440) {
+                prefs.homeDetoxLockoutReset = it
+            }
             R.id.alarmVibrateSeconds -> askNumber(R.string.ml_alarm_vibrate_seconds, prefs.alarmVibrateSeconds, 0..300) {
                 prefs.alarmVibrateSeconds = it
             }
@@ -446,6 +463,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxLockoutMinutes.setOnClickListener(this)
         binding.detoxLockoutReset.setOnClickListener(this)
         binding.alarmVibrateSeconds.setOnClickListener(this)
+        binding.lockoutApps.setOnClickListener(this)
+        binding.homeDetox.setOnClickListener(this)
+        binding.homeDetoxSeconds.setOnClickListener(this)
+        binding.homeDetoxLockoutAfter.setOnClickListener(this)
+        binding.homeDetoxLockoutMinutes.setOnClickListener(this)
+        binding.homeDetoxLockoutReset.setOnClickListener(this)
         binding.alarmRampSeconds.setOnClickListener(this)
         binding.detoxLockColor.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
@@ -531,6 +554,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxLockoutMinutes.text = getString(R.string.ml_detox_minutes, prefs.detoxLockoutMinutes)
         binding.detoxLockoutReset.text = getString(R.string.ml_detox_minutes, prefs.detoxLockoutReset)
         binding.alarmVibrateSeconds.text = getString(R.string.ml_detox_seconds, prefs.alarmVibrateSeconds)
+        binding.lockoutApps.text = DetoxManager.lockoutApps(ctx).size.toString()
+        binding.homeDetox.setText(if (prefs.homeDetox) R.string.on else R.string.off)
+        binding.homeDetoxSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSeconds)
+        binding.homeDetoxLockoutAfter.text = if (prefs.homeDetoxLockoutAfter > 0) prefs.homeDetoxLockoutAfter.toString() else getString(R.string.off)
+        binding.homeDetoxLockoutMinutes.text = getString(R.string.ml_detox_minutes, prefs.homeDetoxLockoutMinutes)
+        binding.homeDetoxLockoutReset.text = getString(R.string.ml_detox_minutes, prefs.homeDetoxLockoutReset)
         binding.alarmRampSeconds.text = getString(R.string.ml_detox_seconds, prefs.alarmRampSeconds)
         binding.detoxLockColor.text = if (prefs.detoxLockColor == 0) getString(R.string.ml_default)
         else "#%06X".format(prefs.detoxLockColor and 0xFFFFFF)
@@ -624,6 +653,28 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             ctx.showMultiSelectDialog(getString(R.string.ml_detox_whitelist), labels, checked, getString(R.string.ml_done)) { selected ->
                 if (!DetoxManager.setWhitelist(ctx, selected.map { DetoxManager.whitelistKey(apps[it]) }.toSet()))
                     ctx.showToast(getString(R.string.ml_detox_whitelist_locked))
+                if (_binding != null) populateTextStyle()
+            }
+        }
+    }
+
+    /** The apps usable during a lockout (detox and detox home), besides the phone. */
+    private fun showLockoutApps() {
+        val ctx = requireContext()
+        if (DetoxManager.isLockedOut(ctx)) {
+            ctx.showToast(getString(R.string.ml_detox_lockout_blocked))
+            return
+        }
+        viewModel.viewModelScope.launch {
+            val apps = getAppsList(ctx, prefs, includeRegularApps = true, includeHiddenApps = true)
+                .filterIsInstance<AppModel.App>()
+                .distinctBy { DetoxManager.whitelistKey(it) }
+                .sortedBy { it.appLabel.lowercase() }
+            val current = DetoxManager.lockoutApps(ctx)
+            val labels = apps.map { it.appLabel }
+            val checked = apps.indices.filter { DetoxManager.whitelistKey(apps[it]) in current }.toSet()
+            ctx.showMultiSelectDialog(getString(R.string.ml_lockout_apps), labels, checked, getString(R.string.ml_done)) { selected ->
+                DetoxManager.setLockoutApps(ctx, selected.map { DetoxManager.whitelistKey(apps[it]) }.toSet())
                 if (_binding != null) populateTextStyle()
             }
         }

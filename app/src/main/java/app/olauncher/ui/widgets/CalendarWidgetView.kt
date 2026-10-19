@@ -218,6 +218,11 @@ class CalendarWidgetView(
         return swiping
     }
 
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) onTouched?.invoke()
+        return super.dispatchTouchEvent(ev)
+    }
+
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
         if (touch.intercept(ev)) return true
         return trackSwipe(ev)
@@ -880,6 +885,9 @@ class CalendarWidgetView(
 
     companion object {
         const val KIND = "calendar"
+
+        /** Any touch on a calendar widget (the detox home bar starts again). */
+        var onTouched: (() -> Unit)? = null
         const val REQUEST_CALENDAR = 7110
         const val REQUEST_LOCATION = 7112
         private const val WEATHER_HOURS = 7

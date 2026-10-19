@@ -129,6 +129,11 @@ class Prefs(context: Context) {
     private val DETOX_LOCKOUT_MINUTES = "DETOX_LOCKOUT_MINUTES"
     private val DETOX_LOCKOUT_RESET = "DETOX_LOCKOUT_RESET"
     private val ALARM_VIBRATE_SECONDS = "ALARM_VIBRATE_SECONDS"
+    private val HOME_DETOX = "HOME_DETOX"
+    private val HOME_DETOX_SECONDS = "HOME_DETOX_SECONDS"
+    private val HOME_DETOX_LOCKOUT_AFTER = "HOME_DETOX_LOCKOUT_AFTER"
+    private val HOME_DETOX_LOCKOUT_MINUTES = "HOME_DETOX_LOCKOUT_MINUTES"
+    private val HOME_DETOX_LOCKOUT_RESET = "HOME_DETOX_LOCKOUT_RESET"
     private val ALARM_RAMP_SECONDS = "ALARM_RAMP_SECONDS"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
@@ -206,6 +211,29 @@ class Prefs(context: Context) {
     var detoxLockoutReset: Int
         get() = prefs.getInt(DETOX_LOCKOUT_RESET, 10)
         set(value) = prefs.edit { putInt(DETOX_LOCKOUT_RESET, value) }
+
+    /** Detox home: a bar on home locks the phone when no app is opened within [homeDetoxSeconds]. */
+    var homeDetox: Boolean
+        get() = prefs.getBoolean(HOME_DETOX, false)
+        set(value) = prefs.edit { putBoolean(HOME_DETOX, value) }
+
+    var homeDetoxSeconds: Int
+        get() = prefs.getInt(HOME_DETOX_SECONDS, 30)
+        set(value) = prefs.edit { putInt(HOME_DETOX_SECONDS, value) }
+
+    /** Detox home bars run out in a row before a lockout; 0 = never. */
+    var homeDetoxLockoutAfter: Int
+        get() = prefs.getInt(HOME_DETOX_LOCKOUT_AFTER, 3)
+        set(value) = prefs.edit { putInt(HOME_DETOX_LOCKOUT_AFTER, value) }
+
+    var homeDetoxLockoutMinutes: Int
+        get() = prefs.getInt(HOME_DETOX_LOCKOUT_MINUTES, 2)
+        set(value) = prefs.edit { putInt(HOME_DETOX_LOCKOUT_MINUTES, value) }
+
+    /** Minutes after the last missed detox home bar when the count starts again from zero. */
+    var homeDetoxLockoutReset: Int
+        get() = prefs.getInt(HOME_DETOX_LOCKOUT_RESET, 10)
+        set(value) = prefs.edit { putInt(HOME_DETOX_LOCKOUT_RESET, value) }
 
     /** ToDo alarms: seconds of vibration alone before the sound starts. */
     var alarmVibrateSeconds: Int
