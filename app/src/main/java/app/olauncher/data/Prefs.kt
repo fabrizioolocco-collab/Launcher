@@ -128,6 +128,8 @@ class Prefs(context: Context) {
     private val DETOX_LOCKOUT_AFTER = "DETOX_LOCKOUT_AFTER"
     private val DETOX_LOCKOUT_MINUTES = "DETOX_LOCKOUT_MINUTES"
     private val DETOX_LOCKOUT_RESET = "DETOX_LOCKOUT_RESET"
+    private val ALARM_VIBRATE_SECONDS = "ALARM_VIBRATE_SECONDS"
+    private val ALARM_RAMP_SECONDS = "ALARM_RAMP_SECONDS"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val BOTTOM_LABELS = "BOTTOM_LABELS"
@@ -204,6 +206,16 @@ class Prefs(context: Context) {
     var detoxLockoutReset: Int
         get() = prefs.getInt(DETOX_LOCKOUT_RESET, 10)
         set(value) = prefs.edit { putInt(DETOX_LOCKOUT_RESET, value) }
+
+    /** ToDo alarms: seconds of vibration alone before the sound starts. */
+    var alarmVibrateSeconds: Int
+        get() = prefs.getInt(ALARM_VIBRATE_SECONDS, 10)
+        set(value) = prefs.edit { putInt(ALARM_VIBRATE_SECONDS, value) }
+
+    /** ToDo alarms: seconds for the sound to grow from very low to full volume; 0 = full at once. */
+    var alarmRampSeconds: Int
+        get() = prefs.getInt(ALARM_RAMP_SECONDS, 30)
+        set(value) = prefs.edit { putInt(ALARM_RAMP_SECONDS, value) }
 
     /** Color of the detox lock countdown bar; 0 = default. */
     var detoxLockColor: Int

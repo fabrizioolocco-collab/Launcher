@@ -110,6 +110,8 @@
     <string name="ml_detox_lockout_after">Blocco dopo barre scadute</string>
     <string name="ml_detox_lockout_minutes">Minuti di blocco</string>
     <string name="ml_detox_lockout_reset">Azzera barre scadute dopo</string>
+    <string name="ml_alarm_vibrate_seconds">Sveglia ToDo: solo vibrazione</string>
+    <string name="ml_alarm_ramp_seconds">Sveglia ToDo: fino al volume pieno</string>
     <string name="ml_detox_missed_bars">Barre scadute %1$d/%2$d</string>
     <string name="ml_detox_lockout_after_hint">Barre di fila (0 = mai)</string>
     <string name="ml_detox_lockout_title">Telefono bloccato</string>

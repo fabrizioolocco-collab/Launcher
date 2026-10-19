@@ -14,12 +14,10 @@ import android.os.VibratorManager
 
 /**
  * The ringing of the todo alarms: vibration alone first, then the alarm sound joins in, from very
- * low up to full volume (the alarm volume of the phone). It goes on until every ringing alarm is
- * answered, at most [MAX_MS].
+ * low up to full volume (the alarm volume of the phone); both times are in Settings. It goes on
+ * until every ringing alarm is answered, at most [MAX_MS].
  */
 object AlarmRinger {
-    private const val VIBRATE_ONLY_MS = 10_000L
-    private const val RAMP_MS = 30_000L
     private const val STEP_MS = 500L
     private const val START_VOLUME = 0.03f
     private const val MAX_MS = 15 * 60_000L
@@ -30,6 +28,7 @@ object AlarmRinger {
     private var vibrator: Vibrator? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var soundStart = 0L
+    private var rampMs = 0L
     private var appContext: Context? = null
     private val soundStarter = Runnable { appContext?.let { startSound(it) } }
     private val timeout = Runnable { stopAll() }
@@ -46,9 +45,11 @@ object AlarmRinger {
             ringing += id
             if (wasRinging) return@post
             appContext = ctx
+            val prefs = app.olauncher.data.Prefs(ctx)
+            rampMs = prefs.alarmRampSeconds * 1000L
             acquireWakeLock(ctx)
             vibrate(ctx)
-            handler.postDelayed(soundStarter, VIBRATE_ONLY_MS)
+            handler.postDelayed(soundStarter, prefs.alarmVibrateSeconds * 1000L)
             handler.postDelayed(timeout, MAX_MS)
         }
     }
@@ -115,7 +116,8 @@ object AlarmRinger {
                 setAudioAttributes(alarmAttributes)
                 setDataSource(ctx, uri)
                 isLooping = true
-                setVolume(START_VOLUME, START_VOLUME)
+                val first = if (rampMs > 0) START_VOLUME else 1f
+                setVolume(first, first)
                 prepare()
                 start()
             }
@@ -124,14 +126,14 @@ object AlarmRinger {
             null
         } ?: return
         soundStart = System.currentTimeMillis()
-        handler.post(ramp)
+        if (rampMs > 0) handler.post(ramp)
     }
 
-    /** Volume up from [START_VOLUME] to full in [RAMP_MS], on a curve so the start stays soft. */
+    /** Volume up from [START_VOLUME] to full in [rampMs], on a curve so the start stays soft. */
     private val ramp = object : Runnable {
         override fun run() {
             val p = player ?: return
-            val share = ((System.currentTimeMillis() - soundStart).toFloat() / RAMP_MS).coerceIn(0f, 1f)
+            val share = ((System.currentTimeMillis() - soundStart).toFloat() / rampMs).coerceIn(0f, 1f)
             val volume = START_VOLUME + (1f - START_VOLUME) * share * share
             try {
                 p.setVolume(volume, volume)
