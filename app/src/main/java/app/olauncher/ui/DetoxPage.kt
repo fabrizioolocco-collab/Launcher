@@ -67,6 +67,11 @@ class DetoxPage(
         addView(lockFill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
     }
     private var lockAnimator: android.animation.ValueAnimator? = null
+    /** Missed lock bars out of those that lock the phone out, e.g. "2/3". */
+    private val missed = smallText().apply {
+        isVisible = false
+        gravity = Gravity.END
+    }
     private val remaining = TextView(context, null, 0, R.style.TextDefault).apply {
         textSize = 64f
         setTypeface(typeface, Typeface.BOLD)
@@ -118,6 +123,7 @@ class DetoxPage(
             })
         }, matchWrap(top = 12))
         column.addView(lockBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 6.dpToPx()).apply { topMargin = 16.dpToPx() })
+        column.addView(missed, matchWrap(top = 6))
         column.addView(LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             background = GradientDrawable().apply {
@@ -262,7 +268,8 @@ class DetoxPage(
                     lockAnimator = null
                     lockBar.isVisible = false
                     if (!page.isVisible) return
-                    if (DetoxManager.lockBarMissed(context, prefs.detoxLockoutAfter, prefs.detoxLockoutMinutes)) update()
+                    if (DetoxManager.lockBarMissed(context, prefs.detoxLockoutAfter, prefs.detoxLockoutMinutes, prefs.detoxLockoutReset)) update()
+                    updateMissed()
                     onLock()
                 }
             })
@@ -301,8 +308,18 @@ class DetoxPage(
         now.text = "${time.format(java.util.Date())}  ·  $date"
         started.text = context.getString(R.string.ml_detox_started_at, time.format(java.util.Date(start)))
         ends.text = context.getString(R.string.ml_detox_ends_at, time.format(java.util.Date(end)))
+        updateMissed()
         if (lockedOut) lockoutNote.text = context.getString(
             R.string.ml_detox_lockout_message, time.format(java.util.Date(DetoxManager.lockoutEnd(context)))
+        )
+    }
+
+    /** The missed bars count, while the lockout is on and not running. */
+    private fun updateMissed() {
+        val after = prefs.detoxLockoutAfter
+        missed.isVisible = prefs.detoxLock && after > 0 && !lockedOut
+        if (missed.isVisible) missed.text = context.getString(
+            R.string.ml_detox_missed_bars, DetoxManager.missedBars(context, prefs.detoxLockoutReset), after
         )
     }
 

@@ -300,6 +300,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.detoxLockoutAfter -> askNumber(R.string.ml_detox_lockout_after_hint, prefs.detoxLockoutAfter, 0..50) {
                 prefs.detoxLockoutAfter = it
             }
+            R.id.detoxLockoutReset -> askNumber(R.string.ml_detox_lockout_reset, prefs.detoxLockoutReset, 1..1440) {
+                prefs.detoxLockoutReset = it
+            }
             R.id.detoxLockoutMinutes -> askNumber(R.string.ml_detox_lockout_minutes, prefs.detoxLockoutMinutes, 1..240) {
                 prefs.detoxLockoutMinutes = it
             }
@@ -435,6 +438,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxLockSeconds.setOnClickListener(this)
         binding.detoxLockoutAfter.setOnClickListener(this)
         binding.detoxLockoutMinutes.setOnClickListener(this)
+        binding.detoxLockoutReset.setOnClickListener(this)
         binding.detoxLockColor.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
         binding.mediaViewer?.setOnClickListener(this)
@@ -517,6 +521,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxLockSeconds.text = getString(R.string.ml_detox_seconds, prefs.detoxLockSeconds)
         binding.detoxLockoutAfter.text = if (prefs.detoxLockoutAfter > 0) prefs.detoxLockoutAfter.toString() else getString(R.string.off)
         binding.detoxLockoutMinutes.text = getString(R.string.ml_detox_minutes, prefs.detoxLockoutMinutes)
+        binding.detoxLockoutReset.text = getString(R.string.ml_detox_minutes, prefs.detoxLockoutReset)
         binding.detoxLockColor.text = if (prefs.detoxLockColor == 0) getString(R.string.ml_default)
         else "#%06X".format(prefs.detoxLockColor and 0xFFFFFF)
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)

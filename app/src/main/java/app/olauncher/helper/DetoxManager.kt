@@ -35,6 +35,7 @@ object DetoxManager {
     private const val KEY_LAST_MINUTES = "LAST_MINUTES"
     private const val KEY_LOCKOUT_END = "LOCKOUT_END"
     private const val KEY_MISSED_BARS = "MISSED_BARS"
+    private const val KEY_MISSED_AT = "MISSED_AT"
 
     /** Payment apps usable during a lockout, besides the default tap-to-pay app. */
     private val WALLETS = setOf(
@@ -185,15 +186,27 @@ object DetoxManager {
 
     fun lockoutLeftMs(context: Context) = (lockoutEnd(context) - System.currentTimeMillis()).coerceAtLeast(0)
 
+    /** Lock bars run out in a row; they count no more once [resetMinutes] passed since the last one. */
+    fun missedBars(context: Context, resetMinutes: Int): Int {
+        val missed = prefs(context).getInt(KEY_MISSED_BARS, 0)
+        if (missed == 0) return 0
+        val at = prefs(context).getLong(KEY_MISSED_AT, 0L)
+        return if (resetMinutes > 0 && System.currentTimeMillis() - at >= resetMinutes * 60_000L) 0 else missed
+    }
+
     /**
-     * The page's lock bar ran out with no app opened. After [after] times in a row (0 = never) the
-     * phone is locked out for [minutes]; the session lasts at least until then. True when it was.
+     * The page's lock bar ran out with no app opened. After [after] times in a row (0 = never, the
+     * count starting again [resetMinutes] after the last one) the phone is locked out for
+     * [minutes]; the session lasts at least until then. True when it was.
      */
-    fun lockBarMissed(context: Context, after: Int, minutes: Int): Boolean {
+    fun lockBarMissed(context: Context, after: Int, minutes: Int, resetMinutes: Int): Boolean {
         if (!isActive(context) || isLockedOut(context)) return false
-        val missed = prefs(context).getInt(KEY_MISSED_BARS, 0) + 1
+        val missed = missedBars(context, resetMinutes) + 1
         if (after <= 0 || missed < after || minutes <= 0) {
-            prefs(context).edit { putInt(KEY_MISSED_BARS, missed) }
+            prefs(context).edit {
+                putInt(KEY_MISSED_BARS, missed)
+                putLong(KEY_MISSED_AT, System.currentTimeMillis())
+            }
             return false
         }
         val until = System.currentTimeMillis() + minutes * 60_000L

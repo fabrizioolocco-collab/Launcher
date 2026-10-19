@@ -127,6 +127,7 @@ class Prefs(context: Context) {
     private val DETOX_LOCK_COLOR = "DETOX_LOCK_COLOR"
     private val DETOX_LOCKOUT_AFTER = "DETOX_LOCKOUT_AFTER"
     private val DETOX_LOCKOUT_MINUTES = "DETOX_LOCKOUT_MINUTES"
+    private val DETOX_LOCKOUT_RESET = "DETOX_LOCKOUT_RESET"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val BOTTOM_LABELS = "BOTTOM_LABELS"
@@ -198,6 +199,11 @@ class Prefs(context: Context) {
     var detoxLockoutMinutes: Int
         get() = prefs.getInt(DETOX_LOCKOUT_MINUTES, 2)
         set(value) = prefs.edit { putInt(DETOX_LOCKOUT_MINUTES, value) }
+
+    /** Minutes after the last missed lock bar when the count starts again from zero. */
+    var detoxLockoutReset: Int
+        get() = prefs.getInt(DETOX_LOCKOUT_RESET, 10)
+        set(value) = prefs.edit { putInt(DETOX_LOCKOUT_RESET, value) }
 
     /** Color of the detox lock countdown bar; 0 = default. */
     var detoxLockColor: Int
