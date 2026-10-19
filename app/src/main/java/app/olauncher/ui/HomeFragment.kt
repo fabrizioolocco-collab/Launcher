@@ -80,6 +80,20 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private lateinit var widgets: HomeWidgetsController
     private lateinit var detox: DetoxController
     private lateinit var homeDetox: HomeDetoxBar
+    /** With detox home on, the ring and its count take the place of the Detox button's icon. */
+    private val detoxRingListener: () -> Unit = { updateDetoxButton() }
+
+    /**
+     * The Detox button: its icon, or detox home's ring and count while it is on; on the search page
+     * (button hidden) only the ring stays, at the left of the box.
+     */
+    private fun updateDetoxButton() {
+        val b = _binding ?: return
+        val ring = app.olauncher.ui.widgets.DetoxRingView.State.enabled
+        b.detoxButton.imageAlpha = if (ring) 0 else 255
+        val show = ring || b.detoxButton.isVisible
+        if (b.detoxButtonBox.isVisible != show) b.detoxButtonBox.isVisible = show
+    }
     private lateinit var detoxPage: DetoxPage
     private lateinit var search: HomeSearchController
 
@@ -245,6 +259,15 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             onLock = { lockScreen() },
         )
         app.olauncher.ui.widgets.CalendarWidgetView.onTouched = { homeDetox.restart() }
+        // Detox home's ring around the Detox button (and at the left of the search page's box)
+        binding.detoxButtonBox.addView(
+            app.olauncher.ui.widgets.DetoxRingView(requireContext(), -1, inBar = true),
+            android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        )
+        app.olauncher.ui.widgets.DetoxRingView.State.listeners += detoxRingListener
+        // The search page hides the button: keep the box only for the ring
+        binding.detoxButton.viewTreeObserver.addOnGlobalLayoutListener { updateDetoxButton() }
+        updateDetoxButton()
 
         initObservers()
         setHomeAlignment(prefs.homeAlignment)
@@ -809,6 +832,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         detox.release()
         homeDetox.release()
         app.olauncher.ui.widgets.CalendarWidgetView.onTouched = null
+        app.olauncher.ui.widgets.DetoxRingView.State.listeners -= detoxRingListener
         _binding = null
     }
 }

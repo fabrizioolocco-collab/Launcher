@@ -447,6 +447,7 @@ class HomeWidgetsController(
                 when (widget.builtin) {
                     CalendarWidgetView.KIND -> free.addView(calendarView(widget))
                     BatteryWidgetView.KIND -> free.addView(batteryView(widget))
+                    DetoxRingView.KIND -> free.addView(detoxRingView(widget))
                 }
                 return@forEach
             }
@@ -570,6 +571,17 @@ class HomeWidgetsController(
 
     private fun batteryView(widget: HomeWidget): View {
         val view = BatteryWidgetView(activity, widget.appWidgetId)
+        view.tag = widget
+        view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
+            leftMargin = widget.x.dpToPx()
+            topMargin = widget.y.dpToPx()
+        }
+        view.touch.listener = dragListener(null)
+        return view
+    }
+
+    private fun detoxRingView(widget: HomeWidget): View {
+        val view = DetoxRingView(activity, widget.appWidgetId)
         view.tag = widget
         view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
             leftMargin = widget.x.dpToPx()
@@ -760,6 +772,7 @@ class HomeWidgetsController(
             when {
                 view is CalendarWidgetView -> showCalendarMenu(item, view)
                 view is BatteryWidgetView -> showBatteryMenu(item, view)
+                view is DetoxRingView -> showDetoxRingMenu(item, view)
                 info != null -> showWidgetMenu(item, info, view as MinimaWidgetHostView)
                 else -> showIconMenu(item)
             }
@@ -970,6 +983,7 @@ class HomeWidgetsController(
         val builtIns = listOf(
             WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_cal_widget), R.drawable.ic_calendar) { addCalendarWidget() },
             WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_battery_widget), R.drawable.ic_m_battery) { addBatteryWidget() },
+            WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_home_detox), R.drawable.ic_m_detox) { addDetoxRingWidget() },
         )
         WidgetPickerDialog.show(activity, items, scope, builtIns) { startAdding(it) }
     }
@@ -998,6 +1012,31 @@ class HomeWidgetsController(
         widgets.add(HomeWidget(id, x = x, y = y, w = w, h = h, builtin = BatteryWidgetView.KIND))
         save()
         render()
+    }
+
+    /** Adds the detox home ring: small and square, to be moved and resized at will. */
+    private fun addDetoxRingWidget() {
+        val id = (widgets.filter { it.isBuiltin }.minOfOrNull { it.appWidgetId } ?: BUILTIN_FIRST_ID) - 1
+        val size = (cellPx().toDp() / 2).coerceAtLeast(DetoxRingView.MIN_SIZE_DP)
+        val (x, y) = freePositionFor(size, size)
+        widgets.add(HomeWidget(id, x = x, y = y, w = size, h = size, builtin = DetoxRingView.KIND))
+        save()
+        render()
+        if (!prefs.homeDetox) activity.showToast(activity.getString(R.string.ml_home_detox_off_hint))
+    }
+
+    private fun showDetoxRingMenu(widget: HomeWidget, view: DetoxRingView) {
+        activity.showMenuDialog(
+            activity.getString(R.string.ml_home_detox),
+            listOf(
+                MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
+                MenuEntry(activity.getString(R.string.ml_widget_remove)) {
+                    widgets.remove(widget)
+                    save()
+                    render()
+                },
+            )
+        )
     }
 
     private fun showBatteryMenu(widget: HomeWidget, view: BatteryWidgetView) {

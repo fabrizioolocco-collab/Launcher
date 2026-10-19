@@ -113,6 +113,7 @@
     <string name="ml_detox_lockout_reset">Missed bars reset after</string>
     <string name="ml_lockout_apps">Apps during the lockout</string>
     <string name="ml_home_detox">Detox home</string>
+    <string name="ml_home_detox_off_hint">Turn on Detox home in Settings to start the countdown</string>
     <string name="ml_home_detox_seconds">Detox home: seconds to open an app</string>
     <string name="ml_home_detox_lockout_after">Detox home: lock out after missed bars</string>
     <string name="ml_home_detox_lockout_minutes">Detox home: lockout minutes</string>

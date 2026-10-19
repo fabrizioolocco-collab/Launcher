@@ -124,7 +124,7 @@ class FreeWidgetLayout @JvmOverloads constructor(
                 val dy = (event.y - downY).toInt()
                 var left = startLeft; var top = startTop; var right = startRight; var bottom = startBottom
                 // The battery widget is meant to be tiny
-                val min = if (target is BatteryWidgetView) BatteryWidgetView.MIN_SIZE_DP.dpToPx() else minSize
+                val min = if (target is BatteryWidgetView || target is DetoxRingView) BatteryWidgetView.MIN_SIZE_DP.dpToPx() else minSize
                 when (activeHandle) {
                     0 -> left = (startLeft + dx).coerceIn(0, startRight - min)
                     1 -> top = (startTop + dy).coerceIn(0, startBottom - min)
