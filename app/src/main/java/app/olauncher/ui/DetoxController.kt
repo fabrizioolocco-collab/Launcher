@@ -218,6 +218,10 @@ class DetoxController(
 
     private fun showSessionMenu() {
         val ctx = activity
+        if (DetoxManager.isLockedOut(ctx)) {
+            ctx.showToast(ctx.getString(R.string.ml_detox_lockout_running, DetoxManager.formatDuration(DetoxManager.lockoutLeftMs(ctx))))
+            return
+        }
         val entries = mutableListOf<MenuEntry>()
         if (!DetoxManager.isStrict(ctx)) {
             entries += MenuEntry(ctx.getString(R.string.ml_detox_end)) { DetoxManager.end(ctx) }

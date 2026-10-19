@@ -107,6 +107,13 @@
     <string name="ml_detox_lock_seconds">Secondi per aprire un\'app</string>
     <string name="ml_detox_lock_color">Colore barra di blocco</string>
     <string name="ml_detox_seconds">%1$d s</string>
+    <string name="ml_detox_lockout_after">Blocco dopo barre scadute</string>
+    <string name="ml_detox_lockout_minutes">Minuti di blocco</string>
+    <string name="ml_detox_lockout_after_hint">Barre di fila (0 = mai)</string>
+    <string name="ml_detox_lockout_title">Telefono bloccato</string>
+    <string name="ml_detox_lockout_message">Solo telefonate e wallet fino alle %1$s</string>
+    <string name="ml_detox_lockout_running">Telefono bloccato: ancora %1$s</string>
+    <string name="ml_detox_lockout_blocked">Telefono bloccato: solo telefonate e wallet</string>
     <string name="ml_permissions">Permessi</string>
     <string name="ml_welcome_title">Benvenuto</string>
     <string name="ml_welcome_message">Tocca ogni voce per concedere il permesso. Servono per badge, detox e strict mode.</string>

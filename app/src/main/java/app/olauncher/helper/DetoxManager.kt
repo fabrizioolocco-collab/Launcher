@@ -18,6 +18,8 @@ import app.olauncher.BuildConfig
  * - Notifications of blocked apps are snoozed until the end and counted as "paused".
  * - Strict sessions: no changes to timer or whitelist, Android Settings blocked (so permissions
  *   can't be revoked), and leaving early requires asking and then waiting [EXIT_WAIT_MS].
+ * - Lockout: when the detox page's lock bar runs out several times in a row with no app opened,
+ *   for a few minutes only calls and the wallet can be used (the session can't be ended meanwhile).
  *
  * State is in SharedPreferences (wall-clock times) so it survives restarts and reboots.
  */
@@ -31,6 +33,16 @@ object DetoxManager {
     private const val KEY_STRICT = "STRICT"
     private const val KEY_EXIT_REQUESTED = "EXIT_REQUESTED_AT"
     private const val KEY_LAST_MINUTES = "LAST_MINUTES"
+    private const val KEY_LOCKOUT_END = "LOCKOUT_END"
+    private const val KEY_MISSED_BARS = "MISSED_BARS"
+
+    /** Payment apps usable during a lockout, besides the default tap-to-pay app. */
+    private val WALLETS = setOf(
+        "com.google.android.apps.walletnfcrel",
+        "com.samsung.android.spay",
+        "com.samsung.android.spaymini",
+        "com.samsung.android.samsungpay.gear",
+    )
 
     /** Always usable: calls and emergency calls, system UI, the launcher itself. */
     private val ALWAYS_ALLOWED = setOf(
@@ -119,6 +131,8 @@ object DetoxManager {
             putBoolean(KEY_STRICT, strict)
             putLong(KEY_EXIT_REQUESTED, 0L)
             putInt(KEY_LAST_MINUTES, minutes)
+            putLong(KEY_LOCKOUT_END, 0L)
+            putInt(KEY_MISSED_BARS, 0)
         }
         changed()
         NotificationListener.instance?.applyDetox()
@@ -129,6 +143,8 @@ object DetoxManager {
         prefs(context).edit {
             putLong(KEY_END, 0L)
             putLong(KEY_EXIT_REQUESTED, 0L)
+            putLong(KEY_LOCKOUT_END, 0L)
+            putInt(KEY_MISSED_BARS, 0)
         }
         changed()
         NotificationListener.instance?.restoreSnoozed()
@@ -161,12 +177,59 @@ object DetoxManager {
         changed()
     }
 
+    // ---------------------------------------------------------------- lockout
+
+    fun lockoutEnd(context: Context) = prefs(context).getLong(KEY_LOCKOUT_END, 0L)
+
+    fun isLockedOut(context: Context) = isActive(context) && lockoutEnd(context) > System.currentTimeMillis()
+
+    fun lockoutLeftMs(context: Context) = (lockoutEnd(context) - System.currentTimeMillis()).coerceAtLeast(0)
+
+    /**
+     * The page's lock bar ran out with no app opened. After [after] times in a row (0 = never) the
+     * phone is locked out for [minutes]; the session lasts at least until then. True when it was.
+     */
+    fun lockBarMissed(context: Context, after: Int, minutes: Int): Boolean {
+        if (!isActive(context) || isLockedOut(context)) return false
+        val missed = prefs(context).getInt(KEY_MISSED_BARS, 0) + 1
+        if (after <= 0 || missed < after || minutes <= 0) {
+            prefs(context).edit { putInt(KEY_MISSED_BARS, missed) }
+            return false
+        }
+        val until = System.currentTimeMillis() + minutes * 60_000L
+        prefs(context).edit {
+            putInt(KEY_MISSED_BARS, 0)
+            putLong(KEY_LOCKOUT_END, until)
+            if (endTime(context) < until) putLong(KEY_END, until)
+        }
+        changed()
+        return true
+    }
+
+    /** An app was opened from the detox page: the missed bars start again from zero. */
+    fun lockBarUsed(context: Context) {
+        if (prefs(context).getInt(KEY_MISSED_BARS, 0) != 0) prefs(context).edit { putInt(KEY_MISSED_BARS, 0) }
+    }
+
+    /** Usable during a lockout: the phone (and the calls' screens) and the wallet. */
+    fun isLockoutApp(context: Context, packageName: String): Boolean =
+        packageName == defaultDialer(context) || packageName in WALLETS || packageName == defaultPaymentApp(context)
+
+    private fun defaultPaymentApp(context: Context): String? = try {
+        Settings.Secure.getString(context.contentResolver, "nfc_payment_default_component")
+            ?.let { android.content.ComponentName.unflattenFromString(it)?.packageName }
+    } catch (e: Exception) {
+        null
+    }
+
     // ---------------------------------------------------------------- what is allowed
 
     /** Can [packageName] be used right now? Always true outside a session. */
     fun isAllowed(context: Context, packageName: String): Boolean {
         if (!isActive(context)) return true
         if (packageName.isBlank()) return true
+        if (isLockedOut(context)) return packageName in ALWAYS_ALLOWED || isLockoutApp(context, packageName) ||
+                packageName in inputMethods(context)
         // Folder shortcuts on home are not apps
         if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName)) return true
         if (isStrict(context) && packageName in STRICT_BLOCKED) return false

@@ -125,6 +125,8 @@ class Prefs(context: Context) {
     private val DETOX_LOCK = "DETOX_LOCK"
     private val DETOX_LOCK_SECONDS = "DETOX_LOCK_SECONDS"
     private val DETOX_LOCK_COLOR = "DETOX_LOCK_COLOR"
+    private val DETOX_LOCKOUT_AFTER = "DETOX_LOCKOUT_AFTER"
+    private val DETOX_LOCKOUT_MINUTES = "DETOX_LOCKOUT_MINUTES"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
     private val BOTTOM_LABELS = "BOTTOM_LABELS"
@@ -186,6 +188,16 @@ class Prefs(context: Context) {
     var detoxLockSeconds: Int
         get() = prefs.getInt(DETOX_LOCK_SECONDS, 15)
         set(value) = prefs.edit { putInt(DETOX_LOCK_SECONDS, value) }
+
+    /** Detox lock bars run out in a row (no app opened) before the phone is locked out; 0 = never. */
+    var detoxLockoutAfter: Int
+        get() = prefs.getInt(DETOX_LOCKOUT_AFTER, 3)
+        set(value) = prefs.edit { putInt(DETOX_LOCKOUT_AFTER, value) }
+
+    /** Minutes of a detox lockout: only calls and the wallet can be used. */
+    var detoxLockoutMinutes: Int
+        get() = prefs.getInt(DETOX_LOCKOUT_MINUTES, 2)
+        set(value) = prefs.edit { putInt(DETOX_LOCKOUT_MINUTES, value) }
 
     /** Color of the detox lock countdown bar; 0 = default. */
     var detoxLockColor: Int

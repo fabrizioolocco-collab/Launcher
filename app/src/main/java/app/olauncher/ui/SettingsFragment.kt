@@ -45,6 +45,7 @@ import app.olauncher.helper.getAppsList
 import app.olauncher.helper.showMultiSelectDialog
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showColorPickerDialog
 import app.olauncher.data.AppModel
 import androidx.lifecycle.viewModelScope
@@ -293,14 +294,14 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 prefs.detoxLock = !prefs.detoxLock
                 populateTextStyle()
             }
-            R.id.detoxLockSeconds -> {
-                val ctx = requireContext()
-                ctx.showMenuDialog(getString(R.string.ml_detox_lock_seconds), listOf(10, 15, 20, 30, 45, 60).map { s ->
-                    MenuEntry(getString(R.string.ml_detox_seconds, s)) {
-                        prefs.detoxLockSeconds = s
-                        if (_binding != null) populateTextStyle()
-                    }
-                })
+            R.id.detoxLockSeconds -> askNumber(R.string.ml_detox_lock_seconds, prefs.detoxLockSeconds, 3..600) {
+                prefs.detoxLockSeconds = it
+            }
+            R.id.detoxLockoutAfter -> askNumber(R.string.ml_detox_lockout_after_hint, prefs.detoxLockoutAfter, 0..50) {
+                prefs.detoxLockoutAfter = it
+            }
+            R.id.detoxLockoutMinutes -> askNumber(R.string.ml_detox_lockout_minutes, prefs.detoxLockoutMinutes, 1..240) {
+                prefs.detoxLockoutMinutes = it
             }
             R.id.detoxLockColor -> requireContext().showColorPickerDialog(
                 getString(R.string.ml_detox_lock_color), prefs.detoxLockColor, getString(R.string.ml_default),
@@ -432,6 +433,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxWhitelist.setOnClickListener(this)
         binding.detoxLock.setOnClickListener(this)
         binding.detoxLockSeconds.setOnClickListener(this)
+        binding.detoxLockoutAfter.setOnClickListener(this)
+        binding.detoxLockoutMinutes.setOnClickListener(this)
         binding.detoxLockColor.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
         binding.mediaViewer?.setOnClickListener(this)
@@ -512,6 +515,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.detoxWhitelist.text = DetoxManager.whitelist(ctx).size.toString()
         binding.detoxLock.setText(if (prefs.detoxLock) R.string.on else R.string.off)
         binding.detoxLockSeconds.text = getString(R.string.ml_detox_seconds, prefs.detoxLockSeconds)
+        binding.detoxLockoutAfter.text = if (prefs.detoxLockoutAfter > 0) prefs.detoxLockoutAfter.toString() else getString(R.string.off)
+        binding.detoxLockoutMinutes.text = getString(R.string.ml_detox_minutes, prefs.detoxLockoutMinutes)
         binding.detoxLockColor.text = if (prefs.detoxLockColor == 0) getString(R.string.ml_default)
         else "#%06X".format(prefs.detoxLockColor and 0xFFFFFF)
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
@@ -571,6 +576,18 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 else -> onPick(options[item.itemId - 1].id)
             }
             populateTextStyle()
+        }
+    }
+
+    /** A whole number typed in, kept within [range]. */
+    private fun askNumber(title: Int, current: Int, range: IntRange, onSet: (Int) -> Unit) {
+        requireContext().showTextInputDialog(
+            getString(title), current.toString(), "${range.first}–${range.last}", getString(R.string.ml_save),
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER,
+        ) { text ->
+            val value = text.toIntOrNull() ?: return@showTextInputDialog
+            onSet(value.coerceIn(range))
+            if (_binding != null) populateTextStyle()
         }
     }
 

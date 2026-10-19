@@ -385,6 +385,7 @@ fun Context.showTextInputDialog(
     action: String,
     /** Lets an empty text be saved (e.g. to go back to a default name). */
     allowBlank: Boolean = false,
+    inputType: Int = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES,
     onSave: (String) -> Unit,
 ): OlDialog {
     val (dialog, binding) = baseDialog(title)
@@ -395,7 +396,7 @@ fun Context.showTextInputDialog(
         this.hint = hint
         setSingleLine(true)
         imeOptions = EditorInfo.IME_ACTION_DONE
-        inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        this.inputType = inputType
         app.olauncher.ui.UiKit.styleInput(this)
         textSize = 18f
         layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {

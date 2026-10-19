@@ -108,6 +108,13 @@
     <string name="ml_detox_lock_seconds">Seconds to open an app</string>
     <string name="ml_detox_lock_color">Lock bar color</string>
     <string name="ml_detox_seconds">%1$d s</string>
+    <string name="ml_detox_lockout_after">Lock out after missed bars</string>
+    <string name="ml_detox_lockout_minutes">Lockout minutes</string>
+    <string name="ml_detox_lockout_after_hint">Bars in a row (0 = never)</string>
+    <string name="ml_detox_lockout_title">Phone locked</string>
+    <string name="ml_detox_lockout_message">Only calls and the wallet until %1$s</string>
+    <string name="ml_detox_lockout_running">Phone locked: %1$s left</string>
+    <string name="ml_detox_lockout_blocked">Phone locked: only calls and the wallet</string>
     <string name="ml_permissions">Permissions</string>
     <string name="ml_welcome_title">Welcome</string>
     <string name="ml_welcome_message">Tap each item to grant the permission. They are needed for badges, detox and strict mode.</string>

@@ -37,7 +37,8 @@ class MyAccessibilityService : AccessibilityService() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastBlockToast > 3000) {
             lastBlockToast = now
-            Toast.makeText(this, getString(R.string.ml_detox_blocked), Toast.LENGTH_SHORT).show()
+            val message = if (DetoxManager.isLockedOut(this)) R.string.ml_detox_lockout_blocked else R.string.ml_detox_blocked
+            Toast.makeText(this, getString(message), Toast.LENGTH_SHORT).show()
         }
     }
 

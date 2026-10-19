@@ -32,7 +32,9 @@ import kotlin.math.ceil
  * bar on top, then the allowed apps sharing the rest of the page, all in sight however many they
  * are (rows, taller the fewer they are; more columns when they don't fit), each with the count of
  * its notifications; "End" opens the session menu. Optionally (Settings) a second bar empties in
- * a few seconds and the phone is locked if no app was opened meanwhile.
+ * a few seconds and the phone is locked if no app was opened meanwhile; when that happens several
+ * times in a row the phone is locked out for a few minutes and the page offers only the phone and
+ * the wallet.
  */
 class DetoxPage(
     private val page: FrameLayout,
@@ -87,6 +89,13 @@ class DetoxPage(
     private val list = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
     private val listBox = FrameLayout(context)
     private var shown: List<AppModel.App> = emptyList()
+    private val lockoutNote = smallText().apply {
+        textSize = 15f
+        setTextColor(primary)
+        isVisible = false
+    }
+    private val endButton = endButton()
+    private var lockedOut = false
 
     init {
         page.setBackgroundColor(context.getColorFromAttr(R.attr.primaryInverseColor))
@@ -124,6 +133,7 @@ class DetoxPage(
             addView(ends, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }, matchWrap(top = 10))
 
+        column.addView(lockoutNote, matchWrap(top = 20))
         listBox.addView(list, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         // The apps share the room left: laid out again once its size is known or changes
         listBox.addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
@@ -133,7 +143,7 @@ class DetoxPage(
             topMargin = 24.dpToPx()
             bottomMargin = 16.dpToPx()
         })
-        column.addView(endButton(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()).apply {
+        column.addView(endButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()).apply {
             gravity = Gravity.CENTER_HORIZONTAL
         })
         page.addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -193,8 +203,14 @@ class DetoxPage(
             stopLockCountdown()
             return
         }
-        if (!wasVisible) {
+        val lock = DetoxManager.isLockedOut(context)
+        if (!wasVisible || lock != lockedOut) {
+            lockedOut = lock
+            lockoutNote.isVisible = lock
+            endButton.isVisible = !lock
             renderApps()
+        }
+        if (!wasVisible) {
             onShown()
             startLockCountdown()
         }
@@ -245,7 +261,9 @@ class DetoxPage(
                     if (cancelled) return
                     lockAnimator = null
                     lockBar.isVisible = false
-                    if (page.isVisible) onLock()
+                    if (!page.isVisible) return
+                    if (DetoxManager.lockBarMissed(context, prefs.detoxLockoutAfter, prefs.detoxLockoutMinutes)) update()
+                    onLock()
                 }
             })
             start()
@@ -269,6 +287,10 @@ class DetoxPage(
             remaining.text = context.getString(R.string.ml_detox_minutes, minutes)
         }
         remainingLabel.text = context.getString(R.string.ml_detox_left)
+        if (lockedOut) {
+            remaining.text = DetoxManager.formatDuration(DetoxManager.lockoutLeftMs(context))
+            remainingLabel.text = context.getString(R.string.ml_detox_lockout_title).lowercase()
+        }
         val total = (end - start).coerceAtLeast(1)
         val share = (left.toFloat() / total).coerceIn(0f, 1f)
         (fill.layoutParams as LinearLayout.LayoutParams).weight = share
@@ -279,18 +301,25 @@ class DetoxPage(
         now.text = "${time.format(java.util.Date())}  ·  $date"
         started.text = context.getString(R.string.ml_detox_started_at, time.format(java.util.Date(start)))
         ends.text = context.getString(R.string.ml_detox_ends_at, time.format(java.util.Date(end)))
+        if (lockedOut) lockoutNote.text = context.getString(
+            R.string.ml_detox_lockout_message, time.format(java.util.Date(DetoxManager.lockoutEnd(context)))
+        )
     }
 
     // ---------------------------------------------------------------- apps
 
     /**
      * The apps allowed in detox (the launcher's own apps and the home's folders included; one each,
-     * the own profile first) plus the phone, always allowed, in alphabetical order.
+     * the own profile first) plus the phone, always allowed, in alphabetical order. During a
+     * lockout only the phone and the wallet.
      */
     private fun allowedApps(): List<AppModel.App> {
         val wanted = DetoxManager.whitelist(context)
         val dialer = defaultDialer()
-        return apps.filter { (DetoxManager.whitelistKey(it) in wanted || it.appPackage == dialer) && DetoxManager.isAllowed(context, it.appPackage) }
+        return apps.filter {
+            if (lockedOut) DetoxManager.isLockoutApp(context, it.appPackage)
+            else (DetoxManager.whitelistKey(it) in wanted || it.appPackage == dialer) && DetoxManager.isAllowed(context, it.appPackage)
+        }
             .sortedBy { it.user != android.os.Process.myUserHandle() }
             .distinctBy { DetoxManager.whitelistKey(it) }
             .sortedBy { it.appLabel.lowercase() }
@@ -397,6 +426,7 @@ class DetoxPage(
         foreground = UiKit.ripple(context)
         setOnClickListener {
             stopLockCountdown()
+            DetoxManager.lockBarUsed(context)
             if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
             else onLaunch(app)
         }
