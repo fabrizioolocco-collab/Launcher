@@ -134,6 +134,8 @@ class Prefs(context: Context) {
     private val HOME_DETOX_LOCKOUT_AFTER = "HOME_DETOX_LOCKOUT_AFTER"
     private val HOME_DETOX_LOCKOUT_MINUTES = "HOME_DETOX_LOCKOUT_MINUTES"
     private val HOME_DETOX_LOCKOUT_RESET = "HOME_DETOX_LOCKOUT_RESET"
+    private val HOME_DETOX_SEARCH = "HOME_DETOX_SEARCH"
+    private val HOME_DETOX_SEARCH_SECONDS = "HOME_DETOX_SEARCH_SECONDS"
     private val ALARM_RAMP_SECONDS = "ALARM_RAMP_SECONDS"
     private val WIDGET_COLUMNS = "WIDGET_COLUMNS"
     private val WELCOME_SHOWN = "WELCOME_SHOWN"
@@ -234,6 +236,16 @@ class Prefs(context: Context) {
     var homeDetoxLockoutReset: Int
         get() = prefs.getInt(HOME_DETOX_LOCKOUT_RESET, 10)
         set(value) = prefs.edit { putInt(HOME_DETOX_LOCKOUT_RESET, value) }
+
+    /** Detox home on the search page: one of the HOME_DETOX_SEARCH_ values. */
+    var homeDetoxSearch: Int
+        get() = prefs.getInt(HOME_DETOX_SEARCH, HOME_DETOX_SEARCH_UNLIMITED)
+        set(value) = prefs.edit { putInt(HOME_DETOX_SEARCH, value) }
+
+    /** Detox home: the search page's own countdown, when limited. */
+    var homeDetoxSearchSeconds: Int
+        get() = prefs.getInt(HOME_DETOX_SEARCH_SECONDS, 40)
+        set(value) = prefs.edit { putInt(HOME_DETOX_SEARCH_SECONDS, value) }
 
     /** ToDo alarms: seconds of vibration alone before the sound starts. */
     var alarmVibrateSeconds: Int
@@ -879,4 +891,13 @@ class Prefs(context: Context) {
     fun getAppRenameLabel(appPackage: String): String = prefs.getString(appPackage, "").toString()
 
     fun setAppRenameLabel(appPackage: String, renameLabel: String) = prefs.edit { putString(appPackage, renameLabel) }
+
+    companion object {
+        /** Detox home on the search page: the countdown goes on from home's. */
+        const val HOME_DETOX_SEARCH_SHARED = 0
+        /** Detox home on the search page: the countdown waits. */
+        const val HOME_DETOX_SEARCH_UNLIMITED = 1
+        /** Detox home on the search page: a countdown of its own ([homeDetoxSearchSeconds]). */
+        const val HOME_DETOX_SEARCH_LIMITED = 2
+    }
 }

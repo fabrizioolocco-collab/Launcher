@@ -12,16 +12,17 @@ import app.olauncher.ui.widgets.DetoxRingView
 /**
  * Detox home (Settings): while home is in sight a countdown runs for a few seconds and then the
  * phone is locked, unless an app is opened; touching the calendar widget starts it again. It waits
- * while something is open over home (search, menus, dialogs, the notification shade) and starts
- * full again after. When it runs out several times in a row a lockout starts, like detox's.
+ * while something is open over home (menus, dialogs, the notification shade) and starts full again
+ * after. On the search page, as set: it goes on from where it was, waits, or runs a countdown of
+ * its own. When it runs out several times in a row a lockout starts, like detox's.
  * Shown by the [DetoxRingView]s (a home widget and the ring around the Detox button); not running
  * during a detox session, which has its own page and bar.
  */
 class HomeDetoxBar(
     private val root: View,
     private val prefs: Prefs,
-    /** Something is open over home (the search page). */
-    private val isCovered: () -> Boolean,
+    /** The search page is open. */
+    private val isSearching: () -> Boolean,
     /** Locks the phone: the countdown ran out. */
     private val onLock: () -> Unit,
 ) {
@@ -32,6 +33,8 @@ class HomeDetoxBar(
     private var resumed = false
     /** The countdown locked the phone: leaving home now is not using it. */
     private var locking = false
+    /** The search page was open when the countdown was last checked. */
+    private var searching = false
 
     private val watch = object : Runnable {
         override fun run() {
@@ -47,11 +50,14 @@ class HomeDetoxBar(
         handler.post(watch)
     }
 
-    /** Home left: for an app or another screen, unless the countdown itself locked the phone. */
+    /**
+     * Home left: for an app or another screen the missed bars start again from zero; not when the
+     * countdown itself locked the phone or the screen was turned off.
+     */
     fun onPause() {
         resumed = false
         handler.removeCallbacks(watch)
-        if (animator != null && !locking) DetoxManager.homeBarUsed(context)
+        if (animator != null && !locking && screenOn()) DetoxManager.homeBarUsed(context)
         stop()
         publish()
     }
@@ -68,11 +74,22 @@ class HomeDetoxBar(
 
     private fun enabled() = prefs.homeDetox && !DetoxManager.isActive(context)
 
-    private fun shouldRun() = resumed && enabled() && root.hasWindowFocus() && !isCovered()
+    private fun screenOn() = try {
+        (context.getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager).isInteractive
+    } catch (e: Exception) {
+        true
+    }
+
+    private fun shouldRun() = resumed && enabled() && root.hasWindowFocus() &&
+            !(isSearching() && prefs.homeDetoxSearch == Prefs.HOME_DETOX_SEARCH_UNLIMITED)
 
     private fun check() {
+        val search = isSearching()
+        // A countdown of its own on the search page, and home's full again after it
+        val switched = search != searching && prefs.homeDetoxSearch == Prefs.HOME_DETOX_SEARCH_LIMITED
+        searching = search
         val run = shouldRun()
-        if (run && animator == null) start()
+        if (run && (animator == null || switched)) start()
         else if (!run && animator != null) stop()
         publish()
     }
@@ -87,7 +104,8 @@ class HomeDetoxBar(
         stop()
         progress = 1f
         animator = ValueAnimator.ofFloat(1f, 0f).apply {
-            duration = prefs.homeDetoxSeconds * 1000L
+            val limited = searching && prefs.homeDetoxSearch == Prefs.HOME_DETOX_SEARCH_LIMITED
+            duration = (if (limited) prefs.homeDetoxSearchSeconds else prefs.homeDetoxSeconds) * 1000L
             interpolator = LinearInterpolator()
             addUpdateListener {
                 progress = it.animatedValue as Float

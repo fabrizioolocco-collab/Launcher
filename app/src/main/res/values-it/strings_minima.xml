@@ -114,6 +114,11 @@
     <string name="ml_home_detox">Detox home</string>
     <string name="ml_home_detox_off_hint">Attiva Detox home nelle Impostazioni per far partire il conto alla rovescia</string>
     <string name="ml_home_detox_seconds">Detox home: secondi per aprire un\'app</string>
+    <string name="ml_home_detox_search">Detox home: ricerca</string>
+    <string name="ml_home_detox_search_shared">Condividi tempo</string>
+    <string name="ml_home_detox_search_unlimited">Illimitato</string>
+    <string name="ml_home_detox_search_limited">Limitato</string>
+    <string name="ml_home_detox_search_seconds">Detox home: secondi in ricerca</string>
     <string name="ml_home_detox_lockout_after">Detox home: blocco dopo barre scadute</string>
     <string name="ml_home_detox_lockout_minutes">Detox home: minuti di blocco</string>
     <string name="ml_home_detox_lockout_reset">Detox home: azzera barre scadute dopo</string>

@@ -20,6 +20,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
 import androidx.core.os.bundleOf
+import androidx.core.view.isVisible
 import androidx.lifecycle.ViewModelProvider
 import androidx.navigation.fragment.findNavController
 import app.olauncher.BuildConfig
@@ -305,6 +306,17 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 prefs.homeDetox = !prefs.homeDetox
                 populateTextStyle()
             }
+            R.id.homeDetoxSearch -> requireContext().showMenuDialog(getString(R.string.ml_home_detox_search), listOf(
+                Prefs.HOME_DETOX_SEARCH_SHARED, Prefs.HOME_DETOX_SEARCH_UNLIMITED, Prefs.HOME_DETOX_SEARCH_LIMITED,
+            ).map { mode ->
+                MenuEntry(homeDetoxSearchLabel(mode)) {
+                    prefs.homeDetoxSearch = mode
+                    if (_binding != null) populateTextStyle()
+                }
+            })
+            R.id.homeDetoxSearchSeconds -> askNumber(R.string.ml_home_detox_search_seconds, prefs.homeDetoxSearchSeconds, 3..600) {
+                prefs.homeDetoxSearchSeconds = it
+            }
             R.id.homeDetoxSeconds -> askNumber(R.string.ml_home_detox_seconds, prefs.homeDetoxSeconds, 3..600) {
                 prefs.homeDetoxSeconds = it
             }
@@ -466,6 +478,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.lockoutApps.setOnClickListener(this)
         binding.homeDetox.setOnClickListener(this)
         binding.homeDetoxSeconds.setOnClickListener(this)
+        binding.homeDetoxSearch.setOnClickListener(this)
+        binding.homeDetoxSearchSeconds.setOnClickListener(this)
         binding.homeDetoxLockoutAfter.setOnClickListener(this)
         binding.homeDetoxLockoutMinutes.setOnClickListener(this)
         binding.homeDetoxLockoutReset.setOnClickListener(this)
@@ -557,6 +571,9 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.lockoutApps.text = DetoxManager.lockoutApps(ctx).size.toString()
         binding.homeDetox.setText(if (prefs.homeDetox) R.string.on else R.string.off)
         binding.homeDetoxSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSeconds)
+        binding.homeDetoxSearch.text = homeDetoxSearchLabel(prefs.homeDetoxSearch)
+        binding.homeDetoxSearchSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSearchSeconds)
+        binding.homeDetoxSearchSecondsRow.isVisible = prefs.homeDetoxSearch == Prefs.HOME_DETOX_SEARCH_LIMITED
         binding.homeDetoxLockoutAfter.text = if (prefs.homeDetoxLockoutAfter > 0) prefs.homeDetoxLockoutAfter.toString() else getString(R.string.off)
         binding.homeDetoxLockoutMinutes.text = getString(R.string.ml_detox_minutes, prefs.homeDetoxLockoutMinutes)
         binding.homeDetoxLockoutReset.text = getString(R.string.ml_detox_minutes, prefs.homeDetoxLockoutReset)
@@ -622,6 +639,14 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             populateTextStyle()
         }
     }
+
+    private fun homeDetoxSearchLabel(mode: Int) = getString(
+        when (mode) {
+            Prefs.HOME_DETOX_SEARCH_SHARED -> R.string.ml_home_detox_search_shared
+            Prefs.HOME_DETOX_SEARCH_LIMITED -> R.string.ml_home_detox_search_limited
+            else -> R.string.ml_home_detox_search_unlimited
+        }
+    )
 
     /** A whole number typed in, kept within [range]. */
     private fun askNumber(title: Int, current: Int, range: IntRange, onSet: (Int) -> Unit) {

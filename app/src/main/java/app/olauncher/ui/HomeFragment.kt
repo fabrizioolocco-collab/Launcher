@@ -255,7 +255,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         homeDetox = HomeDetoxBar(
             root = binding.mainLayout,
             prefs = prefs,
-            isCovered = { search.isActive },
+            isSearching = { search.isActive },
             onLock = { lockScreen() },
         )
         app.olauncher.ui.widgets.CalendarWidgetView.onTouched = { homeDetox.restart() }
