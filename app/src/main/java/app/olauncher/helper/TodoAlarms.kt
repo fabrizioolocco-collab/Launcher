@@ -9,8 +9,6 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -25,13 +23,16 @@ import app.olauncher.ui.todo.TodoAlarmActivity
 import java.util.Date
 
 /**
- * Alerts of the todos: a notification, or an alarm (insistent sound and a full screen page with
- * "Done" / "Snooze"). Only the next alert is scheduled with the AlarmManager; when it goes off
- * every alert that is due is given and the next one is scheduled.
+ * Alerts of the todos: a notification, or an alarm (a full screen page with "Done" / "Snooze",
+ * ringing with [AlarmRinger]: vibration first, then a sound growing louder). Only the next alert
+ * is scheduled with the AlarmManager; when it goes off every alert that is due is given and the
+ * next one is scheduled.
  */
 object TodoAlarms {
     private const val CHANNEL_NOTIFY = "todo_notify"
-    private const val CHANNEL_ALARM = "todo_alarm_v1"
+    /** Silent: [AlarmRinger] vibrates and rings. */
+    private const val CHANNEL_ALARM = "todo_alarm_v2"
+    private const val OLD_CHANNEL_ALARM = "todo_alarm_v1"
     /** An alert missed by more than this (phone off) is not given any more. */
     private const val MAX_LATE = 30 * 60_000L
 
@@ -96,15 +97,11 @@ object TodoAlarms {
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_NOTIFY, ctx.getString(R.string.ml_todo_channel_notify), NotificationManager.IMPORTANCE_HIGH)
         )
+        nm.deleteNotificationChannel(OLD_CHANNEL_ALARM)
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ALARM, ctx.getString(R.string.ml_todo_channel_alarm), NotificationManager.IMPORTANCE_HIGH).apply {
-                setSound(
-                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
-                    AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-                )
-                enableVibration(true)
-                vibrationPattern = longArrayOf(0, 800, 600, 800, 600, 800)
+                setSound(null, null)
+                enableVibration(false)
                 setBypassDnd(true)
             }
         )
@@ -149,12 +146,31 @@ object TodoAlarms {
             )
             builder.setFullScreenIntent(page, true).setOngoing(true)
         }
-        val notification = builder.build()
-        // The alarm sound keeps going until it's answered
-        if (alarm) notification.flags = notification.flags or android.app.Notification.FLAG_INSISTENT
+        if (alarm) builder.setSilent(true)
         try {
-            ctx.getSystemService(NotificationManager::class.java).notify(notificationId(todo.id), notification)
+            ctx.getSystemService(NotificationManager::class.java).notify(notificationId(todo.id), builder.build())
         } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
+        if (alarm) {
+            AlarmRinger.start(ctx, todo.id)
+            openAlarmPage(ctx, todo.id)
+        }
+    }
+
+    /**
+     * The full screen intent only takes the screen while the phone is locked: with the phone in
+     * use (e.g. on the detox page) it is a plain notification, so the page is opened right away
+     * (allowed while the launcher is home or its accessibility service runs).
+     */
+    private fun openAlarmPage(ctx: Context, id: Long) {
+        try {
+            ctx.startActivity(
+                Intent(ctx, TodoAlarmActivity::class.java).putExtra(EXTRA_ID, id)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
+            )
+        } catch (e: Exception) {
+            // Not allowed from the background: the notification's full screen intent stays
             e.printStackTrace()
         }
     }
@@ -166,6 +182,7 @@ object TodoAlarms {
     )
 
     fun dismiss(ctx: Context, id: Long) {
+        AlarmRinger.stop(id)
         ctx.getSystemService(NotificationManager::class.java).cancel(notificationId(id))
     }
 }
