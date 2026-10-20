@@ -25,6 +25,7 @@ import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.ActivityMainBinding
 import app.olauncher.ui.widgets.HomeWidgetsController
+import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.hasBeenDays
 import app.olauncher.helper.hasBeenHours
@@ -413,6 +414,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         super.onDestroy()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // Automatic parking asks for its permissions one after the other
+        ParkingAuto.onPermissionResult(this, requestCode)
     }
 
     @Deprecated("Deprecated in Java")

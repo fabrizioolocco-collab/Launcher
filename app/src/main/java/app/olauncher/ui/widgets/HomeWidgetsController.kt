@@ -27,6 +27,7 @@ import app.olauncher.ui.DetoxController
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
 import app.olauncher.helper.AppRename
+import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.ui.NotificationBadge
 import app.olauncher.helper.NotificationRepository
@@ -766,7 +767,7 @@ class HomeWidgetsController(
             finishDrag(view)
             val item = view.tag as HomeWidget
             // The parking button: a long press opens the saved position (its menu until one is saved)
-            if (item.isApp && ParkingShortcut.isParking(item.packageName) && ParkingShortcut.saved(activity) != null) {
+            if (item.isApp && ParkingShortcut.isParking(item.packageName) && ParkingShortcut.longPressOpensMaps(activity)) {
                 ParkingShortcut.openMaps(activity)
                 return
             }
@@ -922,7 +923,7 @@ class HomeWidgetsController(
                         save()
                         render()
                     },
-                )
+                ) + ParkingAuto.menuEntries(activity)
             )
             return
         }

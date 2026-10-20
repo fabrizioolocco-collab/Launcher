@@ -36,6 +36,7 @@ import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
 import app.olauncher.helper.AppRename
+import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.showMenuDialog
@@ -772,7 +773,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                     ParkingShortcut.setEnabled(ctx, true)
                     if (!widgets.addApp(ParkingShortcut.app(ctx))) ctx.showToast(getString(R.string.ml_parking_already))
                     viewModel.loadHomeApps()
-                }
+                } + ParkingAuto.menuEntries(requireActivity())
         ctx.showMenuDialog(ParkingShortcut.describe(ctx), entries)
     }
 
@@ -820,7 +821,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
     private fun launchHomeApp(app: AppModel.App) {
         if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
-        else if (ParkingShortcut.isParking(app.appPackage)) ParkingShortcut.save(requireActivity())
+        else if (ParkingShortcut.isParking(app.appPackage)) ParkingShortcut.onTap(requireActivity()) { showParkingMenu() }
         else if (TestNotifications.isFake(app.appPackage)) TestNotifications.clearNotifications(requireContext(), app.appPackage)
         else viewModel.launch(app)
     }

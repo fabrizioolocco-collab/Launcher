@@ -29,8 +29,9 @@ import java.util.Locale
 
 /**
  * The parking button on home: a pseudo-app (package [PACKAGE]) that sits on the grid like any
- * icon. A tap waits for a precise GPS fix and saves the position; a long press opens the saved
- * position in Google Maps (the item menu when nothing is saved yet).
+ * icon. With a car chosen ([ParkingAuto]) the position saves itself when the car disconnects, a
+ * tap walks there in Google Maps and a long press opens the menu. Without one, a tap waits for a
+ * precise GPS fix and saves the position, a long press walks there (the menu when nothing is saved).
  */
 object ParkingShortcut {
 
@@ -72,7 +73,7 @@ object ParkingShortcut {
         )
     }
 
-    private fun store(context: Context, location: Location) = prefs(context).edit {
+    fun store(context: Context, location: Location) = prefs(context).edit {
         putLong("LAT", java.lang.Double.doubleToRawLongBits(location.latitude))
         putLong("LON", java.lang.Double.doubleToRawLongBits(location.longitude))
         putFloat("ACC", location.accuracy)
@@ -199,17 +200,38 @@ object ParkingShortcut {
 
     // ---------------------------------------------------------------- open
 
-    /** Opens the saved position in Google Maps (any maps app as a fallback). */
+    /** Tap on the button: with a car chosen walk to it (the menu when nothing is saved), else save now. */
+    fun onTap(activity: Activity, showMenu: () -> Unit) {
+        if (!ParkingAuto.isOn(activity)) save(activity)
+        else if (saved(activity) == null) {
+            activity.showToast(activity.getString(R.string.ml_parking_none))
+            showMenu()
+        } else openMaps(activity)
+    }
+
+    /** Long press on the button walks to the car, unless the tap already does (then: the menu). */
+    fun longPressOpensMaps(context: Context) = !ParkingAuto.isOn(context) && saved(context) != null
+
+    /** Walking navigation to the saved position in Google Maps, or null when nothing is saved. */
+    fun navigationIntent(context: Context): Intent? {
+        val position = saved(context) ?: return null
+        return Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${position.latitude},${position.longitude}&mode=w"))
+            .setPackage("com.google.android.apps.maps")
+    }
+
+    /** Walks to the saved position in Google Maps (another maps app, or the browser, as a fallback). */
     fun openMaps(context: Context) {
         val position = saved(context) ?: run {
             context.showToast(context.getString(R.string.ml_parking_none))
             return
         }
         val label = Uri.encode(context.getString(R.string.ml_parking))
-        val uri = Uri.parse("geo:${position.latitude},${position.longitude}?q=${position.latitude},${position.longitude}($label)")
-        val intents = listOf(
-            Intent(Intent.ACTION_VIEW, uri).setPackage("com.google.android.apps.maps"),
-            Intent(Intent.ACTION_VIEW, uri),
+        val point = "${position.latitude},${position.longitude}"
+        val intents = listOfNotNull(
+            navigationIntent(context),
+            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$point&travelmode=walking"))
+                .setPackage("com.google.android.apps.maps"),
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:$point?q=$point($label)")),
         )
         for (intent in intents) {
             try {
@@ -231,10 +253,10 @@ object ParkingShortcut {
         return drawable.toBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
     }
 
-    /** Menu entries of the parking button: save now, open in maps. */
-    fun menuEntries(activity: Activity): List<MenuEntry> = listOf(
+    /** Menu entries of the parking button: walk there, save now (then [ParkingAuto.menuEntries], at the end). */
+    fun menuEntries(activity: Activity): List<MenuEntry> = listOfNotNull(
+        if (saved(activity) != null) MenuEntry(activity.getString(R.string.ml_parking_open_maps)) { openMaps(activity) } else null,
         MenuEntry(activity.getString(R.string.ml_parking_save)) { save(activity) },
-        MenuEntry(activity.getString(R.string.ml_parking_open_maps)) { openMaps(activity) },
     )
 
     const val REQUEST_LOCATION = 7201

@@ -14,6 +14,7 @@ import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
 import app.olauncher.helper.AppRename
+import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.openAppInfo
@@ -124,7 +125,7 @@ class HomeNewsController(
         if (ParkingShortcut.isParking(app.appPackage)) {
             val info = context.getString(R.string.ml_app_info)
             val activity = context as? android.app.Activity ?: return entries.filter { it.label != info }
-            return ParkingShortcut.menuEntries(activity) + entries.filter { it.label != info }
+            return ParkingShortcut.menuEntries(activity) + entries.filter { it.label != info } + ParkingAuto.menuEntries(activity)
         }
         if (FolderShortcuts.isFolder(app.appPackage)) {
             val info = context.getString(R.string.ml_app_info)
