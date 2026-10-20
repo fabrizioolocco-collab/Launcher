@@ -1804,6 +1804,49 @@
                         android:text="@string/ml_show" />
                 </FrameLayout>
 
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp">
+
+                    <TextView
+                        style="@style/TextSmall"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:paddingVertical="8dp"
+                        android:text="@string/ml_backup"
+                        android:textColor="?attr/primaryColor" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end|bottom"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:id="@+id/backupImport"
+                            style="@style/TextSmallBold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingVertical="8dp"
+                            android:paddingStart="24dp"
+                            android:paddingEnd="8dp"
+                            android:text="@string/ml_backup_import" />
+
+                        <TextView
+                            android:id="@+id/backupExport"
+                            style="@style/TextSmallBold"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginEnd="4dp"
+                            android:paddingVertical="8dp"
+                            android:paddingStart="16dp"
+                            android:paddingEnd="8dp"
+                            android:text="@string/ml_backup_export" />
+                    </LinearLayout>
+                </FrameLayout>
+
             </LinearLayout>
 
             <LinearLayout

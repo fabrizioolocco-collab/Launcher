@@ -842,4 +842,12 @@
     <string name="ml_search_tab_bookmarks">Preferiti</string>
     <string name="ml_search_tab_other_files">Altri file</string>
     <string name="ml_search_page_hint">App, contatti, file, foto e impostazioni.\nInvio per cercare sul web.</string>
+    <string name="ml_backup">Backup impostazioni</string>
+    <string name="ml_backup_export">Salva</string>
+    <string name="ml_backup_import">Ripristina</string>
+    <string name="ml_backup_saved">Backup salvato. Copia il file sull\'altro telefono e usa Ripristina.</string>
+    <string name="ml_backup_error">Impossibile salvare il backup</string>
+    <string name="ml_backup_invalid">Questo file non è un backup di MinimaLauncher</string>
+    <string name="ml_backup_restore_title">Ripristinare il backup?</string>
+    <string name="ml_backup_restore_message">Tutte le impostazioni attuali, la home, le schede, i preferiti e le to-do vengono sostituiti da quelli del backup, poi il launcher si riavvia. I widget di altre app e l\'accesso a OneDrive vanno aggiunti di nuovo.</string>
 </resources>

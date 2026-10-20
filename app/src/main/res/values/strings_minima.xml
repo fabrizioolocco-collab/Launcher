@@ -845,4 +845,12 @@
     <string name="ml_search_tab_bookmarks">Bookmarks</string>
     <string name="ml_search_tab_other_files">Other files</string>
     <string name="ml_search_page_hint">Apps, contacts, files, photos and settings.\nEnter searches the web.</string>
+    <string name="ml_backup">Backup settings</string>
+    <string name="ml_backup_export">Save</string>
+    <string name="ml_backup_import">Restore</string>
+    <string name="ml_backup_saved">Backup saved. Copy the file to the other phone and use Restore there.</string>
+    <string name="ml_backup_error">Couldn\'t save the backup</string>
+    <string name="ml_backup_invalid">This file isn\'t a MinimaLauncher backup</string>
+    <string name="ml_backup_restore_title">Restore backup?</string>
+    <string name="ml_backup_restore_message">All the current settings, home layout, tabs, bookmarks and to-dos are replaced by the ones in the backup, then the launcher restarts. Widgets of other apps and the OneDrive sign-in have to be added again.</string>
 </resources>

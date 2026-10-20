@@ -50,10 +50,12 @@ import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showColorPickerDialog
 import app.olauncher.data.AppModel
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import app.olauncher.helper.copyToClipboard
+import app.olauncher.helper.SettingsBackup
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.ui.widgets.WidgetLog
 import app.olauncher.helper.isOlauncherDefault
@@ -99,6 +101,33 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         }
         target(id)
         if (_binding != null) populateTextStyle()
+    }
+
+    private val backupSaver = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        viewModel.keepCurrentScreen = false
+        if (uri == null) return@registerForActivityResult
+        val ctx = requireContext().applicationContext
+        lifecycleScope.launch {
+            val saved = withContext(Dispatchers.IO) { SettingsBackup.export(ctx, uri) }
+            ctx.showToast(ctx.getString(if (saved) R.string.ml_backup_saved else R.string.ml_backup_error), Toast.LENGTH_LONG)
+        }
+    }
+
+    private val backupPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        viewModel.keepCurrentScreen = false
+        if (uri == null) return@registerForActivityResult
+        requireContext().showConfirmDialog(
+            getString(R.string.ml_backup_restore_title),
+            getString(R.string.ml_backup_restore_message),
+            getString(R.string.ml_backup_import),
+        ) {
+            val ctx = requireContext().applicationContext
+            lifecycleScope.launch {
+                val restored = withContext(Dispatchers.IO) { SettingsBackup.restore(ctx, uri) }
+                if (restored) SettingsBackup.restartApp(ctx)
+                else ctx.showToast(ctx.getString(R.string.ml_backup_invalid), Toast.LENGTH_LONG)
+            }
+        }
     }
 
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -368,6 +397,14 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 findNavController().popBackStack(R.id.mainFragment, false)
                 viewModel.showPermissions.call()
             }
+            R.id.backupExport -> {
+                viewModel.keepCurrentScreen = true
+                backupSaver.launch(SettingsBackup.suggestedName())
+            }
+            R.id.backupImport -> {
+                viewModel.keepCurrentScreen = true
+                backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+            }
             R.id.widgetLog -> {
                 val ctx = requireContext()
                 val text = WidgetLog.read(ctx).lines().takeLast(25).joinToString("\n").ifBlank { "-" }
@@ -496,6 +533,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.permissionsScreen.setOnClickListener(this)
         binding.widgetColumns.setOnClickListener(this)
         binding.widgetLog.setOnClickListener(this)
+        binding.backupExport.setOnClickListener(this)
+        binding.backupImport.setOnClickListener(this)
         binding.autoLaunchSingle.setOnClickListener(this)
         binding.testNotificationSend.setOnClickListener(this)
         binding.testNotificationMany.setOnClickListener(this)
