@@ -16,6 +16,7 @@ import android.service.notification.StatusBarNotification
 import android.text.TextUtils
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -59,6 +60,7 @@ object NotificationsPopup {
     private const val REPLY_COLOR = 0xFF2A5D8F.toInt()
     private const val DELETE_COLOR = 0xFFB3261E.toInt()
     private const val MAX_SHOWN = 8
+    private const val FLING_DP_S = 700
 
     fun show(context: Context, app: AppModel.App, openApp: () -> Unit): Boolean {
         val listener = NotificationListener.instance ?: return false
@@ -369,23 +371,37 @@ object NotificationsPopup {
         // Touch: slide left; a tap opens the notification
         val slop = ViewConfiguration.get(ctx).scaledTouchSlop
         val replyAt = REPLY_AT_DP.dpToPx()
+        val flingSpeed = FLING_DP_S.dpToPx().toFloat()
         var downX = 0f
         var downY = 0f
         var swiping = false
+        var vertical = false
+        var tracker: VelocityTracker? = null
         content.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
                     swiping = false
+                    vertical = false
+                    tracker?.recycle()
+                    tracker = VelocityTracker.obtain().also { it.addMovement(e) }
+                    // Keep the list from stealing the gesture until its direction is clear
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
+                    tracker?.addMovement(e)
                     val dx = e.rawX - downX
-                    if (!swiping && -dx > slop && abs(dx) > abs(e.rawY - downY)) {
-                        swiping = true
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    val dy = e.rawY - downY
+                    if (!swiping && !vertical) {
+                        if (-dx > slop && abs(dx) > abs(dy)) swiping = true
+                        else if (abs(dy) > slop && abs(dy) > abs(dx)) {
+                            // A vertical drag: hand it back to the list to scroll
+                            vertical = true
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                        }
                     }
                     if (swiping) {
                         val x = dx.coerceAtMost(0f)
@@ -400,8 +416,17 @@ object NotificationsPopup {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val x = v.translationX
                     val up = e.actionMasked == MotionEvent.ACTION_UP
+                    tracker?.addMovement(e)
+                    tracker?.computeCurrentVelocity(1000)
+                    val vx = tracker?.xVelocity ?: 0f
+                    tracker?.recycle()
+                    tracker = null
+                    // A quick flick to the left deletes even if short of half the width
+                    val flung = vx < -flingSpeed && -x > slop
                     when {
-                        swiping && up && -x > v.width / 2f -> {
+                        swiping && up && (-x > v.width / 2f || flung) -> {
+                            deleteLayer.isVisible = true
+                            replyLayer.isVisible = false
                             v.animate().translationX(-v.width.toFloat()).setDuration(150).withEndAction {
                                 listener.dismiss(sbn.key)
                                 (wrap.parent as? ViewGroup)?.removeView(wrap)
@@ -416,7 +441,7 @@ object NotificationsPopup {
                             }.start()
                             // Released on "Reply": as if tapped
                             if (swiping && up && -x > replyAt && reply != null) openReply()
-                            if (!swiping && up && abs(e.rawY - downY) < slop) {
+                            if (!swiping && !vertical && up && abs(e.rawY - downY) < slop) {
                                 dialog.dismiss()
                                 AppNotificationsView.openNotification(ctx, app, sbn)
                                 if (sbn.notification.flags and Notification.FLAG_AUTO_CANCEL != 0 || sbn.notification.contentIntent == null)

@@ -10,6 +10,7 @@ import android.graphics.Typeface
 import android.service.notification.StatusBarNotification
 import android.text.TextUtils
 import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
@@ -127,27 +128,41 @@ object AppNotificationsView {
         return list
     }
 
-    /** Horizontal swipe beyond a third of the width dismisses; a tap opens. */
+    /** Horizontal swipe beyond a third of the width (or a quick flick) dismisses; a tap opens. */
     @SuppressLint("ClickableViewAccessibility")
     private fun attachSwipe(view: View, onTap: () -> Unit, onDismissed: () -> Unit) {
         val slop = ViewConfiguration.get(view.context).scaledTouchSlop
+        val flingSpeed = FLING_DP_S.dpToPx().toFloat()
         var downX = 0f
         var downY = 0f
         var swiping = false
+        var vertical = false
+        var tracker: VelocityTracker? = null
         view.setOnTouchListener { v, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     downX = e.rawX
                     downY = e.rawY
                     swiping = false
+                    vertical = false
+                    tracker?.recycle()
+                    tracker = VelocityTracker.obtain().also { it.addMovement(e) }
+                    // Keep the list from stealing the gesture until its direction is clear
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
+                    tracker?.addMovement(e)
                     val dx = e.rawX - downX
-                    if (!swiping && abs(dx) > slop && abs(dx) > abs(e.rawY - downY)) {
-                        swiping = true
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    val dy = e.rawY - downY
+                    if (!swiping && !vertical) {
+                        if (abs(dx) > slop && abs(dx) > abs(dy)) swiping = true
+                        else if (abs(dy) > slop && abs(dy) > abs(dx)) {
+                            // A vertical drag: hand it back to the list to scroll
+                            vertical = true
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                        }
                     }
                     if (swiping) {
                         v.translationX = dx
@@ -158,12 +173,19 @@ object AppNotificationsView {
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val dx = e.rawX - downX
-                    if (swiping && abs(dx) > v.width / 3f && e.actionMasked == MotionEvent.ACTION_UP) {
+                    val up = e.actionMasked == MotionEvent.ACTION_UP
+                    tracker?.addMovement(e)
+                    tracker?.computeCurrentVelocity(1000)
+                    val vx = tracker?.xVelocity ?: 0f
+                    tracker?.recycle()
+                    tracker = null
+                    val flung = abs(vx) > flingSpeed && vx * dx > 0 && abs(dx) > slop
+                    if (swiping && up && (abs(dx) > v.width / 3f || flung)) {
                         v.animate().translationX(if (dx > 0) v.width.toFloat() else -v.width.toFloat()).alpha(0f)
                             .setDuration(150).withEndAction { onDismissed() }.start()
                     } else {
                         v.animate().translationX(0f).alpha(1f).setDuration(150).start()
-                        if (!swiping && e.actionMasked == MotionEvent.ACTION_UP && abs(e.rawY - downY) < slop) onTap()
+                        if (!swiping && !vertical && up && abs(e.rawY - downY) < slop) onTap()
                     }
                     true
                 }
@@ -174,4 +196,5 @@ object AppNotificationsView {
     }
 
     private const val MAX_SHOWN = 6
+    private const val FLING_DP_S = 700
 }
