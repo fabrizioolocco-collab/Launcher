@@ -214,7 +214,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             // R.id.homeButtonRecents -> toggleHomeButtonRecents()
             R.id.autoShowKeyboard -> toggleKeyboardText()
             R.id.swipeUpAction -> {
-                prefs.swipeUpSearch = !prefs.swipeUpSearch
+                // Search -> app list -> nothing (search from the bar only) -> search
+                when {
+                    prefs.swipeUpOff -> { prefs.swipeUpOff = false; prefs.swipeUpSearch = true }
+                    prefs.swipeUpSearch -> prefs.swipeUpSearch = false
+                    else -> prefs.swipeUpOff = true
+                }
                 populateKeyboardText()
             }
             R.id.showIcons -> toggleShowIcons()
@@ -1085,7 +1090,13 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     private fun populateKeyboardText() {
         if (prefs.autoShowKeyboard) binding.autoShowKeyboard.text = getString(R.string.on)
         else binding.autoShowKeyboard.text = getString(R.string.off)
-        binding.swipeUpAction.setText(if (prefs.swipeUpSearch) R.string.ml_swipe_up_search else R.string.ml_swipe_up_apps)
+        binding.swipeUpAction.setText(
+            when {
+                prefs.swipeUpOff -> R.string.ml_swipe_up_off
+                prefs.swipeUpSearch -> R.string.ml_swipe_up_search
+                else -> R.string.ml_swipe_up_apps
+            }
+        )
     }
 
     private fun populateWallpaperText() {

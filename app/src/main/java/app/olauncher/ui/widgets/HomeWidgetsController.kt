@@ -37,6 +37,7 @@ import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getScreenDimensions
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.HomeLock.showHomeItemMenu
 import app.olauncher.helper.showToast
 import app.olauncher.ui.HomeScrollView
 import kotlinx.coroutines.CoroutineScope
@@ -911,7 +912,7 @@ class HomeWidgetsController(
     private fun showIconMenu(item: HomeWidget) {
         val app = findApp(item) ?: return
         if (ParkingShortcut.isParking(app.appPackage)) {
-            activity.showMenuDialog(
+            activity.showHomeItemMenu(
                 ParkingShortcut.describe(activity),
                 ParkingShortcut.menuEntries(activity) + listOfNotNull(
                     AppRename.menuEntry(activity, app),
@@ -925,7 +926,7 @@ class HomeWidgetsController(
             )
             return
         }
-        activity.showMenuDialog(
+        activity.showHomeItemMenu(
             app.appLabel,
             listOfNotNull(
                 MenuEntry(activity.getString(R.string.ml_remove_from_home)) {
@@ -1026,7 +1027,7 @@ class HomeWidgetsController(
     }
 
     private fun showDetoxRingMenu(widget: HomeWidget, view: DetoxRingView) {
-        activity.showMenuDialog(
+        activity.showHomeItemMenu(
             activity.getString(R.string.ml_home_detox),
             listOf(
                 MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
@@ -1040,7 +1041,7 @@ class HomeWidgetsController(
     }
 
     private fun showBatteryMenu(widget: HomeWidget, view: BatteryWidgetView) {
-        activity.showMenuDialog(
+        activity.showHomeItemMenu(
             activity.getString(R.string.ml_battery_widget),
             listOf(
                 MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
@@ -1058,7 +1059,7 @@ class HomeWidgetsController(
     }
 
     private fun showCalendarMenu(widget: HomeWidget, view: CalendarWidgetView) {
-        activity.showMenuDialog(
+        activity.showHomeItemMenu(
             activity.getString(R.string.ml_cal_widget),
             listOf(
                 MenuEntry(activity.getString(R.string.ml_cal_settings)) { CalendarWidgetSettings.show(activity, view, scope) },
@@ -1272,7 +1273,7 @@ class HomeWidgetsController(
         } catch (e: Exception) {
             null
         } ?: activity.getString(R.string.ml_widget)
-        activity.showMenuDialog(title, entries)
+        activity.showHomeItemMenu(title, entries)
     }
 
     companion object {

@@ -18,6 +18,8 @@ class Prefs(context: Context) {
     private val HOME_APPS_NUM = "HOME_APPS_NUM"
     private val AUTO_SHOW_KEYBOARD = "AUTO_SHOW_KEYBOARD"
     private val SWIPE_UP_SEARCH = "SWIPE_UP_SEARCH"
+    private val SWIPE_UP_OFF = "SWIPE_UP_OFF"
+    private val HOME_LOCKED = "HOME_LOCKED"
     private val KEYBOARD_MESSAGE = "KEYBOARD_MESSAGE"
     private val DAILY_WALLPAPER = "DAILY_WALLPAPER"
     private val DAILY_WALLPAPER_URL = "DAILY_WALLPAPER_URL"
@@ -385,6 +387,16 @@ class Prefs(context: Context) {
     var swipeUpSearch: Boolean
         get() = prefs.getBoolean(SWIPE_UP_SEARCH, true)
         set(value) = prefs.edit { putBoolean(SWIPE_UP_SEARCH, value).apply() }
+
+    /** Swipe up on home does nothing: the search opens only from the search bar. */
+    var swipeUpOff: Boolean
+        get() = prefs.getBoolean(SWIPE_UP_OFF, false)
+        set(value) = prefs.edit { putBoolean(SWIPE_UP_OFF, value).apply() }
+
+    /** Home layout locked: icons, widgets and the dock can't be moved, resized, added or removed. */
+    var homeLocked: Boolean
+        get() = prefs.getBoolean(HOME_LOCKED, false)
+        set(value) = prefs.edit { putBoolean(HOME_LOCKED, value).apply() }
 
     var autoShowKeyboard: Boolean
         get() = prefs.getBoolean(AUTO_SHOW_KEYBOARD, false)

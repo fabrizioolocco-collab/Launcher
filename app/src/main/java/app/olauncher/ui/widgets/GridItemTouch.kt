@@ -4,6 +4,7 @@ import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import app.olauncher.helper.HomeLock
 import kotlin.math.abs
 import kotlin.math.hypot
 
@@ -20,7 +21,8 @@ interface GridItemListener {
 /**
  * Nova-style touch handling shared by widgets and icons: a long press anywhere on the item (even
  * over clickable children) takes over the gesture; moving then drags the item, lifting without
- * moving opens its menu. [onTap] (icons) is called for a plain tap.
+ * moving opens its menu. [onTap] (icons) is called for a plain tap. While the home is locked
+ * ([HomeLock]) the long press only opens the menu: the item doesn't move.
  */
 class GridItemTouch(private val view: View, private val onTap: (() -> Unit)? = null) {
 
@@ -35,14 +37,17 @@ class GridItemTouch(private val view: View, private val onTap: (() -> Unit)? = n
     var longPressed = false
         private set
     private var dragging = false
+    /** The long press happened with the home locked: menu only, no drag. */
+    private var locked = false
 
     private val longPressRunnable = Runnable {
         if (view.parent != null && view.hasWindowFocus()) {
             longPressed = true
             dragging = false
+            locked = HomeLock.isOn(view.context)
             view.parent?.requestDisallowInterceptTouchEvent(true)
             view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            listener?.onLongPress(view)
+            if (!locked) listener?.onLongPress(view)
         }
     }
 
@@ -82,6 +87,23 @@ class GridItemTouch(private val view: View, private val onTap: (() -> Unit)? = n
         }
         val dx = event.rawX - downRawX
         val dy = event.rawY - downRawY
+        if (locked) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_MOVE -> if (!dragging && hypot(dx, dy) > touchSlop) {
+                    // Tried to move it: say why it stays put
+                    dragging = true
+                    HomeLock.showLockedToast(view.context)
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (!dragging && event.actionMasked == MotionEvent.ACTION_UP) listener?.onMenu(view)
+                    longPressed = false
+                    dragging = false
+                    locked = false
+                }
+            }
+            return true
+        }
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 if (!dragging && hypot(dx, dy) > touchSlop) dragging = true

@@ -821,6 +821,9 @@
     <string name="ml_swipe_up_action">Swipe up opens</string>
     <string name="ml_swipe_up_search">Search</string>
     <string name="ml_swipe_up_apps">App list</string>
+    <string name="ml_swipe_up_off">None (search bar only)</string>
+    <string name="ml_home_lock">Lock home</string>
+    <string name="ml_home_locked">Home locked: unlock it from the home menu (long press)</string>
     <string name="ml_search_hint_all">Search apps, contacts, files, web</string>
     <string name="ml_search_web_now">Search the web</string>
     <string name="ml_search_tab_bookmarks">Bookmarks</string>

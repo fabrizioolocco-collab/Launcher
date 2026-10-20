@@ -89,14 +89,22 @@ class HomeNewsController(
     // ---------------------------------------------------------------- menus
 
     /** Long press on an empty cell of the home grid: what to put there (or elsewhere on home). */
-    fun showHomeMenu(openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addFolder: () -> Unit, parking: () -> Unit, detox: () -> Unit) {
+    fun showHomeMenu(openSettings: () -> Unit, addApp: () -> Unit, addWidget: () -> Unit, addFolder: () -> Unit, parking: () -> Unit, detox: () -> Unit, onLockChanged: () -> Unit) {
+        // The lock on top; while it's on, nothing can be added to home
+        val lock = MenuEntry(context.getString(R.string.ml_home_lock), checked = prefs.homeLocked, icon = R.drawable.ic_m_lock, onToggle = {
+            prefs.homeLocked = it
+            onLockChanged()
+            true
+        })
+        val add = if (prefs.homeLocked) emptyList() else listOf(
+            MenuEntry(context.getString(R.string.ml_add_app), section = context.getString(R.string.ml_menu_add)) { addApp() },
+            MenuEntry(context.getString(R.string.ml_add_widget)) { addWidget() },
+            MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
+            MenuEntry(context.getString(R.string.ml_dock_add)) { dock?.showAddDialog() },
+        )
         context.showMenuDialog(
             context.getString(R.string.app_name),
-            listOf(
-                MenuEntry(context.getString(R.string.ml_add_app), section = context.getString(R.string.ml_menu_add)) { addApp() },
-                MenuEntry(context.getString(R.string.ml_add_widget)) { addWidget() },
-                MenuEntry(context.getString(R.string.ml_folder_new_ellipsis)) { addFolder() },
-                MenuEntry(context.getString(R.string.ml_dock_add)) { dock?.showAddDialog() },
+            listOf(lock) + add + listOf(
                 MenuEntry(context.getString(R.string.ml_parking_menu), section = context.getString(R.string.ml_menu_tools)) { parking() },
                 MenuEntry(context.getString(R.string.ml_news_zone_show)) { grid.showNewsStrip() },
                 MenuEntry(context.getString(R.string.ml_explorer)) { FileExplorerActivity.openRoots(context) },

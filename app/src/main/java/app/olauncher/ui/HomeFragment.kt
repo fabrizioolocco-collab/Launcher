@@ -448,8 +448,11 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     private fun initSwipeTouchListener() {
         binding.homeScroll.callbacks = object : HomeScrollView.GestureCallbacks {
-            // The search page (over the blurred wallpaper), or the app list, per settings
-            override fun onSwipeUp() = if (prefs.swipeUpSearch) search.openWithKeyboard() else showAppList(Constants.FLAG_LAUNCH_APP)
+            // The search page (over the blurred wallpaper), the app list, or nothing, per settings
+            override fun onSwipeUp() {
+                if (prefs.swipeUpOff) return
+                if (prefs.swipeUpSearch) search.openWithKeyboard() else showAppList(Constants.FLAG_LAUNCH_APP)
+            }
             override fun onSwipeDown() = expandNotificationDrawer(requireContext())
             override fun onSwipeLeft() = openSwipeLeftApp()
             override fun onSwipeRight() = openSwipeRightApp()
@@ -478,6 +481,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                     addFolder = { createFolderShortcut() },
                     parking = { showParkingMenu() },
                     detox = { detox.open() },
+                    onLockChanged = { widgets.endEditing() },
                 )
             }
 
