@@ -834,6 +834,7 @@
     <string name="ml_tab_in">in %1$s</string>
     <string name="ml_tab_drop_hint">Drop it between the apps, or on a tab to move it there</string>
     <string name="ml_tab_hidden_done">%1$s hidden</string>
+    <string name="ml_tab_shown_done">%1$s back in the app list</string>
     <string name="ml_swipe_up_action">Swipe up opens</string>
     <string name="ml_swipe_up_search">Search</string>
     <string name="ml_swipe_up_apps">App list</string>

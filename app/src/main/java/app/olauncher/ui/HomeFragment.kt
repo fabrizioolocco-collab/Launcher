@@ -214,10 +214,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             homeViews = listOf(binding.homeScroll, binding.dockSlot, binding.detoxButton),
             prefs = prefs,
             scope = uiScope,
-            apps = {
-                val hidden = prefs.hiddenApps
-                viewModel.homeApps.value.orEmpty().filter { DrawerTabsRepository.key(it) !in hidden }
-            },
+            // Hidden apps too: they're only kept out of the app list, the search finds every app
+            apps = { viewModel.homeApps.value.orEmpty() },
             launchApp = { app -> launchHomeApp(app) },
             appMenu = { app, onChanged -> showSearchAppMenu(app, onChanged) },
             requestPermission = { permissionRequest.launch(it) },
@@ -803,9 +801,12 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             }) { onChanged() }
         }
         AppRename.menuEntry(ctx, app)?.let { entries += it }
-        entries += MenuEntry(getString(R.string.adapter_hide)) {
-            prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { add(DrawerTabsRepository.key(app)) }
-            ctx.showToast(getString(R.string.ml_tab_hidden_done, app.appLabel))
+        // The search finds hidden apps too: for them the entry brings them back to the app list
+        val key = DrawerTabsRepository.key(app)
+        val hidden = key in prefs.hiddenApps
+        entries += MenuEntry(getString(if (hidden) R.string.adapter_show else R.string.adapter_hide)) {
+            prefs.hiddenApps = prefs.hiddenApps.toMutableSet().apply { if (hidden) remove(key) else add(key) }
+            ctx.showToast(getString(if (hidden) R.string.ml_tab_shown_done else R.string.ml_tab_hidden_done, app.appLabel))
             viewModel.getAppList()
             onChanged()
         }
