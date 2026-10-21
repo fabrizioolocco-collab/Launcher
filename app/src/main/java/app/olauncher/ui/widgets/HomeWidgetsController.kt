@@ -194,46 +194,75 @@ class HomeWidgetsController(
 
     /**
      * The grid got shorter (e.g. the clock was turned on) and the lowest icons or the news strip
-     * went past the bottom: removes as many empty rows above them as needed, so everything below
-     * the gap moves up together and stays visible.
+     * went past the bottom: hides as many empty rows above them as needed, so everything below
+     * the gap is shown moved up together and stays visible. Only what is shown changes, the saved
+     * positions stay: when the room comes back (a shorter moment while the window or the insets
+     * settle, split screen...) the icons go back where they were. Moving an icon by hand while rows
+     * are hidden keeps the layout as it is shown.
      */
     private val fitRunnable = Runnable { fitToHeight() }
+
+    /** Rows (in saved positions) hidden by [fitToHeight]; empty when everything fits. */
+    private var collapsedRows: List<Int> = emptyList()
+
+    /** The row an item saved on [row] is shown on. */
+    private fun shownRow(row: Int): Int = if (row < 0) row else row - collapsedRows.count { it < row }
 
     private fun fitToHeight() {
         if (grid.height == 0 || grid.editing) return
         // The keyboard (search, a rename dialog...) only borrows the room: the icons stay put
         if (androidx.core.view.ViewCompat.getRootWindowInsets(grid)
                 ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true) return
-        val bottom = usedRows()
-        if (bottom == 0 || grid.fits(0, bottom)) return
-        val overflow = grid.rowTop(bottom) - (grid.height - grid.paddingBottom)
-        var toRemove = (overflow + grid.rowSize() - 1) / grid.rowSize()
         val icons = widgets.filter { it.isApp && it.row >= 0 }
-        fun empty(r: Int) = icons.none { r >= it.row && r < it.row + it.rowSpan } &&
-                blocks.none { it.row >= 0 && r >= it.row && r < it.row + it.rowSpan }
-        val movedBlocks = mutableSetOf<Block>()
-        var changed = false
-        // Lowest empty rows first: the gap right above the bottom content closes
-        for (r in bottom - 1 downTo 0) {
-            if (toRemove == 0) break
-            if (!empty(r)) continue
-            icons.filter { it.row > r }.forEach { it.row-- }
-            blocks.filter { it.row > r }.forEach { it.row--; movedBlocks += it }
-            toRemove--
-            changed = true
+        // The news strip where it would be with every row shown
+        val newsBase = if (newsBlock.row >= 0) newsRow() else -1
+        val bottom = maxOf(
+            icons.maxOfOrNull { it.row + it.rowSpan } ?: 0,
+            if (newsBase >= 0) newsBase + newsBlock.rowSpan else 0,
+        )
+        val collapsed = mutableListOf<Int>()
+        if (bottom > 0 && !grid.fits(0, bottom)) {
+            val overflow = grid.rowTop(bottom) - (grid.height - grid.paddingBottom)
+            var toRemove = (overflow + grid.rowSize() - 1) / grid.rowSize()
+            fun empty(r: Int) = icons.none { r >= it.row && r < it.row + it.rowSpan } &&
+                    (newsBase < 0 || r < newsBase || r >= newsBase + newsBlock.rowSpan)
+            // Lowest empty rows first: the gap right above the bottom content closes
+            for (r in bottom - 1 downTo 0) {
+                if (toRemove == 0) break
+                if (!empty(r)) continue
+                collapsed += r
+                toRemove--
+            }
         }
-        if (!changed) return
-        save()
-        movedBlocks.forEach { blockMoved(it) }
+        if (collapsed == collapsedRows && (newsBase < 0 || newsBlock.row == shownRow(newsBase))) return
+        collapsedRows = collapsed
+        if (newsBase >= 0) newsBlock.row = shownRow(newsBase)
+        applyShownRows()
+    }
+
+    /** Puts every icon and the news strip on the row it is shown on. */
+    private fun applyShownRows() {
         for (i in 0 until grid.childCount) {
             val child = grid.getChildAt(i)
             val params = child.layoutParams as? WidgetGridLayout.CellParams ?: continue
             when (val tag = child.tag) {
-                is HomeWidget -> params.row = tag.row
+                is HomeWidget -> if (tag.isApp) params.row = shownRow(tag.row)
                 is Block -> params.row = tag.row
             }
         }
         grid.requestLayout()
+    }
+
+    /**
+     * About to move something by hand while rows are hidden: the layout as shown becomes the saved
+     * one, so what the user sees is what they move.
+     */
+    private fun keepShownRows() {
+        if (collapsedRows.isEmpty()) return
+        widgets.filter { it.isApp && it.row >= 0 }.forEach { it.row = shownRow(it.row) }
+        collapsedRows = emptyList()
+        if (newsBlock.row >= 0 && prefs.newsRow >= 0) prefs.newsRow = newsBlock.row
+        save()
     }
 
     /** Widgets and icons on home. */
@@ -261,7 +290,7 @@ class HomeWidgetsController(
 
     /**
      * Where the news strip goes: the row the user put it on ([Prefs.newsRow], changed only by
-     * dragging it or by [fitToHeight]) or, while that is taken or past the bottom, the nearest free row. That
+     * dragging it) or, while that is taken or past the bottom, the nearest free row. That
      * fallback is not saved, so the strip goes back to its row as soon as it is free again.
      */
     private fun newsRow(): Int {
@@ -491,6 +520,8 @@ class HomeWidgetsController(
         updateBadges()
         pendingPlaceTries = 0
         placePendingApps()
+        // Rows hidden to fit a shorter grid: the new views are already on their shown rows, the strip follows
+        grid.post { fitToHeight() }
     }
 
     private var pendingPlaceTries = 0
@@ -606,7 +637,7 @@ class HomeWidgetsController(
         view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
         view.setTag(R.id.ml_swipe_app, app)
-        view.layoutParams = WidgetGridLayout.CellParams(item.col, item.row, 1, rowDivisions)
+        view.layoutParams = WidgetGridLayout.CellParams(item.col, shownRow(item.row), 1, rowDivisions)
         val showLabel = showLabels
         val tile = prefs.iconTiles
         // Cards like the app drawer's (the same setting)
@@ -699,6 +730,7 @@ class HomeWidgetsController(
 
     /** Moves the dragged view under the finger and previews where it would land. */
     private fun trackDrag(view: View, dx: Float, dy: Float) {
+        keepShownRows()
         dragDx = dx; dragDy = dy
         view.translationX = dx
         view.translationY = dy
