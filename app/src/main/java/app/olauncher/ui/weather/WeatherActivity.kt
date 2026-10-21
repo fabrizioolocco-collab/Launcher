@@ -22,6 +22,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
+import androidx.core.view.doOnLayout
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
@@ -59,6 +60,12 @@ class WeatherActivity : AppCompatActivity() {
     /** Hour column to scroll to when the hours view is next shown. */
     private var pendingColumn = -1
 
+    /** Hour (millis) to scroll to when the hours view is next shown: a tap on it in the widget. */
+    private var pendingTime = 0L
+
+    /** Where the hours view was scrolled to, kept when it is drawn again. */
+    private var hoursX = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -74,7 +81,9 @@ class WeatherActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        if (showHourOf(intent)) render()
+        // Opened again without an hour: back to now
+        if (!showHourOf(intent)) hoursX = 0
+        render()
     }
 
     /** Opened on an hour (a tap on it in the calendar widget): the hours view, scrolled to it. */
@@ -82,8 +91,8 @@ class WeatherActivity : AppCompatActivity() {
         val time = intent?.getLongExtra(EXTRA_TIME, 0L) ?: 0L
         if (time <= 0L) return false
         intent?.removeExtra(EXTRA_TIME)
-        val index = forecast?.upcoming()?.indexOfFirst { time >= it.time && time < it.time + 3_600_000L } ?: -1
-        pendingColumn = index.coerceAtLeast(0)
+        pendingTime = time
+        pendingColumn = -1
         showDays = false
         return true
     }
@@ -265,6 +274,7 @@ class WeatherActivity : AppCompatActivity() {
         }
         bodyScroll.setOnScrollChangeListener { _, x, _, _, _ ->
             bodyView.scrollPos = x
+            hoursX = x
             if (!syncing) {
                 syncing = true
                 headerScroll.scrollTo(x, 0)
@@ -273,14 +283,22 @@ class WeatherActivity : AppCompatActivity() {
             }
         }
 
-        val column = pendingColumn
+        // The hour asked for (a tap in the widget, a day of the list), else where the hours were
+        // left: a refresh of the forecast draws them again and must not jump back to now
+        val time = pendingTime
+        val column = when {
+            pendingColumn >= 0 -> pendingColumn
+            time > 0L -> hours.indexOfFirst { time >= it.time && time < it.time + 3_600_000L }.coerceAtLeast(0)
+            else -> -1
+        }
         pendingColumn = -1
-        if (column > 0) {
-            bodyScroll.post {
-                val x = column * MeteogramView.COL_DP.dpToPx()
-                bodyScroll.scrollTo(x, 0)
-                headerScroll.scrollTo(x, 0)
-            }
+        pendingTime = 0L
+        val x = if (column >= 0) column * MeteogramView.COL_DP.dpToPx() else hoursX
+        hoursX = x
+        // Only once laid out: before that the scroll views have no width to scroll in
+        if (x > 0) bodyScroll.doOnLayout {
+            bodyScroll.scrollTo(x, 0)
+            headerScroll.scrollTo(x, 0)
         }
         return box
     }
