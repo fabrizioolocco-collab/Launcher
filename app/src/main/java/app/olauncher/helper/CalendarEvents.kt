@@ -135,6 +135,76 @@ object CalendarEvents {
         return list.sortedWith(compareBy({ !it.allDay }, { it.begin }, { it.end }))
     }
 
+    /** An event found by the search: the occurrence shown (the next one, else the last). */
+    class Found(val event: Event, val location: String)
+
+    /**
+     * Events of the visible calendars whose title or place holds [query], from a year ago to two
+     * years ahead: one row per event, its next occurrence (or the last one when all are past),
+     * the coming ones first. Blocking.
+     */
+    fun search(context: Context, query: String, max: Int): List<Found> {
+        if (!hasPermission(context) || query.isBlank()) return emptyList()
+        val now = System.currentTimeMillis()
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, now - 365 * DAY_MS)
+            ContentUris.appendId(it, now + 2 * 365 * DAY_MS)
+        }.build()
+        val like = "%" + query.trim().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+        val selection = "${CalendarContract.Instances.VISIBLE} = 1" +
+                " AND (${CalendarContract.Instances.STATUS} IS NULL OR ${CalendarContract.Instances.STATUS} != ${CalendarContract.Instances.STATUS_CANCELED})" +
+                " AND (${CalendarContract.Instances.TITLE} LIKE ? ESCAPE '\\' OR ${CalendarContract.Instances.EVENT_LOCATION} LIKE ? ESCAPE '\\')"
+        val byEvent = HashMap<Long, Found>()
+        try {
+            context.contentResolver.query(
+                uri,
+                arrayOf(
+                    CalendarContract.Instances.EVENT_ID,
+                    CalendarContract.Instances.TITLE,
+                    CalendarContract.Instances.BEGIN,
+                    CalendarContract.Instances.END,
+                    CalendarContract.Instances.ALL_DAY,
+                    CalendarContract.Instances.DISPLAY_COLOR,
+                    CalendarContract.Instances.START_DAY,
+                    CalendarContract.Instances.END_DAY,
+                    CalendarContract.Instances.CALENDAR_ID,
+                    CalendarContract.Instances.EVENT_LOCATION,
+                ),
+                selection, arrayOf(like, like), null
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val begin = c.getLong(2)
+                    val end = c.getLong(3).coerceAtLeast(begin)
+                    val allDay = c.getInt(4) == 1
+                    val event = Event(
+                        id = c.getLong(0),
+                        title = c.getString(1).orEmpty(),
+                        begin = begin,
+                        end = end,
+                        allDay = allDay,
+                        color = c.getInt(5),
+                        calendarId = c.getLong(8),
+                        startDay = c.getInt(6),
+                        endDay = if (allDay) c.getInt(7) else julianDay(if (end > begin) end - 1 else end),
+                    )
+                    val old = byEvent[event.id]?.event
+                    // The first occurrence not over yet; while all are over, the latest
+                    val better = old == null || when {
+                        end > now && old.end > now -> begin < old.begin
+                        end > now -> true
+                        old.end > now -> false
+                        else -> begin > old.begin
+                    }
+                    if (better) byEvent[event.id] = Found(event, c.getString(9).orEmpty())
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        val (coming, past) = byEvent.values.partition { it.event.end > now }
+        return (coming.sortedBy { it.event.begin } + past.sortedByDescending { it.event.begin }).take(max)
+    }
+
     private fun start(context: Context, intent: Intent) {
         try {
             context.startActivity(intent)

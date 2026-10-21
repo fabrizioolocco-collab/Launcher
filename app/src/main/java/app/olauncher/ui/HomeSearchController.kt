@@ -1,6 +1,7 @@
 package app.olauncher.ui
 
 import android.Manifest
+import app.olauncher.helper.CalendarEvents
 import android.app.Activity
 import android.content.ContentUris
 import android.content.Intent
@@ -277,7 +278,7 @@ class HomeSearchController(
     private enum class Kind(val tile: UiKit.FileKind?) {
         APP(null), CONTACT(UiKit.FileKind.CONTACT), SETTING(UiKit.FileKind.SETTINGS), FILE(UiKit.FileKind.DOC),
         FOLDER(UiKit.FileKind.FOLDER), ALBUM(UiKit.FileKind.WALLPAPER), PHOTO(UiKit.FileKind.IMAGE),
-        VIDEO(UiKit.FileKind.VIDEO), MUSIC(UiKit.FileKind.AUDIO), BOOKMARK(null), WEB(null)
+        VIDEO(UiKit.FileKind.VIDEO), MUSIC(UiKit.FileKind.AUDIO), BOOKMARK(null), WEB(null), EVENT(null)
     }
 
     private class Row(
@@ -295,6 +296,8 @@ class HomeSearchController(
         /** Contacts: their id and how to reach them (buttons on the row, long press menu). */
         val contactId: Long? = null,
         val ways: ContactWays? = null,
+        /** Events: their calendar's color, on the tile. */
+        val color: Int = 0,
         val onClick: () -> Unit,
     ) {
         val isDocument
@@ -304,6 +307,7 @@ class HomeSearchController(
     /** Result tabs, each with its count; only those with results are shown. */
     private enum class Tab(val label: Int, val icon: Int) {
         APPS(R.string.ml_search_group_apps, R.drawable.ic_m_grid), CONTACTS(R.string.ml_search_contacts, R.drawable.ic_m_contact),
+        EVENTS(R.string.ml_search_tab_events, R.drawable.ic_m_event),
         PHOTOS(R.string.ml_search_tab_photos, R.drawable.ic_m_image), VIDEOS(R.string.ml_search_tab_videos, R.drawable.ic_m_video),
         MUSIC(R.string.ml_search_tab_music, R.drawable.ic_m_audio), DOCUMENTS(R.string.ml_search_tab_documents, R.drawable.ic_m_doc),
         /** The files that are none of the above (or the files access to ask). */
@@ -325,10 +329,13 @@ class HomeSearchController(
         val albums: List<Row>,
         val settings: List<Row>,
         val bookmarks: List<Row>,
+        /** Null while the calendar can't be read (the tab asks for it). */
+        val events: List<Row>?,
     ) {
         fun rows(tab: Tab): List<Row> = when (tab) {
             Tab.APPS -> apps
             Tab.CONTACTS -> contacts.orEmpty()
+            Tab.EVENTS -> events.orEmpty()
             Tab.FILES -> files.orEmpty().filter { it.kind == Kind.FILE && !it.isDocument }
             Tab.FOLDERS -> folders
             Tab.ALBUMS -> albums
@@ -340,8 +347,30 @@ class HomeSearchController(
             Tab.WEB -> bookmarks
         }
 
-        val total get() = apps.size + contacts.orEmpty().size + files.orEmpty().size + folders.size + albums.size + settings.size + bookmarks.size
+        val total get() = apps.size + contacts.orEmpty().size + files.orEmpty().size + folders.size + albums.size + settings.size + bookmarks.size + events.orEmpty().size
     }
+
+    /** Calendar events whose title or place holds [q]: when (and where) in the subtitle; a tap opens them. */
+    private fun events(q: String): List<Row> = CalendarEvents.search(activity.applicationContext, q, MAX_EVENTS).map { found ->
+        val e = found.event
+        val date = java.text.SimpleDateFormat(
+            if (sameYear(e.begin)) "EEE d MMM" else "EEE d MMM yyyy", java.util.Locale.getDefault()
+        ).format(java.util.Date(e.begin))
+        val time = if (e.allDay) activity.getString(R.string.ml_search_event_all_day)
+        else android.text.format.DateFormat.getTimeFormat(activity).format(java.util.Date(e.begin))
+        val sub = listOf("$date · $time", found.location).filter { it.isNotBlank() }.joinToString(" · ")
+        Row(Kind.EVENT, e.title.ifBlank { "-" }, sub, color = e.color) {
+            CalendarEvents.openEvent(activity, e)
+            leave()
+        }
+    }
+
+    private fun sameYear(millis: Long): Boolean =
+        java.util.Calendar.getInstance().let { now ->
+            val y = now.get(java.util.Calendar.YEAR)
+            now.timeInMillis = millis
+            now.get(java.util.Calendar.YEAR) == y
+        }
 
     private suspend fun searchPhone(q: String) {
         val ctx = activity.applicationContext
@@ -366,16 +395,19 @@ class HomeSearchController(
                     leave()
                 }
             }
-        render(q, Found(appRows, contactRows, fileRows, folderRows, albumRows, settingRows, bookmarkRows))
+        val eventRows = if (granted(Manifest.permission.READ_CALENDAR)) withContext(Dispatchers.IO) { events(q) } else null
+        render(q, Found(appRows, contactRows, fileRows, folderRows, albumRows, settingRows, bookmarkRows, eventRows))
     }
 
     private fun render(q: String, found: Found) {
         results.removeAllViews()
         val missingContacts = found.contacts == null
+        val missingEvents = found.events == null
         val missingFiles = found.files == null
         // Tabs with results, plus Contacts / Files when their permission is missing (to ask it)
         val visible = Tab.entries.filter {
-            found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles)
+            found.rows(it).isNotEmpty() || (it == Tab.CONTACTS && missingContacts) || (it == Tab.FILES && missingFiles) ||
+                    (it == Tab.EVENTS && missingEvents)
         }
         val current = tab?.takeIf { it in visible } ?: visible.firstOrNull { found.rows(it).isNotEmpty() } ?: visible.firstOrNull()
         if (current != null) tabBar(q, found, visible, current, missingFiles)
@@ -385,6 +417,9 @@ class HomeSearchController(
                 requestPermission(Manifest.permission.READ_CONTACTS)
             }
             current == Tab.FILES && missingFiles -> permissionRow(R.string.ml_search_allow_files) { askFilesAccess() }
+            current == Tab.EVENTS && missingEvents -> permissionRow(R.string.ml_search_allow_calendar) {
+                requestPermission(Manifest.permission.READ_CALENDAR)
+            }
             current == Tab.ALBUMS -> albumGrid(found.rows(current))
             current == Tab.APPS -> appGrid(found.rows(current), key)
             else -> card(found.rows(current), key)
@@ -838,6 +873,19 @@ class HomeSearchController(
                 marginEnd = 14.dpToPx()
             })
 
+            row.kind == Kind.EVENT -> addView(
+                UiKit.fileTile(activity, UiKit.FileKind.CLOUD, 40).apply {
+                    (getChildAt(0) as android.widget.ImageView).apply {
+                        setImageResource(R.drawable.ic_m_event)
+                        if (row.color != 0) setColorFilter(row.color or 0xFF000000.toInt())
+                    }
+                },
+                LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply {
+                    marginStart = 2.dpToPx()
+                    marginEnd = 14.dpToPx()
+                }
+            )
+
             row.kind == Kind.WEB || row.kind == Kind.BOOKMARK -> addView(
                 UiKit.fileTile(activity, UiKit.FileKind.CLOUD, 40).apply {
                     (getChildAt(0) as android.widget.ImageView).setImageResource(
@@ -1161,6 +1209,7 @@ class HomeSearchController(
     companion object {
         private const val RESULT = "result"
         private const val MAX_APPS = 30
+        private const val MAX_EVENTS = 30
         private const val APP_COLUMNS = 4
         private val AVATAR_COLORS = intArrayOf(
             0xFF5B9BD5.toInt(), 0xFF9C7BD6.toInt(), 0xFFE09A4F.toInt(), 0xFFE0675E.toInt(), 0xFF4FB38A.toInt(), 0xFFD66BA0.toInt(),

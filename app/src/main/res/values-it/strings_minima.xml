@@ -851,4 +851,7 @@
     <string name="ml_backup_invalid">Questo file non è un backup di MinimaLauncher</string>
     <string name="ml_backup_restore_title">Ripristinare il backup?</string>
     <string name="ml_backup_restore_message">Tutte le impostazioni attuali, la home, le schede, i preferiti e le to-do vengono sostituiti da quelli del backup, poi il launcher si riavvia. I widget di altre app e l\'accesso a OneDrive vanno aggiunti di nuovo.</string>
+    <string name="ml_search_tab_events">Eventi</string>
+    <string name="ml_search_allow_calendar">Consenti l\'accesso al calendario per cercare gli eventi</string>
+    <string name="ml_search_event_all_day">tutto il giorno</string>
 </resources>
