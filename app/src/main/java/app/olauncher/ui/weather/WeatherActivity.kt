@@ -66,8 +66,26 @@ class WeatherActivity : AppCompatActivity() {
         window.navigationBarColor = Color.TRANSPARENT
         setContentView(buildLayout())
         forecast = WeatherRepository.cached(this)
+        showHourOf(intent)
         render()
         load(force = false)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (showHourOf(intent)) render()
+    }
+
+    /** Opened on an hour (a tap on it in the calendar widget): the hours view, scrolled to it. */
+    private fun showHourOf(intent: Intent?): Boolean {
+        val time = intent?.getLongExtra(EXTRA_TIME, 0L) ?: 0L
+        if (time <= 0L) return false
+        intent?.removeExtra(EXTRA_TIME)
+        val index = forecast?.upcoming()?.indexOfFirst { time >= it.time && time < it.time + 3_600_000L } ?: -1
+        pendingColumn = index.coerceAtLeast(0)
+        showDays = false
+        return true
     }
 
     private fun buildLayout(): View {
@@ -400,8 +418,14 @@ class WeatherActivity : AppCompatActivity() {
         private const val REQUEST_LOCATION = 4711
         private const val DAY = 24 * 3_600_000L
 
-        fun open(context: Context) {
-            context.startActivity(Intent(context, WeatherActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        private const val EXTRA_TIME = "time"
+
+        /** The Weather app; on the hour holding [time] (millis) when it's given. */
+        fun open(context: Context, time: Long = 0L) {
+            context.startActivity(
+                Intent(context, WeatherActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .apply { if (time > 0L) putExtra(EXTRA_TIME, time) }
+            )
         }
     }
 }

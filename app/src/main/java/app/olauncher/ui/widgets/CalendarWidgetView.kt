@@ -89,7 +89,7 @@ class CalendarWidgetView(
     private val primary = activity.getColorFromAttr(R.attr.primaryColor)
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-    /** The next hours: hour, icon, temperature; a tap opens the Weather app. */
+    /** The next hours: hour, icon, temperature; a tap opens the Weather app (on the hour tapped). */
     private val weatherRow = LinearLayout(activity).apply {
         orientation = LinearLayout.HORIZONTAL
         isClickable = true
@@ -336,6 +336,8 @@ class CalendarWidgetView(
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 setPadding(0, 4.dpToPx(), 0, 4.dpToPx())
+                // A tap on an hour opens the Weather app right on it
+                setOnClickListener { app.olauncher.ui.weather.WeatherActivity.open(activity, h.time) }
                 addView(text(CalendarText.STATUS).apply {
                     text = if (current) activity.getString(R.string.ml_w_now) else WeatherIcons.hourLabel(h.time)
                     textSize = 11f
