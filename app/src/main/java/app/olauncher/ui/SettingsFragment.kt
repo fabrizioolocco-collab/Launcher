@@ -15,7 +15,6 @@ import android.view.LayoutInflater
 import android.view.Menu
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatDelegate
@@ -34,7 +33,6 @@ import app.olauncher.databinding.FragmentSettingsBinding
 import app.olauncher.helper.appUsagePermissionGranted
 import app.olauncher.helper.createDialog
 import app.olauncher.helper.getColorFromAttr
-import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideStatusBar
 import app.olauncher.helper.isAccessServiceEnabled
 import app.olauncher.helper.isDarkThemeOn
@@ -58,7 +56,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import app.olauncher.helper.copyToClipboard
 import app.olauncher.helper.SettingsBackup
-import app.olauncher.helper.OutlookProbe
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.ui.widgets.WidgetLog
 import app.olauncher.helper.isOlauncherDefault
@@ -130,37 +127,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 if (restored) SettingsBackup.restartApp(ctx)
                 else ctx.showToast(ctx.getString(R.string.ml_backup_invalid), Toast.LENGTH_LONG)
             }
-        }
-    }
-
-    /** Temporary: finds an Outlook event and tries the ways to open it right in Outlook. */
-    private fun runOutlookProbe() {
-        val ctx = requireContext()
-        lifecycleScope.launch {
-            val found = withContext(Dispatchers.IO) { OutlookProbe.nextOutlookEvent(ctx.applicationContext) }
-            if (!isAdded) return@launch
-            if (found == null) {
-                ctx.showToast(getString(R.string.ml_outlook_probe_none), Toast.LENGTH_LONG)
-                return@launch
-            }
-            val text = OutlookProbe.describe(ctx, found)
-            ctx.showMenuDialog(
-                getString(R.string.ml_outlook_probe),
-                listOf(
-                    MenuEntry(getString(R.string.ml_outlook_probe_a)) { OutlookProbe.openInOutlook(ctx, found) },
-                    MenuEntry(getString(R.string.ml_outlook_probe_b)) { OutlookProbe.openWithChooser(ctx, found) },
-                    MenuEntry(getString(R.string.ml_outlook_probe_c)) { OutlookProbe.openOutlookDay(ctx) },
-                ),
-                header = { dialog ->
-                    TextView(dialog.context).apply {
-                        this.text = text
-                        textSize = 13f
-                        setTextIsSelectable(true)
-                        setTextColor(dialog.context.getColorFromAttr(R.attr.primaryColor))
-                        setPadding(8.dpToPx(), 4.dpToPx(), 8.dpToPx(), 12.dpToPx())
-                    }
-                },
-            )
         }
     }
 
@@ -435,7 +401,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 viewModel.keepCurrentScreen = true
                 backupSaver.launch(SettingsBackup.suggestedName())
             }
-            R.id.outlookProbe -> runOutlookProbe()
             R.id.backupImport -> {
                 viewModel.keepCurrentScreen = true
                 backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
@@ -570,7 +535,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.widgetLog.setOnClickListener(this)
         binding.backupExport.setOnClickListener(this)
         binding.backupImport.setOnClickListener(this)
-        binding.outlookProbe.setOnClickListener(this)
         binding.autoLaunchSingle.setOnClickListener(this)
         binding.testNotificationSend.setOnClickListener(this)
         binding.testNotificationMany.setOnClickListener(this)

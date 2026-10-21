@@ -851,10 +851,4 @@
     <string name="ml_backup_invalid">Questo file non è un backup di MinimaLauncher</string>
     <string name="ml_backup_restore_title">Ripristinare il backup?</string>
     <string name="ml_backup_restore_message">Tutte le impostazioni attuali, la home, le schede, i preferiti e le to-do vengono sostituiti da quelli del backup, poi il launcher si riavvia. I widget di altre app e l\'accesso a OneDrive vanno aggiunti di nuovo.</string>
-    <string name="ml_outlook_probe">Prova evento Outlook</string>
-    <string name="ml_outlook_probe_run">Prova</string>
-    <string name="ml_outlook_probe_none">Nessun evento di Outlook sul telefono: in Outlook attiva Impostazioni > account > Sincronizza calendari</string>
-    <string name="ml_outlook_probe_a">A · Apri l\'evento in Outlook</string>
-    <string name="ml_outlook_probe_b">B · Scegli l\'app per l\'evento</string>
-    <string name="ml_outlook_probe_c">C · Calendario Outlook, vista giorno</string>
 </resources>
