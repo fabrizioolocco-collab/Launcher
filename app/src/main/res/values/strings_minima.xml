@@ -857,4 +857,5 @@
     <string name="ml_search_tab_events">Events</string>
     <string name="ml_search_allow_calendar">Allow calendar access to search the events</string>
     <string name="ml_search_event_all_day">all day</string>
+    <string name="ml_search_event_range">from %1$s to %2$s</string>
 </resources>

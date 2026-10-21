@@ -353,12 +353,21 @@ class HomeSearchController(
     /** Calendar events whose title or place holds [q]: when (and where) in the subtitle; a tap opens them. */
     private fun events(q: String): List<Row> = CalendarEvents.search(activity.applicationContext, q, MAX_EVENTS).map { found ->
         val e = found.event
-        val date = java.text.SimpleDateFormat(
-            if (sameYear(e.begin)) "EEE d MMM" else "EEE d MMM yyyy", java.util.Locale.getDefault()
-        ).format(java.util.Date(e.begin))
-        val time = if (e.allDay) activity.getString(R.string.ml_search_event_all_day)
-        else android.text.format.DateFormat.getTimeFormat(activity).format(java.util.Date(e.begin))
-        val sub = listOf("$date · $time", found.location).filter { it.isNotBlank() }.joinToString(" · ")
+        fun date(millis: Long) = java.text.SimpleDateFormat(
+            if (sameYear(millis)) "EEE d MMM" else "EEE d MMM yyyy", java.util.Locale.getDefault()
+        ).format(java.util.Date(millis))
+        fun time(millis: Long) = android.text.format.DateFormat.getTimeFormat(activity).format(java.util.Date(millis))
+        val `when` = when {
+            // More than one day: from ... to ... (the times too when it isn't all day)
+            e.endDay > e.startDay -> {
+                val last = CalendarEvents.dayStart(e.endDay)
+                if (e.allDay) activity.getString(R.string.ml_search_event_range, date(e.begin), date(last))
+                else activity.getString(R.string.ml_search_event_range, "${date(e.begin)} ${time(e.begin)}", "${date(last)} ${time(e.end)}")
+            }
+            e.allDay -> "${date(e.begin)} · ${activity.getString(R.string.ml_search_event_all_day)}"
+            else -> "${date(e.begin)} · ${time(e.begin)}"
+        }
+        val sub = listOf(`when`, found.location).filter { it.isNotBlank() }.joinToString(" · ")
         Row(Kind.EVENT, e.title.ifBlank { "-" }, sub, color = e.color) {
             CalendarEvents.openEvent(activity, e)
             leave()
