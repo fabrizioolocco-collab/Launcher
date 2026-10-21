@@ -104,10 +104,6 @@ class CalendarWidgetView(
         ellipsize = TextUtils.TruncateAt.END
         setOnClickListener { CalendarEvents.openDay(activity, firstDay()) }
     }
-    private val todayButton = iconButton(R.drawable.ic_cal_today, R.string.ml_cal_today_button) {
-        offset = 0
-        reload()
-    }
     private val weekText = text(CalendarText.WEEK).apply { maxLines = 1 }
     private val clockText = text(CalendarText.CLOCK).apply {
         maxLines = 1
@@ -152,8 +148,6 @@ class CalendarWidgetView(
         header.addView(weekText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             marginStart = 10.dpToPx()
         })
-        header.addView(todayButton)
-        todayButton.isVisible = false
         header.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitDate() }
         header.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
         buttons.forEach { header.addView(it) }
@@ -182,7 +176,7 @@ class CalendarWidgetView(
             else lp.width.coerceAtLeast(0)
             return w + lp.marginStart + lp.marginEnd
         }
-        val others = need(clockText) + need(weekText) + need(todayButton) + buttons.sumOf { need(it) }
+        val others = need(clockText) + need(weekText) + buttons.sumOf { need(it) }
         val max = (header.width - header.paddingLeft - header.paddingRight - others).coerceAtLeast(0)
         if (dateText.maxWidth != max) header.post { dateText.maxWidth = max }
     }
@@ -220,7 +214,46 @@ class CalendarWidgetView(
 
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) onTouched?.invoke()
+        trackDoubleTap(ev)
         return super.dispatchTouchEvent(ev)
+    }
+
+    private var tapDownX = 0f
+    private var tapDownY = 0f
+    private var lastTapUp = 0L
+    private var lastTapX = 0f
+    private var lastTapY = 0f
+
+    /** A double tap anywhere on the widget brings it back to today (seen before the children get the taps). */
+    private fun trackDoubleTap(ev: MotionEvent) {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                tapDownX = ev.rawX
+                tapDownY = ev.rawY
+            }
+
+            MotionEvent.ACTION_UP -> {
+                val moved = abs(ev.rawX - tapDownX) > touchSlop || abs(ev.rawY - tapDownY) > touchSlop
+                if (moved || swiping || touch.longPressed) {
+                    lastTapUp = 0L
+                    return
+                }
+                val near = abs(ev.rawX - lastTapX) < touchSlop * 4 && abs(ev.rawY - lastTapY) < touchSlop * 4
+                if (lastTapUp != 0L && ev.eventTime - lastTapUp <= android.view.ViewConfiguration.getDoubleTapTimeout() && near) {
+                    lastTapUp = 0L
+                    if (offset != 0) {
+                        offset = 0
+                        reload()
+                    }
+                    return
+                }
+                lastTapUp = ev.eventTime
+                lastTapX = ev.rawX
+                lastTapY = ev.rawY
+            }
+
+            MotionEvent.ACTION_CANCEL -> lastTapUp = 0L
+        }
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
@@ -465,7 +498,7 @@ class CalendarWidgetView(
         styleText(dateText, CalendarText.HEADER)
         val iconSize = (config.text(CalendarText.HEADER).sizeSp * 1.35f).toInt().dpToPx()
         val tint = config.text(CalendarText.HEADER).color.takeIf { it != 0 } ?: primary
-        (buttons + todayButton).forEach {
+        buttons.forEach {
             it.layoutParams = LinearLayout.LayoutParams(iconSize + 16.dpToPx(), iconSize + 12.dpToPx())
             it.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
         }
@@ -516,7 +549,6 @@ class CalendarWidgetView(
         dateText.text = SimpleDateFormat(pattern, Locale.getDefault()).format(Date(start)).uppercase(Locale.getDefault())
             .let { if (config.shortDate) it.replace(".", "") else it }
         clockText.text = android.text.format.DateFormat.getTimeFormat(activity).format(Date())
-        todayButton.isVisible = offset != 0
         weekText.text = activity.getString(R.string.ml_cal_week, isoWeek(start))
         fitDate()
     }
