@@ -449,6 +449,8 @@
     <string name="ml_settings_notifications">Notifiche e detox</string>
     <string name="ml_settings_files">File e contenuti</string>
     <string name="ml_settings_system">Sistema</string>
+    <string name="ml_settings_search">Cerca nelle impostazioni</string>
+    <string name="ml_settings_no_results">Nessuna impostazione trovata</string>
     <string name="ml_icon_tiles">Riquadri dietro le icone</string>
     <string name="ml_news_zone">Zona novità</string>
     <string name="ml_news_zone_show">Mostra la zona novità</string>
