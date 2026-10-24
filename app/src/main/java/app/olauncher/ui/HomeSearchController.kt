@@ -278,6 +278,33 @@ class HomeSearchController(
         }
     }
 
+    /** Spotify's search of [q] in its app, its web player when the app is missing. */
+    private fun openSpotify(q: String) {
+        val enc = URLEncoder.encode(q, "UTF-8")
+        try {
+            activity.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$enc"))
+                    .setPackage(SPOTIFY).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            leave()
+        } catch (e: Exception) {
+            open(Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com/search/" + Uri.encode(q))))
+        }
+    }
+
+    /** YouTube's search of [q] in its app, its web page when the app is missing. */
+    private fun openYouTube(q: String) {
+        try {
+            activity.startActivity(
+                Intent(Intent.ACTION_SEARCH).putExtra("query", q)
+                    .setPackage(YOUTUBE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            leave()
+        } catch (e: Exception) {
+            open(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + URLEncoder.encode(q, "UTF-8"))))
+        }
+    }
+
     private fun open(intent: Intent) {
         try {
             activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -448,21 +475,29 @@ class HomeSearchController(
             current == Tab.APPS -> appGrid(found.rows(current), key)
             else -> card(found.rows(current), key)
         }
-        // Nothing on the phone: the web is the search key, or these buttons (Google, Play Store)
+        // Nothing on the phone: the web is the search key, or these buttons, two by two
         if (found.total == 0) {
-            val empty = UiKit.emptyState(activity, R.drawable.ic_m_globe, activity.getString(R.string.ml_search_no_results))
-            val buttons = LinearLayout(activity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-            }
+            val empty = UiKit.emptyState(
+                activity, R.drawable.ic_m_globe,
+                activity.getString(R.string.ml_search_no_results) + "\n" + activity.getString(R.string.ml_search_elsewhere, q),
+            )
             val color = UiKit.primary(activity)
-            buttons.addView(pillButton(activity, activity.getString(R.string.ml_search_hint_web), filled = false, color = color) { openWeb(q) },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()))
-            buttons.addView(pillButton(activity, activity.getString(R.string.ml_search_on_play), filled = false, color = color) { openPlayStore(q) },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()).apply { marginStart = 10.dpToPx() })
-            empty.addView(buttons, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                topMargin = 16.dpToPx()
-            })
+            val targets = listOf<Pair<String, () -> Unit>>(
+                "Google" to { openWeb(q) },
+                "Play Store" to { openPlayStore(q) },
+                "Spotify" to { openSpotify(q) },
+                "YouTube" to { openYouTube(q) },
+            )
+            targets.chunked(2).forEachIndexed { i, pair ->
+                val line = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }
+                pair.forEachIndexed { j, (label, action) ->
+                    line.addView(pillButton(activity, label, filled = false, color = color) { action() },
+                        LinearLayout.LayoutParams(0, 44.dpToPx(), 1f).apply { if (j > 0) marginStart = 10.dpToPx() })
+                }
+                empty.addView(line, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    topMargin = (if (i == 0) 16 else 10).dpToPx()
+                })
+            }
             results.addView(empty)
         }
     }
@@ -1272,6 +1307,8 @@ class HomeSearchController(
         private const val SOLID_EXPLORER = "pl.solidexplorer2"
         private const val SAMSUNG_INTERNET = "com.sec.android.app.sbrowser"
         private const val PLAY_STORE = "com.android.vending"
+        private const val SPOTIFY = "com.spotify.music"
+        private const val YOUTUBE = "com.google.android.youtube"
         private const val EXTERNAL_STORAGE_DOCS = "com.android.externalstorage.documents"
 
         @Volatile
