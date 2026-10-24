@@ -39,6 +39,7 @@ import app.olauncher.helper.NotificationListener
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.showDropdown
+import app.olauncher.helper.showToast
 import java.text.DecimalFormat
 
 /**
@@ -496,10 +497,13 @@ class MediaPlayerBar(
         }
     }
 
-    /** Long press on the cover: a drop-down of the apps with something playing or paused, to pick the one shown (or swipe one away). */
+    /** Long press on the cover: a drop-down of the apps with something playing or paused, to pick the one shown. */
     private fun switchApp() {
         val list = candidates()
-        if (list.isEmpty()) return
+        if (list.size < 2) {
+            activity.showToast(R.string.ml_player_only_one)
+            return
+        }
         val secondary = activity.getColorFromAttr(R.attr.secondaryTextColor)
         val card = LinearLayout(activity).apply {
             orientation = VERTICAL
@@ -562,80 +566,9 @@ class MediaPlayerBar(
                     preferred = c.packageName
                     refresh()
                 }
-                swipeToClose(this) {
-                    closeApp(c)
-                    card.removeView(this)
-                    if (card.childCount == 0) popup.dismiss()
-                }
             }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         popup.showAsDropDown(art, 0, 4.dpToPx())
-    }
-
-    /** A row of the drop-down follows the finger to the left; past a third of its width it slides out and [onClose] runs. */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun swipeToClose(row: View, onClose: () -> Unit) {
-        val slop = android.view.ViewConfiguration.get(activity).scaledTouchSlop
-        var downX = 0f
-        var downY = 0f
-        var swiping = false
-        row.setOnTouchListener { v, ev ->
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = ev.rawX
-                    downY = ev.rawY
-                    swiping = false
-                    false
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = ev.rawX - downX
-                    if (!swiping && dx < -slop && kotlin.math.abs(dx) > kotlin.math.abs(ev.rawY - downY)) {
-                        swiping = true
-                        v.isPressed = false
-                        v.cancelLongPress()
-                        v.parent?.requestDisallowInterceptTouchEvent(true)
-                    }
-                    if (swiping) {
-                        v.translationX = dx.coerceAtMost(0f)
-                        v.alpha = 1f - (-v.translationX / v.width.coerceAtLeast(1)).coerceAtMost(1f) * 0.7f
-                    }
-                    swiping
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (!swiping) return@setOnTouchListener false
-                    swiping = false
-                    if (ev.actionMasked == MotionEvent.ACTION_UP && -v.translationX > v.width / 3f)
-                        v.animate().translationX(-v.width.toFloat()).alpha(0f).setDuration(150).withEndAction { onClose() }.start()
-                    else v.animate().translationX(0f).alpha(1f).setDuration(150).start()
-                    true
-                }
-
-                else -> false
-            }
-        }
-    }
-
-    /**
-     * Android lets no app close another: playback is stopped (most apps then drop their session and
-     * leave the player), then the app's process is ended if it has gone to the background.
-     */
-    private fun closeApp(c: MediaController) {
-        try {
-            c.transportControls.stop()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        val pkg = c.packageName
-        handler.postDelayed({
-            try {
-                (activity.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).killBackgroundProcesses(pkg)
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-            refreshSessions()
-        }, 1500)
     }
 
     // ---------------------------------------------------------------- helpers

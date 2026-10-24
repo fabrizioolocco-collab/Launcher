@@ -10,8 +10,6 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
-    <!-- Player on home: a swipe on an app in its list stops it and ends its process once in the background -->
-    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
     <!--Used only for downloading wallpapers-->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Parking button on home: saves the GPS position of the car -->
