@@ -472,11 +472,6 @@
     <!-- Calendar widget -->
     <string name="ml_cal_widget">Calendar</string>
     <string name="ml_battery_widget">Battery</string>
-    <string name="ml_battery_charging">charging</string>
-    <string name="ml_battery_full">fully charged</string>
-    <string name="ml_battery_full_in">full in %s</string>
-    <string name="ml_battery_frame_off">Remove the card</string>
-    <string name="ml_battery_frame_on">Show the card</string>
     <string name="ml_cal_add">Add</string>
     <string name="ml_cal_all_day">All day</string>
     <string name="ml_cal_back">Back</string>

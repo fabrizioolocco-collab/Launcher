@@ -469,11 +469,6 @@
     <!-- Calendar widget -->
     <string name="ml_cal_widget">Calendario</string>
     <string name="ml_battery_widget">Batteria</string>
-    <string name="ml_battery_charging">in carica</string>
-    <string name="ml_battery_full">carica completa</string>
-    <string name="ml_battery_full_in">piena tra %s</string>
-    <string name="ml_battery_frame_off">Togli il riquadro</string>
-    <string name="ml_battery_frame_on">Mostra il riquadro</string>
     <string name="ml_cal_add">Aggiungi</string>
     <string name="ml_cal_all_day">Tutto il giorno</string>
     <string name="ml_cal_back">Indietro</string>

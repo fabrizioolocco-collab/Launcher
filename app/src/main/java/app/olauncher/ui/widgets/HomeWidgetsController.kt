@@ -454,7 +454,8 @@ class HomeWidgetsController(
         renderedCards = prefs.drawerCards
         renderedIconSize = prefs.homeIconSize
         val removed = mutableListOf<HomeWidget>()
-        var changed = false
+        // The old battery widget is gone (the battery is in the calendar widget now)
+        var changed = widgets.removeAll { it.isBuiltin && it.builtin == OLD_BATTERY_KIND }
         widgets.forEach { widget ->
             if (widget.isApp) {
                 if (widget.colSpan != 1 || widget.rowSpan != rowDivisions) {
@@ -477,7 +478,6 @@ class HomeWidgetsController(
             if (widget.isBuiltin) {
                 when (widget.builtin) {
                     CalendarWidgetView.KIND -> free.addView(calendarView(widget))
-                    BatteryWidgetView.KIND -> free.addView(batteryView(widget))
                     DetoxRingView.KIND -> free.addView(detoxRingView(widget))
                 }
                 return@forEach
@@ -593,17 +593,6 @@ class HomeWidgetsController(
 
     private fun calendarView(widget: HomeWidget): View {
         val view = CalendarWidgetView(activity, widget.appWidgetId, scope)
-        view.tag = widget
-        view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
-            leftMargin = widget.x.dpToPx()
-            topMargin = widget.y.dpToPx()
-        }
-        view.touch.listener = dragListener(null)
-        return view
-    }
-
-    private fun batteryView(widget: HomeWidget): View {
-        val view = BatteryWidgetView(activity, widget.appWidgetId)
         view.tag = widget
         view.layoutParams = android.widget.FrameLayout.LayoutParams(widget.w.dpToPx(), widget.h.dpToPx()).apply {
             leftMargin = widget.x.dpToPx()
@@ -805,7 +794,6 @@ class HomeWidgetsController(
             }
             when {
                 view is CalendarWidgetView -> showCalendarMenu(item, view)
-                view is BatteryWidgetView -> showBatteryMenu(item, view)
                 view is DetoxRingView -> showDetoxRingMenu(item, view)
                 info != null -> showWidgetMenu(item, info, view as MinimaWidgetHostView)
                 else -> showIconMenu(item)
@@ -1016,7 +1004,6 @@ class HomeWidgetsController(
         }.sortedWith(compareBy({ it.app.lowercase() }, { it.label.lowercase() }))
         val builtIns = listOf(
             WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_cal_widget), R.drawable.ic_calendar) { addCalendarWidget() },
-            WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_battery_widget), R.drawable.ic_m_battery) { addBatteryWidget() },
             WidgetPickerDialog.BuiltIn(activity.getString(R.string.ml_home_detox), R.drawable.ic_m_detox) { addDetoxRingWidget() },
         )
         WidgetPickerDialog.show(activity, items, scope, builtIns) { startAdding(it) }
@@ -1036,18 +1023,6 @@ class HomeWidgetsController(
             ActivityCompat.requestPermissions(activity, arrayOf(Manifest.permission.READ_CALENDAR), CalendarWidgetView.REQUEST_CALENDAR)
     }
 
-    /** Adds the battery widget: small (two cells by half a cell), to be resized at will. */
-    private fun addBatteryWidget() {
-        val id = (widgets.filter { it.isBuiltin }.minOfOrNull { it.appWidgetId } ?: BUILTIN_FIRST_ID) - 1
-        val cellDp = cellPx().toDp()
-        val w = 2 * cellDp
-        val h = (cellDp / 2).coerceAtLeast(BatteryWidgetView.MIN_SIZE_DP)
-        val (x, y) = freePositionFor(w, h)
-        widgets.add(HomeWidget(id, x = x, y = y, w = w, h = h, builtin = BatteryWidgetView.KIND))
-        save()
-        render()
-    }
-
     /** Adds the detox home ring: small and square, to be moved and resized at will. */
     private fun addDetoxRingWidget() {
         val id = (widgets.filter { it.isBuiltin }.minOfOrNull { it.appWidgetId } ?: BUILTIN_FIRST_ID) - 1
@@ -1065,24 +1040,6 @@ class HomeWidgetsController(
             listOf(
                 MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
                 MenuEntry(activity.getString(R.string.ml_widget_remove)) {
-                    widgets.remove(widget)
-                    save()
-                    render()
-                },
-            )
-        )
-    }
-
-    private fun showBatteryMenu(widget: HomeWidget, view: BatteryWidgetView) {
-        activity.showHomeItemMenu(
-            activity.getString(R.string.ml_battery_widget),
-            listOf(
-                MenuEntry(activity.getString(R.string.ml_widget_resize)) { free.editTarget = view },
-                MenuEntry(activity.getString(if (view.framed) R.string.ml_battery_frame_off else R.string.ml_battery_frame_on)) {
-                    view.framed = !view.framed
-                },
-                MenuEntry(activity.getString(R.string.ml_widget_remove)) {
-                    view.forget()
                     widgets.remove(widget)
                     save()
                     render()
@@ -1310,6 +1267,8 @@ class HomeWidgetsController(
     }
 
     companion object {
+        /** Kind of the removed battery widget, dropped from the saved layouts. */
+        private const val OLD_BATTERY_KIND = "battery"
         /** The grid's rows are half a column tall, so icons pack tighter. */
         const val TOP_ROW_DIVISIONS = 2
 
