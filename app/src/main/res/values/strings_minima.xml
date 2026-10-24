@@ -276,6 +276,10 @@
     <string name="ml_swipe_shortcut_other">Shortcut of another app…</string>
     <string name="ml_swipe_open_file">Open a file…</string>
     <!-- File explorer views -->
+    <string name="ml_explorer_search">Search</string>
+    <string name="ml_explorer_search_hint">Search in this folder and its subfolders</string>
+    <string name="ml_explorer_searching">Searching the subfolders…</string>
+    <string name="ml_explorer_no_results">Nothing found</string>
     <string name="ml_explorer_view">View</string>
     <string name="ml_explorer_grid">Grid</string>
     <string name="ml_explorer_columns">Columns: %1$d</string>

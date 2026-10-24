@@ -273,6 +273,10 @@
     <string name="ml_swipe_shortcut_other">Scorciatoia di un\'altra app…</string>
     <string name="ml_swipe_open_file">Apri un file…</string>
     <!-- File explorer views -->
+    <string name="ml_explorer_search">Cerca</string>
+    <string name="ml_explorer_search_hint">Cerca in questa cartella e nelle sottocartelle</string>
+    <string name="ml_explorer_searching">Cerco nelle sottocartelle…</string>
+    <string name="ml_explorer_no_results">Nessun risultato</string>
     <string name="ml_explorer_view">Vista</string>
     <string name="ml_explorer_grid">Griglia</string>
     <string name="ml_explorer_columns">Colonne: %1$d</string>

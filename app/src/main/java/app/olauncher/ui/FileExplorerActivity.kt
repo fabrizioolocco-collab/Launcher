@@ -129,6 +129,16 @@ open class FileExplorerActivity : AppCompatActivity() {
     private var view = FolderView()
     private var viewSource: File? = null
     private var entries: MutableList<Entry> = mutableListOf()
+    /** The folder's items as listed (sorted), before the search filter. */
+    private var folderEntries: List<Entry> = emptyList()
+
+    /** Search: the folder filtered while typing, then (on the phone) the matches in its subfolders. */
+    private lateinit var searchRow: LinearLayout
+    private lateinit var searchInput: android.widget.EditText
+    private lateinit var searchButton: ImageView
+    private var query = ""
+    private var searchJob: kotlinx.coroutines.Job? = null
+    private val searching get() = query.isNotEmpty()
     /** Names the user hid in the folder shown (see [hideSelected]). */
     private var hiddenNames: Set<String> = emptySet()
     private var clip: Clip? = null
@@ -203,7 +213,11 @@ open class FileExplorerActivity : AppCompatActivity() {
         oneDrive.clearCache()
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = if (selecting) clearSelection() else goBack()
+            override fun handleOnBackPressed() = when {
+                selecting -> clearSelection()
+                searchRow.isVisible -> closeSearch()
+                else -> goBack()
+            }
         })
         location = startLocation(intent)
         entryKey = keyOf(location)
@@ -257,17 +271,48 @@ open class FileExplorerActivity : AppCompatActivity() {
             v.setPadding(v.paddingLeft, bars.top + 8.dpToPx(), v.paddingRight, bars.bottom + 8.dpToPx())
             insets
         }
+        searchButton = UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_explorer_search)) {
+            if (searchRow.isVisible) closeSearch() else openSearch()
+        }
         val viewButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_explorer_view)) { showViewMenu() }
         newFolder = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { if (pickMode) askNewFolder() else showAddMenu() }
-        val bar = UiKit.appBar(this, "", onBack = { if (selecting) clearSelection() else goUp() }, actions = listOf(viewButton, newFolder))
+        val bar = UiKit.appBar(this, "", onBack = { if (selecting) clearSelection() else goUp() }, actions = listOf(searchButton, viewButton, newFolder))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 4.dpToPx())
         backButton = bar.back
         title = bar.title
         subtitle = bar.subtitle
         subtitle.compoundDrawablePadding = 4.dpToPx()
         subtitle.gravity = Gravity.CENTER_VERTICAL
-        headerButtons = listOf(viewButton, newFolder)
+        headerButtons = listOf(searchButton, viewButton, newFolder)
         root.addView(bar.view)
+        // Search field under the bar, shown by the search button
+        searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(16.dpToPx(), 2.dpToPx(), 8.dpToPx(), 6.dpToPx())
+            isVisible = false
+        }
+        searchInput = android.widget.EditText(this).apply {
+            UiKit.styleInput(this)
+            hint = getString(R.string.ml_explorer_search_hint)
+            isSingleLine = true
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setOnEditorActionListener { v, _, _ ->
+                (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0)
+                true
+            }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    query = s?.toString()?.trim().orEmpty()
+                    applySearch()
+                }
+            })
+        }
+        searchRow.addView(searchInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        searchRow.addView(UiKit.iconButton(this, R.drawable.ic_m_close, getString(R.string.close)) { closeSearch() })
+        root.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // Status line, with a spinning circle while something loads or runs
         statusRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -420,6 +465,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         val key = keyOf(location)
         val changed = loadedKey != key
         if (changed) selected.clear()
+        if (changed && searchRow.isVisible) closeSearch(reload = false)
         loadedKey = key
         updatePasteBar()
         when (val loc = location) {
@@ -554,7 +600,12 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun isHidden(name: String) = name.startsWith(".") || name in hiddenNames
 
     private fun setEntries(list: List<Entry>, sort: Boolean = true) {
-        entries = (if (sort) sorted(list) else list).toMutableList()
+        folderEntries = if (sort) sorted(list) else list
+        if (searching) applySearch() else showEntries(folderEntries)
+    }
+
+    private fun showEntries(list: List<Entry>) {
+        entries = list.toMutableList()
         val manager = this.list.layoutManager
         if (view.grid && (manager !is GridLayoutManager || manager.spanCount != view.columns))
             this.list.layoutManager = GridLayoutManager(this, view.columns)
@@ -579,6 +630,88 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
         val ordered = if (view.descending) byKey.reversed() else byKey
         return if (view.foldersFirst) list.sortedWith(compareBy<Entry> { !it.isFolder }.then(ordered)) else list.sortedWith(ordered)
+    }
+
+    // ---------------------------------------------------------------- search
+
+    private fun openSearch() {
+        searchRow.isVisible = true
+        UiKit.setToolActive(searchButton, true)
+        searchInput.requestFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showSoftInput(searchInput, 0)
+    }
+
+    /** Hides the field and shows the whole folder again ([reload] false: a new folder is being loaded anyway). */
+    private fun closeSearch(reload: Boolean = true) {
+        searchJob?.cancel()
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(searchInput.windowToken, 0)
+        searchRow.isVisible = false
+        UiKit.setToolActive(searchButton, false)
+        val had = searching
+        query = ""
+        if (searchInput.text.isNotEmpty()) searchInput.setText("")
+        if (had && reload) {
+            showStatus(null)
+            showEntries(folderEntries)
+            emptyView.isVisible = entries.isEmpty()
+        }
+    }
+
+    private fun fold(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "").lowercase()
+
+    /**
+     * The folder's items whose name holds the query (accents and case ignored) at once; on the phone,
+     * after a short pause, the matches in the subfolders follow, with their folder under the name.
+     */
+    private fun applySearch() {
+        searchJob?.cancel()
+        if (!searching) {
+            showStatus(null)
+            showEntries(folderEntries)
+            emptyView.isVisible = entries.isEmpty()
+            return
+        }
+        val key = fold(query)
+        val here = folderEntries.filter { fold(it.name).contains(key) }
+        showEntries(here)
+        emptyView.isVisible = false
+        val loc = location as? Location.Local
+        if (loc == null || !hasFilesAccess()) {
+            showStatus(if (here.isEmpty()) getString(R.string.ml_explorer_no_results) else null)
+            return
+        }
+        showStatus(getString(R.string.ml_explorer_searching), busy = true)
+        val showHidden = view.showHidden
+        searchJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(250)
+            val deeper = withContext(Dispatchers.IO) {
+                val found = mutableListOf<File>()
+                fun walk(dir: File, depth: Int) {
+                    if (found.size >= MAX_SEARCH_RESULTS || depth > MAX_SEARCH_DEPTH) return
+                    val children = dir.listFiles() ?: return
+                    for (f in children) {
+                        if (!showHidden && f.name.startsWith(".")) continue
+                        if (depth > 0 && fold(f.name).contains(key)) found += f
+                        if (found.size >= MAX_SEARCH_RESULTS) return
+                        if (f.isDirectory) walk(f, depth + 1)
+                    }
+                }
+                walk(loc.dir, 0)
+                found.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
+            }
+            if (location != loc || fold(query) != key) return@launch
+            val more = deeper.map { f ->
+                Entry(f.name, f.isDirectory, if (f.isDirectory) 0 else f.length(), f.lastModified(), f, mimeOf(f.name),
+                    info = "/" + relative(f.parentFile ?: loc.dir))
+            }
+            if (more.isNotEmpty()) {
+                val start = entries.size
+                entries.addAll(more)
+                list.adapter?.notifyItemRangeInserted(start, more.size)
+            }
+            showStatus(if (entries.isEmpty()) getString(R.string.ml_explorer_no_results) else null)
+        }
     }
 
     private fun hasFilesAccess() =
@@ -774,7 +907,7 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     /** Manual order: long press and drag to move an item; a long press without moving opens its menu. */
     private val dragHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.Callback() {
-        override fun isLongPressDragEnabled() = view.sort == FolderView.SORT_MANUAL
+        override fun isLongPressDragEnabled() = view.sort == FolderView.SORT_MANUAL && !searching
         override fun isItemViewSwipeEnabled() = false
 
         override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
@@ -1289,7 +1422,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             }
             root.setOnClickListener { onTap(entry) }
             // In manual order a long press drags the item (the menu opens if it isn't moved)
-            if (view.sort == FolderView.SORT_MANUAL && entry.root == null) root.setOnLongClickListener(null)
+            if (view.sort == FolderView.SORT_MANUAL && !searching && entry.root == null) root.setOnLongClickListener(null)
             else root.setOnLongClickListener {
                 onLongPress(entry)
                 true
@@ -1298,6 +1431,9 @@ open class FileExplorerActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val MAX_SEARCH_RESULTS = 300
+        private const val MAX_SEARCH_DEPTH = 8
+
         const val EXTRA_LOCAL_PATH = "local_path"
         const val EXTRA_CLOUD = "cloud"
         /** A OneDrive folder to open, as made by [cloudPathOf] (e.g. a home folder shortcut). */
