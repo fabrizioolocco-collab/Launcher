@@ -728,6 +728,8 @@
     <string name="ml_w_error">Forecast not available</string>
     <string name="ml_w_updated">Updated %s</string>
     <string name="ml_w_source">Data: Open-Meteo</string>
+    <string name="ml_cal_show_battery">Battery next to the weather</string>
+    <string name="ml_cal_battery_short">Batt.</string>
     <string name="ml_cal_show_weather">Weather in the header</string>
     <string name="ml_w_sunrise">Sunrise %1$s · sunset %2$s</string>
     <string name="ml_cal_card">Card with a border</string>

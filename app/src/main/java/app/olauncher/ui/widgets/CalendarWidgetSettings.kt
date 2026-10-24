@@ -127,6 +127,7 @@ object CalendarWidgetSettings {
                     }
                 },
                 toggle(R.string.ml_cal_show_weather, c.showWeather) { cfg, v -> cfg.showWeather = v },
+                toggle(R.string.ml_cal_show_battery, c.showBattery) { cfg, v -> cfg.showBattery = v },
                 toggle(R.string.ml_cal_card, c.card) { cfg, v -> cfg.card = v },
                 toggle(R.string.ml_cal_show_header, c.showHeader) { cfg, v -> cfg.showHeader = v },
                 toggle(R.string.ml_cal_show_clock, c.showClock) { cfg, v -> cfg.showClock = v },

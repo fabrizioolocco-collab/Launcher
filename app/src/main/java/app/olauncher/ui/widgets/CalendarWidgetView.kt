@@ -347,7 +347,9 @@ class CalendarWidgetView(
 
     private fun showWeather() {
         weatherRow.removeAllViews()
-        weatherRow.isVisible = config.showWeather
+        val battery = config.showBattery && batteryLevel >= 0
+        weatherRow.isVisible = config.showWeather || battery
+        if (battery) addBatteryCell()
         if (!config.showWeather) return
         if (!WeatherRepository.hasPermission(activity) && WeatherRepository.cached(activity) == null) {
             weatherRow.addView(text(CalendarText.STATUS).apply {
@@ -364,10 +366,12 @@ class CalendarWidgetView(
         val forecast = WeatherRepository.cached(activity)
         val today = CalendarEvents.julianDay(System.currentTimeMillis())
         val day = firstDay()
-        val hours = if (day == today) forecast?.upcoming()?.take(WEATHER_HOURS).orEmpty()
+        // The battery takes the place of one hour
+        val count = if (battery) WEATHER_HOURS - 1 else WEATHER_HOURS
+        val hours = if (day == today) forecast?.upcoming()?.take(count).orEmpty()
         else forecast?.hours?.filter {
             CalendarEvents.julianDay(it.time) == day && ((it.time - CalendarEvents.dayStart(day)) / 3_600_000L).toInt().let { h -> h in 8..20 && h % 2 == 0 }
-        }.orEmpty()
+        }.orEmpty().take(count)
         val now = day == today
         hours.forEachIndexed { i, h ->
             val current = now && i == 0
@@ -394,12 +398,127 @@ class CalendarWidgetView(
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
-        if (hours.isEmpty()) weatherRow.isVisible = false
+        if (hours.isEmpty() && !battery) weatherRow.isVisible = false
+    }
+
+    // ---------------------------------------------------------------- battery (first cell of the weather row)
+
+    private var batteryLevel = -1
+    private var batteryCharging = false
+    private var batteryRegistered = false
+    private val batteryReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, intent: android.content.Intent) = onBattery(intent)
+    }
+
+    private fun watchBattery(on: Boolean) {
+        if (on == batteryRegistered) return
+        batteryRegistered = on
+        try {
+            if (on) activity.registerReceiver(batteryReceiver, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))?.let { onBattery(it) }
+            else activity.unregisterReceiver(batteryReceiver)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    /** The sticky battery broadcast comes often (voltage, temperature): redraw only when level or charging change. */
+    private fun onBattery(intent: android.content.Intent) {
+        val raw = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+        val status = intent.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1)
+        val level = if (raw < 0) -1 else (raw * 100 / scale).coerceIn(0, 100)
+        val charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL
+        if (level == batteryLevel && charging == batteryCharging) return
+        batteryLevel = level
+        batteryCharging = charging
+        if (isAttachedToWindow && config.showBattery) showWeather()
+    }
+
+    /** Vertical battery between a label and the percentage, like the hours next to it; a tap opens the battery usage. */
+    private fun addBatteryCell() {
+        weatherRow.addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(2.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
+            contentDescription = "${activity.getString(R.string.ml_battery_widget)} $batteryLevel%"
+            setOnClickListener { openBatteryUsage() }
+            addView(text(CalendarText.STATUS).apply {
+                text = if (batteryCharging) "\u26A1" else activity.getString(R.string.ml_cal_battery_short)
+                textSize = 11f
+                alpha = if (batteryCharging) 0.9f else 0.55f
+                typeface = Typeface.DEFAULT
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            val outline = config.text(CalendarText.TIME).color.takeIf { it != 0 } ?: primary
+            addView(BatteryIcon(activity, batteryLevel, outline),
+                LinearLayout.LayoutParams(12.dpToPx(), 22.dpToPx()).apply { topMargin = 4.dpToPx(); bottomMargin = 4.dpToPx() })
+            addView(text(CalendarText.TIME, Typeface.BOLD).apply {
+                text = "$batteryLevel%"
+                textSize = 13f
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // A thin line between the battery and the hours
+        if (config.showWeather) weatherRow.addView(View(activity).apply {
+            setBackgroundColor(ColorUtils.setAlphaComponent(primary, 0x30))
+        }, LinearLayout.LayoutParams(1.dpToPx(), ViewGroup.LayoutParams.MATCH_PARENT).apply {
+            topMargin = 8.dpToPx(); bottomMargin = 8.dpToPx(); marginEnd = 4.dpToPx()
+        })
+    }
+
+    private fun openBatteryUsage() {
+        for (intent in listOf(android.content.Intent(android.content.Intent.ACTION_POWER_USAGE_SUMMARY),
+            android.content.Intent(android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS))) {
+            try {
+                activity.startActivity(intent)
+                return
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    /** Upright battery outline (tip on top) filled from the bottom: green, orange under 30%, red under 15%. */
+    private class BatteryIcon(context: Context, private val level: Int, private val outline: Int) : View(context) {
+        private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1.5f * resources.displayMetrics.density
+            color = outline
+        }
+        private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = when {
+                level < 15 -> 0xFFE05252.toInt()
+                level < 30 -> 0xFFE8912F.toInt()
+                else -> 0xFF3DB06B.toInt()
+            }
+        }
+        private val tip = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = outline }
+        private val rect = RectF()
+
+        override fun onDraw(canvas: Canvas) {
+            val d = resources.displayMetrics.density
+            val sw = stroke.strokeWidth
+            val tipH = 2f * d
+            val w = width.toFloat()
+            val h = height.toFloat()
+            rect.set(w * 0.3f, 0f, w * 0.7f, tipH + sw / 2)
+            canvas.drawRoundRect(rect, d, d, tip)
+            rect.set(sw / 2, tipH + sw / 2, w - sw / 2, h - sw / 2)
+            canvas.drawRoundRect(rect, 2.5f * d, 2.5f * d, stroke)
+            val inset = sw * 1.8f
+            val innerTop = tipH + inset
+            val innerH = h - inset - innerTop
+            val top = h - inset - innerH * level / 100f
+            if (level > 0) {
+                rect.set(inset, top, w - inset, h - inset)
+                canvas.drawRoundRect(rect, d, d, fill)
+            }
+        }
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         attached += this
+        watchBattery(config.showBattery)
         TodoStore.addListener(todoListener)
         observe()
         reload()
@@ -409,6 +528,7 @@ class CalendarWidgetView(
 
     override fun onDetachedFromWindow() {
         attached -= this
+        watchBattery(false)
         TodoStore.removeListener(todoListener)
         handler.removeCallbacks(tick)
         if (observing) {
@@ -542,7 +662,10 @@ class CalendarWidgetView(
             else -> null
         }
         if (config.card) setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 10.dpToPx()) else setPadding(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 8.dpToPx())
-        if (isAttachedToWindow) showWeather()
+        if (isAttachedToWindow) {
+            watchBattery(config.showBattery)
+            showWeather()
+        }
     }
 
     private fun updateHeader() {
