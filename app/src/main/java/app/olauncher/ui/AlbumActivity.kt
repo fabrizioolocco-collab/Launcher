@@ -54,6 +54,8 @@ class AlbumActivity : AppCompatActivity() {
 
     private val selected = LinkedHashSet<String>()
     private val selecting get() = selected.isNotEmpty()
+    /** Selecting by sliding over the photos (after a long press, or sideways during a selection). */
+    private lateinit var dragSelect: DragSelect
     private lateinit var title: TextView
     private lateinit var count: TextView
     private lateinit var backButton: ImageView
@@ -127,6 +129,13 @@ class AlbumActivity : AppCompatActivity() {
             setPadding(8.dpToPx(), 0, 8.dpToPx(), 24.dpToPx())
         }
         root.addView(grid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        dragSelect = DragSelect(grid, { selecting },
+            isSelected = { p -> media.getOrNull(p)?.absolutePath in selected },
+            setSelected = { p, on -> media.getOrNull(p)?.let { if (on) selected.add(it.absolutePath) else selected.remove(it.absolutePath) } },
+            onChanged = {
+                updateSelection()
+                grid.adapter?.notifyDataSetChanged()
+            })
         selectionBar = UiKit.toolBar(this).apply { isVisible = false }
         listOf(
             Tool(R.drawable.ic_m_share, R.string.ml_explorer_share) { shareSelected() },
@@ -364,6 +373,7 @@ class AlbumActivity : AppCompatActivity() {
             cell.setOnClickListener { if (selecting) toggle(file) else open(file) }
             cell.setOnLongClickListener {
                 toggle(file)
+                dragSelect.start(media.indexOf(file))
                 true
             }
             MediaThumbnails.load(lifecycleScope, image, file, cell.layoutParams.width.coerceAtLeast(64), uris[file.absolutePath])

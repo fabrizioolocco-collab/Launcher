@@ -146,6 +146,8 @@ open class FileExplorerActivity : AppCompatActivity() {
     /** Multiple selection (paths), started by a long press. */
     private val selected = LinkedHashSet<String>()
     private val selecting get() = selected.isNotEmpty()
+    /** Selecting by sliding over the items (after a long press, or sideways during a selection). */
+    private lateinit var dragSelect: DragSelect
     private var loadedKey: String? = null
     private lateinit var backButton: ImageView
     private lateinit var selectionBar: LinearLayout
@@ -341,6 +343,15 @@ open class FileExplorerActivity : AppCompatActivity() {
             addItemDecoration(separators)
         }
         dragHelper.attachToRecyclerView(list)
+        dragSelect = DragSelect(list, { selecting },
+            isSelected = { p -> entries.getOrNull(p)?.key in selected },
+            setSelected = { p, on ->
+                entries.getOrNull(p)?.takeIf { it.root == null }?.let { if (on) selected.add(it.key) else selected.remove(it.key) }
+            },
+            onChanged = {
+                updateSelection()
+                list.adapter?.notifyDataSetChanged()
+            })
         listArea.addView(list, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         emptyView = UiKit.emptyState(this, R.drawable.ic_m_folder_open, getString(R.string.ml_explorer_empty)).apply { isVisible = false }
         listArea.addView(emptyView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -1068,7 +1079,11 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     /** Long press: starts (or extends) the multiple selection; on the OneDrive root, offers to disconnect it. */
     private fun onLongPress(entry: Entry) {
-        if (entry.root == null) return toggleSelect(entry)
+        if (entry.root == null) {
+            toggleSelect(entry)
+            dragSelect.start(entries.indexOf(entry))
+            return
+        }
         if (entry.root is Location.Cloud && oneDrive.isConnected()) showMenuDialog(entry.name, listOf(
             MenuEntry(getString(R.string.ml_onedrive_disconnect)) {
                 oneDrive.disconnect()
