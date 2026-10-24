@@ -152,6 +152,13 @@ class CalendarWidgetView(
             marginStart = 10.dpToPx()
         })
         header.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> fitDate() }
+        // The hours shown depend on the width: again once it is known or changes
+        weatherRow.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            if (v.width > 0 && v.width != weatherWidth) {
+                weatherWidth = v.width
+                v.post { showWeather() }
+            }
+        }
         header.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
         buttons.forEach { header.addView(it) }
         content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -366,8 +373,8 @@ class CalendarWidgetView(
         val forecast = WeatherRepository.cached(activity)
         val today = CalendarEvents.julianDay(System.currentTimeMillis())
         val day = firstDay()
-        // The battery takes the place of one hour
-        val count = if (battery) WEATHER_HOURS - 1 else WEATHER_HOURS
+        // As many hours as fit the width (at least seven), the battery's place taken out
+        val count = weatherSlots(battery)
         val hours = if (day == today) forecast?.upcoming()?.take(count).orEmpty()
         else forecast?.hours?.filter {
             CalendarEvents.julianDay(it.time) == day && ((it.time - CalendarEvents.dayStart(day)) / 3_600_000L).toInt().let { h -> h in 8..20 && h % 2 == 0 }
@@ -400,6 +407,16 @@ class CalendarWidgetView(
         }
         if (hours.isEmpty() && !battery) weatherRow.isVisible = false
     }
+
+    /** Hours of weather that fit the row: [HOUR_MIN_DP] each, between [WEATHER_HOURS] and [MAX_WEATHER_HOURS]. */
+    private fun weatherSlots(battery: Boolean): Int {
+        val w = weatherRow.width.takeIf { it > 0 } ?: (width - paddingLeft - paddingRight)
+        if (w <= 0) return WEATHER_HOURS
+        val free = w - if (battery) BATTERY_CELL_DP.dpToPx() else 0
+        return (free / HOUR_MIN_DP.dpToPx()).coerceIn(WEATHER_HOURS, MAX_WEATHER_HOURS)
+    }
+
+    private var weatherWidth = 0
 
     // ---------------------------------------------------------------- battery (first cell of the weather row)
 
@@ -439,7 +456,7 @@ class CalendarWidgetView(
         weatherRow.addView(LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(2.dpToPx(), 4.dpToPx(), 10.dpToPx(), 4.dpToPx())
+            setPadding(0, 4.dpToPx(), 6.dpToPx(), 4.dpToPx())
             contentDescription = "${activity.getString(R.string.ml_battery_widget)} $batteryLevel%"
             setOnClickListener { openBatteryUsage() }
             addView(text(CalendarText.STATUS).apply {
@@ -462,7 +479,7 @@ class CalendarWidgetView(
         if (config.showWeather) weatherRow.addView(View(activity).apply {
             setBackgroundColor(ColorUtils.setAlphaComponent(primary, 0x30))
         }, LinearLayout.LayoutParams(1.dpToPx(), ViewGroup.LayoutParams.MATCH_PARENT).apply {
-            topMargin = 8.dpToPx(); bottomMargin = 8.dpToPx(); marginEnd = 4.dpToPx()
+            topMargin = 8.dpToPx(); bottomMargin = 8.dpToPx(); marginEnd = 2.dpToPx()
         })
     }
 
@@ -1058,6 +1075,11 @@ class CalendarWidgetView(
         const val REQUEST_CALENDAR = 7110
         const val REQUEST_LOCATION = 7112
         private const val WEATHER_HOURS = 7
+        private const val MAX_WEATHER_HOURS = 10
+        /** Narrowest an hour of the weather row gets (time, icon, degrees). */
+        private const val HOUR_MIN_DP = 36
+        /** Room of the battery cell and its line. */
+        private const val BATTERY_CELL_DP = 36
         private const val UNDO_MS = 4_000L
         private val FILTER_NAMES = listOf(R.string.ml_cal_todo_show_all, R.string.ml_cal_todo_hide_done, R.string.ml_cal_todo_hide_all)
 
