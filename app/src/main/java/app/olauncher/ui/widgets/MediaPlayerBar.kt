@@ -104,6 +104,11 @@ class MediaPlayerBar(
         setOnClickListener { openApp() }
         setOnLongClickListener { switchApp(); true }
     }
+    /** The app playing, always in sight (with "1/2" when more are playing: long press on the cover moves on). */
+    private val appText = text(CalendarText.TIME).apply {
+        maxLines = 1
+        ellipsize = TextUtils.TruncateAt.END
+    }
     private val title = text(CalendarText.TITLE).apply {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
@@ -166,15 +171,8 @@ class MediaPlayerBar(
         setOnClickListener { togglePlay() }
         addView(playIcon, FrameLayout.LayoutParams(24.dpToPx(), 24.dpToPx(), Gravity.CENTER))
     }
-    private val nextButton = ImageView(activity).apply {
-        setImageResource(R.drawable.ic_mp_next)
-        setColorFilter(primary, PorterDuff.Mode.SRC_IN)
-        scaleType = ImageView.ScaleType.CENTER_INSIDE
-        contentDescription = activity.getString(R.string.ml_player_next)
-        isClickable = true
-        isFocusable = true
-        setOnClickListener { current?.transportControls?.skipToNext() }
-    }
+    private val prevButton = trackButton(R.drawable.ic_mp_prev, R.string.ml_player_prev) { current?.transportControls?.skipToPrevious() }
+    private val nextButton = trackButton(R.drawable.ic_mp_next, R.string.ml_player_next) { current?.transportControls?.skipToNext() }
 
     private val sessionsListener = MediaSessionManager.OnActiveSessionsChangedListener { list -> setSessions(list.orEmpty()) }
 
@@ -202,6 +200,7 @@ class MediaPlayerBar(
         }
         top.addView(art, LayoutParams(42.dpToPx(), 42.dpToPx()).apply { marginEnd = 12.dpToPx() })
         val meta = LinearLayout(activity).apply { orientation = VERTICAL }
+        meta.addView(appText, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 3.dpToPx() })
         meta.addView(title)
         meta.addView(subtitle, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 3.dpToPx() })
         top.addView(meta, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -216,10 +215,10 @@ class MediaPlayerBar(
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        listOf(speedChip, backButton, playButton, forwardButton, nextButton).forEach { v ->
+        listOf(speedChip, prevButton, backButton, playButton, forwardButton, nextButton).forEach { v ->
             val size = when (v) {
                 playButton -> 46.dpToPx()
-                nextButton -> 40.dpToPx()
+                prevButton, nextButton -> 40.dpToPx()
                 else -> ViewGroup.LayoutParams.WRAP_CONTENT
             }
             controls.addView(FrameLayout(activity).apply {
@@ -241,6 +240,11 @@ class MediaPlayerBar(
         style(title, CalendarText.TITLE)
         style(subtitle, CalendarText.TIME)
         subtitle.alpha = 0.6f
+        style(appText, CalendarText.TIME)
+        appText.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        appText.typeface = Typeface.create(appText.typeface, Typeface.BOLD)
+        appText.letterSpacing = 0.06f
+        appText.alpha = 0.55f
         listOf(elapsed, total).forEach {
             style(it, CalendarText.TIME)
             it.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
@@ -351,13 +355,13 @@ class MediaPlayerBar(
         val appName = appLabel(c.packageName)
         val name = meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
             ?: meta?.getString(MediaMetadata.METADATA_KEY_TITLE)
+        val list = candidates()
+        val index = list.indexOfFirst { it.packageName == c.packageName }
+        appText.text = appName.uppercase() + if (list.size > 1 && index >= 0) "  ${index + 1}/${list.size}" else ""
         title.text = name ?: appName
-        subtitle.text = listOfNotNull(
-            meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
-                ?: meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
-                ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM),
-            appName.takeIf { name != null },
-        ).filter { it.isNotBlank() }.distinct().joinToString(" · ")
+        subtitle.text = (meta?.getString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE)
+            ?: meta?.getString(MediaMetadata.METADATA_KEY_ARTIST)
+            ?: meta?.getString(MediaMetadata.METADATA_KEY_ALBUM)).orEmpty().trim()
         subtitle.isVisible = subtitle.text.isNotEmpty()
 
         val cover = meta?.cover()
@@ -377,6 +381,7 @@ class MediaPlayerBar(
         val actions = state?.actions ?: 0L
         val playing = isPlaying(c)
         playIcon.setImageResource(if (playing) R.drawable.ic_mp_pause else R.drawable.ic_mp_play)
+        prevButton.isVisible = actions and PlaybackState.ACTION_SKIP_TO_PREVIOUS != 0L
         nextButton.isVisible = actions and PlaybackState.ACTION_SKIP_TO_NEXT != 0L
 
         val duration = duration(c)
@@ -503,7 +508,6 @@ class MediaPlayerBar(
         val next = list[(index + 1) % list.size]
         preferred = next.packageName
         refresh()
-        activity.showToast(appLabel(next.packageName))
     }
 
     // ---------------------------------------------------------------- helpers
@@ -512,6 +516,16 @@ class MediaPlayerBar(
     private fun claimTouch(view: View) = view.setOnTouchListener { v, ev ->
         if (ev.actionMasked == MotionEvent.ACTION_DOWN) v.parent?.requestDisallowInterceptTouchEvent(true)
         false
+    }
+
+    private fun trackButton(icon: Int, description: Int, onClick: () -> Unit) = ImageView(activity).apply {
+        setImageResource(icon)
+        setColorFilter(primary, PorterDuff.Mode.SRC_IN)
+        scaleType = ImageView.ScaleType.CENTER_INSIDE
+        contentDescription = activity.getString(description)
+        isClickable = true
+        isFocusable = true
+        setOnClickListener { onClick() }
     }
 
     private fun skipButton(icon: Int, label: TextView, description: Int, onClick: () -> Unit) = FrameLayout(activity).apply {
