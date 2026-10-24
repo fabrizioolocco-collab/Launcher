@@ -104,7 +104,7 @@ class MediaPlayerBar(
         setOnClickListener { openApp() }
         setOnLongClickListener { switchApp(); true }
     }
-    /** The app playing, always in sight (with "1/2" when more are playing: long press on the cover moves on). */
+    /** The app playing, always in sight (with "1/2" when more are playing: long press on the cover picks another). */
     private val appText = text(CalendarText.TIME).apply {
         maxLines = 1
         ellipsize = TextUtils.TruncateAt.END
@@ -497,17 +497,78 @@ class MediaPlayerBar(
         }
     }
 
-    /** Long press on the cover: the next app with something playing or paused. */
+    /** Long press on the cover: a drop-down of the apps with something playing or paused, to pick the one shown. */
     private fun switchApp() {
         val list = candidates()
         if (list.size < 2) {
             activity.showToast(R.string.ml_player_only_one)
             return
         }
-        val index = list.indexOfFirst { it.packageName == current?.packageName }
-        val next = list[(index + 1) % list.size]
-        preferred = next.packageName
-        refresh()
+        val secondary = activity.getColorFromAttr(R.attr.secondaryTextColor)
+        val card = LinearLayout(activity).apply {
+            orientation = VERTICAL
+            setPadding(6.dpToPx(), 6.dpToPx(), 6.dpToPx(), 6.dpToPx())
+            background = GradientDrawable().apply {
+                cornerRadius = 16.dpToPx().toFloat()
+                setColor(activity.getColorFromAttr(R.attr.cardColor))
+                setStroke(1.dpToPx(), activity.getColorFromAttr(R.attr.cardStrokeColor))
+            }
+        }
+        val popup = android.widget.PopupWindow(card, 270.dpToPx(), ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+            elevation = 8.dpToPx().toFloat()
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+            isOutsideTouchable = true
+        }
+        val ripple = TypedValue().let { tv ->
+            if (activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)) tv.resourceId else 0
+        }
+        list.forEach { c ->
+            val name = c.metadata?.getString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE)
+                ?: c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
+            val state = activity.getString(if (isPlaying(c)) R.string.ml_player_playing else R.string.ml_player_paused)
+            card.addView(LinearLayout(activity).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = 54.dpToPx()
+                setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
+                if (ripple != 0) setBackgroundResource(ripple)
+                isClickable = true
+                addView(ImageView(activity).apply {
+                    setImageDrawable(try {
+                        activity.packageManager.getApplicationIcon(c.packageName)
+                    } catch (e: Exception) {
+                        null
+                    })
+                }, LayoutParams(30.dpToPx(), 30.dpToPx()).apply { marginEnd = 12.dpToPx() })
+                addView(LinearLayout(activity).apply {
+                    orientation = VERTICAL
+                    addView(TextView(activity).apply {
+                        text = appLabel(c.packageName)
+                        textSize = 15f
+                        setTextColor(primary)
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    })
+                    addView(TextView(activity).apply {
+                        text = listOfNotNull(state, name).joinToString(" · ")
+                        textSize = 12.5f
+                        setTextColor(secondary)
+                        maxLines = 1
+                        ellipsize = TextUtils.TruncateAt.END
+                    })
+                }, LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                if (c.packageName == current?.packageName) addView(ImageView(activity).apply {
+                    setImageResource(R.drawable.ic_m_check)
+                    imageTintList = ColorStateList.valueOf(primary)
+                }, LayoutParams(18.dpToPx(), 18.dpToPx()).apply { marginStart = 8.dpToPx() })
+                setOnClickListener {
+                    popup.dismiss()
+                    preferred = c.packageName
+                    refresh()
+                }
+            }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        popup.showAsDropDown(art, 0, 4.dpToPx())
     }
 
     // ---------------------------------------------------------------- helpers

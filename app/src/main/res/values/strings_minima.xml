@@ -873,6 +873,8 @@
     <string name="ml_player_back">Jump back</string>
     <string name="ml_player_forward">Jump forward</string>
     <string name="ml_player_prev">Previous</string>
+    <string name="ml_player_playing">Playing</string>
+    <string name="ml_player_paused">Paused</string>
     <string name="ml_player_next">Next</string>
     <string name="ml_player_speed">Playback speed</string>
     <string name="ml_player_only_one">No other app is playing</string>

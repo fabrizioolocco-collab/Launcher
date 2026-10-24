@@ -870,6 +870,8 @@
     <string name="ml_player_back">Salta indietro</string>
     <string name="ml_player_forward">Salta avanti</string>
     <string name="ml_player_prev">Precedente</string>
+    <string name="ml_player_playing">In riproduzione</string>
+    <string name="ml_player_paused">In pausa</string>
     <string name="ml_player_next">Successivo</string>
     <string name="ml_player_speed">Velocità di riproduzione</string>
     <string name="ml_player_only_one">Nessun\'altra app in riproduzione</string>
