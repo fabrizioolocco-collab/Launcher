@@ -31,6 +31,9 @@ class VideoCropper(private val src: File, private val dst: File) {
 
     class Crop(val left: Int, val top: Int, val width: Int, val height: Int)
 
+    /** Quarter turns (degrees, clockwise) added to the video's own orientation flag. */
+    var extraRotation = 0
+
     /** Called with the progress (0..1) from the encoding thread. */
     var onProgress: ((Float) -> Unit)? = null
 
@@ -80,14 +83,16 @@ class VideoCropper(private val src: File, private val dst: File) {
             decoder.start()
 
             muxer = MediaMuxer(dst.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            var own = 0
             try {
                 val r = MediaMetadataRetriever()
                 r.setDataSource(src.absolutePath)
-                r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull()?.let { muxer.setOrientationHint(it) }
+                own = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
                 r.release()
             } catch (e: Exception) {
                 // no rotation info
             }
+            muxer.setOrientationHint(((own + extraRotation) % 360 + 360) % 360)
 
             // Audio track copied as is
             audioExtractor.setDataSource(src.absolutePath)

@@ -8,22 +8,25 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.SurfaceTexture
 import android.graphics.drawable.GradientDrawable
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
+import android.media.MediaPlayer
 import android.media.MediaScannerConnection
 import android.os.Bundle
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.Surface
+import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
-import android.widget.VideoView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -46,12 +49,19 @@ import kotlin.math.min
 /**
  * Video trimmer: two handles on a strip of frames pick the start and the end; the result is saved
  * as a copy without re-encoding (MediaExtractor → MediaMuxer), so it's fast and keeps the quality.
- * The cut lands on key frames, so the precision is about a second or two.
+ * The cut lands on key frames, so the precision is about a second or two. The rotation (90° steps)
+ * only changes the video's orientation flag: instant and lossless, also together with a crop.
  */
 class VideoEditActivity : AppCompatActivity() {
 
     private lateinit var file: File
-    private lateinit var video: VideoView
+    private lateinit var video: PreviewPlayer
+    /** The preview frame, and inside it the picture (video + crop frame) that turns with the rotation. */
+    private lateinit var frame: FrameLayout
+    private lateinit var stage: FrameLayout
+    private lateinit var rotateButton: ImageView
+    /** Rotation chosen by the user, clockwise, on top of the video's own. */
+    private var userRotation = 0
     private lateinit var trimmer: TrimView
     private lateinit var rangeText: TextView
     private lateinit var playButton: ImageView
@@ -112,8 +122,8 @@ class VideoEditActivity : AppCompatActivity() {
             }
             trimmer.setup(duration, frames)
             updateRange()
+            layoutStage()
             video.setVideoPath(file.absolutePath)
-            video.seekTo(1)
         }
     }
 
@@ -128,7 +138,9 @@ class VideoEditActivity : AppCompatActivity() {
             insets
         }
         cropButton = UiKit.iconButton(this, R.drawable.ic_m_crop, getString(R.string.ml_edit_crop)) { toggleCrop() }
+        rotateButton = UiKit.iconButton(this, R.drawable.ic_m_rotate, getString(R.string.ml_edit_rotate)) { rotate() }
         val bar = UiKit.appBar(this, getString(R.string.ml_edit_trim), onBack = { finish() }, actions = listOf(
+            rotateButton,
             cropButton,
             UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_save)) { save() },
         ))
@@ -136,12 +148,13 @@ class VideoEditActivity : AppCompatActivity() {
         bar.view.setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 4.dpToPx())
         root.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
-        val frame = FrameLayout(this)
-        video = VideoView(this).apply {
-            setOnPreparedListener { it.isLooping = false }
-            setOnCompletionListener { showPlaying(false) }
-        }
-        frame.addView(video, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        frame = FrameLayout(this)
+        frame.addOnLayoutChangeListener { _, l, t, rr, b, ol, ot, orr, ob -> if (rr - l != orr - ol || b - t != ob - ot) frame.post { layoutStage() } }
+        stage = FrameLayout(this)
+        val texture = TextureView(this)
+        video = PreviewPlayer(texture).apply { onCompletion = { showPlaying(false) } }
+        stage.addView(texture, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        frame.addView(stage, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER))
         // Round dark play / pause button over the preview
         playButton = ImageView(this).apply {
             setImageResource(R.drawable.ic_m_play)
@@ -161,7 +174,7 @@ class VideoEditActivity : AppCompatActivity() {
         }
         frame.addView(playButton, FrameLayout.LayoutParams(72.dpToPx(), 72.dpToPx(), Gravity.CENTER))
         cropView = CropOverlay(this).apply { isVisible = false }
-        frame.addView(cropView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        stage.addView(cropView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(frame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
         // Trim range and the strip of frames, in a card
@@ -189,6 +202,34 @@ class VideoEditActivity : AppCompatActivity() {
     private fun showPlaying(playing: Boolean) {
         playButton.setImageResource(if (playing) R.drawable.ic_m_pause else R.drawable.ic_m_play)
         playButton.alpha = if (playing) 0.35f else 1f
+    }
+
+    /** A quarter turn clockwise more; the preview (with the crop frame) turns with it. */
+    private fun rotate() {
+        if (videoW == 0 || videoH == 0) return
+        userRotation = (userRotation + 90) % 360
+        layoutStage()
+        UiKit.setToolActive(rotateButton, userRotation != 0)
+    }
+
+    /**
+     * The picture sized to the video as shown (its own rotation applied), turned by [userRotation]
+     * and fitted in the preview frame.
+     */
+    private fun layoutStage() {
+        val fw = frame.width
+        val fh = frame.height
+        if (fw == 0 || fh == 0 || videoW == 0 || videoH == 0) return
+        val dw = if (rotation % 180 == 0) videoW else videoH
+        val dh = if (rotation % 180 == 0) videoH else videoW
+        val turned = userRotation % 180 != 0
+        val aw = if (turned) dh else dw
+        val ah = if (turned) dw else dh
+        val s = min(fw.toFloat() / aw, fh.toFloat() / ah)
+        val bw = (aw * s).toInt()
+        val bh = (ah * s).toInt()
+        stage.layoutParams = FrameLayout.LayoutParams(if (turned) bh else bw, if (turned) bw else bh, Gravity.CENTER)
+        stage.rotation = userRotation.toFloat()
     }
 
     private fun toggleCrop() {
@@ -250,6 +291,80 @@ class VideoEditActivity : AppCompatActivity() {
         showPlaying(false)
     }
 
+    override fun onDestroy() {
+        video.release()
+        super.onDestroy()
+    }
+
+    /** A MediaPlayer on a TextureView: unlike a VideoView it turns with its view (the rotation preview). */
+    private class PreviewPlayer(private val view: TextureView) : TextureView.SurfaceTextureListener {
+        private var player: MediaPlayer? = null
+        private var path: String? = null
+        private var prepared = false
+        private var pendingSeek = 1
+        var onCompletion: (() -> Unit)? = null
+
+        init {
+            view.surfaceTextureListener = this
+        }
+
+        val isPlaying get() = prepared && player?.isPlaying == true
+        val currentPosition get() = if (prepared) player?.currentPosition ?: 0 else 0
+
+        fun setVideoPath(p: String) {
+            path = p
+            view.surfaceTexture?.let { open(it) }
+        }
+
+        fun seekTo(ms: Int) {
+            if (prepared) player?.seekTo(ms) else pendingSeek = ms
+        }
+
+        fun start() {
+            if (prepared) player?.start()
+        }
+
+        fun pause() {
+            if (isPlaying) player?.pause()
+        }
+
+        fun postDelayed(action: Runnable, ms: Long) = view.postDelayed(action, ms)
+
+        fun release() {
+            player?.release()
+            player = null
+            prepared = false
+        }
+
+        private fun open(texture: SurfaceTexture) {
+            val p = path ?: return
+            if (player != null) return
+            player = try {
+                MediaPlayer().apply {
+                    setSurface(Surface(texture))
+                    setDataSource(p)
+                    setOnPreparedListener { mp ->
+                        prepared = true
+                        mp.seekTo(pendingSeek)
+                    }
+                    setOnCompletionListener { onCompletion?.invoke() }
+                    prepareAsync()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+        }
+
+        override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) = open(texture)
+        override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) {}
+        override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {}
+        override fun onSurfaceTextureDestroyed(texture: SurfaceTexture): Boolean {
+            release()
+            return true
+        }
+    }
+
     // ---------------------------------------------------------------- probing
 
     /** Duration and a strip of small frames. */
@@ -289,11 +404,16 @@ class VideoEditActivity : AppCompatActivity() {
         showPlaying(false)
         val crop = sourceCrop()
         val trimmed = startMs > 0 || endMs < durationMs
-        if (crop == null && !trimmed) {
+        val turn = userRotation
+        if (crop == null && !trimmed && turn == 0) {
             showToast(getString(R.string.ml_edit_nothing))
             return
         }
-        showToast(getString(if (crop != null) R.string.ml_edit_crop_saving else R.string.ml_edit_trim_saving))
+        showToast(getString(when {
+            crop != null -> R.string.ml_edit_crop_saving
+            trimmed -> R.string.ml_edit_trim_saving
+            else -> R.string.ml_edit_rotate_saving
+        }))
         val progress = progressText ?: TextView(this).apply {
             setTextColor(Color.WHITE)
             textSize = 16f
@@ -303,7 +423,7 @@ class VideoEditActivity : AppCompatActivity() {
                 setColor(0xCC000000.toInt())
             }
             setPadding(24.dpToPx(), 16.dpToPx(), 24.dpToPx(), 16.dpToPx())
-            (video.parent as FrameLayout).addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            frame.addView(this, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             progressText = this
         }
         progress.isVisible = crop != null
@@ -313,8 +433,9 @@ class VideoEditActivity : AppCompatActivity() {
                 val out = uniqueCopy(file)
                 val ok = if (crop != null) VideoCropper(file, out).also { c ->
                     c.onProgress = { p -> runOnUiThread { progress.text = "${(p * 100).toInt()}%" } }
+                    c.extraRotation = turn
                 }.run(crop, startMs * 1000, endMs * 1000)
-                else trim(file, out, startMs * 1000, endMs * 1000)
+                else trim(file, out, startMs * 1000, endMs * 1000, turn)
                 if (ok) {
                     MediaScannerConnection.scanFile(applicationContext, arrayOf(out.absolutePath), null, null)
                     out
@@ -343,7 +464,8 @@ class VideoEditActivity : AppCompatActivity() {
     }
 
     /** Copies the samples between [startUs] and [endUs] of every track into a new MP4, no re-encoding. */
-    private fun trim(src: File, dst: File, startUs: Long, endUs: Long): Boolean {
+    /** Copy of [startUs]..[endUs] without re-encoding, turned by [extraRotation] more (orientation flag). */
+    private fun trim(src: File, dst: File, startUs: Long, endUs: Long, extraRotation: Int = 0): Boolean {
         val extractor = MediaExtractor()
         var muxer: MediaMuxer? = null
         try {
@@ -361,15 +483,17 @@ class VideoEditActivity : AppCompatActivity() {
                     maxBuffer = max(maxBuffer, format.getInteger(android.media.MediaFormat.KEY_MAX_INPUT_SIZE))
             }
             if (trackMap.isEmpty()) return false
-            // Rotation and orientation are kept
+            // Rotation and orientation are kept, plus the user's
+            var own = 0
             try {
                 val r = MediaMetadataRetriever()
                 r.setDataSource(src.absolutePath)
-                r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull()?.let { muxer.setOrientationHint(it) }
+                own = r.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
                 r.release()
             } catch (e: Exception) {
                 // no rotation info
             }
+            muxer.setOrientationHint(((own + extraRotation) % 360 + 360) % 360)
             muxer.start()
             extractor.seekTo(startUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
             val buffer = ByteBuffer.allocate(maxBuffer)
