@@ -369,16 +369,22 @@ class CalendarWidgetView(
             })
             return
         }
-        // Today: the next hours; another day: that day from 8 to 20 every two hours (if the forecast gets there)
+        // Today: the next hours; another day: every two hours around 14:00, as many as fit (8-20 for seven,
+        // 6-22 for nine...), if the forecast gets there
         val forecast = WeatherRepository.cached(activity)
         val today = CalendarEvents.julianDay(System.currentTimeMillis())
         val day = firstDay()
         // As many hours as fit the width (at least seven), the battery's place taken out
         val count = weatherSlots(battery)
         val hours = if (day == today) forecast?.upcoming()?.take(count).orEmpty()
-        else forecast?.hours?.filter {
-            CalendarEvents.julianDay(it.time) == day && ((it.time - CalendarEvents.dayStart(day)) / 3_600_000L).toInt().let { h -> h in 8..20 && h % 2 == 0 }
-        }.orEmpty().take(count)
+        else {
+            // Even hours 0-22: a window of [count] centred on 14:00, kept inside the day
+            val start = (7 - (count - 1) / 2).coerceIn(0, (12 - count).coerceAtLeast(0))
+            val wanted = (start until start + count).map { it * 2 }.toSet()
+            forecast?.hours?.filter {
+                CalendarEvents.julianDay(it.time) == day && ((it.time - CalendarEvents.dayStart(day)) / 3_600_000L).toInt() in wanted
+            }.orEmpty().take(count)
+        }
         val now = day == today
         hours.forEachIndexed { i, h ->
             val current = now && i == 0
