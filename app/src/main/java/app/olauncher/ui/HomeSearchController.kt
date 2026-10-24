@@ -53,6 +53,8 @@ import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -238,10 +240,7 @@ class HomeSearchController(
             if (pageOpen) results.addView(UiKit.emptyState(activity, R.drawable.ic_m_search, activity.getString(R.string.ml_search_page_hint)))
             return
         }
-        job = scope.launch {
-            delay(150)
-            searchPhone(q)
-        }
+        job = scope.launch { searchPhone(q) }
     }
 
     /** Search key: the web search, always (a result is a tap away). */
@@ -360,6 +359,9 @@ class HomeSearchController(
         WEB(R.string.ml_search_tab_bookmarks, R.drawable.ic_m_star),
     }
 
+    /** Only the apps and settings shown so far: the rest is being read. */
+    private var loading = false
+
     /** Tab chosen by the user; kept while typing as long as it has results. */
     private var tab: Tab? = null
 
@@ -423,7 +425,11 @@ class HomeSearchController(
             now.get(java.util.Calendar.YEAR) == y
         }
 
-    private suspend fun searchPhone(q: String) {
+    /**
+     * The apps (and settings) show at once, from memory; contacts, files, events and bookmarks are
+     * read meanwhile (together) and added when ready, after a short pause while typing.
+     */
+    private suspend fun searchPhone(q: String) = coroutineScope {
         val ctx = activity.applicationContext
         val key = normalize(q)
         val appRows = apps()
@@ -433,11 +439,14 @@ class HomeSearchController(
             .sortedWith(compareBy({ !normalize(it.appLabel).startsWith(key) }, { it.appLabel.lowercase() }))
             .take(MAX_APPS)
             .map { app -> Row(Kind.APP, app.appLabel, app = app) { launchApp(app); leave() } }
-        val contactRows = if (granted(Manifest.permission.READ_CONTACTS)) withContext(Dispatchers.IO) { contacts(q) } else null
-        val filesOk = filesGranted()
-        val fileRows = if (filesOk) withContext(Dispatchers.IO) { files(q) } else null
-        val (folderRows, albumRows) = if (filesOk) withContext(Dispatchers.IO) { folders(key) } else emptyList<Row>() to emptyList()
         val settingRows = settings().filter { normalize(it.title).contains(key) }
+        render(q, Found(appRows, emptyList(), emptyList(), emptyList(), emptyList(), settingRows, emptyList(), emptyList()), loading = true)
+        delay(150)
+        val contactsAsync = async(Dispatchers.IO) { if (granted(Manifest.permission.READ_CONTACTS)) contacts(q) else null }
+        val filesOk = filesGranted()
+        val filesAsync = async(Dispatchers.IO) { if (filesOk) files(q) else null }
+        val foldersAsync = async(Dispatchers.IO) { if (filesOk) folders(key) else emptyList<Row>() to emptyList() }
+        val eventsAsync = async(Dispatchers.IO) { if (granted(Manifest.permission.READ_CALENDAR)) events(q) else null }
         val bookmarkRows = withContext(Dispatchers.IO) { BookmarkStore.bookmarks(ctx) }
             .filter { normalize(it.title).contains(key) || it.url.lowercase().contains(key) }
             .map { b ->
@@ -446,11 +455,13 @@ class HomeSearchController(
                     leave()
                 }
             }
-        val eventRows = if (granted(Manifest.permission.READ_CALENDAR)) withContext(Dispatchers.IO) { events(q) } else null
-        render(q, Found(appRows, contactRows, fileRows, folderRows, albumRows, settingRows, bookmarkRows, eventRows))
+        val (folderRows, albumRows) = foldersAsync.await()
+        render(q, Found(appRows, contactsAsync.await(), filesAsync.await(), folderRows, albumRows, settingRows, bookmarkRows, eventsAsync.await()))
     }
 
-    private fun render(q: String, found: Found) {
+    /** [loading]: only the apps and settings so far (no permission tabs, no "nothing found" yet). */
+    private fun render(q: String, found: Found, loading: Boolean = false) {
+        this.loading = loading
         results.removeAllViews()
         val missingContacts = found.contacts == null
         val missingEvents = found.events == null
@@ -476,7 +487,7 @@ class HomeSearchController(
             else -> card(found.rows(current), key)
         }
         // Nothing on the phone: the web is the search key, or these buttons, two by two
-        if (found.total == 0) {
+        if (found.total == 0 && !loading) {
             val empty = UiKit.emptyState(
                 activity, R.drawable.ic_m_globe,
                 activity.getString(R.string.ml_search_no_results) + "\n" + activity.getString(R.string.ml_search_elsewhere, q),
@@ -557,7 +568,10 @@ class HomeSearchController(
                     }
                     val icon = android.widget.ImageView(activity)
                     addView(icon, LinearLayout.LayoutParams(size, size))
-                    scope.launch {
+                    // Already loaded (the same search a moment ago): at once, no blank frame
+                    val cached = IconPackManager.cachedIcon(app.appPackage, app.activityClassName, app.user, iconPack, size)
+                    if (cached != null) icon.setImageDrawable(IconPackManager.toDrawable(ctx, cached, size))
+                    else scope.launch {
                         val bitmap = withContext(Dispatchers.IO) {
                             IconPackManager.getIcon(ctx, app.appPackage, app.activityClassName, app.user, iconPack, size)
                         } ?: return@launch
@@ -639,7 +653,7 @@ class HomeSearchController(
                 isClickable = true
                 setOnClickListener {
                     tab = t
-                    render(q, found)
+                    render(q, found, loading)
                     resultsScroll.scrollTo(0, 0)
                 }
             }, ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {

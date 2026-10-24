@@ -87,6 +87,10 @@ object IconPackManager {
         failedPack = null
     }
 
+    /** The icon if already loaded (no disk work: fine on the main thread), else null. */
+    fun cachedIcon(packageName: String, activityClassName: String?, user: UserHandle, iconPackPackage: String, sizePx: Int): Bitmap? =
+        synchronized(this) { cache.get("$iconPackPackage|$packageName/$activityClassName|$user|$sizePx") }
+
     /** Returns the icon as a bitmap of [sizePx] x [sizePx], or null when nothing can be loaded. */
     fun getIcon(
         context: Context,
