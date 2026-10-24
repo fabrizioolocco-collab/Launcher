@@ -781,6 +781,7 @@
     <string name="ml_sb_missing">Samsung Internet is not installed</string>
     <string name="ml_sb_open_app">Open the browser (last tab)</string>
     <string name="ml_sb_choose">Tabs button opens</string>
+    <string name="ml_viewer_app">Minima Viewer</string>
     <string name="ml_scan_app">Scanner</string>
     <string name="ml_scan_add_pages">Scan pages</string>
     <string name="ml_scan_add">Add</string>

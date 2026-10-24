@@ -199,6 +199,28 @@
             android:theme="@style/ViewerTheme" />
 
         <!-- Built-in photo/video viewer and editors -->
+        <!-- The viewer as an app for photos and videos ("Open with", the camera's preview) -->
+        <activity
+            android:name=".ui.media.ViewerEntryActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/ml_viewer_app"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <action android:name="com.android.camera.action.REVIEW" />
+                <action android:name="android.provider.action.REVIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ui.media.MediaViewerActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"

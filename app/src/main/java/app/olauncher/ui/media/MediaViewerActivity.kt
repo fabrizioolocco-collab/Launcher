@@ -368,9 +368,10 @@ class MediaViewerActivity : AppCompatActivity() {
             return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
         }
 
-        fun open(context: Context, file: File) = context.startActivity(
+        fun open(context: Context, file: File) = context.startActivity(intent(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
+        /** Without a new task: from [ViewerEntryActivity], the viewer stays in the caller's task. */
+        fun intent(context: Context, file: File): Intent =
             Intent(context, MediaViewerActivity::class.java).putExtra(EXTRA_PATH, file.absolutePath)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
     }
 }

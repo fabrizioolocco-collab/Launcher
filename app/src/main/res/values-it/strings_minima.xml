@@ -778,6 +778,7 @@
     <string name="ml_sb_missing">Samsung Internet non è installato</string>
     <string name="ml_sb_open_app">Apri il browser (ultima scheda)</string>
     <string name="ml_sb_choose">Il tasto schede apre</string>
+    <string name="ml_viewer_app">Visualizzatore Minima</string>
     <string name="ml_scan_app">Scanner</string>
     <string name="ml_scan_add_pages">Scansiona pagine</string>
     <string name="ml_scan_add">Aggiungi</string>
