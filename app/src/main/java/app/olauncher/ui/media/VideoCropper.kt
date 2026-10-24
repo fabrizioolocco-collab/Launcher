@@ -31,6 +31,9 @@ class VideoCropper(private val src: File, private val dst: File) {
 
     class Crop(val left: Int, val top: Int, val width: Int, val height: Int)
 
+    /** Leave the audio track out. */
+    var mute = false
+
     /** Quarter turns (degrees, clockwise) added to the video's own orientation flag. */
     var extraRotation = 0
 
@@ -96,7 +99,7 @@ class VideoCropper(private val src: File, private val dst: File) {
 
             // Audio track copied as is
             audioExtractor.setDataSource(src.absolutePath)
-            val audioTrack = (0 until audioExtractor.trackCount).firstOrNull {
+            val audioTrack = if (mute) null else (0 until audioExtractor.trackCount).firstOrNull {
                 audioExtractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true
             }
             var audioOut = -1

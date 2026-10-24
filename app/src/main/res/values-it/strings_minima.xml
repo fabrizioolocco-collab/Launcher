@@ -351,7 +351,11 @@
     <string name="ml_edit_trim_range">%1$s – %2$s  ·  %3$s</string>
     <string name="ml_edit_trim_too_short">Tieni almeno mezzo secondo</string>
     <string name="ml_edit_trim_saving">Salvo il video tagliato…</string>
-    <string name="ml_edit_nothing">Niente da salvare: prima taglia, ritaglia o ruota</string>
+    <string name="ml_edit_nothing">Niente da salvare: prima taglia, ritaglia, ruota o togli l\'audio</string>
+    <string name="ml_edit_mute">Togli audio</string>
+    <string name="ml_edit_muted">Audio tolto: il video si salva senza suono</string>
+    <string name="ml_edit_unmuted">Audio mantenuto</string>
+    <string name="ml_edit_mute_saving">Salvo il video senza audio…</string>
     <string name="ml_edit_rotate_saving">Salvo il video ruotato…</string>
     <string name="ml_edit_crop_saving">Ricomprimo il video ritagliato, ci vuole un po\'…</string>
     <string name="ml_edit_hint">Si salva tutto insieme con Salva: ritaglia, ruota e disegna nell\'ordine che vuoi.</string>

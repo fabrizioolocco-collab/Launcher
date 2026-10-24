@@ -62,6 +62,9 @@ class VideoEditActivity : AppCompatActivity() {
     private lateinit var rotateButton: ImageView
     /** Rotation chosen by the user, clockwise, on top of the video's own. */
     private var userRotation = 0
+    /** Saved without the audio track (the preview plays muted too). */
+    private var muted = false
+    private lateinit var muteButton: ImageView
     private lateinit var trimmer: TrimView
     private lateinit var rangeText: TextView
     private lateinit var playButton: ImageView
@@ -139,7 +142,9 @@ class VideoEditActivity : AppCompatActivity() {
         }
         cropButton = UiKit.iconButton(this, R.drawable.ic_m_crop, getString(R.string.ml_edit_crop)) { toggleCrop() }
         rotateButton = UiKit.iconButton(this, R.drawable.ic_m_rotate, getString(R.string.ml_edit_rotate)) { rotate() }
+        muteButton = UiKit.iconButton(this, R.drawable.ic_m_volume, getString(R.string.ml_edit_mute)) { toggleMute() }
         val bar = UiKit.appBar(this, getString(R.string.ml_edit_trim), onBack = { finish() }, actions = listOf(
+            muteButton,
             rotateButton,
             cropButton,
             UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_save)) { save() },
@@ -202,6 +207,15 @@ class VideoEditActivity : AppCompatActivity() {
     private fun showPlaying(playing: Boolean) {
         playButton.setImageResource(if (playing) R.drawable.ic_m_pause else R.drawable.ic_m_play)
         playButton.alpha = if (playing) 0.35f else 1f
+    }
+
+    /** Audio off / on: the copy is saved without the audio track. */
+    private fun toggleMute() {
+        muted = !muted
+        muteButton.setImageResource(if (muted) R.drawable.ic_m_volume_off else R.drawable.ic_m_volume)
+        UiKit.setToolActive(muteButton, muted)
+        video.setMuted(muted)
+        showToast(getString(if (muted) R.string.ml_edit_muted else R.string.ml_edit_unmuted))
     }
 
     /** A quarter turn clockwise more; the preview (with the crop frame) turns with it. */
@@ -302,7 +316,14 @@ class VideoEditActivity : AppCompatActivity() {
         private var path: String? = null
         private var prepared = false
         private var pendingSeek = 1
+        private var muted = false
         var onCompletion: (() -> Unit)? = null
+
+        fun setMuted(on: Boolean) {
+            muted = on
+            val v = if (on) 0f else 1f
+            player?.setVolume(v, v)
+        }
 
         init {
             view.surfaceTextureListener = this
@@ -345,6 +366,7 @@ class VideoEditActivity : AppCompatActivity() {
                     setDataSource(p)
                     setOnPreparedListener { mp ->
                         prepared = true
+                        if (muted) mp.setVolume(0f, 0f)
                         mp.seekTo(pendingSeek)
                     }
                     setOnCompletionListener { onCompletion?.invoke() }
@@ -405,14 +427,16 @@ class VideoEditActivity : AppCompatActivity() {
         val crop = sourceCrop()
         val trimmed = startMs > 0 || endMs < durationMs
         val turn = userRotation
-        if (crop == null && !trimmed && turn == 0) {
+        val mute = muted
+        if (crop == null && !trimmed && turn == 0 && !mute) {
             showToast(getString(R.string.ml_edit_nothing))
             return
         }
         showToast(getString(when {
             crop != null -> R.string.ml_edit_crop_saving
             trimmed -> R.string.ml_edit_trim_saving
-            else -> R.string.ml_edit_rotate_saving
+            turn != 0 -> R.string.ml_edit_rotate_saving
+            else -> R.string.ml_edit_mute_saving
         }))
         val progress = progressText ?: TextView(this).apply {
             setTextColor(Color.WHITE)
@@ -434,8 +458,9 @@ class VideoEditActivity : AppCompatActivity() {
                 val ok = if (crop != null) VideoCropper(file, out).also { c ->
                     c.onProgress = { p -> runOnUiThread { progress.text = "${(p * 100).toInt()}%" } }
                     c.extraRotation = turn
+                    c.mute = mute
                 }.run(crop, startMs * 1000, endMs * 1000)
-                else trim(file, out, startMs * 1000, endMs * 1000, turn)
+                else trim(file, out, startMs * 1000, endMs * 1000, turn, mute)
                 if (ok) {
                     MediaScannerConnection.scanFile(applicationContext, arrayOf(out.absolutePath), null, null)
                     out
@@ -464,8 +489,8 @@ class VideoEditActivity : AppCompatActivity() {
     }
 
     /** Copies the samples between [startUs] and [endUs] of every track into a new MP4, no re-encoding. */
-    /** Copy of [startUs]..[endUs] without re-encoding, turned by [extraRotation] more (orientation flag). */
-    private fun trim(src: File, dst: File, startUs: Long, endUs: Long, extraRotation: Int = 0): Boolean {
+    /** Copy of [startUs]..[endUs] without re-encoding, turned by [extraRotation] more (orientation flag), without audio if [mute]. */
+    private fun trim(src: File, dst: File, startUs: Long, endUs: Long, extraRotation: Int = 0, mute: Boolean = false): Boolean {
         val extractor = MediaExtractor()
         var muxer: MediaMuxer? = null
         try {
@@ -476,7 +501,7 @@ class VideoEditActivity : AppCompatActivity() {
             for (i in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(i)
                 val mime = format.getString(android.media.MediaFormat.KEY_MIME) ?: continue
-                if (!mime.startsWith("video/") && !mime.startsWith("audio/")) continue
+                if (!mime.startsWith("video/") && (mute || !mime.startsWith("audio/"))) continue
                 extractor.selectTrack(i)
                 trackMap[i] = muxer.addTrack(format)
                 if (format.containsKey(android.media.MediaFormat.KEY_MAX_INPUT_SIZE))
