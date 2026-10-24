@@ -10,6 +10,7 @@ import app.olauncher.data.TodoStore
 import app.olauncher.helper.CalendarEvents
 import app.olauncher.helper.FontManager
 import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.showColorPickerDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showMultiSelectDialog
@@ -102,6 +103,29 @@ object CalendarWidgetSettings {
                     }
                 },
                 MenuEntry(activity.getString(R.string.ml_cal_texts)) { showTexts(activity, view, reopen) },
+                MenuEntry(activity.getString(R.string.ml_cal_player), checked = c.showPlayer, onToggle = { v ->
+                    view.updateConfig { it.showPlayer = v }
+                    // The other apps' playback is read through the notification access
+                    if (v && !NotificationRepository.isAccessGranted(activity)) {
+                        activity.showToast(activity.getString(R.string.ml_cal_player_access))
+                        NotificationRepository.openAccessSettings(activity)
+                    }
+                    true
+                }),
+                MenuEntry(activity.getString(R.string.ml_cal_skip_back, c.skipBack)) {
+                    val seconds = MediaPlayerBar.SKIP_SECONDS
+                    choose(activity, activity.getString(R.string.ml_cal_skip_back_title), seconds.map { "$it s" }, seconds.indexOf(c.skipBack)) { i ->
+                        view.updateConfig { it.skipBack = seconds[i] }
+                        reopen()
+                    }
+                },
+                MenuEntry(activity.getString(R.string.ml_cal_skip_forward, c.skipForward)) {
+                    val seconds = MediaPlayerBar.SKIP_SECONDS
+                    choose(activity, activity.getString(R.string.ml_cal_skip_forward_title), seconds.map { "$it s" }, seconds.indexOf(c.skipForward)) { i ->
+                        view.updateConfig { it.skipForward = seconds[i] }
+                        reopen()
+                    }
+                },
                 toggle(R.string.ml_cal_show_weather, c.showWeather) { cfg, v -> cfg.showWeather = v },
                 toggle(R.string.ml_cal_card, c.card) { cfg, v -> cfg.card = v },
                 toggle(R.string.ml_cal_show_header, c.showHeader) { cfg, v -> cfg.showHeader = v },

@@ -861,4 +861,18 @@
     <string name="ml_search_allow_calendar">Allow calendar access to search the events</string>
     <string name="ml_search_event_all_day">all day</string>
     <string name="ml_search_event_range">from %1$s to %2$s</string>
+    <!-- Calendar widget: what is playing -->
+    <string name="ml_cal_player">Player while something is playing</string>
+    <string name="ml_cal_player_access">Allow notification access to see what is playing</string>
+    <string name="ml_cal_skip_back">Jump back: %d s</string>
+    <string name="ml_cal_skip_back_title">Jump back</string>
+    <string name="ml_cal_skip_forward">Jump forward: %d s</string>
+    <string name="ml_cal_skip_forward_title">Jump forward</string>
+    <string name="ml_player_open">Open the app playing</string>
+    <string name="ml_player_play_pause">Play / pause</string>
+    <string name="ml_player_back">Jump back</string>
+    <string name="ml_player_forward">Jump forward</string>
+    <string name="ml_player_next">Next</string>
+    <string name="ml_player_speed">Playback speed</string>
+    <string name="ml_player_only_one">No other app is playing</string>
 </resources>

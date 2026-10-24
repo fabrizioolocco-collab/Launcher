@@ -65,6 +65,10 @@ class CalendarWidgetConfig {
     var todoDoneMode = TODO_DONE_STRIKE
     /** ToDo categories to show; empty = all (and the todos without a category). */
     var todoCategories: Set<Long> = emptySet()
+    /** What is playing (music, podcasts...) at the bottom, while an app plays; jumps back / forward in seconds. */
+    var showPlayer = true
+    var skipBack = 10
+    var skipForward = 30
     val texts: MutableMap<CalendarText, CalendarTextStyle> =
         CalendarText.entries.associateWith { CalendarTextStyle(sizeSp = it.defaultSize, style = it.defaultStyle) }.toMutableMap()
 
@@ -94,6 +98,9 @@ class CalendarWidgetConfig {
         .put("tdp", todoPlace)
         .put("tdd", todoDoneMode)
         .put("tdc", JSONArray(todoCategories.toList()))
+        .put("mp", showPlayer)
+        .put("mpb", skipBack)
+        .put("mpf", skipForward)
         .put("txt", JSONObject().also { o ->
             texts.forEach { (t, s) ->
                 o.put(t.key, JSONObject().put("f", s.font).put("s", s.sizeSp).put("y", s.style).put("c", s.color))
@@ -145,6 +152,9 @@ class CalendarWidgetConfig {
             todoDoneMode = o.optInt("tdd", TODO_DONE_STRIKE).coerceIn(0, 1)
             val tdc = o.optJSONArray("tdc")
             todoCategories = if (tdc == null) emptySet() else (0 until tdc.length()).map { tdc.getLong(it) }.toSet()
+            showPlayer = o.optBoolean("mp", true)
+            skipBack = o.optInt("mpb", 10).coerceIn(1, 600)
+            skipForward = o.optInt("mpf", 30).coerceIn(1, 600)
             val txt = o.optJSONObject("txt")
             CalendarText.entries.forEach { t ->
                 val s = txt?.optJSONObject(t.key) ?: return@forEach

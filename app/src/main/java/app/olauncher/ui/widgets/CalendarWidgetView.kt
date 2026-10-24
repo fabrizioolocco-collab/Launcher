@@ -128,6 +128,9 @@ class CalendarWidgetView(
         addView(list, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
+    /** What is playing, at the bottom while an app plays. */
+    private val player = MediaPlayerBar(activity) { view, t -> styleText(view, t) }
+
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() {
@@ -159,6 +162,9 @@ class CalendarWidgetView(
             topMargin = 4.dpToPx(); bottomMargin = 6.dpToPx()
         })
         content.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        content.addView(player, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 4.dpToPx()
+        })
         addView(content, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         setPadding(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 8.dpToPx())
         isClickable = true
@@ -517,6 +523,10 @@ class CalendarWidgetView(
         styleText(weekText, CalendarText.WEEK)
         if (config.text(CalendarText.WEEK).color == 0) weekText.alpha = 0.6f else weekText.alpha = 1f
         weekText.isVisible = config.showWeek
+        player.skipBack = config.skipBack
+        player.skipForward = config.skipForward
+        player.active = config.showPlayer
+        player.applyStyle()
         background = when {
             // A card like the menus' (the opacity setting fades its ground, the border stays)
             config.card -> GradientDrawable().apply {

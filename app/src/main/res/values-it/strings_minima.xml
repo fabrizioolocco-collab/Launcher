@@ -858,4 +858,18 @@
     <string name="ml_search_allow_calendar">Consenti l\'accesso al calendario per cercare gli eventi</string>
     <string name="ml_search_event_all_day">tutto il giorno</string>
     <string name="ml_search_event_range">dal %1$s al %2$s</string>
+    <!-- Calendar widget: what is playing -->
+    <string name="ml_cal_player">Lettore quando c\'è qualcosa in riproduzione</string>
+    <string name="ml_cal_player_access">Consenti l\'accesso alle notifiche per vedere cosa è in riproduzione</string>
+    <string name="ml_cal_skip_back">Salto indietro: %d s</string>
+    <string name="ml_cal_skip_back_title">Salto indietro</string>
+    <string name="ml_cal_skip_forward">Salto avanti: %d s</string>
+    <string name="ml_cal_skip_forward_title">Salto avanti</string>
+    <string name="ml_player_open">Apri l\'app in riproduzione</string>
+    <string name="ml_player_play_pause">Riproduci / pausa</string>
+    <string name="ml_player_back">Salta indietro</string>
+    <string name="ml_player_forward">Salta avanti</string>
+    <string name="ml_player_next">Successivo</string>
+    <string name="ml_player_speed">Velocità di riproduzione</string>
+    <string name="ml_player_only_one">Nessun\'altra app in riproduzione</string>
 </resources>
