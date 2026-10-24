@@ -48,6 +48,7 @@ import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.dpToPx
+import app.olauncher.helper.pillButton
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.CoroutineScope
@@ -263,6 +264,20 @@ class HomeSearchController(
         }
     }
 
+    /** The Play Store's search of [q] among the apps, its web page when the store is missing. */
+    private fun openPlayStore(q: String) {
+        val enc = URLEncoder.encode(q, "UTF-8")
+        try {
+            activity.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$enc&c=apps"))
+                    .setPackage(PLAY_STORE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+            leave()
+        } catch (e: Exception) {
+            open(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=$enc&c=apps")))
+        }
+    }
+
     private fun open(intent: Intent) {
         try {
             activity.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
@@ -433,11 +448,23 @@ class HomeSearchController(
             current == Tab.APPS -> appGrid(found.rows(current), key)
             else -> card(found.rows(current), key)
         }
-        // Nothing on the phone: the web is the search key, or this button
-        if (found.total == 0) results.addView(UiKit.emptyState(
-            activity, R.drawable.ic_m_globe, activity.getString(R.string.ml_search_no_results),
-            activity.getString(R.string.ml_search_on_google, q),
-        ) { openWeb(q) })
+        // Nothing on the phone: the web is the search key, or these buttons (Google, Play Store)
+        if (found.total == 0) {
+            val empty = UiKit.emptyState(activity, R.drawable.ic_m_globe, activity.getString(R.string.ml_search_no_results))
+            val buttons = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+            }
+            val color = UiKit.primary(activity)
+            buttons.addView(pillButton(activity, activity.getString(R.string.ml_search_hint_web), filled = false, color = color) { openWeb(q) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()))
+            buttons.addView(pillButton(activity, activity.getString(R.string.ml_search_on_play), filled = false, color = color) { openPlayStore(q) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 44.dpToPx()).apply { marginStart = 10.dpToPx() })
+            empty.addView(buttons, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = 16.dpToPx()
+            })
+            results.addView(empty)
+        }
     }
 
     /** Rows in a card over the blurred wallpaper, a thin line between them. */
@@ -1244,6 +1271,7 @@ class HomeSearchController(
         private const val FOLDER_CACHE_MS = 10 * 60_000L
         private const val SOLID_EXPLORER = "pl.solidexplorer2"
         private const val SAMSUNG_INTERNET = "com.sec.android.app.sbrowser"
+        private const val PLAY_STORE = "com.android.vending"
         private const val EXTERNAL_STORAGE_DOCS = "com.android.externalstorage.documents"
 
         @Volatile

@@ -176,6 +176,7 @@
     <string name="ml_search_web">Google</string>
     <string name="ml_search_phone">Telefono</string>
     <string name="ml_search_hint_web">Cerca su Google</string>
+    <string name="ml_search_on_play">Cerca sul Play Store</string>
     <string name="ml_search_hint_phone">Cerca nel telefono</string>
     <string name="ml_search_group_apps">App</string>
     <string name="ml_search_contacts">Contatti</string>
