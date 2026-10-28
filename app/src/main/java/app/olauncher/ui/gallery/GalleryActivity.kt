@@ -311,6 +311,9 @@ class GalleryActivity : AppCompatActivity() {
 
     private fun buildLayout(): View {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        // A solid background: the theme shows the wallpaper, which the recent apps preview leaves out (gray)
+        val night = resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        root.setBackgroundColor(if (night) 0xFF000000.toInt() else 0xFFFFFFFF.toInt())
         ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(0, bars.top + 8.dpToPx(), 0, bars.bottom)
