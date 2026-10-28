@@ -44,11 +44,11 @@ object MediaThumbnails {
     /** Photos and videos of [dir], newest first, when it holds nothing else, no subfolders either (an album); null otherwise. */
     fun albumMedia(dir: File): List<File>? {
         val entries = dir.listFiles()?.filter { !it.name.startsWith(".") } ?: return null
-        // Subfolders (WhatsApp Images' Sent and Private...) must stay reachable: a folder then, not an album
-        if (entries.any { it.isDirectory }) return null
-        val files = entries.filter { it.isFile }
-        if (files.isEmpty() || !files.all { isMedia(mimeOf(it.name)) }) return null
-        return files.sortedByDescending { it.lastModified() }
+        // By name first, without reading the disk: anything not named as a photo or video (a subfolder
+        // like WhatsApp Images' Sent, which must stay reachable, or a PDF) means a folder, not an album
+        if (entries.isEmpty() || !entries.all { isMedia(mimeOf(it.name)) }) return null
+        // One date read per file (sorting would read them again at each comparison: slow on big folders)
+        return entries.map { it to it.lastModified() }.sortedByDescending { it.second }.map { it.first }
     }
 
     /** Photos and videos directly inside [dirs] (other files ignored), newest first. */

@@ -781,18 +781,32 @@ open class FileExplorerActivity : AppCompatActivity() {
             viewSource = source
         }
         hiddenNames = views.hidden(loc.dir)
-        val files = loc.dir.listFiles()
-        if (files == null) {
-            setEntries(emptyList())
-            showStatus(getString(R.string.ml_explorer_cannot_read))
-            return
+        // Read off the main thread: a chat folder holds thousands of files, each one read for its
+        // kind, size and date, which froze the screen (the tap on the folder seemed to do nothing)
+        localLoad?.cancel()
+        // Another folder: its items must not stay tappable while the new one is read
+        if (folderEntries.firstOrNull()?.file?.parentFile != loc.dir) setEntries(emptyList())
+        localLoad = lifecycleScope.launch {
+            val listed = withContext(Dispatchers.IO) {
+                loc.dir.listFiles()?.map { f ->
+                    val folder = f.isDirectory
+                    Entry(f.name, folder, if (folder) 0 else f.length(), f.lastModified(), f, mimeOf(f.name))
+                }
+            }
+            if (location != loc) return@launch
+            if (listed == null) {
+                setEntries(emptyList())
+                showStatus(getString(R.string.ml_explorer_cannot_read))
+                return@launch
+            }
+            setEntries(listed.filter { view.showHidden || !isHidden(it.name) })
+            showStatus(null)
+            emptyView.isVisible = entries.isEmpty()
         }
-        setEntries(files.filter { view.showHidden || !isHidden(it.name) }.map { f ->
-            Entry(f.name, f.isDirectory, if (f.isDirectory) 0 else f.length(), f.lastModified(), f, mimeOf(f.name))
-        })
-        showStatus(null)
-        emptyView.isVisible = entries.isEmpty()
     }
+
+    /** The phone folder being read, cancelled when another one is opened. */
+    private var localLoad: kotlinx.coroutines.Job? = null
 
     /** A OneDrive folder; [clear] empties the list while loading (a new folder, not a reload). */
     private fun loadCloud(loc: Location.Cloud, clear: Boolean) {

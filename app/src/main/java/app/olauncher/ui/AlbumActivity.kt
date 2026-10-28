@@ -34,6 +34,7 @@ import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -84,21 +85,21 @@ class AlbumActivity : AppCompatActivity() {
     private val sourcePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val folder = result.data?.getStringExtra(FileExplorerActivity.EXTRA_LOCAL_PATH)?.let { File(it) } ?: return@registerForActivityResult
         CameraRoll.set(this, dir, folder, true)
-        reload()
-        showSources()
+        reload { showSources() }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dir = File(intent.getStringExtra(EXTRA_PATH) ?: run { finish(); return })
         gallery = intent.getBooleanExtra(EXTRA_GALLERY, false)
-        loadMedia()
         setContentView(buildLayout())
+        // The folder choice asked from home's long press: once the folders are known
+        val askSources = savedInstanceState == null && intent.getBooleanExtra(EXTRA_SHOW_SOURCES, false)
+        reload { if (askSources) showSources() }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = if (selecting) clearSelection() else finish()
         })
         updateSelection()
-        if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_SHOW_SOURCES, false)) showSources()
     }
 
     private var firstResume = true
@@ -110,19 +111,32 @@ class AlbumActivity : AppCompatActivity() {
             return
         }
         // Back from the viewer or an editor (or WhatsApp): a saved copy, a deleted or a new file must show at once
-        reload()
+        // (unless a reload is already going, like the one after adding a folder, which then shows the choice)
+        if (loading?.isActive != true) reload()
     }
 
-    private fun reload() {
-        loadMedia()
-        updateSelection()
-        grid.adapter?.notifyDataSetChanged()
-    }
+    private var loading: Job? = null
 
-    private fun loadMedia() {
-        sources = if (gallery) listOf(dir) + CameraRoll.included(this, dir) else listOf(dir)
-        media = MediaThumbnails.mediaIn(sources)
-        uris = sources.fold(emptyMap<String, Uri>()) { all, folder -> all + MediaThumbnails.mediaUris(this, folder) }
+    /**
+     * Reads the photos again, off the main thread (the gallery merges chat folders with thousands of
+     * files); [then] runs once they are shown.
+     */
+    private fun reload(then: () -> Unit = {}) {
+        loading?.cancel()
+        loading = lifecycleScope.launch {
+            val found = withContext(Dispatchers.IO) {
+                val folders = if (gallery) listOf(dir) + CameraRoll.included(this@AlbumActivity, dir) else listOf(dir)
+                Triple(folders, MediaThumbnails.mediaIn(folders),
+                    folders.fold(emptyMap<String, Uri>()) { all, folder -> all + MediaThumbnails.mediaUris(this@AlbumActivity, folder) })
+            }
+            sources = found.first
+            media = found.second
+            uris = found.third
+            selected.retainAll(media.map { it.absolutePath }.toSet())
+            updateSelection()
+            grid.adapter?.notifyDataSetChanged()
+            then()
+        }
     }
 
     /** Gallery: the folders merged with the camera's, each turned on or off; another one can be added. */
@@ -330,10 +344,7 @@ class AlbumActivity : AppCompatActivity() {
     private fun afterChange(paths: List<String>) {
         if (paths.isNotEmpty()) MediaScannerConnection.scanFile(applicationContext, paths.toTypedArray(), null, null)
         selected.clear()
-        loadMedia()
-        updateSelection()
-        grid.adapter?.notifyDataSetChanged()
-        if (media.isEmpty()) finish()
+        reload { if (media.isEmpty()) finish() }
     }
 
     // ---------------------------------------------------------------- media
