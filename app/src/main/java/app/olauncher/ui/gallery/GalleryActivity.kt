@@ -51,17 +51,24 @@ import java.io.File
  *   WhatsApp, Telegram, Download...), newest first, like "Recents" on the iPhone ([CameraRoll]).
  * - Albums: the user's own folder tree (DCIM/Foto, or the folder chosen), shown as it is on the phone:
  *   a folder holding folders shows only them (2024 → its albums), a folder without subfolders is an
- *   album and shows its photos. Folders are made, renamed, moved and deleted here; photos are moved
- *   or copied into them from the selection. Nothing is ever organized automatically.
+ *   album and shows its photos. The tiles' order is the user's (drag them), their size and the albums'
+ *   previews are chosen in the ⋮ menu. Folders are made, renamed, moved and deleted here; photos are
+ *   moved or copied into them from the selection. Nothing is ever organized automatically.
  *
- * Long press starts a multiple selection: share, copy, move (into an album), delete.
+ * Long press starts a multiple selection, of photos (share, copy, move into an album, delete) or of
+ * folder tiles (move, rename, delete); on a tile, a long press that moves drags it instead.
  */
 class GalleryActivity : AppCompatActivity() {
 
     private enum class Tab { PHOTOS, ALBUMS }
 
-    /** A folder tile in the Albums tab; [loose] is the "Other photos" tile of a folder that has folders and photos. */
-    private class Folder(val dir: File, val name: String, val cover: File?, val folders: Int, val photos: Int, val loose: Boolean = false)
+    /**
+     * A folder tile in the Albums tab: [folders] inside it (a folder of folders) or else its [photos]
+     * (an album); [loose] is the "Other photos" tile of a folder that has folders and photos.
+     */
+    private class Folder(val dir: File, val name: String, val folders: Int, val photos: Int, val loose: Boolean = false) {
+        val key: String get() = if (loose) "" else dir.absolutePath
+    }
 
     /** The camera folder, the base of the Photos tab. */
     private lateinit var dir: File
@@ -76,7 +83,9 @@ class GalleryActivity : AppCompatActivity() {
 
     /** Shown now: photos (Photos tab, an album) or folders (a folder of folders), never both. */
     private var media: List<File> = emptyList()
-    private var folders: List<Folder> = emptyList()
+    private var folders: MutableList<Folder> = mutableListOf()
+    /** Album covers found so far (folder path → newest photo, or null when it has none). */
+    private val covers = HashMap<String, File?>()
     private val showingFolders get() = tab == Tab.ALBUMS && folders.isNotEmpty() && media.isEmpty()
     /** MediaStore address of each file: fast system thumbnails and gallery opening. */
     private var uris: Map<String, Uri> = emptyMap()
@@ -93,6 +102,7 @@ class GalleryActivity : AppCompatActivity() {
     private lateinit var menuButton: ImageView
     private lateinit var tabs: LinearLayout
     private lateinit var selectionBar: LinearLayout
+    private lateinit var folderBar: LinearLayout
     private lateinit var grid: RecyclerView
     private lateinit var emptyView: TextView
 
@@ -110,13 +120,13 @@ class GalleryActivity : AppCompatActivity() {
         CameraRoll.set(this, dir, folder, true)
         reload { showSources() }
     }
-    /** A folder of the Albums tab moved elsewhere: the destination chosen in the explorer. */
-    private var folderToMove: File? = null
+    /** Folders of the Albums tab moved elsewhere: the destination chosen in the explorer. */
+    private var foldersToMove: List<File> = emptyList()
     private val folderMovePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val target = result.data?.getStringExtra(FileExplorerActivity.EXTRA_LOCAL_PATH)?.let { File(it) }
-        val folder = folderToMove
-        folderToMove = null
-        if (target != null && folder != null) moveFolder(folder, target)
+        val chosen = foldersToMove
+        foldersToMove = emptyList()
+        if (target != null && chosen.isNotEmpty()) moveFolders(chosen, target)
     }
     /** The top of the Albums tab, chosen in the explorer. */
     private val albumRootPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -132,6 +142,8 @@ class GalleryActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         dir = CameraRoll.cameraDir()
         albumRoot = CameraRoll.albumRoot(this)
+        folderColumns = CameraRoll.albumColumns(this)
+        albumPreviews = CameraRoll.albumPreviews(this)
         albumDir = albumRoot
         setContentView(buildLayout())
         // The folder choice asked from home's long press: once the folders are known
@@ -178,7 +190,7 @@ class GalleryActivity : AppCompatActivity() {
         loaded = false
         selected.clear()
         media = emptyList()
-        folders = emptyList()
+        folders = mutableListOf()
         grid.adapter?.notifyDataSetChanged()
         updateTabs()
         reload()
@@ -204,7 +216,7 @@ class GalleryActivity : AppCompatActivity() {
                 }
                 sources = found.first
                 media = found.second
-                folders = emptyList()
+                folders = mutableListOf()
                 uris = found.third
             } else {
                 // A folder gone meanwhile (deleted or renamed elsewhere): back to the nearest one still there
@@ -213,11 +225,11 @@ class GalleryActivity : AppCompatActivity() {
                 val loose = looseView
                 val found = withContext(Dispatchers.IO) { readAlbum(shown, loose) }
                 media = found.first
-                folders = found.second
+                folders = found.second.toMutableList()
                 uris = if (media.isEmpty()) emptyMap() else MediaThumbnails.mediaUris(this@GalleryActivity, shown)
             }
             loaded = true
-            selected.retainAll(media.map { it.absolutePath }.toSet())
+            selected.retainAll((media.map { it.absolutePath } + folders.map { it.key }).toSet())
             updateBars()
             grid.adapter?.notifyDataSetChanged()
             grid.scrollToPosition(0)
@@ -225,35 +237,49 @@ class GalleryActivity : AppCompatActivity() {
         }
     }
 
-    /** What [folder] shows: its subfolders when it has any (plus "Other photos" for photos beside them), else its photos. */
+    /**
+     * What [folder] shows: its subfolders when it has any (plus "Other photos" for photos beside them),
+     * else its photos. Quick: the tiles only count names (no file is read); covers come later, one by one.
+     */
     private fun readAlbum(folder: File, loose: Boolean): Pair<List<File>, List<Folder>> {
-        val subs = subfolders(folder)
+        val subs = ordered(folder, subfolders(folder))
         if (loose || subs.isEmpty()) return MediaThumbnails.mediaIn(listOf(folder)) to emptyList()
         val tiles = subs.map { sub ->
-            val (photos, cover) = treeStats(sub)
-            Folder(sub, sub.name, cover, subfolders(sub).size, photos)
+            val (folders, photos) = quickCount(sub)
+            Folder(sub, sub.name, folders, photos)
         }
-        val own = MediaThumbnails.mediaIn(listOf(folder))
-        val other = if (own.isEmpty()) emptyList()
-        else listOf(Folder(folder, getString(R.string.ml_gallery_other_photos), own.first(), 0, own.size, loose = true))
+        val own = quickCount(folder).second
+        val other = if (own == 0) emptyList()
+        else listOf(Folder(folder, getString(R.string.ml_gallery_other_photos), 0, own, loose = true))
         return emptyList<File>() to tiles + other
     }
 
-    /** The folders inside [folder] as the user keeps them: by name, hidden ones left out. */
+    /** The folders inside [folder] as on the phone, hidden ones left out. */
     private fun subfolders(folder: File): List<File> =
         folder.listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") }?.sortedBy { it.name.lowercase() }.orEmpty()
 
-    /** Photos and videos in the whole tree of [folder], and the cover: its newest photo, else the first subfolder's. */
-    private fun treeStats(folder: File): Pair<Int, File?> {
-        val own = MediaThumbnails.mediaIn(listOf(folder))
-        var total = own.size
-        var cover = own.firstOrNull()
-        for (sub in subfolders(folder)) {
-            val (n, c) = treeStats(sub)
-            total += n
-            if (cover == null) cover = c
+    /** [subs] in the order the user dragged them to; the others (new ones) after, by name. */
+    private fun ordered(folder: File, subs: List<File>): List<File> {
+        val order = CameraRoll.albumOrder(this, folder).withIndex().associate { it.value to it.index }
+        if (order.isEmpty()) return subs
+        return subs.sortedWith(compareBy<File>({ order[it.name] ?: Int.MAX_VALUE }, { it.name.lowercase() }))
+    }
+
+    /** Folders and photos directly in [folder], by their names: only what isn't named as a photo is checked on disk. */
+    private fun quickCount(folder: File): Pair<Int, Int> {
+        var folders = 0
+        var photos = 0
+        folder.listFiles()?.forEach {
+            if (it.name.startsWith(".")) return@forEach
+            if (MediaThumbnails.isMedia(mimeOf(it.name))) photos++ else if (it.isDirectory) folders++
         }
-        return total to cover
+        return folders to photos
+    }
+
+    /** Photos and videos in the whole tree of [folder] (to say what a delete takes away). */
+    private fun treeCount(folder: File): Int {
+        val (_, photos) = quickCount(folder)
+        return photos + subfolders(folder).sumOf { treeCount(it) }
     }
 
     /** The folders merged with the camera's, each turned on or off; another one can be added. */
@@ -292,7 +318,7 @@ class GalleryActivity : AppCompatActivity() {
         }
         sourcesButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_gallery_sources)) { showSources() }
         newFolderButton = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_gallery_new_folder)) { askNewFolder(albumDir) {} }
-        menuButton = UiKit.iconButton(this, R.drawable.ic_m_more, getString(R.string.ml_explorer_more)) { showFolderMenu(albumDir) }
+        menuButton = UiKit.iconButton(this, R.drawable.ic_m_more, getString(R.string.ml_explorer_more)) { showAlbumsMenu() }
         val bar = UiKit.appBar(this, getString(R.string.ml_gallery), onBack = { goBack() },
             actions = listOf(sourcesButton, newFolderButton, menuButton))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 8.dpToPx())
@@ -324,10 +350,10 @@ class GalleryActivity : AppCompatActivity() {
 
         val content = FrameLayout(this)
         grid = RecyclerView(this).apply {
-            // Six spans: photos take two (three a row), folder tiles three (two a row)
+            // Twelve spans: photos take four (three a row), folder tiles 12 / the columns chosen
             layoutManager = GridLayoutManager(this@GalleryActivity, SPANS).apply {
                 spanSizeLookup = object : GridLayoutManager.SpanSizeLookup() {
-                    override fun getSpanSize(position: Int) = if (showingFolders) SPANS / FOLDER_COLUMNS else SPANS / COLUMNS
+                    override fun getSpanSize(position: Int) = if (showingFolders) SPANS / folderColumns else SPANS / COLUMNS
                 }
             }
             adapter = GridAdapter()
@@ -347,8 +373,8 @@ class GalleryActivity : AppCompatActivity() {
         root.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
         dragSelect = DragSelect(grid, { selecting },
-            isSelected = { p -> media.getOrNull(p)?.absolutePath in selected },
-            setSelected = { p, on -> media.getOrNull(p)?.let { if (on) selected.add(it.absolutePath) else selected.remove(it.absolutePath) } },
+            isSelected = { p -> keyAt(p) in selected },
+            setSelected = { p, on -> keyAt(p)?.let { if (on) selected.add(it) else selected.remove(it) } },
             onChanged = {
                 updateBars()
                 grid.adapter?.notifyDataSetChanged()
@@ -367,7 +393,84 @@ class GalleryActivity : AppCompatActivity() {
         root.addView(selectionBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 8.dpToPx())
         })
+        // The same bar for selected folder tiles
+        folderBar = UiKit.toolBar(this).apply { isVisible = false }
+        listOf(
+            Tool(R.drawable.ic_m_move, R.string.ml_explorer_move) { moveSelectedFolders() },
+            Tool(R.drawable.ic_m_rename, R.string.rename) { renameSelectedFolder() },
+            Tool(R.drawable.ic_m_delete, R.string.ml_explorer_delete) { deleteSelectedFolders() },
+            Tool(R.drawable.ic_m_more, R.string.ml_explorer_more) { showFolderMore() },
+        ).forEach { tool ->
+            folderBar.addView(UiKit.toolButton(this, tool.icon, getString(tool.label)) { tool.action() },
+                LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        root.addView(folderBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 8.dpToPx())
+        })
+        dragHelper.attachToRecyclerView(grid)
         return root
+    }
+
+    // ---------------------------------------------------------------- tiles: order (drag) and selection
+
+    private var dragMoved = false
+    private var dragFolder: Folder? = null
+
+    /** Folder tiles: a long press that moves drags the tile to a new place; one that doesn't selects it. */
+    private val dragHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.Callback() {
+        override fun isLongPressDragEnabled() = showingFolders && !selecting
+        override fun isItemViewSwipeEnabled() = false
+
+        override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
+            if (!showingFolders || folders.getOrNull(viewHolder.bindingAdapterPosition)?.loose != false) return 0
+            val all = androidx.recyclerview.widget.ItemTouchHelper.UP or androidx.recyclerview.widget.ItemTouchHelper.DOWN or
+                    androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT
+            return makeMovementFlags(all, 0)
+        }
+
+        override fun onMove(recyclerView: RecyclerView, from: RecyclerView.ViewHolder, to: RecyclerView.ViewHolder): Boolean {
+            val a = from.bindingAdapterPosition
+            val b = to.bindingAdapterPosition
+            // "Other photos" stays last
+            if (a < 0 || b < 0 || folders.getOrNull(b)?.loose != false) return false
+            folders.add(b, folders.removeAt(a))
+            recyclerView.adapter?.notifyItemMoved(a, b)
+            dragMoved = true
+            return true
+        }
+
+        override fun onSwiped(viewHolder: RecyclerView.ViewHolder, direction: Int) {}
+
+        override fun onSelectedChanged(viewHolder: RecyclerView.ViewHolder?, actionState: Int) {
+            super.onSelectedChanged(viewHolder, actionState)
+            if (actionState == androidx.recyclerview.widget.ItemTouchHelper.ACTION_STATE_DRAG && viewHolder != null) {
+                dragMoved = false
+                dragFolder = folders.getOrNull(viewHolder.bindingAdapterPosition)
+                viewHolder.itemView.alpha = 0.7f
+                viewHolder.itemView.scaleX = 1.05f
+                viewHolder.itemView.scaleY = 1.05f
+            }
+        }
+
+        override fun clearView(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder) {
+            super.clearView(recyclerView, viewHolder)
+            viewHolder.itemView.alpha = 1f
+            viewHolder.itemView.scaleX = 1f
+            viewHolder.itemView.scaleY = 1f
+            if (dragMoved) CameraRoll.saveAlbumOrder(this@GalleryActivity, albumDir, folders.filterNot { it.loose }.map { it.dir.name })
+            else dragFolder?.let { toggleKey(it.key) }
+            dragFolder = null
+        }
+    })
+
+    /** What position [p] holds, for selecting by sliding: a photo's path, a folder's ("Other photos": none). */
+    private fun keyAt(p: Int): String? = if (showingFolders) folders.getOrNull(p)?.key?.ifEmpty { null } else media.getOrNull(p)?.absolutePath
+
+    private fun toggleKey(key: String) {
+        if (key.isEmpty()) return
+        if (!selected.remove(key)) selected.add(key)
+        updateBars()
+        grid.adapter?.notifyDataSetChanged()
     }
 
     /** The tab switch: the chosen one filled with the text colour, its label in the background's. */
@@ -430,7 +533,10 @@ class GalleryActivity : AppCompatActivity() {
         newFolderButton.isVisible = !selecting && albums && !looseView && media.isEmpty()
         menuButton.isVisible = !selecting && albums && !looseView
         tabs.isVisible = !selecting
-        selectionBar.isVisible = selecting
+        selectionBar.isVisible = selecting && !showingFolders
+        folderBar.isVisible = selecting && showingFolders
+        // Rename is for one folder at a time
+        folderBar.getChildAt(1).alpha = if (selected.size == 1) 1f else 0.35f
         emptyView.isVisible = !selecting && media.isEmpty() && folders.isEmpty() && loaded
         emptyView.text = getString(if (albums) R.string.ml_gallery_empty_folder else R.string.ml_gallery_empty)
     }
@@ -567,32 +673,87 @@ class GalleryActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- album folders
 
-    /** Menu of an album folder (the tile's ⋮, or the bar's inside it); at the top: where the albums are. */
-    private fun showFolderMenu(folder: File) {
-        if (same(folder, albumRoot)) {
-            showMenuDialog(getString(R.string.ml_gallery_tab_albums), listOf(
-                MenuEntry(getString(R.string.ml_gallery_album_root), icon = R.drawable.ic_m_folder, value = relative(albumRoot)) {
-                    albumRootPicker.launch(Intent(this, FolderPickerActivity::class.java)
-                        .putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, albumRoot.absolutePath))
-                },
-                MenuEntry(getString(R.string.ml_gallery_show_in_folder), icon = R.drawable.ic_m_folder_open) {
-                    FileExplorerActivity.openLocal(this, folder)
-                },
-            ))
-            return
-        }
-        showMenuDialog(folder.name, listOf(
-            MenuEntry(getString(R.string.rename), icon = R.drawable.ic_m_rename) { askRename(folder) },
-            MenuEntry(getString(R.string.ml_gallery_move_folder), icon = R.drawable.ic_m_move) {
-                folderToMove = folder
-                folderMovePicker.launch(Intent(this, FolderPickerActivity::class.java)
-                    .putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, (folder.parentFile ?: albumRoot).absolutePath))
+    /** Albums tab: tiles per row (2 large, 3 medium, 4 small) and whether albums show their newest photo. */
+    private var folderColumns = 2
+    private var albumPreviews = true
+
+    /**
+     * The bar's ⋮ in the Albums tab: how the tiles look, then (at the top) where the albums are, or
+     * (inside a folder) what can be done with it.
+     */
+    private fun showAlbumsMenu() {
+        val sizes = listOf(2 to R.string.ml_gallery_size_large, 3 to R.string.ml_gallery_size_medium, 4 to R.string.ml_gallery_size_small)
+        val entries = mutableListOf(
+            MenuEntry(getString(R.string.ml_gallery_tile_size), icon = R.drawable.ic_m_resize,
+                value = getString(sizes.first { it.first == folderColumns }.second), section = getString(R.string.ml_gallery_view)) {
+                showMenuDialog(getString(R.string.ml_gallery_tile_size), sizes.map { (columns, label) ->
+                    MenuEntry(getString(label), icon = if (columns == folderColumns) R.drawable.ic_m_check else 0) {
+                        folderColumns = columns
+                        CameraRoll.setAlbumColumns(this, columns)
+                        grid.adapter = GridAdapter()
+                    }
+                })
             },
-            MenuEntry(getString(R.string.ml_gallery_show_in_folder), icon = R.drawable.ic_m_folder_open) {
+            MenuEntry(getString(R.string.ml_gallery_album_previews), checked = albumPreviews, onToggle = { on ->
+                albumPreviews = on
+                CameraRoll.setAlbumPreviews(this, on)
+                grid.adapter?.notifyDataSetChanged()
+                true
+            }),
+        )
+        if (same(albumDir, albumRoot)) {
+            entries += MenuEntry(getString(R.string.ml_gallery_album_root), icon = R.drawable.ic_m_folder, value = relative(albumRoot),
+                section = getString(R.string.ml_gallery_tab_albums)) {
+                albumRootPicker.launch(Intent(this, FolderPickerActivity::class.java)
+                    .putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, albumRoot.absolutePath))
+            }
+            entries += MenuEntry(getString(R.string.ml_gallery_show_in_folder), icon = R.drawable.ic_m_folder_open) {
+                FileExplorerActivity.openLocal(this, albumRoot)
+            }
+        } else {
+            val folder = albumDir
+            entries += MenuEntry(getString(R.string.rename), icon = R.drawable.ic_m_rename, section = folder.name) { askRename(folder) }
+            entries += MenuEntry(getString(R.string.ml_gallery_move_folder), icon = R.drawable.ic_m_move) { pickFolderTarget(listOf(folder)) }
+            entries += MenuEntry(getString(R.string.ml_gallery_show_in_folder), icon = R.drawable.ic_m_folder_open) {
                 FileExplorerActivity.openLocal(this, folder)
-            },
-            MenuEntry(getString(R.string.ml_explorer_delete), icon = R.drawable.ic_m_delete, destructive = true) { askDelete(folder) },
-        ))
+            }
+            entries += MenuEntry(getString(R.string.ml_explorer_delete), icon = R.drawable.ic_m_delete, destructive = true) { askDelete(listOf(folder)) }
+        }
+        showMenuDialog(getString(R.string.ml_gallery_tab_albums), entries)
+    }
+
+    private fun selectedFolders() = folders.filter { !it.loose && it.key in selected }.map { it.dir }
+
+    private fun moveSelectedFolders() = selectedFolders().takeIf { it.isNotEmpty() }?.let { pickFolderTarget(it) }
+
+    private fun renameSelectedFolder() {
+        val folder = selectedFolders().singleOrNull() ?: return showToast(getString(R.string.ml_gallery_rename_one))
+        askRename(folder)
+    }
+
+    private fun deleteSelectedFolders() = selectedFolders().takeIf { it.isNotEmpty() }?.let { askDelete(it) }
+
+    private fun showFolderMore() {
+        val chosen = selectedFolders()
+        val items = mutableListOf<MenuEntry>()
+        chosen.singleOrNull()?.let { folder ->
+            items += MenuEntry(getString(R.string.ml_gallery_show_in_folder), icon = R.drawable.ic_m_folder_open) {
+                FileExplorerActivity.openLocal(this, folder)
+            }
+        }
+        items += MenuEntry(getString(R.string.ml_explorer_select_all)) {
+            folders.filterNot { it.loose }.forEach { selected.add(it.key) }
+            updateBars()
+            grid.adapter?.notifyDataSetChanged()
+        }
+        showMenuDialog(getString(R.string.ml_explorer_selected, chosen.size), items)
+    }
+
+    /** Where folders go: chosen in the explorer, starting from the folder they are in. */
+    private fun pickFolderTarget(chosen: List<File>) {
+        foldersToMove = chosen
+        folderMovePicker.launch(Intent(this, FolderPickerActivity::class.java)
+            .putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, (chosen.first().parentFile ?: albumRoot).absolutePath))
     }
 
     /** A new folder in [parent]; [then] gets it once made. */
@@ -618,60 +779,84 @@ class GalleryActivity : AppCompatActivity() {
             when {
                 !validName(name) -> showToast(getString(R.string.ml_gallery_bad_name))
                 renamed.exists() -> showToast(getString(R.string.ml_gallery_folder_exists))
-                else -> relocate(folder, renamed, getString(R.string.rename))
+                else -> {
+                    // Keeps its place in the dragged order
+                    val parent = folder.parentFile
+                    if (parent != null) {
+                        val order = CameraRoll.albumOrder(this, parent)
+                        if (folder.name in order) CameraRoll.saveAlbumOrder(this, parent, order.map { if (it == folder.name) name else it })
+                    }
+                    relocate(listOf(folder to renamed), getString(R.string.rename))
+                }
             }
         }
     }
 
-    private fun moveFolder(folder: File, target: File) {
-        val dest = File(target, folder.name)
-        when {
-            same(target, folder.parentFile ?: target) -> return
-            // Not into itself or one of its own folders
-            (target.absolutePath + "/").startsWith(folder.absolutePath + "/") -> showToast(getString(R.string.ml_gallery_bad_target))
-            dest.exists() -> showToast(getString(R.string.ml_gallery_folder_exists))
-            else -> relocate(folder, dest, getString(R.string.ml_gallery_move_folder))
+    private fun moveFolders(chosen: List<File>, target: File) {
+        val moves = chosen.filter { !same(target, it.parentFile ?: target) }.mapNotNull { folder ->
+            val dest = File(target, folder.name)
+            when {
+                // Not into itself or one of its own folders
+                (target.absolutePath + "/").startsWith(folder.absolutePath + "/") -> {
+                    showToast(getString(R.string.ml_gallery_bad_target))
+                    null
+                }
+                dest.exists() -> {
+                    showToast(getString(R.string.ml_gallery_folder_exists))
+                    null
+                }
+                else -> folder to dest
+            }
         }
+        if (moves.isNotEmpty()) relocate(moves, getString(R.string.ml_gallery_move_folder))
     }
 
-    /** Renames or moves [folder] to [dest] (copying when a plain rename can't); the gallery is told about every photo. */
-    private fun relocate(folder: File, dest: File, label: String) {
+    /** Renames or moves folders (copying when a plain rename can't); the gallery is told about every photo. */
+    private fun relocate(moves: List<Pair<File, File>>, label: String) {
         lifecycleScope.launch {
-            val paths = withContext(Dispatchers.IO) {
-                val before = folder.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
-                val ok = folder.renameTo(dest) || (folder.copyRecursively(dest) && folder.deleteRecursively())
-                if (!ok) null else before + dest.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
+            val paths = mutableListOf<String>()
+            var failed = false
+            withContext(Dispatchers.IO) {
+                for ((folder, dest) in moves) {
+                    val before = folder.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
+                    val ok = folder.renameTo(dest) || (folder.copyRecursively(dest) && folder.deleteRecursively())
+                    if (!ok) failed = true
+                    else paths += before + dest.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
+                }
             }
-            if (paths == null) {
-                showToast(getString(R.string.ml_explorer_failed, label))
-                return@launch
-            }
-            // Inside the folder that moved: follow it
-            if ((albumDir.absolutePath + "/").startsWith(folder.absolutePath + "/"))
+            if (failed) showToast(getString(R.string.ml_explorer_failed, label))
+            // Inside a folder that moved: follow it
+            moves.firstOrNull { (folder, _) -> (albumDir.absolutePath + "/").startsWith(folder.absolutePath + "/") }?.let { (folder, dest) ->
                 albumDir = File(dest.absolutePath + albumDir.absolutePath.removePrefix(folder.absolutePath))
+            }
+            covers.clear()
             afterChange(paths)
         }
     }
 
-    private fun askDelete(folder: File) {
+    /** Deletes folders with all they hold, after a confirmation that says how much goes. */
+    private fun askDelete(chosen: List<File>) {
         lifecycleScope.launch {
-            val (photos, _) = withContext(Dispatchers.IO) { treeStats(folder) }
-            showConfirmDialog(
-                getString(R.string.ml_explorer_delete),
-                getString(R.string.ml_gallery_delete_folder_confirm, folder.name, photos),
-                getString(R.string.ml_explorer_delete),
-            ) {
+            val photos = withContext(Dispatchers.IO) { chosen.sumOf { treeCount(it) } }
+            val message = if (chosen.size == 1) getString(R.string.ml_gallery_delete_folder_confirm, chosen[0].name, photos)
+            else getString(R.string.ml_gallery_delete_folders_confirm, chosen.size, photos)
+            showConfirmDialog(getString(R.string.ml_explorer_delete), message, getString(R.string.ml_explorer_delete)) {
                 lifecycleScope.launch {
-                    val paths = withContext(Dispatchers.IO) {
-                        val all = folder.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
-                        if (folder.deleteRecursively()) all else null
+                    val paths = mutableListOf<String>()
+                    var failed = false
+                    withContext(Dispatchers.IO) {
+                        for (folder in chosen) {
+                            val all = folder.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
+                            if (folder.deleteRecursively()) paths += all else failed = true
+                        }
                     }
-                    if (paths == null) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_explorer_delete)))
-                    if ((albumDir.absolutePath + "/").startsWith(folder.absolutePath + "/")) {
-                        albumDir = folder.parentFile ?: albumRoot
+                    if (failed) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_explorer_delete)))
+                    chosen.firstOrNull { (albumDir.absolutePath + "/").startsWith(it.absolutePath + "/") }?.let {
+                        albumDir = it.parentFile ?: albumRoot
                         looseView = false
                     }
-                    afterChange(paths.orEmpty())
+                    covers.clear()
+                    afterChange(paths)
                 }
             }
         }
@@ -776,66 +961,63 @@ class GalleryActivity : AppCompatActivity() {
             return cell
         }
 
-        /** A folder tile: square cover (with the number of its folders), name, counts and a ⋮ for its menu. */
+        /**
+         * A folder tile: a square (an album's newest photo, or a line icon on a card: always for a folder
+         * of folders, for albums when previews are off) with the selection mark, then the name and count.
+         */
         private fun folderCell(parent: ViewGroup): View {
             val ctx = parent.context
-            val side = cellSide(parent, FOLDER_COLUMNS) - 12.dpToPx()
+            val side = cellSide(parent, folderColumns) - 12.dpToPx()
+            val small = folderColumns >= 4
             val cell = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-                setPadding(6.dpToPx(), 0, 6.dpToPx(), 14.dpToPx())
-            }
-            val coverBox = FrameLayout(ctx).apply {
+                setPadding(6.dpToPx(), 0, 6.dpToPx(), (if (small) 10 else 14).dpToPx())
                 isClickable = true
-                foreground = UiKit.ripple(ctx)
+                isLongClickable = true
             }
-            coverBox.addView(roundImage(ctx, 16), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            // Folder mark with the number of folders inside
-            coverBox.addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                background = GradientDrawable().apply {
-                    cornerRadius = 10.dpToPx().toFloat()
-                    setColor(0x99000000.toInt())
-                }
-                setPadding(7.dpToPx(), 3.dpToPx(), 8.dpToPx(), 3.dpToPx())
-                addView(ImageView(ctx).apply {
-                    setImageResource(R.drawable.ic_m_folder)
-                    imageTintList = ColorStateList.valueOf(0xFFFFFFFF.toInt())
-                }, LinearLayout.LayoutParams(14.dpToPx(), 14.dpToPx()).apply { marginEnd = 4.dpToPx() })
-                addView(TextView(ctx).apply {
-                    textSize = 12f
-                    setTextColor(0xFFFFFFFF.toInt())
-                })
-                isVisible = false
-            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
-                setMargins(8.dpToPx(), 0, 0, 8.dpToPx())
+            val box = FrameLayout(ctx)
+            box.addView(roundImage(ctx, if (small) 12 else 16), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            // Without a preview: the kind as a line icon on a card
+            box.addView(FrameLayout(ctx).apply {
+                background = UiKit.cardBackground(ctx, if (small) 12 else 16)
+                addView(ImageView(ctx).apply { imageTintList = ColorStateList.valueOf(UiKit.secondary(ctx)) },
+                    FrameLayout.LayoutParams(side * 3 / 10, side * 3 / 10, Gravity.CENTER))
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            // Selection mark (a check badge, filled when selected)
+            box.addView(FrameLayout(ctx).apply { isVisible = false }, FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.END
+            ).apply {
+                setMargins(0, 8.dpToPx(), 8.dpToPx(), 0)
             })
-            cell.addView(coverBox, LinearLayout.LayoutParams(side, side))
-            val row = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.TOP
-                setPadding(2.dpToPx(), 6.dpToPx(), 0, 0)
-            }
-            row.addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL
-                addView(TextView(ctx).apply {
-                    textSize = 15f
-                    setTextColor(UiKit.primary(ctx))
-                    maxLines = 1
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                    setTypeface(typeface, android.graphics.Typeface.BOLD)
-                })
-                addView(TextView(ctx).apply {
-                    textSize = 12.5f
-                    setTextColor(UiKit.secondary(ctx))
-                    maxLines = 1
-                })
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            row.addView(UiKit.iconButton(ctx, R.drawable.ic_m_more, getString(R.string.ml_explorer_more), UiKit.secondary(ctx)) {},
-                LinearLayout.LayoutParams(36.dpToPx(), 36.dpToPx()))
-            cell.addView(row, LinearLayout.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT))
+            cell.addView(box, LinearLayout.LayoutParams(side, side))
+            cell.addView(TextView(ctx).apply {
+                textSize = if (small) 13f else 15f
+                setTextColor(UiKit.primary(ctx))
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setPadding(2.dpToPx(), 6.dpToPx(), 2.dpToPx(), 0)
+            }, LinearLayout.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT))
+            cell.addView(TextView(ctx).apply {
+                textSize = if (small) 11.5f else 12.5f
+                setTextColor(UiKit.secondary(ctx))
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(2.dpToPx(), 0, 2.dpToPx(), 0)
+            }, LinearLayout.LayoutParams(side, ViewGroup.LayoutParams.WRAP_CONTENT))
             return cell
+        }
+
+        /** The newest photo of an album, read once in the background; [show] gets it (null: none). */
+        private fun withCover(folder: Folder, show: (File?) -> Unit) {
+            val key = folder.dir.absolutePath + if (folder.loose) "#loose" else ""
+            if (covers.containsKey(key)) return show(covers[key])
+            lifecycleScope.launch {
+                val cover = withContext(Dispatchers.IO) { MediaThumbnails.mediaIn(listOf(folder.dir)).firstOrNull() }
+                covers[key] = cover
+                show(cover)
+            }
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
@@ -843,26 +1025,51 @@ class GalleryActivity : AppCompatActivity() {
         }
 
         private fun bindFolder(cell: LinearLayout, folder: Folder) {
-            val coverBox = cell.getChildAt(0) as FrameLayout
-            val image = coverBox.getChildAt(0) as ImageView
-            val mark = coverBox.getChildAt(1) as LinearLayout
-            val row = cell.getChildAt(1) as LinearLayout
-            val texts = row.getChildAt(0) as LinearLayout
-            val more = row.getChildAt(1)
-            (texts.getChildAt(0) as TextView).text = folder.name
-            (texts.getChildAt(1) as TextView).text =
-                if (folder.folders > 0) getString(R.string.ml_gallery_folders_photos, folder.folders, folder.photos)
-                else getString(R.string.ml_gallery_n_photos, folder.photos)
-            mark.isVisible = folder.folders > 0
-            (mark.getChildAt(1) as TextView).text = folder.folders.toString()
-            coverBox.setOnClickListener { openFolder(folder) }
-            coverBox.contentDescription = folder.name
-            // "Other photos" is not a folder of its own: no menu
-            more.isVisible = !folder.loose
-            more.setOnClickListener { showFolderMenu(folder.dir) }
+            val box = cell.getChildAt(0) as FrameLayout
+            val image = box.getChildAt(0) as ImageView
+            val plain = box.getChildAt(1) as FrameLayout
+            val mark = box.getChildAt(2) as FrameLayout
+            val isAlbum = folder.folders == 0
+            (cell.getChildAt(1) as TextView).text = folder.name
+            (cell.getChildAt(2) as TextView).text = when {
+                folder.folders > 0 && folder.photos > 0 -> getString(R.string.ml_gallery_folders_photos, folder.folders, folder.photos)
+                folder.folders > 0 -> resources.getQuantityString(R.plurals.ml_gallery_n_folders, folder.folders, folder.folders)
+                else -> getString(R.string.ml_gallery_n_photos, folder.photos)
+            }
+            cell.contentDescription = folder.name
+            val isSelected = folder.key in selected
+            mark.removeAllViews()
+            if (selecting && !folder.loose) mark.addView(UiKit.checkBadge(this@GalleryActivity, isSelected, 24))
+            mark.isVisible = selecting && !folder.loose
+            box.alpha = if (selecting && !isSelected) 0.6f else 1f
+            box.scaleX = if (isSelected) 0.92f else 1f
+            box.scaleY = box.scaleX
+            cell.setOnClickListener { if (selecting) toggleKey(folder.key) else openFolder(folder) }
+            // Not selecting: the long press is the drag helper's (drag to reorder, or select when it doesn't move)
+            if (selecting) cell.setOnLongClickListener {
+                toggleKey(folder.key)
+                dragSelect.start(folders.indexOf(folder))
+                true
+            } else {
+                cell.setOnLongClickListener(null)
+                cell.isLongClickable = true
+            }
+            // A folder of folders never shows a photo; an album does when previews are on
+            val preview = isAlbum && albumPreviews && folder.photos > 0
+            val icon = plain.getChildAt(0) as ImageView
+            icon.setImageResource(if (isAlbum) R.drawable.ic_m_image else R.drawable.ic_m_folder)
+            plain.isVisible = !preview
             image.setImageDrawable(null)
             image.tag = null
-            folder.cover?.let { MediaThumbnails.load(lifecycleScope, image, it, coverBox.layoutParams.width.coerceAtLeast(64)) }
+            if (preview) {
+                val path = folder.dir.absolutePath
+                cell.tag = path
+                withCover(folder) { cover ->
+                    if (cell.tag != path) return@withCover
+                    if (cover == null) plain.isVisible = true
+                    else MediaThumbnails.load(lifecycleScope, image, cover, box.layoutParams.width.coerceAtLeast(64))
+                }
+            } else cell.tag = null
         }
 
         private fun bindPhoto(cell: FrameLayout, file: File) {
@@ -890,8 +1097,7 @@ class GalleryActivity : AppCompatActivity() {
     companion object {
         private const val EXTRA_SHOW_SOURCES = "show_sources"
         private const val COLUMNS = 3
-        private const val FOLDER_COLUMNS = 2
-        private const val SPANS = 6
+        private const val SPANS = 12
         private const val TYPE_PHOTO = 0
         private const val TYPE_FOLDER = 1
         private val GALLERIES = listOf("org.fossify.gallery", "com.simplemobiletools.gallery.pro")

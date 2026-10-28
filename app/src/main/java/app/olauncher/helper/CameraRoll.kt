@@ -119,6 +119,26 @@ object CameraRoll {
 
     fun setAlbumRoot(context: Context, folder: File) = prefs(context).edit { putString(KEY_ALBUM_ROOT, folder.absolutePath) }
 
+    /** Gallery albums: tiles per row (2, 3 or 4) and whether albums show their newest photo. */
+    fun albumColumns(context: Context) = prefs(context).getInt(KEY_ALBUM_COLUMNS, 2).coerceIn(2, 4)
+
+    fun setAlbumColumns(context: Context, columns: Int) = prefs(context).edit { putInt(KEY_ALBUM_COLUMNS, columns) }
+
+    fun albumPreviews(context: Context) = prefs(context).getBoolean(KEY_ALBUM_PREVIEWS, true)
+
+    fun setAlbumPreviews(context: Context, on: Boolean) = prefs(context).edit { putBoolean(KEY_ALBUM_PREVIEWS, on) }
+
+    /** The order the user dragged the folders of [folder] to (names; empty: by name). */
+    fun albumOrder(context: Context, folder: File): List<String> = try {
+        val array = org.json.JSONArray(prefs(context).getString(KEY_ALBUM_ORDER + folder.absolutePath.trimEnd('/'), "[]"))
+        List(array.length()) { array.getString(it) }
+    } catch (e: Exception) {
+        emptyList()
+    }
+
+    fun saveAlbumOrder(context: Context, folder: File, names: List<String>) =
+        prefs(context).edit { putString(KEY_ALBUM_ORDER + folder.absolutePath.trimEnd('/'), org.json.JSONArray(names).toString()) }
+
     private fun isAppMedia(dir: File) = dir.absolutePath.contains("/Android/media/", ignoreCase = true)
 
     private fun same(a: File, b: File) = a.absolutePath.trimEnd('/').equals(b.absolutePath.trimEnd('/'), ignoreCase = true)
@@ -126,4 +146,7 @@ object CameraRoll {
     private const val KEY_SOURCES = "SOURCES"
     private const val KEY_DOWNLOAD_ADDED = "DOWNLOAD_ADDED"
     private const val KEY_ALBUM_ROOT = "ALBUM_ROOT"
+    private const val KEY_ALBUM_COLUMNS = "ALBUM_COLUMNS"
+    private const val KEY_ALBUM_PREVIEWS = "ALBUM_PREVIEWS"
+    private const val KEY_ALBUM_ORDER = "ALBUM_ORDER_"
 }

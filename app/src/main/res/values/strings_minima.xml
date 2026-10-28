@@ -350,6 +350,18 @@
     <string name="ml_gallery_n_photos">%1$d photos</string>
     <string name="ml_gallery_empty_folder">Nothing here yet. Make a folder with +, or bring photos in: select them, then Move or Copy.</string>
     <string name="ml_gallery_empty">No photos or videos</string>
+    <string name="ml_gallery_size_large">Large</string>
+    <string name="ml_gallery_size_medium">Medium</string>
+    <string name="ml_gallery_size_small">Small</string>
+    <string name="ml_gallery_tile_size">Size</string>
+    <string name="ml_gallery_view">View</string>
+    <string name="ml_gallery_album_previews">Album previews</string>
+    <string name="ml_gallery_rename_one">Select one folder to rename it</string>
+    <string name="ml_gallery_delete_folders_confirm">Delete %1$d folders with everything in them (%2$d photos and videos)? It can\'t be undone.</string>
+    <plurals name="ml_gallery_n_folders">
+        <item quantity="one">%1$d folder</item>
+        <item quantity="other">%1$d folders</item>
+    </plurals>
     <string name="ml_gallery_old_folder">old</string>
     <string name="ml_gallery_folder_path">Path</string>
     <string name="ml_info">Info</string>

@@ -347,6 +347,18 @@
     <string name="ml_gallery_n_photos">%1$d foto</string>
     <string name="ml_gallery_empty_folder">Ancora vuota. Crea una cartella con +, oppure portaci delle foto: selezionale, poi Sposta o Copia.</string>
     <string name="ml_gallery_empty">Nessuna foto o video</string>
+    <string name="ml_gallery_size_large">Grandi</string>
+    <string name="ml_gallery_size_medium">Medie</string>
+    <string name="ml_gallery_size_small">Piccole</string>
+    <string name="ml_gallery_tile_size">Dimensione</string>
+    <string name="ml_gallery_view">Vista</string>
+    <string name="ml_gallery_album_previews">Anteprima degli album</string>
+    <string name="ml_gallery_rename_one">Seleziona una sola cartella per rinominarla</string>
+    <string name="ml_gallery_delete_folders_confirm">Eliminare %1$d cartelle con tutto il contenuto (%2$d foto e video)? Non si può annullare.</string>
+    <plurals name="ml_gallery_n_folders">
+        <item quantity="one">%1$d cartella</item>
+        <item quantity="other">%1$d cartelle</item>
+    </plurals>
     <string name="ml_gallery_old_folder">vecchia</string>
     <string name="ml_gallery_folder_path">Percorso</string>
     <string name="ml_info">Info</string>
