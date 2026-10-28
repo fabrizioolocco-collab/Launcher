@@ -49,6 +49,11 @@ class MenuEntry(
     val onClick: () -> Unit = {},
     /** An "i" button before the switch of a toggle row, for details on it (e.g. a folder's path). */
     val onInfo: (() -> Unit)? = null,
+    /**
+     * An "x" at the end of a row with a value, to clear it without opening the choice (e.g. a swipe
+     * action); returns the value shown afterwards. The menu stays open.
+     */
+    val onClear: (() -> String)? = null,
 )
 
 private fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding> {
@@ -247,19 +252,36 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
             row.addView(switch, LinearLayout.LayoutParams(46.dpToPx(), 28.dpToPx()).apply { marginStart = 10.dpToPx() })
             row.setOnClickListener { switch.toggle() }
         } else {
+            var valueView: TextView? = null
             value?.let { v ->
-                row.addView(TextView(ctx).apply {
+                valueView = TextView(ctx).apply {
                     text = v
                     textSize = 14f
                     setTextColor(secondary)
                     maxLines = 1
                     ellipsize = android.text.TextUtils.TruncateAt.END
                     setPadding(10.dpToPx(), 0, 6.dpToPx(), 0)
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 0f })
+                }
+                row.addView(valueView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 0f })
                 row.addView(ImageView(ctx).apply {
                     setImageResource(R.drawable.ic_m_chevron_right)
                     imageTintList = ColorStateList.valueOf(secondary)
                 }, LinearLayout.LayoutParams(16.dpToPx(), 16.dpToPx()))
+            }
+            entry.onClear?.let { clear ->
+                row.addView(ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_m_close)
+                    imageTintList = ColorStateList.valueOf(secondary)
+                    contentDescription = ctx.getString(R.string.ml_clear)
+                    val p = 8.dpToPx()
+                    setPadding(p, p, p, p)
+                    background = ripple(ctx)
+                    isClickable = true
+                    setOnClickListener { button ->
+                        valueView?.text = clear()
+                        button.isVisible = false
+                    }
+                }, LinearLayout.LayoutParams(36.dpToPx(), 36.dpToPx()).apply { marginStart = 4.dpToPx() })
             }
             row.setOnClickListener { run(entry) }
         }

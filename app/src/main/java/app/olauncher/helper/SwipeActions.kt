@@ -142,8 +142,17 @@ object SwipeActions {
     /** The two long-press menu entries ("Swipe up: …", "Swipe down: …") for [app]. */
     fun menuEntries(context: Context, app: AppModel.App, apps: () -> List<AppModel.App>): List<MenuEntry> =
         listOf(true, false).map { up ->
-            val current = get(context, app, up)?.label ?: context.getString(R.string.ml_swipe_none)
-            MenuEntry(context.getString(if (up) R.string.ml_swipe_up_format else R.string.ml_swipe_down_format, current)) {
+            val action = get(context, app, up)
+            val none = context.getString(R.string.ml_swipe_none)
+            MenuEntry(
+                context.getString(if (up) R.string.ml_swipe_up else R.string.ml_swipe_down),
+                value = action?.label ?: none,
+                // An "x" frees the swipe right in the menu
+                onClear = if (action == null) null else ({
+                    set(context, app, up, null)
+                    none
+                }),
+            ) {
                 choose(context, app, up, apps)
             }
         }

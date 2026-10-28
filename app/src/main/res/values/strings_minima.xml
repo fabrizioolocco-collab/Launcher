@@ -271,6 +271,7 @@
     <string name="ml_swipe_up_format">Swipe up: %1$s</string>
     <string name="ml_swipe_down_format">Swipe down: %1$s</string>
     <string name="ml_swipe_none">No action</string>
+    <string name="ml_clear">Clear</string>
     <string name="ml_swipe_open_app">Open an app…</string>
     <string name="ml_swipe_shortcut_of">Shortcut of %1$s…</string>
     <string name="ml_swipe_shortcut_other">Shortcut of another app…</string>
