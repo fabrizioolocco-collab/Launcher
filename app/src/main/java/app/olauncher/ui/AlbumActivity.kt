@@ -26,7 +26,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
-import app.olauncher.helper.CameraRoll
 import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
@@ -46,17 +45,10 @@ import java.io.File
  *
  * Long press starts a multiple selection: share, copy, move (to a folder chosen in the explorer,
  * where new folders can be made), delete.
- *
- * The camera folder opened from home is the gallery ([CameraRoll]): it also shows the photos and
- * videos of the chosen folders (screenshots, WhatsApp, Telegram...), like "Recents" on the iPhone.
  */
 class AlbumActivity : AppCompatActivity() {
 
     private lateinit var dir: File
-    /** Home gallery: the camera folder merged with other folders. */
-    private var gallery = false
-    /** The folders shown: [dir], plus the merged ones in the gallery. */
-    private var sources: List<File> = emptyList()
     private var media: List<File> = emptyList()
     /** MediaStore address of each file: fast system thumbnails and gallery opening. */
     private var uris: Map<String, Uri> = emptyMap()
@@ -69,7 +61,6 @@ class AlbumActivity : AppCompatActivity() {
     private lateinit var count: TextView
     private lateinit var backButton: ImageView
     private lateinit var folderButton: ImageView
-    private lateinit var sourcesButton: ImageView
     private lateinit var selectionBar: LinearLayout
     private lateinit var grid: RecyclerView
 
@@ -81,21 +72,12 @@ class AlbumActivity : AppCompatActivity() {
         pendingMove = null
         if (target != null && move != null) transfer(target, move)
     }
-    /** A folder added to the gallery from the explorer. */
-    private val sourcePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val folder = result.data?.getStringExtra(FileExplorerActivity.EXTRA_LOCAL_PATH)?.let { File(it) } ?: return@registerForActivityResult
-        CameraRoll.set(this, dir, folder, true)
-        reload { showSources() }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         dir = File(intent.getStringExtra(EXTRA_PATH) ?: run { finish(); return })
-        gallery = intent.getBooleanExtra(EXTRA_GALLERY, false)
         setContentView(buildLayout())
-        // The folder choice asked from home's long press: once the folders are known
-        val askSources = savedInstanceState == null && intent.getBooleanExtra(EXTRA_SHOW_SOURCES, false)
-        reload { if (askSources) showSources() }
+        reload()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = if (selecting) clearSelection() else finish()
         })
@@ -110,59 +92,26 @@ class AlbumActivity : AppCompatActivity() {
             firstResume = false
             return
         }
-        // Back from the viewer or an editor (or WhatsApp): a saved copy, a deleted or a new file must show at once
-        // (unless a reload is already going, like the one after adding a folder, which then shows the choice)
-        if (loading?.isActive != true) reload()
+        // Back from the viewer or an editor: a saved copy or a deleted file must show at once
+        reload()
     }
 
     private var loading: Job? = null
 
-    /**
-     * Reads the photos again, off the main thread (the gallery merges chat folders with thousands of
-     * files); [then] runs once they are shown.
-     */
+    /** Reads the photos again, off the main thread (a chat folder holds thousands); [then] runs once they are shown. */
     private fun reload(then: () -> Unit = {}) {
         loading?.cancel()
         loading = lifecycleScope.launch {
             val found = withContext(Dispatchers.IO) {
-                val folders = if (gallery) listOf(dir) + CameraRoll.included(this@AlbumActivity, dir) else listOf(dir)
-                Triple(folders, MediaThumbnails.mediaIn(folders),
-                    folders.fold(emptyMap<String, Uri>()) { all, folder -> all + MediaThumbnails.mediaUris(this@AlbumActivity, folder) })
+                MediaThumbnails.mediaIn(listOf(dir)) to MediaThumbnails.mediaUris(this@AlbumActivity, dir)
             }
-            sources = found.first
-            media = found.second
-            uris = found.third
+            media = found.first
+            uris = found.second
             selected.retainAll(media.map { it.absolutePath }.toSet())
             updateSelection()
             grid.adapter?.notifyDataSetChanged()
             then()
         }
-    }
-
-    /** Gallery: the folders merged with the camera's, each turned on or off; another one can be added. */
-    private fun showSources() {
-        val entries = CameraRoll.options(this, dir).map { (folder, name) ->
-            MenuEntry(name, checked = sources.any { it.absolutePath == folder.absolutePath }, onToggle = { on ->
-                CameraRoll.set(this, dir, folder, on)
-                reload()
-                true
-            }, onInfo = { showFolderInfo(folder, name) })
-        } + MenuEntry(getString(R.string.ml_gallery_add_folder), icon = R.drawable.ic_m_add) {
-            sourcePicker.launch(Intent(this, FolderPickerActivity::class.java)
-                .putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, android.os.Environment.getExternalStorageDirectory().absolutePath))
-        }
-        showMenuDialog(getString(R.string.ml_gallery_sources), entries)
-    }
-
-    /** Where a gallery folder is: its full path, and a way to open it in the explorer. */
-    private fun showFolderInfo(folder: File, name: String) {
-        showMenuDialog(name, listOf(
-            MenuEntry(folder.absolutePath.removePrefix(android.os.Environment.getExternalStorageDirectory().absolutePath).ifEmpty { "/" },
-                section = getString(R.string.ml_gallery_folder_path)),
-            MenuEntry(getString(R.string.ml_search_open_folder), icon = R.drawable.ic_m_folder_open) {
-                FileExplorerActivity.openLocal(this, folder)
-            },
-        ))
     }
 
     private fun buildLayout(): View {
@@ -175,9 +124,7 @@ class AlbumActivity : AppCompatActivity() {
         folderButton = UiKit.iconButton(this, R.drawable.ic_m_folder_open, getString(R.string.ml_search_open_folder)) {
             FileExplorerActivity.openLocal(this@AlbumActivity, dir)
         }
-        sourcesButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_gallery_sources)) { showSources() }
-        val actions = if (gallery) listOf(sourcesButton, folderButton) else listOf(folderButton)
-        val bar = UiKit.appBar(this, albumTitle(), onBack = { if (selecting) clearSelection() else finish() }, actions = actions)
+        val bar = UiKit.appBar(this, dir.name, onBack = { if (selecting) clearSelection() else finish() }, actions = listOf(folderButton))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 8.dpToPx())
         backButton = bar.back
         title = bar.title
@@ -237,15 +184,12 @@ class AlbumActivity : AppCompatActivity() {
     private fun updateSelection() {
         backButton.setImageResource(if (selecting) R.drawable.ic_m_close else R.drawable.ic_m_arrow_back)
         backButton.contentDescription = getString(if (selecting) R.string.close else R.string.ml_cal_back)
-        title.text = if (selecting) getString(R.string.ml_explorer_selected, selected.size) else albumTitle()
+        title.text = if (selecting) getString(R.string.ml_explorer_selected, selected.size) else dir.name
         count.text = getString(R.string.ml_album_count, media.size)
         count.isVisible = !selecting
         folderButton.isVisible = !selecting
-        sourcesButton.isVisible = gallery && !selecting
         selectionBar.isVisible = selecting
     }
-
-    private fun albumTitle() = if (gallery) getString(R.string.ml_gallery) else dir.name
 
     private fun uriFor(file: File): Uri = uris[file.absolutePath] ?: FileProvider.getUriForFile(this, "$packageName.files", file)
 
@@ -277,7 +221,6 @@ class AlbumActivity : AppCompatActivity() {
     }
 
     private fun transfer(target: File, move: Boolean) {
-        // In the gallery the photos come from several folders: those already in the target stay put
         val files = selectedFiles().filter { it.parentFile?.absolutePath != target.absolutePath }
         if (files.isEmpty()) {
             showToast(getString(R.string.ml_album_same_folder))
@@ -355,8 +298,7 @@ class AlbumActivity : AppCompatActivity() {
     /** Opens a photo or video in the gallery (Fossify first), which shows the rest of the folder too. */
     private fun open(file: File) {
         if (app.olauncher.data.Prefs(this).builtInViewer) {
-            if (gallery) app.olauncher.ui.media.MediaViewerActivity.open(this, file, sources)
-            else app.olauncher.ui.media.MediaViewerActivity.open(this, file)
+            app.olauncher.ui.media.MediaViewerActivity.open(this, file)
             return
         }
         val mime = mimeOf(file.name) ?: "image/*"
@@ -444,20 +386,11 @@ class AlbumActivity : AppCompatActivity() {
 
     companion object {
         private const val EXTRA_PATH = "path"
-        private const val EXTRA_GALLERY = "gallery"
-        private const val EXTRA_SHOW_SOURCES = "show_sources"
         private const val COLUMNS = 3
         private val GALLERIES = listOf("org.fossify.gallery", "com.simplemobiletools.gallery.pro")
 
         fun open(context: Context, dir: File) = context.startActivity(
             Intent(context, AlbumActivity::class.java).putExtra(EXTRA_PATH, dir.absolutePath)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-
-        /** The camera folder as the home gallery, merged with other folders; [showSources] opens their choice. */
-        fun openGallery(context: Context, dir: File, showSources: Boolean = false) = context.startActivity(
-            Intent(context, AlbumActivity::class.java).putExtra(EXTRA_PATH, dir.absolutePath)
-                .putExtra(EXTRA_GALLERY, true).putExtra(EXTRA_SHOW_SOURCES, showSources)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
     }

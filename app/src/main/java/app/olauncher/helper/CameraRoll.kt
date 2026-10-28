@@ -7,11 +7,11 @@ import app.olauncher.R
 import java.io.File
 
 /**
- * The camera folder opened from home as a gallery, like "Recents" on the iPhone: next to the camera's
- * photos it shows those of other folders (screenshots, WhatsApp, Telegram...), newest first. Each file
- * stays in its own folder; only the view is merged, and only photos and videos: the other files of
- * these folders (a PDF in Download...) are seen only in the folder itself. The folders shown are
- * chosen in the album.
+ * The folders of the Gallery ([app.olauncher.ui.gallery.GalleryActivity]), like "Recents" on the
+ * iPhone: next to the camera's photos it shows those of other folders (screenshots, WhatsApp,
+ * Telegram...), newest first. Each file stays in its own folder; only the view is merged, and only
+ * photos and videos: the other files of these folders (a PDF in Download...) are seen only in the
+ * folder itself. The folders shown are chosen in the gallery.
  */
 object CameraRoll {
 
@@ -19,7 +19,15 @@ object CameraRoll {
 
     private val root: File get() = Environment.getExternalStorageDirectory()
 
-    /** The camera's folder (DCIM/Camera, or DCIM/100ANDRO and the like): opened from home it becomes the gallery. */
+    /** The camera's folder, the gallery's base: DCIM/Camera, or the DCIM folder the camera uses on this phone. */
+    fun cameraDir(): File {
+        val dcim = File(root, "DCIM")
+        val camera = File(dcim, "Camera")
+        if (camera.isDirectory) return camera
+        return dcim.listFiles()?.firstOrNull { it.isDirectory && isCameraRoll(it) } ?: camera
+    }
+
+    /** The camera's folder (DCIM/Camera, or DCIM/100ANDRO and the like): opened from home it shows the gallery. */
     fun isCameraRoll(dir: File) = dir.parentFile?.absolutePath.equals(File(root, "DCIM").absolutePath, ignoreCase = true) &&
         (dir.name.equals("Camera", ignoreCase = true) || Regex("\\d{3}[A-Za-z_]{5}").matches(dir.name))
 

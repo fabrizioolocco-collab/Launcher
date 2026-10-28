@@ -119,12 +119,13 @@ suspend fun getAppsList(
                     )
 
                     // if the current app is not OLauncher
-                    // Our own entries are skipped, except the "File" explorer, the ToDo app, the Scanner and the Compass
+                    // Our own entries are skipped, except the "File" explorer, the ToDo app, the Scanner, the Compass and the Gallery
                     if (app.applicationInfo.packageName != BuildConfig.APPLICATION_ID ||
                         app.componentName.className == "app.olauncher.FilesAlias" ||
                         app.componentName.className == "app.olauncher.TodoAlias" ||
                         app.componentName.className == "app.olauncher.ScannerAlias" ||
-                        app.componentName.className == "app.olauncher.CompassAlias"
+                        app.componentName.className == "app.olauncher.CompassAlias" ||
+                        app.componentName.className == "app.olauncher.GalleryAlias"
                     ) {
                         // is this a hidden app?
                         if (hiddenApps.contains(DrawerTabsRepository.key(appModel))) {

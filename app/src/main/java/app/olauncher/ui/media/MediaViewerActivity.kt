@@ -368,13 +368,13 @@ class MediaViewerActivity : AppCompatActivity() {
 
         fun open(context: Context, file: File) = context.startActivity(intent(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 
-        /** Opens [file] swiping through the photos and videos of all [dirs], newest first (the home gallery). */
-        fun open(context: Context, file: File, dirs: List<File>) = context.startActivity(
-            intent(context, file).putExtra(EXTRA_DIRS, dirs.map { it.absolutePath }.toTypedArray()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
 
         /** Without a new task: from [ViewerEntryActivity], the viewer stays in the caller's task. */
         fun intent(context: Context, file: File): Intent =
             Intent(context, MediaViewerActivity::class.java).putExtra(EXTRA_PATH, file.absolutePath)
+
+        /** Viewer of [file] swiping through the photos and videos of all [dirs], newest first (the Gallery). */
+        fun intent(context: Context, file: File, dirs: List<File>): Intent =
+            intent(context, file).putExtra(EXTRA_DIRS, dirs.map { it.absolutePath }.toTypedArray())
     }
 }

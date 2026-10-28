@@ -327,6 +327,7 @@
     <string name="ml_gallery">Gallery</string>
     <string name="ml_gallery_sources">Included folders</string>
     <string name="ml_gallery_add_folder">Add folder…</string>
+    <string name="ml_gallery_show_in_folder">Show in folder</string>
     <string name="ml_gallery_old_folder">old</string>
     <string name="ml_gallery_folder_path">Path</string>
     <string name="ml_info">Info</string>

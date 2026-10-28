@@ -324,6 +324,7 @@
     <string name="ml_gallery">Galleria</string>
     <string name="ml_gallery_sources">Cartelle incluse</string>
     <string name="ml_gallery_add_folder">Aggiungi cartella…</string>
+    <string name="ml_gallery_show_in_folder">Mostra nella cartella</string>
     <string name="ml_gallery_old_folder">vecchia</string>
     <string name="ml_gallery_folder_path">Percorso</string>
     <string name="ml_info">Info</string>

@@ -4,4 +4,5 @@
     <color name="ic_todo_launcher_background">#1E88E5</color>
     <color name="ic_scanner_launcher_background">#00897B</color>
     <color name="ic_compass_launcher_background">#E53935</color>
+    <color name="ic_gallery_launcher_background">#F4511E</color>
 </resources>

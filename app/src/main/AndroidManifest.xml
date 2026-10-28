@@ -238,6 +238,26 @@
             android:taskAffinity="app.minimalauncher.files"
             android:theme="@style/ViewerTheme" />
 
+        <!-- Gallery: the camera's photos with those of the chosen folders, also listed as "Gallery" in the app list -->
+        <activity
+            android:name=".ui.gallery.GalleryActivity"
+            android:exported="false"
+            android:label="@string/ml_gallery"
+            android:taskAffinity="app.minimalauncher.gallery" />
+
+        <activity-alias
+            android:name=".GalleryAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_gallery_launcher"
+            android:label="@string/ml_gallery"
+            android:targetActivity=".ui.gallery.GalleryActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- Album grid opened from the home search -->
         <activity
             android:name=".ui.AlbumActivity"
