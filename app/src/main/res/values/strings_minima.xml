@@ -323,6 +323,9 @@
     <string name="ml_explorer_moving_many">Move: %1$d items</string>
     <string name="ml_explorer_share_no_folders">Folders can\'t be shared: select files</string>
     <string name="ml_album_same_folder">They are already in this folder</string>
+    <string name="ml_gallery">Gallery</string>
+    <string name="ml_gallery_sources">Included folders</string>
+    <string name="ml_gallery_add_folder">Add folder…</string>
     <!-- Media viewer -->
     <string name="ml_media_viewer">Open photos and videos in</string>
     <string name="ml_viewer_builtin">Built-in viewer</string>

@@ -48,6 +48,15 @@ object MediaThumbnails {
         return files.sortedByDescending { it.lastModified() }
     }
 
+    /** Photos and videos directly inside [dirs] (other files ignored), newest first. */
+    fun mediaIn(dirs: List<File>): List<File> = dirs
+        .flatMap { dir -> dir.listFiles()?.filter { it.isFile && !it.name.startsWith(".") && isMedia(mimeOf(it.name)) }.orEmpty() }
+        .distinctBy { it.absolutePath }
+        // One date read per file: thousands of chat photos would otherwise be read again at each comparison
+        .map { it to it.lastModified() }
+        .sortedByDescending { it.second }
+        .map { it.first }
+
     /** MediaStore addresses of the files directly inside [dir], by absolute path. */
     fun mediaUris(context: Context, dir: File): Map<String, Uri> {
         val base = MediaStore.Files.getContentUri("external")

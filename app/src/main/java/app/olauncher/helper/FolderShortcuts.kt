@@ -88,7 +88,9 @@ object FolderShortcuts {
     fun openPath(context: Context, dir: File, inExplorer: Boolean = true) {
         if (inExplorer) {
             // A folder with only photos and videos opens as an album grid, like in the explorer
-            if (MediaThumbnails.albumMedia(dir) != null) AlbumActivity.open(context, dir)
+            // The camera folder is the gallery: its photos together with WhatsApp's, Telegram's...
+            if (CameraRoll.isCameraRoll(dir) && dir.isDirectory) AlbumActivity.openGallery(context, dir)
+            else if (MediaThumbnails.albumMedia(dir) != null) AlbumActivity.open(context, dir)
             else FileExplorerActivity.openLocal(context, dir)
             return
         }
@@ -139,6 +141,10 @@ object FolderShortcuts {
                 update(context, Folder(folder.id, folder.path, folder.name, !folder.inExplorer))
                 onChanged()
             },
+            // The gallery's folders (WhatsApp, Telegram...), chosen in the album
+            if (folder.inExplorer && CameraRoll.isCameraRoll(File(folder.path))) MenuEntry(context.getString(R.string.ml_gallery_sources)) {
+                AlbumActivity.openGallery(context, File(folder.path), showSources = true)
+            } else null,
             MenuEntry(context.getString(R.string.rename)) {
                 context.showTextInputDialog(context.getString(R.string.rename), folder.name, folder.name, context.getString(R.string.ml_save)) { name ->
                     update(context, Folder(folder.id, folder.path, name, folder.inExplorer))

@@ -62,16 +62,16 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var counter: TextView
     private var chromeVisible = true
     private var current = 0
+    /** The folders swiped through (one, or those of the home gallery). */
+    private var dirs: List<File> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val start = File(intent.getStringExtra(EXTRA_PATH) ?: run { finish(); return })
         val dir = start.parentFile ?: run { finish(); return }
-        media = dir.listFiles()
-            ?.filter { it.isFile && !it.name.startsWith(".") && MediaThumbnails.isMedia(MediaThumbnails.mimeOf(it.name)) }
-            ?.sortedByDescending { it.lastModified() }
-            .orEmpty()
-            .ifEmpty { listOf(start) }
+        // From the home gallery: the photos of all its folders; otherwise those of the file's folder
+        dirs = intent.getStringArrayExtra(EXTRA_DIRS)?.map { File(it) } ?: listOf(dir)
+        media = MediaThumbnails.mediaIn(dirs).ifEmpty { listOf(start) }
         current = media.indexOfFirst { it.absolutePath == start.absolutePath }.coerceAtLeast(0)
 
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -253,10 +253,7 @@ class MediaViewerActivity : AppCompatActivity() {
         }
         // Back from an editor: list the folder again (a saved copy appears next to the original)
         val shown = media.getOrNull(current) ?: return
-        val dir = shown.parentFile ?: return
-        val fresh = dir.listFiles()
-            ?.filter { it.isFile && !it.name.startsWith(".") && MediaThumbnails.isMedia(MediaThumbnails.mimeOf(it.name)) }
-            ?.sortedByDescending { it.lastModified() }.orEmpty()
+        val fresh = MediaThumbnails.mediaIn(dirs)
         if (fresh.map { it.absolutePath } == media.map { it.absolutePath }) return
         media = fresh.ifEmpty { listOf(shown) }
         current = media.indexOfFirst { it.absolutePath == shown.absolutePath }.coerceAtLeast(0)
@@ -362,6 +359,7 @@ class MediaViewerActivity : AppCompatActivity() {
 
     companion object {
         private const val EXTRA_PATH = "path"
+        private const val EXTRA_DIRS = "dirs"
 
         fun formatDuration(ms: Long): String {
             val s = ms / 1000
@@ -369,6 +367,11 @@ class MediaViewerActivity : AppCompatActivity() {
         }
 
         fun open(context: Context, file: File) = context.startActivity(intent(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+
+        /** Opens [file] swiping through the photos and videos of all [dirs], newest first (the home gallery). */
+        fun open(context: Context, file: File, dirs: List<File>) = context.startActivity(
+            intent(context, file).putExtra(EXTRA_DIRS, dirs.map { it.absolutePath }.toTypedArray()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
 
         /** Without a new task: from [ViewerEntryActivity], the viewer stays in the caller's task. */
         fun intent(context: Context, file: File): Intent =
