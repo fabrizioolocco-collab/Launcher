@@ -8,7 +8,9 @@ import java.io.File
 /**
  * The camera folder opened from home as a gallery, like "Recents" on the iPhone: next to the camera's
  * photos it shows those of other folders (screenshots, WhatsApp, Telegram...), newest first. Each file
- * stays in its own folder; only the view is merged. The folders shown are chosen in the album.
+ * stays in its own folder; only the view is merged, and only photos and videos: the other files of
+ * these folders (a PDF in Download...) are seen only in the folder itself. The folders shown are
+ * chosen in the album.
  */
 object CameraRoll {
 
@@ -42,15 +44,17 @@ object CameraRoll {
         "Telegram/Telegram Video",
         "Pictures/Telegram",
         "Movies/Telegram",
+        "Download",
     )
 
-    /** Other places offered (off until chosen): the download folder and the albums of the other apps. */
+    /** Other places offered (off until chosen): the albums of the other apps. */
     private val OFFERED_PARENTS = listOf("DCIM", "Pictures", "Movies")
 
     private fun defaults() = DEFAULTS.map { File(root, it) }.filter { it.isDirectory }
 
     /** The folders merged into the gallery of [camera] (the camera folder itself excluded). */
     fun included(context: Context, camera: File): List<File> {
+        addDownload(context)
         val stored = prefs(context).getStringSet(KEY_SOURCES, null)
             ?: return defaults().filterNot { same(it, camera) }
         return options(context, camera).map { it.first }.filter { it.absolutePath in stored && it.isDirectory }
@@ -61,7 +65,7 @@ object CameraRoll {
         val stored = prefs(context).getStringSet(KEY_SOURCES, null).orEmpty()
         val offered = OFFERED_PARENTS.flatMap { parent ->
             File(root, parent).listFiles()?.filter { it.isDirectory && !it.name.startsWith(".") }?.sortedBy { it.name.lowercase() }.orEmpty()
-        } + File(root, Environment.DIRECTORY_DOWNLOADS)
+        }
         val all = (defaults() + stored.map { File(it) } + offered)
             .filter { it.isDirectory && !same(it, camera) }
             .distinctBy { it.absolutePath.lowercase() }
@@ -79,7 +83,19 @@ object CameraRoll {
         prefs(context).edit { putStringSet(KEY_SOURCES, current) }
     }
 
+    /** Download joined the defaults later: added once to a choice already made, then left to the user. */
+    private fun addDownload(context: Context) {
+        val prefs = prefs(context)
+        if (prefs.getBoolean(KEY_DOWNLOAD_ADDED, false)) return
+        val stored = prefs.getStringSet(KEY_SOURCES, null)
+        prefs.edit {
+            if (stored != null) putStringSet(KEY_SOURCES, stored + File(root, Environment.DIRECTORY_DOWNLOADS).absolutePath)
+            putBoolean(KEY_DOWNLOAD_ADDED, true)
+        }
+    }
+
     private fun same(a: File, b: File) = a.absolutePath.trimEnd('/').equals(b.absolutePath.trimEnd('/'), ignoreCase = true)
 
     private const val KEY_SOURCES = "SOURCES"
+    private const val KEY_DOWNLOAD_ADDED = "DOWNLOAD_ADDED"
 }
