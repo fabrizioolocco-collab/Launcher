@@ -47,6 +47,8 @@ class MenuEntry(
     /** A colored dot before the label (e.g. a category's color); 0: none. */
     val dot: Int = 0,
     val onClick: () -> Unit = {},
+    /** An "i" button before the switch of a toggle row, for details on it (e.g. a folder's path). */
+    val onInfo: (() -> Unit)? = null,
 )
 
 private fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding> {
@@ -219,6 +221,18 @@ fun Context.showMenuDialog(title: String, entries: List<MenuEntry>, header: ((Ol
             setTextColor(if (destructive) DESTRUCTIVE_COLOR else primary)
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (entry.checked != null) {
+            entry.onInfo?.let { info ->
+                row.addView(ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_m_info)
+                    imageTintList = ColorStateList.valueOf(secondary)
+                    contentDescription = ctx.getString(R.string.ml_info)
+                    val p = 8.dpToPx()
+                    setPadding(p, p, p, p)
+                    background = ripple(ctx)
+                    isClickable = true
+                    setOnClickListener { info() }
+                }, LinearLayout.LayoutParams(36.dpToPx(), 36.dpToPx()).apply { marginStart = 6.dpToPx() })
+            }
             val switch = PillSwitch(ctx).apply {
                 checked = entry.checked
                 var reverting = false

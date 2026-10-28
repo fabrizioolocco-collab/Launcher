@@ -324,6 +324,8 @@
     <string name="ml_gallery_sources">Cartelle incluse</string>
     <string name="ml_gallery_add_folder">Aggiungi cartella…</string>
     <string name="ml_gallery_old_folder">vecchia</string>
+    <string name="ml_gallery_folder_path">Percorso</string>
+    <string name="ml_info">Info</string>
     <!-- Media viewer -->
     <string name="ml_media_viewer">Apri foto e video in</string>
     <string name="ml_viewer_builtin">Visualizzatore integrato</string>

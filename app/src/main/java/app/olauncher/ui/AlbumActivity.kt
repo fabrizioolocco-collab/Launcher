@@ -132,12 +132,23 @@ class AlbumActivity : AppCompatActivity() {
                 CameraRoll.set(this, dir, folder, on)
                 reload()
                 true
-            })
+            }, onInfo = { showFolderInfo(folder, name) })
         } + MenuEntry(getString(R.string.ml_gallery_add_folder), icon = R.drawable.ic_m_add) {
             sourcePicker.launch(Intent(this, FolderPickerActivity::class.java)
                 .putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, android.os.Environment.getExternalStorageDirectory().absolutePath))
         }
         showMenuDialog(getString(R.string.ml_gallery_sources), entries)
+    }
+
+    /** Where a gallery folder is: its full path, and a way to open it in the explorer. */
+    private fun showFolderInfo(folder: File, name: String) {
+        showMenuDialog(name, listOf(
+            MenuEntry(folder.absolutePath.removePrefix(android.os.Environment.getExternalStorageDirectory().absolutePath).ifEmpty { "/" },
+                section = getString(R.string.ml_gallery_folder_path)),
+            MenuEntry(getString(R.string.ml_search_open_folder), icon = R.drawable.ic_m_folder_open) {
+                FileExplorerActivity.openLocal(this, folder)
+            },
+        ))
     }
 
     private fun buildLayout(): View {
