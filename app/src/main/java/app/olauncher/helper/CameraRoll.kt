@@ -110,10 +110,20 @@ object CameraRoll {
         }
     }
 
+    /** The top of the Gallery's Albums tab: the folder chosen, else DCIM/Foto when there is one, else DCIM. */
+    fun albumRoot(context: Context): File {
+        prefs(context).getString(KEY_ALBUM_ROOT, null)?.let { File(it) }?.takeIf { it.isDirectory }?.let { return it }
+        val dcim = File(root, "DCIM")
+        return dcim.listFiles()?.firstOrNull { it.isDirectory && it.name.equals("Foto", ignoreCase = true) } ?: dcim
+    }
+
+    fun setAlbumRoot(context: Context, folder: File) = prefs(context).edit { putString(KEY_ALBUM_ROOT, folder.absolutePath) }
+
     private fun isAppMedia(dir: File) = dir.absolutePath.contains("/Android/media/", ignoreCase = true)
 
     private fun same(a: File, b: File) = a.absolutePath.trimEnd('/').equals(b.absolutePath.trimEnd('/'), ignoreCase = true)
 
     private const val KEY_SOURCES = "SOURCES"
     private const val KEY_DOWNLOAD_ADDED = "DOWNLOAD_ADDED"
+    private const val KEY_ALBUM_ROOT = "ALBUM_ROOT"
 }
