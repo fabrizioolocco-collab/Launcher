@@ -46,7 +46,6 @@ class MenuEntry(
     val destructive: Boolean = false,
     /** A colored dot before the label (e.g. a category's color); 0: none. */
     val dot: Int = 0,
-    val onClick: () -> Unit = {},
     /** An "i" button before the switch of a toggle row, for details on it (e.g. a folder's path). */
     val onInfo: (() -> Unit)? = null,
     /**
@@ -54,6 +53,8 @@ class MenuEntry(
      * action); returns the value shown afterwards. The menu stays open.
      */
     val onClear: (() -> String)? = null,
+    // Last, so that `MenuEntry(label) { ... }` is the tap action
+    val onClick: () -> Unit = {},
 )
 
 private fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding> {
