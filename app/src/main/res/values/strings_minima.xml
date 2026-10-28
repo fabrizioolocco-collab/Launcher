@@ -326,6 +326,7 @@
     <string name="ml_gallery">Gallery</string>
     <string name="ml_gallery_sources">Included folders</string>
     <string name="ml_gallery_add_folder">Add folder…</string>
+    <string name="ml_gallery_old_folder">old</string>
     <!-- Media viewer -->
     <string name="ml_media_viewer">Open photos and videos in</string>
     <string name="ml_viewer_builtin">Built-in viewer</string>

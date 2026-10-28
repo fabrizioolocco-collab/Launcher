@@ -3,6 +3,7 @@ package app.olauncher.helper
 import android.content.Context
 import android.os.Environment
 import androidx.core.content.edit
+import app.olauncher.R
 import java.io.File
 
 /**
@@ -69,10 +70,17 @@ object CameraRoll {
         val all = (defaults() + stored.map { File(it) } + offered)
             .filter { it.isDirectory && !same(it, camera) }
             .distinctBy { it.absolutePath.lowercase() }
-        // Same name in two places (screenshots in DCIM and Pictures): the parent tells them apart
-        val names = all.groupingBy { it.name.lowercase() }.eachCount()
+        // Same name in two places: the old WhatsApp/Telegram folder (from before Android/media) is
+        // marked as such, otherwise the parent tells them apart (screenshots in DCIM and Pictures)
+        val byName = all.groupBy { it.name.lowercase() }
         return all.map { dir ->
-            dir to if ((names[dir.name.lowercase()] ?: 0) > 1) "${dir.name} (${dir.parentFile?.name})" else dir.name
+            val twins = byName[dir.name.lowercase()].orEmpty()
+            dir to when {
+                twins.size < 2 -> dir.name
+                isAppMedia(dir) -> dir.name
+                twins.any { isAppMedia(it) } -> "${dir.name} (${context.getString(R.string.ml_gallery_old_folder)})"
+                else -> "${dir.name} (${dir.parentFile?.name})"
+            }
         }
     }
 
@@ -93,6 +101,8 @@ object CameraRoll {
             putBoolean(KEY_DOWNLOAD_ADDED, true)
         }
     }
+
+    private fun isAppMedia(dir: File) = dir.absolutePath.contains("/Android/media/", ignoreCase = true)
 
     private fun same(a: File, b: File) = a.absolutePath.trimEnd('/').equals(b.absolutePath.trimEnd('/'), ignoreCase = true)
 
