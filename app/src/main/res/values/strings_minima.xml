@@ -927,4 +927,5 @@
     <string name="ml_player_next">Next</string>
     <string name="ml_player_speed">Playback speed</string>
     <string name="ml_player_only_one">No other app is playing</string>
+    <string name="ml_player_hide">Hide</string>
 </resources>

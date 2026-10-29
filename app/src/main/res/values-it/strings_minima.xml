@@ -924,4 +924,5 @@
     <string name="ml_player_next">Successivo</string>
     <string name="ml_player_speed">Velocità di riproduzione</string>
     <string name="ml_player_only_one">Nessun\'altra app in riproduzione</string>
+    <string name="ml_player_hide">Nascondi</string>
 </resources>

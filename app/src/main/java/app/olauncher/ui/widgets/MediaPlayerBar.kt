@@ -1,6 +1,7 @@
 package app.olauncher.ui.widgets
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.Activity
 import android.app.ActivityOptions
 import android.content.ComponentName
@@ -32,14 +33,15 @@ import android.widget.SeekBar
 import android.widget.TextView
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
+import androidx.lifecycle.Observer
 import app.olauncher.R
 import app.olauncher.data.CalendarText
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.NotificationListener
+import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.showDropdown
-import app.olauncher.helper.showToast
 import java.text.DecimalFormat
 
 /**
@@ -49,7 +51,8 @@ import java.text.DecimalFormat
  *
  * It reads the other apps' media sessions through the notification access the launcher already
  * has; without it, or with nothing playing, it stays hidden. It goes away when the app playing
- * closes its session (the app closed).
+ * closes its session (the app closed), and a paused one also when its media notification is gone
+ * (Spotify keeps its session after being closed). The long press on the cover can also hide it.
  */
 @SuppressLint("ViewConstructor")
 class MediaPlayerBar(
@@ -91,6 +94,12 @@ class MediaPlayerBar(
     /** Apps that were playing at the last refresh: one starting to play becomes the one shown. */
     private var wasPlaying = emptySet<String>()
     private var listening = false
+    /** Apps hidden from the long press on the cover: back as soon as they start playing again. */
+    private val hidden = mutableSetOf<String>()
+
+    /** A media notification gone (app closed, notification swiped) can hide a paused session. */
+    private val notificationsObserver = Observer<Any> { if (listening) refresh() }
+    private var observing = false
 
     private val divider = View(activity)
     private val art = ImageView(activity).apply {
@@ -280,6 +289,10 @@ class MediaPlayerBar(
     }
 
     private fun start() {
+        if (!observing) {
+            NotificationRepository.state.observeForever(notificationsObserver)
+            observing = true
+        }
         if (!listening) {
             listening = try {
                 manager.addOnActiveSessionsChangedListener(sessionsListener, listenerComponent, handler)
@@ -293,6 +306,10 @@ class MediaPlayerBar(
     }
 
     private fun stop() {
+        if (observing) {
+            NotificationRepository.state.removeObserver(notificationsObserver)
+            observing = false
+        }
         if (listening) {
             try {
                 manager.removeOnActiveSessionsChangedListener(sessionsListener)
@@ -321,11 +338,38 @@ class MediaPlayerBar(
     }
 
     /** Sessions with something loaded (playing, paused, buffering): not stopped or idle. */
-    private fun candidates() = controllers.filter {
+    private fun loaded() = controllers.filter {
         when (it.playbackState?.state) {
             null, PlaybackState.STATE_NONE, PlaybackState.STATE_STOPPED, PlaybackState.STATE_ERROR -> false
             else -> it.metadata != null
         }
+    }
+
+    /**
+     * The sessions shown: playing ones always (unless hidden), paused ones only while their app still
+     * has its media notification. Apps like Spotify keep a paused session alive after being closed
+     * (or after their notification is swiped away), which would leave the song there for good.
+     */
+    private fun candidates(): List<MediaController> {
+        val media = mediaNotificationPackages()
+        return loaded().filter {
+            it.packageName !in hidden && (isPlaying(it) || media == null || it.packageName in media)
+        }
+    }
+
+    /** Apps with a media notification up; null when the notifications can't be read (then no filter). */
+    private fun mediaNotificationPackages(): Set<String>? {
+        val listener = NotificationListener.instance ?: return null
+        val all = try {
+            listener.activeNotifications
+        } catch (e: Exception) {
+            null
+        } ?: return null
+        return all.filter { sbn ->
+            val extras = sbn.notification?.extras
+            extras?.containsKey(Notification.EXTRA_MEDIA_SESSION) == true ||
+                    extras?.getString(Notification.EXTRA_TEMPLATE)?.contains("MediaStyle") == true
+        }.map { it.packageName }.toSet()
     }
 
     private fun isPlaying(c: MediaController?) = c?.playbackState?.state.let {
@@ -334,11 +378,13 @@ class MediaPlayerBar(
     }
 
     private fun refresh() {
-        val list = candidates()
-        // An app that starts playing becomes the one shown
-        val playing = list.filter { isPlaying(it) }.map { it.packageName }.toSet()
-        (playing - wasPlaying).firstOrNull()?.let { preferred = it }
+        // An app that starts playing becomes the one shown (and is back if it was hidden)
+        val playing = loaded().filter { isPlaying(it) }.map { it.packageName }.toSet()
+        val started = playing - wasPlaying
+        hidden -= started
+        started.firstOrNull()?.let { preferred = it }
         wasPlaying = playing
+        val list = candidates()
         val chosen = list.firstOrNull { it.packageName == preferred }
             ?: list.firstOrNull { isPlaying(it) }
             ?: list.firstOrNull()
@@ -497,11 +543,14 @@ class MediaPlayerBar(
         }
     }
 
-    /** Long press on the cover: a drop-down of the apps with something playing or paused, to pick the one shown. */
+    /**
+     * Long press on the cover: a drop-down of the apps with something playing or paused, to pick the
+     * one shown, and "Hide" to take the one shown away until it plays again.
+     */
     private fun switchApp() {
         val list = candidates()
         if (list.size < 2) {
-            activity.showToast(R.string.ml_player_only_one)
+            art.showDropdown(listOf(MenuEntry(activity.getString(R.string.ml_player_hide), icon = R.drawable.ic_m_hide) { hideCurrent() }))
             return
         }
         val secondary = activity.getColorFromAttr(R.attr.secondaryTextColor)
@@ -568,7 +617,37 @@ class MediaPlayerBar(
                 }
             }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
+        card.addView(LinearLayout(activity).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = 46.dpToPx()
+            setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 6.dpToPx())
+            if (ripple != 0) setBackgroundResource(ripple)
+            isClickable = true
+            addView(ImageView(activity).apply {
+                setImageResource(R.drawable.ic_m_hide)
+                imageTintList = ColorStateList.valueOf(primary)
+                scaleType = ImageView.ScaleType.CENTER_INSIDE
+            }, LayoutParams(30.dpToPx(), 20.dpToPx()).apply { marginEnd = 12.dpToPx() })
+            addView(TextView(activity).apply {
+                text = activity.getString(R.string.ml_player_hide)
+                textSize = 15f
+                setTextColor(primary)
+            })
+            setOnClickListener {
+                popup.dismiss()
+                hideCurrent()
+            }
+        }, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         popup.showAsDropDown(art, 0, 4.dpToPx())
+    }
+
+    /** Takes the app shown off the widget until it starts playing again. */
+    private fun hideCurrent() {
+        val c = current ?: return
+        hidden += c.packageName
+        if (preferred == c.packageName) preferred = null
+        refresh()
     }
 
     // ---------------------------------------------------------------- helpers
