@@ -1155,7 +1155,9 @@ class GalleryActivity : AppCompatActivity() {
             cell.addView(TextView(ctx).apply {
                 textSize = if (small) 13f else 15f
                 setTextColor(UiKit.primary(ctx))
-                maxLines = 1
+                // Album names often run long: wrap onto a second line before cutting them
+                maxLines = 2
+                setLineSpacing(0f, 0.95f)
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setPadding(2.dpToPx(), 6.dpToPx(), 2.dpToPx(), 0)
