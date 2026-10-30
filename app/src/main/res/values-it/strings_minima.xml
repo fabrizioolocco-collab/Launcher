@@ -346,6 +346,8 @@
     <string name="ml_gallery_folders_photos">%1$d cartelle · %2$d foto</string>
     <string name="ml_gallery_n_photos">%1$d foto</string>
     <string name="ml_gallery_empty_folder">Ancora vuota. Crea una cartella con +, oppure portaci delle foto: selezionale, poi Sposta o Copia.</string>
+    <string name="ml_gallery_search_hint">Cerca per nome, data o cartella</string>
+    <string name="ml_gallery_search_albums_hint">Cerca un album</string>
     <string name="ml_gallery_empty">Nessuna foto o video</string>
     <string name="ml_gallery_size_large">Grandi</string>
     <string name="ml_gallery_size_medium">Medie</string>

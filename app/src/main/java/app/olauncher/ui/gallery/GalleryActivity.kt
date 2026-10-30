@@ -57,6 +57,9 @@ import java.io.File
  *
  * Long press starts a multiple selection, of photos (share, copy, move into an album, delete) or of
  * folder tiles (move, rename, delete); on a tile, a long press that moves drags it instead.
+ *
+ * Search (the bar's magnifier): photos by name, date ("agosto 2024", "12/08") or the folder they come
+ * from (WhatsApp, Screenshots); where folders are shown, the albums of the whole tree below by name.
  */
 class GalleryActivity : AppCompatActivity() {
 
@@ -84,6 +87,9 @@ class GalleryActivity : AppCompatActivity() {
     /** Shown now: photos (Photos tab, an album) or folders (a folder of folders), never both. */
     private var media: List<File> = emptyList()
     private var folders: MutableList<Folder> = mutableListOf()
+    /** What the tab read, before the search filter. */
+    private var allMedia: List<File> = emptyList()
+    private var allFolders: List<Folder> = emptyList()
     /** Album covers found so far (folder path → newest photo, or null when it has none). */
     private val covers = HashMap<String, File?>()
     private val showingFolders get() = tab == Tab.ALBUMS && folders.isNotEmpty() && media.isEmpty()
@@ -100,6 +106,9 @@ class GalleryActivity : AppCompatActivity() {
     private lateinit var sourcesButton: ImageView
     private lateinit var newFolderButton: ImageView
     private lateinit var menuButton: ImageView
+    private lateinit var searchButton: ImageView
+    private lateinit var searchRow: LinearLayout
+    private lateinit var searchInput: android.widget.EditText
     private lateinit var tabs: LinearLayout
     private lateinit var selectionBar: LinearLayout
     private lateinit var folderBar: LinearLayout
@@ -168,10 +177,11 @@ class GalleryActivity : AppCompatActivity() {
         if (loading?.isActive != true) reload()
     }
 
-    /** Back: ends a selection, then goes up the album folders, then leaves. */
+    /** Back: ends a selection, then the search, then goes up the album folders, then leaves. */
     private fun goBack() {
         when {
             selecting -> clearSelection()
+            searchRow.isVisible -> closeSearch()
             tab == Tab.ALBUMS && looseView -> {
                 looseView = false
                 reload()
@@ -191,6 +201,8 @@ class GalleryActivity : AppCompatActivity() {
         selected.clear()
         media = emptyList()
         folders = mutableListOf()
+        allMedia = emptyList()
+        allFolders = emptyList()
         grid.adapter?.notifyDataSetChanged()
         updateTabs()
         reload()
@@ -215,8 +227,8 @@ class GalleryActivity : AppCompatActivity() {
                         folders.fold(emptyMap<String, Uri>()) { all, folder -> all + MediaThumbnails.mediaUris(this@GalleryActivity, folder) })
                 }
                 sources = found.first
-                media = found.second
-                folders = mutableListOf()
+                allMedia = found.second
+                allFolders = emptyList()
                 uris = found.third
             } else {
                 // A folder gone meanwhile (deleted or renamed elsewhere): back to the nearest one still there
@@ -224,17 +236,119 @@ class GalleryActivity : AppCompatActivity() {
                 val shown = albumDir
                 val loose = looseView
                 val found = withContext(Dispatchers.IO) { readAlbum(shown, loose) }
-                media = found.first
-                folders = found.second.toMutableList()
-                uris = if (media.isEmpty()) emptyMap() else MediaThumbnails.mediaUris(this@GalleryActivity, shown)
+                allMedia = found.first
+                allFolders = found.second
+                uris = if (allMedia.isEmpty()) emptyMap() else MediaThumbnails.mediaUris(this@GalleryActivity, shown)
             }
             loaded = true
-            selected.retainAll((media.map { it.absolutePath } + folders.map { it.key }).toSet())
-            updateBars()
-            grid.adapter?.notifyDataSetChanged()
-            grid.scrollToPosition(0)
+            applySearch()
             then()
         }
+    }
+
+    /** Shows the media or folders now in [media] / [folders] (all of them, or what the search found). */
+    private fun showResults() {
+        selected.retainAll((media.map { it.absolutePath } + folders.map { it.key }).toSet())
+        updateBars()
+        grid.adapter?.notifyDataSetChanged()
+        grid.scrollToPosition(0)
+    }
+
+    // ---------------------------------------------------------------- search
+
+    private var query = ""
+    private val searching get() = query.isNotEmpty()
+    private var searchJob: Job? = null
+    /** What a photo can be found by (name, folder, dates), read once per file. */
+    private val searchTexts = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    private fun openSearch() {
+        searchRow.isVisible = true
+        UiKit.setToolActive(searchButton, true)
+        searchInput.requestFocus()
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showSoftInput(searchInput, 0)
+    }
+
+    /** Hides the field and shows everything again ([refresh] false: something else is reloading anyway). */
+    private fun closeSearch(refresh: Boolean = true) {
+        searchJob?.cancel()
+        (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(searchInput.windowToken, 0)
+        searchRow.isVisible = false
+        UiKit.setToolActive(searchButton, false)
+        val had = searching
+        query = ""
+        if (searchInput.text.isNotEmpty()) searchInput.setText("")
+        if (had && refresh) applySearch()
+    }
+
+    private fun fold(s: String) = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "").lowercase()
+
+    /**
+     * Filters what the tab read by the query (every word must be found, accents and case ignored):
+     * photos by name, folder and date; where folders are shown, the folders of the whole tree below.
+     */
+    private fun applySearch() {
+        searchJob?.cancel()
+        if (!searching) {
+            media = allMedia
+            folders = allFolders.toMutableList()
+            showResults()
+            return
+        }
+        val words = fold(query).split(' ').filter { it.isNotEmpty() }
+        val inFolders = tab == Tab.ALBUMS && allMedia.isEmpty() && allFolders.isNotEmpty()
+        val base = albumDir
+        val photos = allMedia
+        searchJob = lifecycleScope.launch {
+            kotlinx.coroutines.delay(150)
+            if (inFolders) {
+                folders = withContext(Dispatchers.IO) { findFolders(base, words) }.toMutableList()
+                media = emptyList()
+            } else {
+                media = withContext(Dispatchers.IO) {
+                    val formats = searchFormats()
+                    photos.filter { f ->
+                        val text = searchTexts.getOrPut(f.absolutePath) { searchText(f, formats) }
+                        words.all { text.contains(it) }
+                    }
+                }
+                folders = mutableListOf()
+            }
+            showResults()
+        }
+    }
+
+    /** The ways a date is written in a search: "12 agosto 2024", "12/08/2024", "2024-08-12". */
+    private fun searchFormats() = listOf(
+        java.text.SimpleDateFormat("d MMMM yyyy EEEE", java.util.Locale.getDefault()),
+        java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()),
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault()),
+    )
+
+    private fun searchText(file: File, formats: List<java.text.SimpleDateFormat>): String {
+        val date = java.util.Date(file.lastModified())
+        return fold(file.name + " " + (file.parentFile?.name ?: "") + " " + formats.joinToString(" ") { it.format(date) })
+    }
+
+    /** Folders in the tree of [base] whose path (from [base]) holds every word, shown as "2024 › Mare". */
+    private fun findFolders(base: File, words: List<String>): List<Folder> {
+        val found = mutableListOf<Folder>()
+        fun walk(dir: File, path: List<String>) {
+            if (path.size > MAX_SEARCH_DEPTH) return
+            for (sub in ordered(dir, subfolders(dir))) {
+                if (found.size >= MAX_SEARCH_RESULTS) return
+                val subPath = path + sub.name
+                val text = fold(subPath.joinToString(" "))
+                if (words.all { text.contains(it) } && fold(sub.name).let { name -> words.any { name.contains(it) } }) {
+                    val (folders, photos) = quickCount(sub)
+                    found += Folder(sub, subPath.joinToString(" › "), folders, photos)
+                }
+                walk(sub, subPath)
+            }
+        }
+        walk(base, emptyList())
+        return found
     }
 
     /**
@@ -322,13 +436,46 @@ class GalleryActivity : AppCompatActivity() {
         sourcesButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_gallery_sources)) { showSources() }
         newFolderButton = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_gallery_new_folder)) { askNewFolder(albumDir) {} }
         menuButton = UiKit.iconButton(this, R.drawable.ic_m_more, getString(R.string.ml_explorer_more)) { showAlbumsMenu() }
+        searchButton = UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_explorer_search)) {
+            if (searchRow.isVisible) closeSearch() else openSearch()
+        }
         val bar = UiKit.appBar(this, getString(R.string.ml_gallery), onBack = { goBack() },
-            actions = listOf(sourcesButton, newFolderButton, menuButton))
+            actions = listOf(searchButton, sourcesButton, newFolderButton, menuButton))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 8.dpToPx())
         backButton = bar.back
         title = bar.title
         count = bar.subtitle
         root.addView(bar.view)
+
+        // Search field under the bar, shown by the magnifier
+        searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(16.dpToPx(), 0, 8.dpToPx(), 10.dpToPx())
+            isVisible = false
+        }
+        searchInput = android.widget.EditText(this).apply {
+            UiKit.styleInput(this)
+            isSingleLine = true
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setOnEditorActionListener { v, _, _ ->
+                (getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(v.windowToken, 0)
+                true
+            }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    val typed = s?.toString()?.trim().orEmpty()
+                    if (typed == query) return
+                    query = typed
+                    applySearch()
+                }
+            })
+        }
+        searchRow.addView(searchInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        searchRow.addView(UiKit.iconButton(this, R.drawable.ic_m_close, getString(R.string.close)) { closeSearch() })
+        root.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         tabs = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -421,11 +568,12 @@ class GalleryActivity : AppCompatActivity() {
 
     /** Folder tiles: a long press that moves drags the tile to a new place; one that doesn't selects it. */
     private val dragHelper = androidx.recyclerview.widget.ItemTouchHelper(object : androidx.recyclerview.widget.ItemTouchHelper.Callback() {
-        override fun isLongPressDragEnabled() = showingFolders && !selecting
+        // Not on search results: they come from several folders, their order isn't one folder's
+        override fun isLongPressDragEnabled() = showingFolders && !selecting && !searching
         override fun isItemViewSwipeEnabled() = false
 
         override fun getMovementFlags(recyclerView: RecyclerView, viewHolder: RecyclerView.ViewHolder): Int {
-            if (!showingFolders || folders.getOrNull(viewHolder.bindingAdapterPosition)?.loose != false) return 0
+            if (!showingFolders || searching || folders.getOrNull(viewHolder.bindingAdapterPosition)?.loose != false) return 0
             val all = androidx.recyclerview.widget.ItemTouchHelper.UP or androidx.recyclerview.widget.ItemTouchHelper.DOWN or
                     androidx.recyclerview.widget.ItemTouchHelper.LEFT or androidx.recyclerview.widget.ItemTouchHelper.RIGHT
             return makeMovementFlags(all, 0)
@@ -535,13 +683,20 @@ class GalleryActivity : AppCompatActivity() {
         // New folders go where folders are shown (or in an empty folder): an album with photos stays an album
         newFolderButton.isVisible = !selecting && albums && !looseView && media.isEmpty()
         menuButton.isVisible = !selecting && albums && !looseView
+        searchButton.isVisible = !selecting
+        searchInput.hint = getString(if (albums && allMedia.isEmpty() && allFolders.isNotEmpty()) R.string.ml_gallery_search_albums_hint
+            else R.string.ml_gallery_search_hint)
         tabs.isVisible = !selecting
         selectionBar.isVisible = selecting && !showingFolders
         folderBar.isVisible = selecting && showingFolders
         // Rename is for one folder at a time
         folderBar.getChildAt(1).alpha = if (selected.size == 1) 1f else 0.35f
         emptyView.isVisible = !selecting && media.isEmpty() && folders.isEmpty() && loaded
-        emptyView.text = getString(if (albums) R.string.ml_gallery_empty_folder else R.string.ml_gallery_empty)
+        emptyView.text = getString(when {
+            searching -> R.string.ml_explorer_no_results
+            albums -> R.string.ml_gallery_empty_folder
+            else -> R.string.ml_gallery_empty
+        })
     }
 
     private fun uriFor(file: File): Uri = uris[file.absolutePath] ?: FileProvider.getUriForFile(this, "$packageName.files", file)
@@ -670,6 +825,7 @@ class GalleryActivity : AppCompatActivity() {
     /** After moving, copying or deleting: let the gallery know, then reload the grid. */
     private fun afterChange(paths: List<String>) {
         if (paths.isNotEmpty()) MediaScannerConnection.scanFile(applicationContext, paths.toTypedArray(), null, null)
+        searchTexts.clear()
         selected.clear()
         reload()
     }
@@ -909,6 +1065,8 @@ class GalleryActivity : AppCompatActivity() {
 
     private fun openFolder(folder: Folder) {
         if (folder.loose) looseView = true else albumDir = folder.dir
+        // A folder found by the search: opened as it is
+        if (searchRow.isVisible) closeSearch(refresh = false)
         reload()
     }
 
@@ -1048,8 +1206,9 @@ class GalleryActivity : AppCompatActivity() {
             box.scaleX = if (isSelected) 0.92f else 1f
             box.scaleY = box.scaleX
             cell.setOnClickListener { if (selecting) toggleKey(folder.key) else openFolder(folder) }
-            // Not selecting: the long press is the drag helper's (drag to reorder, or select when it doesn't move)
-            if (selecting) cell.setOnLongClickListener {
+            // Not selecting: the long press is the drag helper's (drag to reorder, or select when it doesn't move);
+            // search results aren't dragged, their long press selects
+            if (selecting || searching) cell.setOnLongClickListener {
                 toggleKey(folder.key)
                 dragSelect.start(folders.indexOf(folder))
                 true
@@ -1101,6 +1260,8 @@ class GalleryActivity : AppCompatActivity() {
         private const val EXTRA_SHOW_SOURCES = "show_sources"
         private const val COLUMNS = 3
         private const val SPANS = 12
+        private const val MAX_SEARCH_DEPTH = 8
+        private const val MAX_SEARCH_RESULTS = 200
         private const val TYPE_PHOTO = 0
         private const val TYPE_FOLDER = 1
         private val GALLERIES = listOf("org.fossify.gallery", "com.simplemobiletools.gallery.pro")

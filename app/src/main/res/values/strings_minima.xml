@@ -349,6 +349,8 @@
     <string name="ml_gallery_folders_photos">%1$d folders · %2$d photos</string>
     <string name="ml_gallery_n_photos">%1$d photos</string>
     <string name="ml_gallery_empty_folder">Nothing here yet. Make a folder with +, or bring photos in: select them, then Move or Copy.</string>
+    <string name="ml_gallery_search_hint">Search by name, date or folder</string>
+    <string name="ml_gallery_search_albums_hint">Search an album</string>
     <string name="ml_gallery_empty">No photos or videos</string>
     <string name="ml_gallery_size_large">Large</string>
     <string name="ml_gallery_size_medium">Medium</string>
