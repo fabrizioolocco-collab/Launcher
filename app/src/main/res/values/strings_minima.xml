@@ -528,6 +528,10 @@
     <string name="ml_cal_color">Color: %s</string>
     <string name="ml_cal_color_title">Color</string>
     <string name="ml_cal_colors">Calendar colors</string>
+    <string name="ml_cal_quick">Hide from the widget: %s</string>
+    <string name="ml_cal_quick_none">none</string>
+    <string name="ml_cal_quick_title">Calendars to hide and show from the widget</string>
+    <string name="ml_cal_filter_title">Calendars in the widget</string>
     <string name="ml_cal_color_calendar">Calendar color</string>
     <string name="ml_cal_days">Days shown: %d</string>
     <string name="ml_cal_days_ago">%d days ago</string>

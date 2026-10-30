@@ -51,6 +51,9 @@ object CalendarWidgetSettings {
                 MenuEntry(activity.getString(R.string.ml_cal_colors)) {
                     pickCalendarColors(activity, view, scope, reopen)
                 },
+                MenuEntry(activity.getString(R.string.ml_cal_quick, quickLabel(activity, c))) {
+                    pickQuickCalendars(activity, view, scope, reopen)
+                },
                 MenuEntry(activity.getString(R.string.ml_cal_todo_filter, filterNames[c.todoFilter])) {
                     choose(activity, activity.getString(R.string.ml_cal_todo_filter_title), filterNames, c.todoFilter) { i ->
                         view.updateConfig { it.todoFilter = i }
@@ -149,6 +152,40 @@ object CalendarWidgetSettings {
     private fun calendarsLabel(activity: Activity, c: CalendarWidgetConfig) =
         if (c.calendars.isEmpty()) activity.getString(R.string.ml_cal_calendars_all)
         else activity.getString(R.string.ml_cal_calendars_count, c.calendars.size)
+
+    private fun quickLabel(activity: Activity, c: CalendarWidgetConfig) =
+        if (c.quickCalendars.isEmpty()) activity.getString(R.string.ml_cal_quick_none)
+        else activity.getString(R.string.ml_cal_calendars_count, c.quickCalendars.size)
+
+    /** Which of the calendars shown get a switch in the header's filter button (none: no button). */
+    private fun pickQuickCalendars(activity: Activity, view: CalendarWidgetView, scope: CoroutineScope, then: () -> Unit) {
+        if (!CalendarEvents.hasPermission(activity)) {
+            activity.showToast(activity.getString(R.string.ml_cal_permission))
+            return
+        }
+        scope.launch {
+            val chosen = view.config.calendars
+            val calendars = withContext(Dispatchers.IO) { CalendarEvents.calendars(activity.applicationContext) }
+                .filter { if (chosen.isEmpty()) it.visible else it.id in chosen }
+            if (calendars.isEmpty()) {
+                activity.showToast(activity.getString(R.string.ml_cal_no_calendars))
+                return@launch
+            }
+            val quick = view.config.quickCalendars
+            val checked = calendars.indices.filter { calendars[it].id in quick }.toSet()
+            val labels = calendars.map { if (it.account.isBlank() || it.account == it.name) it.name else "${it.name}  ·  ${it.account}" }
+            activity.showMultiSelectDialog(
+                activity.getString(R.string.ml_cal_quick_title), labels, checked, activity.getString(R.string.ml_done)
+            ) { selected ->
+                view.updateConfig { cfg ->
+                    cfg.quickCalendars = selected.map { calendars[it].id }.toSet()
+                    // A calendar no longer in the filter shows again
+                    cfg.hiddenCalendars = cfg.hiddenCalendars.filter { it in cfg.quickCalendars }.toSet()
+                }
+                then()
+            }
+        }
+    }
 
     private fun todoCategoriesLabel(activity: Activity, c: CalendarWidgetConfig) =
         if (c.todoCategories.isEmpty()) activity.getString(R.string.ml_cal_calendars_all)

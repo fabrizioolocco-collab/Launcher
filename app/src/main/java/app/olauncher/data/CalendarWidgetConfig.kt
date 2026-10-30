@@ -31,6 +31,13 @@ class CalendarWidgetConfig {
     var calendars: Set<Long> = emptySet()
     /** Color chosen for a calendar's events, by calendar id (missing = the calendar's own color). */
     var calendarColors: Map<Long, Int> = emptyMap()
+    /** Calendars that the filter button in the header can hide and show again (none: no button). */
+    var quickCalendars: Set<Long> = emptySet()
+    /** Of [quickCalendars], those hidden from the widget for now. */
+    var hiddenCalendars: Set<Long> = emptySet()
+    /** Events of [calendarId] are hidden with the filter button. */
+    fun hides(calendarId: Long) = calendarId in hiddenCalendars && calendarId in quickCalendars
+    val filtering get() = hiddenCalendars.any { it in quickCalendars }
     var pastMode = PAST_DIM
     /** Days listed from the selected one (1 = only that day). */
     var days = 1
@@ -79,6 +86,8 @@ class CalendarWidgetConfig {
     fun toJson(): JSONObject = JSONObject()
         .put("cal", JSONArray(calendars.toList()))
         .put("cc", JSONObject().also { o -> calendarColors.forEach { (id, color) -> o.put(id.toString(), color) } })
+        .put("qc", JSONArray(quickCalendars.toList()))
+        .put("hc", JSONArray(hiddenCalendars.toList()))
         .put("past", pastMode)
         .put("days", days)
         .put("hdr", showHeader)
@@ -128,11 +137,18 @@ class CalendarWidgetConfig {
         const val TODO_DONE_STRIKE = 0
         const val TODO_DONE_HIDE = 1
 
+        private fun longs(o: JSONObject, key: String): Set<Long> {
+            val a = o.optJSONArray(key) ?: return emptySet()
+            return (0 until a.length()).map { a.getLong(it) }.toSet()
+        }
+
         fun fromJson(o: JSONObject): CalendarWidgetConfig = CalendarWidgetConfig().apply {
             val cal = o.optJSONArray("cal")
             calendars = if (cal == null) emptySet() else (0 until cal.length()).map { cal.getLong(it) }.toSet()
             val cc = o.optJSONObject("cc")
             calendarColors = cc?.keys()?.asSequence()?.mapNotNull { k -> k.toLongOrNull()?.let { it to cc.getInt(k) } }?.toMap().orEmpty()
+            quickCalendars = longs(o, "qc")
+            hiddenCalendars = longs(o, "hc")
             pastMode = o.optInt("past", PAST_DIM)
             days = o.optInt("days", 1).coerceIn(1, 14)
             showHeader = o.optBoolean("hdr", true)

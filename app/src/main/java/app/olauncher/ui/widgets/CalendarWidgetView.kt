@@ -115,9 +115,11 @@ class CalendarWidgetView(
         updateConfig { c -> c.todoFilter = (c.todoFilter + 1) % 3 }
         activity.showToast(activity.getString(FILTER_NAMES[config.todoFilter]))
     }
+    /** Hides / shows again the calendars chosen in the settings; narrow, to leave room to the date. */
+    private val calendarFilterButton = iconButton(R.drawable.ic_cal_filter, R.string.ml_cal_filter_title) { showCalendarFilter(it) }
     private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
     private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
-    private val buttons = listOf(todoFilterButton, addButton, prevButton, nextButton)
+    private val buttons = listOf(calendarFilterButton, todoFilterButton, addButton, prevButton, nextButton)
     private val divider = View(activity)
     private val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private val scroll = ScrollView(activity).apply {
@@ -651,6 +653,12 @@ class CalendarWidgetView(
             it.layoutParams = LinearLayout.LayoutParams(iconSize + 16.dpToPx(), iconSize + 12.dpToPx())
             it.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
         }
+        // Slightly smaller and with little side padding: the date keeps its room
+        val filterIcon = iconSize * 85 / 100
+        calendarFilterButton.layoutParams = LinearLayout.LayoutParams(filterIcon + 4.dpToPx(), iconSize + 12.dpToPx())
+        calendarFilterButton.setPadding(2.dpToPx(), 6.dpToPx(), 2.dpToPx(), 6.dpToPx())
+        calendarFilterButton.isVisible = config.quickCalendars.isNotEmpty()
+        calendarFilterButton.setImageResource(if (config.filtering) R.drawable.ic_cal_filter_on else R.drawable.ic_cal_filter)
         todoFilterButton.setImageResource(
             when (config.todoFilter) {
                 CalendarWidgetConfig.TODO_HIDE_DONE -> R.drawable.ic_todo_hide_done
@@ -748,7 +756,7 @@ class CalendarWidgetView(
             todoVisible(it.category) && (!hidesDone() || it.at in undoable)
         } else emptyList()
         for (day in first until first + config.days) {
-            var dayEvents = events.filter { day in it.startDay..it.endDay }
+            var dayEvents = events.filter { day in it.startDay..it.endDay && !config.hides(it.calendarId) }
             if (config.pastMode == CalendarWidgetConfig.PAST_HIDE) dayEvents = dayEvents.filter { !isPast(it, now) }
             // A todo not done on its day moves on to today, late
             val dayTodos = todos.filter { (it.due == day && day >= today) || (day == today && it.due < today) }
@@ -788,6 +796,81 @@ class CalendarWidgetView(
                         is DoneItem -> doneRow(item.done)
                     }
                 )
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- calendar filter
+
+    /** Drop-down under the filter button: the calendars it handles, a tap hides / shows one (it stays open). */
+    private fun showCalendarFilter(anchor: View) {
+        if (!CalendarEvents.hasPermission(activity)) return activity.showToast(activity.getString(R.string.ml_cal_permission))
+        val ctx = activity.applicationContext
+        scope.launch {
+            val calendars = withContext(Dispatchers.IO) { CalendarEvents.calendars(ctx) }.filter { it.id in config.quickCalendars }
+            if (calendars.isEmpty()) return@launch activity.showToast(activity.getString(R.string.ml_cal_no_calendars))
+            val secondary = activity.getColorFromAttr(R.attr.secondaryTextColor)
+            val card = LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(6.dpToPx(), 6.dpToPx(), 6.dpToPx(), 6.dpToPx())
+                background = GradientDrawable().apply {
+                    cornerRadius = 16.dpToPx().toFloat()
+                    setColor(activity.getColorFromAttr(R.attr.cardColor))
+                    setStroke(1.dpToPx(), activity.getColorFromAttr(R.attr.cardStrokeColor))
+                }
+            }
+            card.addView(TextView(activity).apply {
+                setText(R.string.ml_cal_filter_title)
+                textSize = 12f
+                setTextColor(secondary)
+                setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 4.dpToPx())
+            })
+            val ripple = TypedValue().also { activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true) }.resourceId
+            calendars.forEach { cal ->
+                val check = ImageView(activity).apply {
+                    setImageResource(R.drawable.ic_m_check)
+                    imageTintList = android.content.res.ColorStateList.valueOf(primary)
+                }
+                val row = LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    minimumHeight = 46.dpToPx()
+                    setPadding(10.dpToPx(), 0, 10.dpToPx(), 0)
+                    if (ripple != 0) setBackgroundResource(ripple)
+                    isClickable = true
+                }
+                row.addView(View(activity).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(config.calendarColors[cal.id] ?: (cal.color or 0xFF000000.toInt()))
+                    }
+                }, LinearLayout.LayoutParams(12.dpToPx(), 12.dpToPx()).apply { marginEnd = 12.dpToPx() })
+                row.addView(TextView(activity).apply {
+                    text = cal.name
+                    textSize = 15f
+                    maxLines = 1
+                    ellipsize = TextUtils.TruncateAt.END
+                    setTextColor(primary)
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                row.addView(check, LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { marginStart = 8.dpToPx() })
+                fun paint() {
+                    val shown = cal.id !in config.hiddenCalendars
+                    check.isVisible = shown
+                    row.alpha = if (shown) 1f else 0.5f
+                }
+                paint()
+                row.setOnClickListener {
+                    updateConfig { c -> c.hiddenCalendars = if (cal.id in c.hiddenCalendars) c.hiddenCalendars - cal.id else c.hiddenCalendars + cal.id }
+                    paint()
+                }
+                card.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            val width = 230.dpToPx()
+            android.widget.PopupWindow(card, width, ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
+                elevation = 8.dpToPx().toFloat()
+                setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0))
+                isOutsideTouchable = true
+                showAsDropDown(anchor, anchor.width - width, 4.dpToPx())
             }
         }
     }
