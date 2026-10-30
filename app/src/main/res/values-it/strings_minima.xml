@@ -676,6 +676,11 @@
     <string name="ml_todo_after">dopo</string>
     <string name="ml_todo_cancel">Annulla</string>
     <string name="ml_todo_need_title">Scrivi cosa vuoi fare</string>
+    <string name="ml_todo_photo">Foto</string>
+    <string name="ml_todo_photo_add">Aggiungi una foto</string>
+    <string name="ml_todo_photo_remove">Togli la foto</string>
+    <string name="ml_todo_photo_title">Promemoria foto</string>
+    <string name="ml_todo_photo_error">Impossibile allegare l\'immagine</string>
     <string name="ml_todo_need_date">Per l\'avviso serve una scadenza</string>
     <string name="ml_todo_allow">Consenti</string>
     <string name="ml_todo_fullscreen_permission">Per mostrare la sveglia a schermo intero consenti a MinimaLauncher le notifiche a schermo intero.</string>

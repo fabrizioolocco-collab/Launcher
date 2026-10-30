@@ -43,6 +43,8 @@ class Todo(val id: Long) {
     /** The alert time already notified, so it rings once. */
     var notified = 0L
     var created = 0L
+    /** Attached photo: a file name in [TodoStore.photoDir] ("" = none), a copy so it outlives the original. */
+    var photo = ""
 
     val done get() = doneAt > 0
     val recurring get() = repeat != REPEAT_NONE
@@ -62,7 +64,7 @@ class Todo(val id: Long) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("t", title).put("c", category).put("d", due).put("h", time)
         .put("a", alert).put("r", repeat).put("e", every).put("u", unit).put("fc", fromCompletion)
-        .put("dn", doneAt).put("sz", snooze).put("nt", notified).put("cr", created)
+        .put("dn", doneAt).put("sz", snooze).put("nt", notified).put("cr", created).put("p", photo)
 
     companion object {
         fun fromJson(o: JSONObject) = Todo(o.getLong("id")).apply {
@@ -79,6 +81,7 @@ class Todo(val id: Long) {
             snooze = o.optLong("sz")
             notified = o.optLong("nt")
             created = o.optLong("cr")
+            photo = o.optString("p")
         }
     }
 }
@@ -228,13 +231,18 @@ object TodoStore {
     fun save(context: Context, todo: Todo) {
         ensure(context)
         val i = todos.indexOfFirst { it.id == todo.id }
-        if (i >= 0) todos[i] = todo else todos += todo
+        if (i >= 0) {
+            // A replaced or removed photo goes with the old version
+            if (todos[i].photo != todo.photo) deletePhoto(context, todos[i].photo)
+            todos[i] = todo
+        } else todos += todo
         changed(context)
     }
 
     @Synchronized
     fun delete(context: Context, id: Long) {
         ensure(context)
+        todos.filter { it.id == id }.forEach { deletePhoto(context, it.photo) }
         todos.removeAll { it.id == id }
         history.removeAll { it.todoId == id }
         changed(context)
@@ -306,8 +314,22 @@ object TodoStore {
         ensure(context)
         history.removeAll { it.todoId == record.todoId && it.at == record.at }
         // A one-off done todo goes with its record
+        todos.filter { it.id == record.todoId && it.done }.forEach { deletePhoto(context, it.photo) }
         todos.removeAll { it.id == record.todoId && it.done }
         changed(context)
+    }
+
+    // ---------------------------------------------------------------- photos
+
+    /** Where the todos' photos are kept: the app's own storage, untouched by the gallery. */
+    fun photoDir(context: Context): File = File(context.applicationContext.filesDir, "todo_photos").apply { mkdirs() }
+
+    /** The photo of [todo], if it has one and the file is there. */
+    fun photoFile(context: Context, todo: Todo): File? =
+        todo.photo.takeIf { it.isNotEmpty() }?.let { File(photoDir(context), it) }?.takeIf { it.isFile }
+
+    fun deletePhoto(context: Context, name: String) {
+        if (name.isNotEmpty() && !name.contains('/')) File(photoDir(context), name).delete()
     }
 
     // ---------------------------------------------------------------- categories

@@ -18,10 +18,13 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.NumberPicker
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -63,7 +66,9 @@ import java.util.Calendar
 /**
  * New / edit todo: what, category, due date and optional time, alert (none, notification, alarm)
  * and repetition (every day / week / month / year / working day, or every N days / weeks / months
- * / years, counted from the due date or from the day it's done).
+ * / years, counted from the due date or from the day it's done), and a photo. Also the target of
+ * Share for images (e.g. a screenshot): a new todo with that photo, a copy kept in the app's
+ * storage so it stays even if the original is deleted from the gallery.
  */
 class TodoEditActivity : AppCompatActivity() {
 
@@ -93,11 +98,23 @@ class TodoEditActivity : AppCompatActivity() {
     private lateinit var everyLabel: TextView
     private lateinit var everyPicker: NumberPicker
     private lateinit var unitPicker: NumberPicker
+    private lateinit var photoAdd: View
+    private lateinit var photoBox: FrameLayout
+    private lateinit var photoView: ImageView
+    /** Photos copied while editing: those not saved with the todo are deleted on leaving. */
+    private val addedPhotos = mutableListOf<String>()
+    private var saved = false
+
+    private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        uri?.let { attach(it) }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         primary = getColorFromAttr(R.attr.primaryColor)
-        val id = intent.getLongExtra(EXTRA_ID, -1L)
+        val shared = intent.action == Intent.ACTION_SEND
+        // From Share, only a new todo: an outside app never opens an existing one
+        val id = if (shared) -1L else intent.getLongExtra(EXTRA_ID, -1L)
         val existing = if (id >= 0) TodoStore.get(this, id) else null
         isNew = existing == null
         todo = existing?.copy() ?: Todo(-1L).apply {
@@ -106,16 +123,34 @@ class TodoEditActivity : AppCompatActivity() {
         }
         savedInstanceState?.getString(STATE_TODO)?.let { todo = Todo.fromJson(org.json.JSONObject(it)) }
         countFrom = savedInstanceState?.getInt(STATE_COUNT, NO_DAY) ?: NO_DAY
+        savedInstanceState?.getStringArrayList(STATE_ADDED)?.let { addedPhotos += it }
+        if (shared && savedInstanceState == null) {
+            intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }?.let { todo.title = it.trim() }
+        }
         setContentView(buildLayout())
         titleInput.setText(todo.title)
         render()
+        renderPhoto()
         if (isNew) titleInput.requestFocus()
+        if (shared && savedInstanceState == null) {
+            @Suppress("DEPRECATION")
+            val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) intent.getParcelableExtra(Intent.EXTRA_STREAM, android.net.Uri::class.java)
+            else intent.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+            // Only shared content: a file:// path could point into the app's own files
+            if (uri?.scheme == "content") attach(uri)
+        }
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) addedPhotos.filter { !saved || it != todo.photo }.forEach { TodoStore.deletePhoto(this, it) }
+        super.onDestroy()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         todo.title = titleInput.text.toString()
         outState.putString(STATE_TODO, todo.toJson().toString())
         outState.putInt(STATE_COUNT, countFrom)
+        outState.putStringArrayList(STATE_ADDED, ArrayList(addedPhotos))
         super.onSaveInstanceState(outState)
     }
 
@@ -156,6 +191,49 @@ class TodoEditActivity : AppCompatActivity() {
             setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 12.dpToPx())
         }
         form.addView(titleInput, matchWrap())
+
+        // Photo: a button to add one, or its preview (tap: full screen) with a cross to remove it
+        form.addView(label(R.string.ml_todo_photo))
+        val add = field(R.string.ml_todo_photo_add, R.drawable.ic_m_image) {
+            titleInput.hideKeyboard()
+            pickPhoto.launch("image/*")
+        }
+        add.third.apply {
+            isClickable = false
+            background = null
+            contentDescription = null
+        }
+        photoAdd = add.first
+        form.addView(photoAdd, matchWrap())
+        photoBox = FrameLayout(this).apply { background = boxBackground() }
+        photoView = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            clipToOutline = true
+            outlineProvider = object : android.view.ViewOutlineProvider() {
+                override fun getOutline(view: View, outline: android.graphics.Outline) {
+                    outline.setRoundRect(0, 0, view.width, view.height, 12.dpToPx().toFloat())
+                }
+            }
+            contentDescription = getString(R.string.ml_todo_photo)
+            setOnClickListener {
+                titleInput.hideKeyboard()
+                TodoStore.photoFile(this@TodoEditActivity, todo)?.let { TodoPhotos.showFull(this@TodoEditActivity, it) }
+            }
+        }
+        photoBox.addView(photoView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        photoBox.addView(UiKit.iconButton(this, R.drawable.ic_m_close, getString(R.string.ml_todo_photo_remove), android.graphics.Color.WHITE) {
+            todo.photo = ""
+            renderPhoto()
+        }.apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0x99000000.toInt())
+            }
+        }, FrameLayout.LayoutParams(40.dpToPx(), 40.dpToPx(), Gravity.TOP or Gravity.END).apply {
+            topMargin = 8.dpToPx()
+            marginEnd = 8.dpToPx()
+        })
+        form.addView(photoBox, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 220.dpToPx()))
 
         form.addView(label(R.string.ml_todo_category))
         val category = field(R.string.ml_todo_none, R.drawable.ic_m_chevron_down) { pickCategory() }
@@ -405,6 +483,34 @@ class TodoEditActivity : AppCompatActivity() {
         unitPicker.value = UNITS.indexOf(todo.unit).coerceAtLeast(0)
     }
 
+    private fun renderPhoto() {
+        val file = TodoStore.photoFile(this, todo)
+        photoAdd.isVisible = file == null
+        photoBox.isVisible = file != null
+        photoView.setImageDrawable(null)
+        if (file != null) TodoPhotos.load(photoView, file, resources.displayMetrics.widthPixels)
+    }
+
+    /** Copies the image at [uri] (off the main thread) and makes it the todo's photo. */
+    private fun attach(uri: android.net.Uri) {
+        Thread {
+            val name = TodoPhotos.copy(this, uri)
+            runOnUiThread {
+                if (name == null) {
+                    showToast(getString(R.string.ml_todo_photo_error))
+                    return@runOnUiThread
+                }
+                addedPhotos += name
+                if (isDestroyed) {
+                    TodoStore.deletePhoto(this, name)
+                    return@runOnUiThread
+                }
+                todo.photo = name
+                renderPhoto()
+            }
+        }.start()
+    }
+
     private fun setDue(day: Int) {
         todo.due = day
         countFrom = NO_DAY
@@ -530,7 +636,8 @@ class TodoEditActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- save / delete
 
     private fun save() {
-        val title = titleInput.text.toString().trim()
+        // A photo alone is enough: the todo is named after it
+        val title = titleInput.text.toString().trim().ifBlank { if (TodoStore.photoFile(this, todo) != null) getString(R.string.ml_todo_photo_title) else "" }
         if (title.isBlank()) {
             showToast(getString(R.string.ml_todo_need_title))
             return
@@ -546,6 +653,7 @@ class TodoEditActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
         result.notified = result.alertTime().takeIf { it in 1..now } ?: 0L
         titleInput.hideKeyboard()
+        saved = true
         TodoStore.save(this, result)
         finish()
     }
@@ -564,6 +672,7 @@ class TodoEditActivity : AppCompatActivity() {
         private const val EXTRA_CATEGORY = "todo_category"
         private const val STATE_TODO = "todo"
         private const val STATE_COUNT = "count_from"
+        private const val STATE_ADDED = "added_photos"
         private const val REQUEST_NOTIFICATIONS = 7120
         private val UNITS = listOf(UNIT_DAY, UNIT_WEEK, UNIT_MONTH, UNIT_YEAR)
         private val ALERT_NAMES = listOf(R.string.ml_todo_alert_none, R.string.ml_todo_alert_notify, R.string.ml_todo_alert_alarm)

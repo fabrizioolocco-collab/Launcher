@@ -679,6 +679,11 @@
     <string name="ml_todo_after">after</string>
     <string name="ml_todo_cancel">Cancel</string>
     <string name="ml_todo_need_title">Write what you want to do</string>
+    <string name="ml_todo_photo">Photo</string>
+    <string name="ml_todo_photo_add">Add a photo</string>
+    <string name="ml_todo_photo_remove">Remove the photo</string>
+    <string name="ml_todo_photo_title">Photo reminder</string>
+    <string name="ml_todo_photo_error">Couldn\'t attach the image</string>
     <string name="ml_todo_need_date">An alert needs a due date</string>
     <string name="ml_todo_allow">Allow</string>
     <string name="ml_todo_fullscreen_permission">To show the alarm on the full screen, allow full screen notifications for MinimaLauncher.</string>

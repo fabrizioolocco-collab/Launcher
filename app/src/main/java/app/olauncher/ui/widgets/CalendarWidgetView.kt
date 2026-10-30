@@ -49,6 +49,7 @@ import app.olauncher.ui.todo.TodoActivity
 import app.olauncher.ui.todo.TodoCheckView
 import app.olauncher.ui.todo.TodoEditActivity
 import app.olauncher.ui.todo.TodoLabels
+import app.olauncher.ui.todo.TodoSpans
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -938,7 +939,9 @@ class CalendarWidgetView(
             if (config.text(CalendarText.TIME).color == 0) alpha = 0.7f
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = 12.dpToPx() })
         line.addView(text(CalendarText.TITLE).apply {
-            text = todo.title
+            // A todo with a photo (e.g. from a screenshot shared to it) shows a small picture before its title
+            text = if (todo.photo.isEmpty()) todo.title
+            else TextUtils.concat(TodoSpans.icon(activity, R.drawable.ic_m_image, currentTextColor, textSize.toInt()), " ", todo.title)
             maxLines = 1
             ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))

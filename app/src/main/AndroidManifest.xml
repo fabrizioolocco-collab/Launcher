@@ -307,6 +307,21 @@
             android:exported="false"
             android:label="@string/ml_todo_app"
             android:windowSoftInputMode="adjustResize" />
+        <!-- Share > ToDo for an image (e.g. a screenshot): a new todo with that photo -->
+        <activity-alias
+            android:name=".TodoShareAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_todo_launcher"
+            android:label="@string/ml_todo_app"
+            android:targetActivity=".ui.todo.TodoEditActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity-alias>
         <activity
             android:name=".ui.todo.TodoAlarmActivity"
             android:excludeFromRecents="true"

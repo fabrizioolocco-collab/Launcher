@@ -316,6 +316,7 @@ class TodoActivity : AppCompatActivity() {
         if (todo.recurring) details += TextUtils.concat(TodoSpans.icon(this, R.drawable.ic_m_repeat, iconColor, iconSize), " ", TodoLabels.repeat(this, todo))
         if (todo.alert == ALERT_NOTIFY) details += TodoSpans.icon(this, R.drawable.ic_m_bell, iconColor, iconSize)
         if (todo.alert == ALERT_ALARM) details += TodoSpans.icon(this, R.drawable.ic_m_alarm, iconColor, iconSize)
+        if (todo.photo.isNotEmpty()) details += TodoSpans.icon(this, R.drawable.ic_m_image, iconColor, iconSize)
         TodoStore.category(this, todo.category)?.let { if (filter == 0L && !byCategory) details += it.name }
         if (details.isNotEmpty()) {
             val text = android.text.SpannableStringBuilder()
@@ -392,6 +393,8 @@ class TodoActivity : AppCompatActivity() {
             MenuEntry(getString(R.string.ml_todo_edit)) { TodoEditActivity.edit(this, todo.id) },
             MenuEntry(getString(R.string.ml_todo_duplicate)) {
                 val copy = Todo.fromJson(todo.toJson().put("id", TodoStore.newId(this)).put("cr", System.currentTimeMillis()))
+                // Its own copy of the photo, so deleting one doesn't take the other's
+                copy.photo = TodoPhotos.duplicate(this, todo.photo)
                 TodoStore.save(this, copy)
             },
             MenuEntry(getString(R.string.ml_todo_delete)) {
