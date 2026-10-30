@@ -141,6 +141,8 @@ const val UNIT_YEAR = 3
 object TodoStore {
     private const val FILE = "todos.json"
     private const val HISTORY_DAYS = 60
+    /** A done todo's photo is deleted this long after it was completed, to save space. */
+    private const val PHOTO_KEEP_MS = 7 * 24 * 3_600_000L
 
     private var loaded = false
     private val todos = mutableListOf<Todo>()
@@ -167,6 +169,8 @@ object TodoStore {
             o.optJSONArray("cats")?.let { a -> for (i in 0 until a.length()) categories += TodoCategory.fromJson(a.getJSONObject(i)) }
             o.optJSONArray("todos")?.let { a -> for (i in 0 until a.length()) todos += Todo.fromJson(a.getJSONObject(i)) }
             o.optJSONArray("done")?.let { a -> for (i in 0 until a.length()) history += TodoDone.fromJson(a.getJSONObject(i)) }
+            // Saved with the next change; the file is already gone
+            prunePhotos(context)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -176,6 +180,7 @@ object TodoStore {
     private fun write(context: Context) {
         val today = CalendarEvents.julianDay(System.currentTimeMillis())
         history.removeAll { it.day < today - HISTORY_DAYS }
+        prunePhotos(context)
         val o = JSONObject()
             .put("next", nextId)
             .put("cats", JSONArray().also { a -> categories.forEach { a.put(it.toJson()) } })
@@ -327,6 +332,15 @@ object TodoStore {
     /** The photo of [todo], if it has one and the file is there. */
     fun photoFile(context: Context, todo: Todo): File? =
         todo.photo.takeIf { it.isNotEmpty() }?.let { File(photoDir(context), it) }?.takeIf { it.isFile }
+
+    /** Drops the photos of the todos done more than a week ago (a recurring todo is never done). */
+    private fun prunePhotos(context: Context) {
+        val limit = System.currentTimeMillis() - PHOTO_KEEP_MS
+        todos.filter { it.done && it.doneAt < limit && it.photo.isNotEmpty() }.forEach {
+            deletePhoto(context, it.photo)
+            it.photo = ""
+        }
+    }
 
     fun deletePhoto(context: Context, name: String) {
         if (name.isNotEmpty() && !name.contains('/')) File(photoDir(context), name).delete()

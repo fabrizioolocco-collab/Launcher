@@ -39,6 +39,8 @@ class CalendarWidgetConfig {
     fun hides(calendarId: Long) = calendarId in hiddenCalendars && calendarId in quickCalendars
     val filtering get() = hiddenCalendars.any { it in quickCalendars }
     var pastMode = PAST_DIM
+    /** How past events looked before the filter button hid them, to go back to it. */
+    var shownPastMode = PAST_DIM
     /** Days listed from the selected one (1 = only that day). */
     var days = 1
     var showHeader = true
@@ -89,6 +91,7 @@ class CalendarWidgetConfig {
         .put("qc", JSONArray(quickCalendars.toList()))
         .put("hc", JSONArray(hiddenCalendars.toList()))
         .put("past", pastMode)
+        .put("psm", shownPastMode)
         .put("days", days)
         .put("hdr", showHeader)
         .put("wk", showWeek)
@@ -150,6 +153,7 @@ class CalendarWidgetConfig {
             quickCalendars = longs(o, "qc")
             hiddenCalendars = longs(o, "hc")
             pastMode = o.optInt("past", PAST_DIM)
+            shownPastMode = o.optInt("psm", PAST_DIM).takeIf { it != PAST_HIDE } ?: PAST_DIM
             days = o.optInt("days", 1).coerceIn(1, 14)
             showHeader = o.optBoolean("hdr", true)
             showWeek = o.optBoolean("wk", true)

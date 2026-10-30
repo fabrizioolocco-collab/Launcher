@@ -529,6 +529,7 @@
     <string name="ml_cal_quick_none">nessuno</string>
     <string name="ml_cal_quick_title">Calendari da nascondere e mostrare dal widget</string>
     <string name="ml_cal_filter_title">Calendari nel widget</string>
+    <string name="ml_cal_filter_past">Eventi terminati</string>
     <string name="ml_cal_color_calendar">Colore del calendario</string>
     <string name="ml_cal_days">Giorni mostrati: %d</string>
     <string name="ml_cal_days_ago">%d giorni fa</string>

@@ -803,13 +803,15 @@ class CalendarWidgetView(
 
     // ---------------------------------------------------------------- calendar filter
 
-    /** Drop-down under the filter button: the calendars it handles, a tap hides / shows one (it stays open). */
+    /**
+     * Drop-down under the filter button: on top the events already over (hide / show), then the
+     * calendars it handles; a tap hides / shows one (it stays open).
+     */
     private fun showCalendarFilter(anchor: View) {
         if (!CalendarEvents.hasPermission(activity)) return activity.showToast(activity.getString(R.string.ml_cal_permission))
         val ctx = activity.applicationContext
         scope.launch {
             val calendars = withContext(Dispatchers.IO) { CalendarEvents.calendars(ctx) }.filter { it.id in config.quickCalendars }
-            if (calendars.isEmpty()) return@launch activity.showToast(activity.getString(R.string.ml_cal_no_calendars))
             val secondary = activity.getColorFromAttr(R.attr.secondaryTextColor)
             val card = LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
@@ -820,14 +822,10 @@ class CalendarWidgetView(
                     setStroke(1.dpToPx(), activity.getColorFromAttr(R.attr.cardStrokeColor))
                 }
             }
-            card.addView(TextView(activity).apply {
-                setText(R.string.ml_cal_filter_title)
-                textSize = 12f
-                setTextColor(secondary)
-                setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 4.dpToPx())
-            })
             val ripple = TypedValue().also { activity.theme.resolveAttribute(android.R.attr.selectableItemBackground, it, true) }.resourceId
-            calendars.forEach { cal ->
+
+            /** A row with a [lead] mark, its [label] and a check while shown; a tap calls [toggle]. */
+            fun toggleRow(lead: View, label: String, shown: () -> Boolean, toggle: () -> Unit) {
                 val check = ImageView(activity).apply {
                     setImageResource(R.drawable.ic_m_check)
                     imageTintList = android.content.res.ColorStateList.valueOf(primary)
@@ -840,14 +838,9 @@ class CalendarWidgetView(
                     if (ripple != 0) setBackgroundResource(ripple)
                     isClickable = true
                 }
-                row.addView(View(activity).apply {
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(config.calendarColors[cal.id] ?: (cal.color or 0xFF000000.toInt()))
-                    }
-                }, LinearLayout.LayoutParams(12.dpToPx(), 12.dpToPx()).apply { marginEnd = 12.dpToPx() })
+                row.addView(lead, LinearLayout.LayoutParams(12.dpToPx(), 12.dpToPx()).apply { marginEnd = 12.dpToPx() })
                 row.addView(TextView(activity).apply {
-                    text = cal.name
+                    text = label
                     textSize = 15f
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
@@ -855,16 +848,53 @@ class CalendarWidgetView(
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 row.addView(check, LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { marginStart = 8.dpToPx() })
                 fun paint() {
-                    val shown = cal.id !in config.hiddenCalendars
-                    check.isVisible = shown
-                    row.alpha = if (shown) 1f else 0.5f
+                    check.isVisible = shown()
+                    row.alpha = if (shown()) 1f else 0.5f
                 }
                 paint()
                 row.setOnClickListener {
-                    updateConfig { c -> c.hiddenCalendars = if (cal.id in c.hiddenCalendars) c.hiddenCalendars - cal.id else c.hiddenCalendars + cal.id }
+                    toggle()
                     paint()
                 }
                 card.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+
+            // Events already over: hidden, or back as they were before (dimmed or shown)
+            toggleRow(ImageView(activity).apply {
+                setImageResource(R.drawable.ic_m_event)
+                imageTintList = android.content.res.ColorStateList.valueOf(secondary)
+            }, activity.getString(R.string.ml_cal_filter_past), { config.pastMode != CalendarWidgetConfig.PAST_HIDE }) {
+                updateConfig { c ->
+                    if (c.pastMode == CalendarWidgetConfig.PAST_HIDE) c.pastMode = c.shownPastMode
+                    else {
+                        c.shownPastMode = c.pastMode
+                        c.pastMode = CalendarWidgetConfig.PAST_HIDE
+                    }
+                }
+            }
+
+            if (calendars.isNotEmpty()) {
+                card.addView(View(activity).apply { setBackgroundColor(activity.getColorFromAttr(R.attr.cardStrokeColor)) },
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1.dpToPx()).apply {
+                        topMargin = 4.dpToPx()
+                        bottomMargin = 2.dpToPx()
+                    })
+                card.addView(TextView(activity).apply {
+                    setText(R.string.ml_cal_filter_title)
+                    textSize = 12f
+                    setTextColor(secondary)
+                    setPadding(10.dpToPx(), 6.dpToPx(), 10.dpToPx(), 4.dpToPx())
+                })
+            }
+            calendars.forEach { cal ->
+                toggleRow(View(activity).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(config.calendarColors[cal.id] ?: (cal.color or 0xFF000000.toInt()))
+                    }
+                }, cal.name, { cal.id !in config.hiddenCalendars }) {
+                    updateConfig { c -> c.hiddenCalendars = if (cal.id in c.hiddenCalendars) c.hiddenCalendars - cal.id else c.hiddenCalendars + cal.id }
+                }
             }
             val width = 230.dpToPx()
             android.widget.PopupWindow(card, width, ViewGroup.LayoutParams.WRAP_CONTENT, true).apply {
