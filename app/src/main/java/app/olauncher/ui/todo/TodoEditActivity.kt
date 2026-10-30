@@ -554,9 +554,13 @@ class TodoEditActivity : AppCompatActivity() {
         titleInput.hideKeyboard()
         val initial = if (todo.time != NO_TIME) todo.time else Calendar.getInstance().let { (it.get(Calendar.HOUR_OF_DAY) + 1) % 24 * 60 }
         TimePickerDialog(this, pickerTheme(), { _, h, m ->
+            // A time given for the first time brings the alarm with it (changed to none or a notification by hand)
+            val alarm = todo.time == NO_TIME && todo.alert == ALERT_NONE
             todo.time = h * 60 + m
             if (todo.due == NO_DAY) todo.due = today()
+            if (alarm) todo.alert = ALERT_ALARM
             render()
+            if (alarm) askAlertPermissions(ALERT_ALARM)
         }, initial / 60, initial % 60, android.text.format.DateFormat.is24HourFormat(this)).show()
     }
 
