@@ -722,6 +722,7 @@
     <string name="ml_cal_todo_hide_done">Hide the ToDos done</string>
     <string name="ml_cal_todo_hide_all">Hide the ToDos</string>
     <string name="ml_cal_open_todo">Open ToDo</string>
+    <string name="ml_cal_go_to_date">Go to date</string>
     <string name="ml_todo_by_category">Group by category</string>
     <string name="ml_todo_no_category">No category</string>
     <string name="ml_pdf_search_hint">Search in the PDF</string>

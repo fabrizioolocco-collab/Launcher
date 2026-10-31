@@ -917,7 +917,26 @@ class CalendarWidgetView(
                 TodoEditActivity.create(activity, maxOf(day, CalendarEvents.julianDay(System.currentTimeMillis())))
             },
             MenuEntry(activity.getString(R.string.ml_cal_open_todo)) { TodoActivity.open(activity) },
+            MenuEntry(activity.getString(R.string.ml_cal_go_to_date)) { pickDate() },
         ))
+    }
+
+    /** Jumps the widget to a day picked on a calendar (back to today as usual: double tap, or a touch outside). */
+    private fun pickDate() {
+        val night = (activity.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val theme = if (night) android.R.style.Theme_DeviceDefault_Dialog_Alert else android.R.style.Theme_DeviceDefault_Light_Dialog_Alert
+        val c = java.util.Calendar.getInstance().apply { timeInMillis = CalendarEvents.dayStart(firstDay()) + 12 * 3_600_000L }
+        android.app.DatePickerDialog(activity, theme, { _, y, m, d ->
+            val picked = java.util.Calendar.getInstance().apply {
+                clear()
+                set(y, m, d, 12, 0, 0)
+            }
+            offset = CalendarEvents.julianDay(picked.timeInMillis) - CalendarEvents.julianDay(System.currentTimeMillis())
+            reload()
+        }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH)).apply {
+            datePicker.firstDayOfWeek = java.util.Calendar.MONDAY
+        }.show()
     }
 
     /** Done todos go away: by setting, or with the header button on "only those to do". */
