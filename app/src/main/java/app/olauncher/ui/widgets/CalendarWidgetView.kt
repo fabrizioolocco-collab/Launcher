@@ -69,6 +69,9 @@ import kotlin.math.abs
  *
  * The todos of the ToDo app show on their due date (the late ones on today, in red) with a circle
  * to mark them done; where they go among the events and what happens once done is in the settings.
+ *
+ * A tap on the week number (or the + menu) switches to the whole week as a grid of hours
+ * ([WeekGridView]); a tap on a day there goes back to its list.
  */
 class CalendarWidgetView(
     private val activity: Activity,
@@ -105,7 +108,15 @@ class CalendarWidgetView(
         ellipsize = TextUtils.TruncateAt.END
         setOnClickListener { CalendarEvents.openDay(activity, firstDay()) }
     }
-    private val weekText = text(CalendarText.WEEK).apply { maxLines = 1 }
+    /** The week number; a tap switches between the day and the week grid. */
+    private val weekText = text(CalendarText.WEEK).apply {
+        maxLines = 1
+        setOnClickListener { toggleWeek() }
+    }
+    private val weekGrid = WeekGridView(activity).apply {
+        onDayTap = { day -> showDay(day) }
+        onZoomed = { z -> updateConfig { it.weekZoom = z } }
+    }
     private val clockText = text(CalendarText.CLOCK).apply {
         maxLines = 1
         setOnClickListener { openClock() }
@@ -137,7 +148,7 @@ class CalendarWidgetView(
     private val handler = Handler(Looper.getMainLooper())
     private val tick = object : Runnable {
         override fun run() {
-            if (firstDay() != loadedDay) reload() else showEvents()
+            if (rangeStart() != loadedDay) reload() else showEvents()
             scheduleTick()
         }
     }
@@ -215,7 +226,7 @@ class CalendarWidgetView(
                 swiping = false
             }
 
-            MotionEvent.ACTION_MOVE -> if (!swiping && config.swipeDays && !touch.longPressed) {
+            MotionEvent.ACTION_MOVE -> if (!swiping && config.swipeDays && !touch.longPressed && ev.pointerCount == 1) {
                 val dx = ev.rawX - swipeDownX
                 val dy = ev.rawY - swipeDownY
                 if (abs(dx) > touchSlop * 2 && abs(dx) > abs(dy) * 1.5f) {
@@ -316,10 +327,18 @@ class CalendarWidgetView(
         reload()
     }
 
-    /** Forward ([direction] 1) or back (-1) by as many days as are shown. */
+    /** Forward ([direction] 1) or back (-1) by as many days as are shown (a week in the week grid). */
     private fun moveDays(direction: Int) {
-        offset += direction * config.days
+        offset += direction * if (config.weekView) 7 else config.days
         reload()
+    }
+
+    private fun toggleWeek() = updateConfig { it.weekView = !it.weekView }
+
+    /** From the week grid: the list of [day]. */
+    private fun showDay(day: Int) {
+        offset = day - CalendarEvents.julianDay(System.currentTimeMillis())
+        updateConfig { it.weekView = false }
     }
 
     /** The list scrolling takes the gesture: no long press then. */
@@ -606,6 +625,12 @@ class CalendarWidgetView(
 
     private fun firstDay() = CalendarEvents.julianDay(System.currentTimeMillis()) + offset
 
+    /** Monday of the week of [day] (Julian day 0 is a Monday). */
+    private fun weekStart(day: Int) = day - Math.floorMod(day, 7)
+
+    /** The first day loaded: the selected one, or the Monday of its week in the week grid. */
+    private fun rangeStart() = if (config.weekView) weekStart(firstDay()) else firstDay()
+
     /** Settings changed (from the settings dialog): saves and redraws. */
     fun updateConfig(change: (CalendarWidgetConfig) -> Unit) {
         change(config)
@@ -617,7 +642,7 @@ class CalendarWidgetView(
     private var hadPermission = false
 
     fun reload() {
-        val first = firstDay()
+        val first = rangeStart()
         updateHeader()
         if (isAttachedToWindow) showWeather()
         hadPermission = CalendarEvents.hasPermission(activity)
@@ -629,7 +654,7 @@ class CalendarWidgetView(
             showEvents()
             return
         }
-        val last = first + config.days - 1
+        val last = first + (if (config.weekView) 7 else config.days) - 1
         val cfg = config
         val ctx = activity.applicationContext
         loadJob?.cancel()
@@ -715,6 +740,15 @@ class CalendarWidgetView(
             .let { if (config.shortDate) it.replace(".", "") else it }
         clockText.text = android.text.format.DateFormat.getTimeFormat(activity).format(Date())
         weekText.text = activity.getString(R.string.ml_cal_week, isoWeek(start))
+        if (config.weekView) {
+            // The week's span: "26 OTT – 1 NOV"
+            val monday = weekStart(first)
+            val f = SimpleDateFormat(if (sameYear) "d MMM" else "d MMM yyyy", Locale.getDefault())
+            dateText.text = (f.format(Date(CalendarEvents.dayStart(monday) + 43_200_000L)) + " – " +
+                f.format(Date(CalendarEvents.dayStart(monday + 6) + 43_200_000L))).uppercase(Locale.getDefault()).replace(".", "")
+        }
+        weekText.paintFlags = if (config.weekView) weekText.paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+        else weekText.paintFlags and android.graphics.Paint.UNDERLINE_TEXT_FLAG.inv()
         fitDate()
     }
 
@@ -756,6 +790,7 @@ class CalendarWidgetView(
         val history = if (config.showTodos) TodoStore.history(activity).filter {
             todoVisible(it.category) && (!hidesDone() || it.at in undoable)
         } else emptyList()
+        if (config.weekView) return showWeek(first, now, todos, history)
         for (day in first until first + config.days) {
             var dayEvents = events.filter { day in it.startDay..it.endDay && !config.hides(it.calendarId) }
             if (config.pastMode == CalendarWidgetConfig.PAST_HIDE) dayEvents = dayEvents.filter { !isPast(it, now) }
@@ -799,6 +834,54 @@ class CalendarWidgetView(
                 )
             }
         }
+    }
+
+    // ---------------------------------------------------------------- week grid
+
+    /** The week from [monday] as a grid: events and todos with a time at their hours, the rest on top. */
+    private fun showWeek(monday: Int, now: Long, todos: List<Todo>, history: List<TodoDone>) {
+        val today = CalendarEvents.julianDay(now)
+        val items = mutableListOf<WeekGridView.Item>()
+        val dimPast = config.pastMode == CalendarWidgetConfig.PAST_DIM
+        for (day in monday until monday + 7) {
+            val dayStart = CalendarEvents.dayStart(day)
+            events.filter { day in it.startDay..it.endDay && !config.hides(it.calendarId) }.forEach { e ->
+                val past = isPast(e, now)
+                if (past && config.pastMode == CalendarWidgetConfig.PAST_HIDE) return@forEach
+                val title = e.title.ifBlank { activity.getString(R.string.ml_cal_no_title) }
+                val open = { CalendarEvents.openEvent(activity, e) }
+                if (e.allDay) {
+                    items += WeekGridView.Item(day, 0, 0, true, title, e.color, past && dimPast, open)
+                } else {
+                    val start = if (e.startDay < day) 0 else ((e.begin - dayStart) / 60_000L).toInt()
+                    val end = if (e.endDay > day) 24 * 60 else ((e.end - dayStart) / 60_000L).toInt()
+                    // Ends at this midnight: nothing left of it on this day
+                    if (e.startDay < day && end <= 0) return@forEach
+                    items += WeekGridView.Item(day, start, end.coerceAtLeast(start), false, title, e.color, past && dimPast, open)
+                }
+            }
+            // A todo not done on its day moves on to today, late (no time then: on top)
+            todos.filter { (it.due == day && day >= today) || (day == today && it.due < today) }.forEach { t ->
+                val open = { TodoEditActivity.edit(activity, t.id) }
+                val color = if (t.due < today) TODO_LATE_COLOR else todoColor(t.category)
+                if (t.time != NO_TIME && t.due == day) items += WeekGridView.Item(day, t.time, t.time + 30, false, "○ " + t.title, color, false, open)
+                else items += WeekGridView.Item(day, 0, 0, true, "○ " + t.title, color, false, open)
+            }
+            history.filter { it.day == day }.forEach { d ->
+                val open = { if (TodoStore.get(activity, d.todoId) != null) TodoEditActivity.edit(activity, d.todoId) else TodoActivity.open(activity) }
+                if (d.time != NO_TIME) items += WeekGridView.Item(day, d.time, d.time + 30, false, "✓ " + d.title, todoColor(d.category), true, open)
+                else items += WeekGridView.Item(day, 0, 0, true, "✓ " + d.title, todoColor(d.category), true, open)
+            }
+        }
+        weekGrid.weekStart = monday
+        weekGrid.items = items
+        weekGrid.zoom = config.weekZoom
+        weekGrid.textColor = config.text(CalendarText.TITLE).color.takeIf { it != 0 } ?: primary
+        weekGrid.typeface = FontManager.typeface(activity, config.text(CalendarText.TITLE).font) ?: Typeface.DEFAULT
+        weekGrid.maxTextSp = (config.text(CalendarText.TITLE).sizeSp * 0.6f).coerceIn(7f, 12f)
+        (weekGrid.parent as? ViewGroup)?.removeView(weekGrid)
+        list.addView(weekGrid, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        weekGrid.refresh()
     }
 
     // ---------------------------------------------------------------- calendar filter
@@ -918,6 +1001,7 @@ class CalendarWidgetView(
             },
             MenuEntry(activity.getString(R.string.ml_cal_open_todo)) { TodoActivity.open(activity) },
             MenuEntry(activity.getString(R.string.ml_cal_go_to_date)) { pickDate() },
+            MenuEntry(activity.getString(if (config.weekView) R.string.ml_cal_day_view else R.string.ml_cal_week_view)) { toggleWeek() },
         ))
     }
 

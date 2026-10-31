@@ -3,6 +3,7 @@ package app.olauncher.data
 import android.content.Context
 import android.graphics.Typeface
 import androidx.core.content.edit
+import app.olauncher.ui.widgets.WeekGridView
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -46,6 +47,10 @@ class CalendarWidgetConfig {
     var showHeader = true
     /** Week number (ISO) next to the date. */
     var showWeek = true
+    /** The whole week as a grid of hours instead of the list of the day. */
+    var weekView = false
+    /** How stretched the hours of the week grid are (pinch). */
+    var weekZoom = 1f
     /** Current time before the date. */
     var showClock = true
     /** "SAB 17 OTT" instead of "SABATO, 17 OTTOBRE". */
@@ -95,6 +100,8 @@ class CalendarWidgetConfig {
         .put("days", days)
         .put("hdr", showHeader)
         .put("wk", showWeek)
+        .put("wv", weekView)
+        .put("wz", weekZoom.toDouble())
         .put("clk", showClock)
         .put("sd", shortDate)
         .put("pf", progressFill)
@@ -157,6 +164,8 @@ class CalendarWidgetConfig {
             days = o.optInt("days", 1).coerceIn(1, 14)
             showHeader = o.optBoolean("hdr", true)
             showWeek = o.optBoolean("wk", true)
+            weekView = o.optBoolean("wv", false)
+            weekZoom = o.optDouble("wz", 1.0).toFloat().coerceIn(WeekGridView.MIN_ZOOM, WeekGridView.MAX_ZOOM)
             showClock = o.optBoolean("clk", true)
             shortDate = o.optBoolean("sd", false)
             progressFill = o.optInt("pf", 0)

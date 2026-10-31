@@ -720,6 +720,8 @@
     <string name="ml_cal_todo_hide_all">Nascondi ToDo</string>
     <string name="ml_cal_open_todo">Apri ToDo</string>
     <string name="ml_cal_go_to_date">Vai alla data</string>
+    <string name="ml_cal_week_view">Vista settimana</string>
+    <string name="ml_cal_day_view">Vista giorno</string>
     <string name="ml_todo_by_category">Raggruppa per categoria</string>
     <string name="ml_todo_no_category">Senza categoria</string>
     <string name="ml_pdf_search_hint">Cerca nel PDF</string>
