@@ -682,7 +682,8 @@
                         android:padding="8dp"
                         android:text="@string/ml_swipe_up_search" />
                 </FrameLayout>
-ayout
+
+                <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="12dp">
