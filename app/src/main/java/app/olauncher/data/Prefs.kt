@@ -19,6 +19,7 @@ class Prefs(context: Context) {
     private val AUTO_SHOW_KEYBOARD = "AUTO_SHOW_KEYBOARD"
     private val SWIPE_UP_SEARCH = "SWIPE_UP_SEARCH"
     private val SWIPE_UP_OFF = "SWIPE_UP_OFF"
+    private val SWIPE_DOWN_OFF = "SWIPE_DOWN_OFF"
     private val HOME_LOCKED = "HOME_LOCKED"
     private val KEYBOARD_MESSAGE = "KEYBOARD_MESSAGE"
     private val DAILY_WALLPAPER = "DAILY_WALLPAPER"
@@ -392,6 +393,11 @@ class Prefs(context: Context) {
     var swipeUpOff: Boolean
         get() = prefs.getBoolean(SWIPE_UP_OFF, false)
         set(value) = prefs.edit { putBoolean(SWIPE_UP_OFF, value).apply() }
+
+    /** Swipe down on home does nothing: the notifications open only from the top edge, as in any app. */
+    var swipeDownOff: Boolean
+        get() = prefs.getBoolean(SWIPE_DOWN_OFF, false)
+        set(value) = prefs.edit { putBoolean(SWIPE_DOWN_OFF, value).apply() }
 
     /** Home layout locked: icons, widgets and the dock can't be moved, resized, added or removed. */
     var homeLocked: Boolean

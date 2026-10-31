@@ -452,7 +452,9 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 if (prefs.swipeUpOff) return
                 if (prefs.swipeUpSearch) search.openWithKeyboard() else showAppList(Constants.FLAG_LAUNCH_APP)
             }
-            override fun onSwipeDown() = expandNotificationDrawer(requireContext())
+            override fun onSwipeDown() {
+                if (!prefs.swipeDownOff) expandNotificationDrawer(requireContext())
+            }
             override fun onSwipeLeft() = openSwipeLeftApp()
             override fun onSwipeRight() = openSwipeRightApp()
             override fun onEmptyTap() = widgets.endEditing()

@@ -243,6 +243,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 }
                 populateKeyboardText()
             }
+            R.id.swipeDownAction -> {
+                prefs.swipeDownOff = !prefs.swipeDownOff
+                populateKeyboardText()
+            }
             R.id.showIcons -> toggleShowIcons()
             R.id.iconTiles -> {
                 prefs.iconTiles = !prefs.iconTiles
@@ -460,6 +464,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.setLauncher.setOnClickListener(this)
         binding.autoShowKeyboard.setOnClickListener(this)
         binding.swipeUpAction.setOnClickListener(this)
+        binding.swipeDownAction.setOnClickListener(this)
         binding.toggleLock.setOnClickListener(this)
         // Home button for recents feature disabled
         // binding.homeButtonRecents.setOnClickListener(this)
@@ -1101,6 +1106,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 else -> R.string.ml_swipe_up_apps
             }
         )
+        binding.swipeDownAction.setText(if (prefs.swipeDownOff) R.string.ml_swipe_down_off else R.string.ml_swipe_down_notifications)
     }
 
     private fun populateWallpaperText() {
