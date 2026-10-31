@@ -146,14 +146,14 @@ object AppNotificationsView {
                     swiping = false
                     vertical = false
                     tracker?.recycle()
-                    tracker = VelocityTracker.obtain().also { it.addMovement(e) }
+                    tracker = VelocityTracker.obtain().also { it.addScreenMovement(e) }
                     // Keep the list from stealing the gesture until its direction is clear
                     v.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    tracker?.addMovement(e)
+                    tracker?.addScreenMovement(e)
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     if (!swiping && !vertical) {
@@ -174,7 +174,7 @@ object AppNotificationsView {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val dx = e.rawX - downX
                     val up = e.actionMasked == MotionEvent.ACTION_UP
-                    tracker?.addMovement(e)
+                    tracker?.addScreenMovement(e)
                     tracker?.computeCurrentVelocity(1000)
                     val vx = tracker?.xVelocity ?: 0f
                     tracker?.recycle()
@@ -197,4 +197,15 @@ object AppNotificationsView {
 
     private const val MAX_SHOWN = 6
     private const val FLING_DP_S = 700
+}
+
+/**
+ * Adds [e] in screen coordinates: a swiped row follows the finger, so in its own coordinates
+ * the finger barely moves and a quick flick would read as almost still.
+ */
+internal fun VelocityTracker.addScreenMovement(e: MotionEvent) {
+    val copy = MotionEvent.obtain(e)
+    copy.setLocation(e.rawX, e.rawY)
+    addMovement(copy)
+    copy.recycle()
 }

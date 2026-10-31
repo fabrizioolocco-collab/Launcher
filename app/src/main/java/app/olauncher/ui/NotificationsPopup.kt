@@ -50,7 +50,7 @@ import kotlin.math.abs
  * "Open app" at the bottom.
  *
  * Each row slides left: a little shows "Reply" underneath (releasing there opens the reply field
- * under the message, sent through the notification's own reply action); past half the row it
+ * under the message, sent through the notification's own reply action); past a third of the row it
  * turns red and releasing clears the notification. A tap opens it.
  */
 object NotificationsPopup {
@@ -385,14 +385,14 @@ object NotificationsPopup {
                     swiping = false
                     vertical = false
                     tracker?.recycle()
-                    tracker = VelocityTracker.obtain().also { it.addMovement(e) }
+                    tracker = VelocityTracker.obtain().also { it.addScreenMovement(e) }
                     // Keep the list from stealing the gesture until its direction is clear
                     v.parent?.requestDisallowInterceptTouchEvent(true)
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    tracker?.addMovement(e)
+                    tracker?.addScreenMovement(e)
                     val dx = e.rawX - downX
                     val dy = e.rawY - downY
                     if (!swiping && !vertical) {
@@ -406,7 +406,7 @@ object NotificationsPopup {
                     if (swiping) {
                         val x = dx.coerceAtMost(0f)
                         v.translationX = x
-                        val past = -x > v.width / 2f
+                        val past = -x > v.width / 3f
                         deleteLayer.isVisible = past
                         replyLayer.isVisible = !past && reply != null
                     }
@@ -416,15 +416,15 @@ object NotificationsPopup {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     val x = v.translationX
                     val up = e.actionMasked == MotionEvent.ACTION_UP
-                    tracker?.addMovement(e)
+                    tracker?.addScreenMovement(e)
                     tracker?.computeCurrentVelocity(1000)
                     val vx = tracker?.xVelocity ?: 0f
                     tracker?.recycle()
                     tracker = null
-                    // A quick flick to the left deletes even if short of half the width
+                    // A quick flick to the left deletes even if short of a third of the width
                     val flung = vx < -flingSpeed && -x > slop
                     when {
-                        swiping && up && (-x > v.width / 2f || flung) -> {
+                        swiping && up && (-x > v.width / 3f || flung) -> {
                             deleteLayer.isVisible = true
                             replyLayer.isVisible = false
                             v.animate().translationX(-v.width.toFloat()).setDuration(150).withEndAction {
