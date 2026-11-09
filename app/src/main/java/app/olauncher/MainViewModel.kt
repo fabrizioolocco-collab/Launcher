@@ -22,6 +22,7 @@ import app.olauncher.data.Constants
 import app.olauncher.data.Prefs
 import app.olauncher.helper.SingleLiveEvent
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.HomeShortcuts
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.WallpaperWorker
@@ -423,10 +424,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadHomeApps() {
         viewModelScope.launch {
-            val apps = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = true)
-                .filterIsInstance<AppModel.App>()
-            // Folder shortcuts (and the test app) live on home like apps
+            val all = getAppsList(appContext, prefs, includeRegularApps = true, includeHiddenApps = true)
+            val apps = all.filterIsInstance<AppModel.App>()
+            // Folder shortcuts, pinned shortcuts (web apps added from the browser) and the test app live on home like apps
             val extra = FolderShortcuts.asApps(appContext) +
+                    all.filterIsInstance<AppModel.PinnedShortcut>().map { HomeShortcuts.toApp(it) } +
                     (if (ParkingShortcut.isEnabled(appContext)) listOf(ParkingShortcut.app(appContext)) else emptyList()) +
                     (if (TestNotifications.isEnabled(appContext)) listOf(TestNotifications.fakeApp(appContext)) else emptyList()) +
                     TestNotifications.fakeApps(appContext)
@@ -434,7 +436,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun launch(app: AppModel.App) = selectedApp(app, Constants.FLAG_LAUNCH_APP)
+    fun launch(app: AppModel.App) = selectedApp(HomeShortcuts.toPinned(app) ?: app, Constants.FLAG_LAUNCH_APP)
 
     fun getHiddenApps() {
         viewModelScope.launch {

@@ -31,7 +31,8 @@ object AppRename {
             action = context.getString(R.string.ml_save),
             allowBlank = true,
         ) { label ->
-            Prefs(context).setAppRenameLabel(DrawerTabsRepository.renameId(app.appPackage, app.activityClassName), label)
+            val key = HomeShortcuts.renameKey(app) ?: DrawerTabsRepository.renameId(app.appPackage, app.activityClassName)
+            Prefs(context).setAppRenameLabel(key, label)
             onRenamed?.invoke()
         }
     }

@@ -108,6 +108,8 @@ object IconPackManager {
                 ?: if (FolderShortcuts.isFolder(packageName)) FolderShortcuts.icon(context, sizePx)
                 else if (ParkingShortcut.isParking(packageName)) ParkingShortcut.icon(context, sizePx)
                 else if (TestNotifications.isFake(packageName)) fakeIcon(context, packageName, user, iconPackPackage, sizePx)
+                else if (HomeShortcuts.isShortcut(packageName)) (HomeShortcuts.icon(context, packageName, user, sizePx)
+                    ?: HomeShortcuts.ownerPackage(packageName)?.let { loadDefault(context, it, null, user, iconPackPackage, sizePx) })
                 else loadDefault(context, packageName, activityClassName, user, iconPackPackage, sizePx)
         } catch (e: Exception) {
             e.printStackTrace()

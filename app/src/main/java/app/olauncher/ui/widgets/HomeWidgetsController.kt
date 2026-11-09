@@ -26,6 +26,7 @@ import app.olauncher.ui.AppNotificationsView
 import app.olauncher.ui.DetoxController
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.HomeShortcuts
 import app.olauncher.helper.AppRename
 import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.ParkingShortcut
@@ -965,7 +966,9 @@ class HomeWidgetsController(
                 // As in the app drawer; with app info it also gives the menu its tiles on top
                 activity.uninstallEntry(app.appPackage, app.user),
             ).let { base ->
-                if (FolderShortcuts.isFolder(app.appPackage))
+                if (HomeShortcuts.isShortcut(app.appPackage))
+                    base.filter { it.label != activity.getString(R.string.ml_app_info) } + DetoxController.whitelistEntry(activity, app)
+                else if (FolderShortcuts.isFolder(app.appPackage))
                     base.filter { it.label != activity.getString(R.string.ml_app_info) } +
                             FolderShortcuts.menuEntries(activity, app) { SwipeActions.onFoldersChanged?.invoke() } +
                             DetoxController.whitelistEntry(activity, app)

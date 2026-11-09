@@ -35,6 +35,7 @@ import app.olauncher.databinding.FragmentHomeBinding
 import app.olauncher.helper.DetoxManager
 import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
+import app.olauncher.helper.HomeShortcuts
 import app.olauncher.helper.AppRename
 import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.ParkingShortcut
@@ -796,6 +797,18 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             if (added) widgets.reloadIfChanged()
         }
         if (!dock.contains(app) && !dock.isFull()) entries += MenuEntry(getString(R.string.ml_dock_add_app)) { dock.add(app) }
+        if (HomeShortcuts.isShortcut(app.appPackage)) {
+            // A web app added from the browser: no hiding, app info or uninstall of its own
+            entries += MenuEntry(getString(R.string.ml_change_icon)) {
+                IconChooser.show(ctx, app, uiScope, { callback ->
+                    onImagePicked = callback
+                    imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }) { onChanged() }
+            }
+            AppRename.menuEntry(ctx, app)?.let { entries += it }
+            ctx.showMenuDialog(app.appLabel, entries)
+            return
+        }
         entries += MenuEntry(getString(R.string.ml_change_icon)) {
             IconChooser.show(ctx, app, uiScope, { callback ->
                 onImagePicked = callback

@@ -637,7 +637,8 @@ fun Context.uninstall(packageName: String) {
 
 /** "Uninstall" for an app menu; none for the launcher's own shortcuts (folders, parking, test apps), which aren't installed. */
 fun Context.uninstallEntry(packageName: String, user: UserHandle): MenuEntry? {
-    if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName) || TestNotifications.isFake(packageName)) return null
+    if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName) || TestNotifications.isFake(packageName) ||
+        HomeShortcuts.isShortcut(packageName)) return null
     return MenuEntry(getString(R.string.delete)) { uninstallApp(packageName, user) }
 }
 

@@ -44,6 +44,7 @@ import app.olauncher.helper.IconPackManager
 import app.olauncher.helper.NotificationRepository
 import app.olauncher.helper.TestNotifications
 import app.olauncher.helper.deletePinnedShortcut
+import app.olauncher.helper.HomeShortcuts
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.hideKeyboard
 import app.olauncher.helper.isEinkDisplay
@@ -454,6 +455,7 @@ class AppDrawerFragment : BaseFragment() {
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
             ctx.showMenuDialog(appModel.appLabel, entries + DetoxController.whitelistEntry(ctx, appModel), header = AppNotificationsView.create(ctx, appModel))
         } else if (appModel is AppModel.PinnedShortcut) {
+            entries += addToHomeEntry(HomeShortcuts.toApp(appModel))
             entries += MenuEntry(getString(R.string.rename)) { askRename(appModel) }
             entries += MenuEntry(getString(R.string.delete)) { adapter.delete(appModel) }
             ctx.showMenuDialog(appModel.appLabel, entries)
@@ -656,15 +658,20 @@ class AppDrawerFragment : BaseFragment() {
         adapter.notifyDataSetChanged()
     }
 
+    /** A pinned shortcut (e.g. a web app) shows its own icon, not the browser's. */
+    private fun iconPackage(appModel: AppModel) =
+        if (appModel is AppModel.PinnedShortcut) HomeShortcuts.toApp(appModel).appPackage else appModel.appPackage
+
     private fun loadGridIcon(appModel: AppModel, view: ImageView, size: Int) {
-        val key = "${appModel.appPackage}|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
+        val pkg = iconPackage(appModel)
+        val key = "$pkg|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
         view.tag = key
         val context = requireContext().applicationContext
         val iconPack = prefs.iconPack
         uiScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 IconPackManager.getIcon(
-                    context, appModel.appPackage, (appModel as? AppModel.App)?.activityClassName,
+                    context, pkg, (appModel as? AppModel.App)?.activityClassName,
                     appModel.user, iconPack, size
                 )
             } ?: return@launch
@@ -675,7 +682,8 @@ class AppDrawerFragment : BaseFragment() {
     private fun loadIcon(appModel: AppModel, view: TextView) {
         if (!prefs.showIcons) return
         val size = (view.textSize * 1.15f).toInt()
-        val key = "${appModel.appPackage}|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
+        val pkg = iconPackage(appModel)
+        val key = "$pkg|${appModel.user}|${(appModel as? AppModel.App)?.activityClassName}"
         view.tag = key
         val notified = appModel is AppModel.App && (notifications[notificationKey(appModel)]?.count ?: 0) > 0
         view.compoundDrawablePadding = 14.dpToPx()
@@ -685,7 +693,7 @@ class AppDrawerFragment : BaseFragment() {
         uiScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
                 IconPackManager.getIcon(
-                    context, appModel.appPackage, (appModel as? AppModel.App)?.activityClassName,
+                    context, pkg, (appModel as? AppModel.App)?.activityClassName,
                     appModel.user, iconPack, size
                 )
             } ?: return@launch
