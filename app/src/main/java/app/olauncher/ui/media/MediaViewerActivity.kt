@@ -174,9 +174,14 @@ class MediaViewerActivity : AppCompatActivity() {
 
     private fun delete() {
         val file = currentFile() ?: return
-        showConfirmDialog(getString(R.string.ml_explorer_delete), getString(R.string.ml_explorer_delete_confirm, file.name), getString(R.string.ml_explorer_delete)) {
-            if (!file.delete()) {
-                showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_explorer_delete)))
+        // Into the gallery's recycle bin, restorable for 30 days
+        showConfirmDialog(
+            getString(R.string.ml_trash_move),
+            getString(R.string.ml_trash_move_confirm, file.name, app.olauncher.helper.MediaTrash.KEEP_DAYS),
+            getString(R.string.ml_trash_move),
+        ) {
+            if (app.olauncher.helper.MediaTrash.moveToTrash(listOf(file)).isEmpty()) {
+                showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_trash_move)))
                 return@showConfirmDialog
             }
             MediaScannerConnection.scanFile(applicationContext, arrayOf(file.absolutePath), null, null)

@@ -106,6 +106,7 @@ class GalleryActivity : AppCompatActivity() {
     private lateinit var sourcesButton: ImageView
     private lateinit var newFolderButton: ImageView
     private lateinit var menuButton: ImageView
+    private lateinit var trashButton: ImageView
     private lateinit var searchButton: ImageView
     private lateinit var searchRow: LinearLayout
     private lateinit var searchInput: android.widget.EditText
@@ -155,6 +156,8 @@ class GalleryActivity : AppCompatActivity() {
         albumPreviews = CameraRoll.albumPreviews(this)
         albumDir = albumRoot
         setContentView(buildLayout())
+        // What has been in the recycle bin for 30 days goes for good
+        lifecycleScope.launch(Dispatchers.IO) { app.olauncher.helper.MediaTrash.purgeExpired(applicationContext) }
         // The folder choice asked from home's long press: once the folders are known
         val askSources = savedInstanceState == null && intent.getBooleanExtra(EXTRA_SHOW_SOURCES, false)
         reload { if (askSources) showSources() }
@@ -436,11 +439,12 @@ class GalleryActivity : AppCompatActivity() {
         sourcesButton = UiKit.iconButton(this, R.drawable.ic_m_sliders, getString(R.string.ml_gallery_sources)) { showSources() }
         newFolderButton = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_gallery_new_folder)) { askNewFolder(albumDir) {} }
         menuButton = UiKit.iconButton(this, R.drawable.ic_m_more, getString(R.string.ml_explorer_more)) { showAlbumsMenu() }
+        trashButton = UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_trash)) { TrashActivity.open(this) }
         searchButton = UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_explorer_search)) {
             if (searchRow.isVisible) closeSearch() else openSearch()
         }
         val bar = UiKit.appBar(this, getString(R.string.ml_gallery), onBack = { goBack() },
-            actions = listOf(searchButton, sourcesButton, newFolderButton, menuButton))
+            actions = listOf(searchButton, sourcesButton, newFolderButton, trashButton, menuButton))
         bar.view.setPadding(6.dpToPx(), 0, 6.dpToPx(), 8.dpToPx())
         backButton = bar.back
         title = bar.title
@@ -684,6 +688,7 @@ class GalleryActivity : AppCompatActivity() {
         newFolderButton.isVisible = !selecting && albums && !looseView && media.isEmpty()
         menuButton.isVisible = !selecting && albums && !looseView
         searchButton.isVisible = !selecting
+        trashButton.isVisible = !selecting
         searchInput.hint = getString(if (albums && allMedia.isEmpty() && allFolders.isNotEmpty()) R.string.ml_gallery_search_albums_hint
             else R.string.ml_gallery_search_hint)
         tabs.isVisible = !selecting
@@ -784,16 +789,17 @@ class GalleryActivity : AppCompatActivity() {
 
     private fun deleteSelected() {
         val files = selectedFiles()
+        // Into the gallery's recycle bin, restorable for 30 days
         showConfirmDialog(
-            getString(R.string.ml_explorer_delete),
-            if (files.size == 1) getString(R.string.ml_explorer_delete_confirm, files[0].name)
-            else getString(R.string.ml_explorer_delete_many_confirm, files.size),
-            getString(R.string.ml_explorer_delete),
+            getString(R.string.ml_trash_move),
+            if (files.size == 1) getString(R.string.ml_trash_move_confirm, files[0].name, app.olauncher.helper.MediaTrash.KEEP_DAYS)
+            else getString(R.string.ml_trash_move_many_confirm, files.size, app.olauncher.helper.MediaTrash.KEEP_DAYS),
+            getString(R.string.ml_trash_move),
         ) {
             lifecycleScope.launch {
-                val ok = withContext(Dispatchers.IO) { files.map { it.delete() }.all { it } }
-                if (!ok) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_explorer_delete)))
-                afterChange(files.map { it.absolutePath })
+                val moved = withContext(Dispatchers.IO) { app.olauncher.helper.MediaTrash.moveToTrash(files) }
+                if (moved.size < files.size) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_trash_move)))
+                afterChange(moved)
             }
         }
     }
@@ -997,16 +1003,20 @@ class GalleryActivity : AppCompatActivity() {
     private fun askDelete(chosen: List<File>) {
         lifecycleScope.launch {
             val photos = withContext(Dispatchers.IO) { chosen.sumOf { treeCount(it) } }
-            val message = if (chosen.size == 1) getString(R.string.ml_gallery_delete_folder_confirm, chosen[0].name, photos)
-            else getString(R.string.ml_gallery_delete_folders_confirm, chosen.size, photos)
-            showConfirmDialog(getString(R.string.ml_explorer_delete), message, getString(R.string.ml_explorer_delete)) {
+            val days = app.olauncher.helper.MediaTrash.KEEP_DAYS
+            val message = if (chosen.size == 1) getString(R.string.ml_trash_folder_confirm, chosen[0].name, photos, days)
+            else getString(R.string.ml_trash_folders_confirm, chosen.size, photos, days)
+            showConfirmDialog(getString(R.string.ml_trash_move), message, getString(R.string.ml_trash_move)) {
                 lifecycleScope.launch {
                     val paths = mutableListOf<String>()
                     var failed = false
                     withContext(Dispatchers.IO) {
                         for (folder in chosen) {
-                            val all = folder.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList()
-                            if (folder.deleteRecursively()) paths += all else failed = true
+                            // Every file goes to the recycle bin (restoring one remakes its folders), then the empty folders go
+                            val all = folder.walkTopDown().filter { it.isFile }.toList()
+                            val moved = app.olauncher.helper.MediaTrash.moveToTrash(all)
+                            paths += moved
+                            if (moved.size < all.size || !folder.deleteRecursively()) failed = true
                         }
                     }
                     if (failed) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_explorer_delete)))

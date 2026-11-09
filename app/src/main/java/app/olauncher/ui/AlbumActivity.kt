@@ -254,16 +254,17 @@ class AlbumActivity : AppCompatActivity() {
 
     private fun deleteSelected() {
         val files = selectedFiles()
+        // Into the gallery's recycle bin, restorable for 30 days
         showConfirmDialog(
-            getString(R.string.ml_explorer_delete),
-            if (files.size == 1) getString(R.string.ml_explorer_delete_confirm, files[0].name)
-            else getString(R.string.ml_explorer_delete_many_confirm, files.size),
-            getString(R.string.ml_explorer_delete),
+            getString(R.string.ml_trash_move),
+            if (files.size == 1) getString(R.string.ml_trash_move_confirm, files[0].name, app.olauncher.helper.MediaTrash.KEEP_DAYS)
+            else getString(R.string.ml_trash_move_many_confirm, files.size, app.olauncher.helper.MediaTrash.KEEP_DAYS),
+            getString(R.string.ml_trash_move),
         ) {
             lifecycleScope.launch {
-                val ok = withContext(Dispatchers.IO) { files.map { it.delete() }.all { it } }
-                if (!ok) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_explorer_delete)))
-                afterChange(files.map { it.absolutePath })
+                val moved = withContext(Dispatchers.IO) { app.olauncher.helper.MediaTrash.moveToTrash(files) }
+                if (moved.size < files.size) showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_trash_move)))
+                afterChange(moved)
             }
         }
     }

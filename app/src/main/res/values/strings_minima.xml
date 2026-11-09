@@ -946,4 +946,19 @@
     <string name="ml_player_speed">Playback speed</string>
     <string name="ml_player_only_one">No other app is playing</string>
     <string name="ml_player_hide">Hide</string>
+    <string name="ml_trash">Trash</string>
+    <string name="ml_trash_subtitle">%1$d items · deleted for good after %2$d days</string>
+    <string name="ml_trash_empty">The trash is empty</string>
+    <string name="ml_trash_restore">Restore</string>
+    <string name="ml_trash_delete_forever">Delete forever</string>
+    <string name="ml_trash_delete_forever_confirm">Delete %1$d items forever? It can\'t be undone.</string>
+    <string name="ml_trash_empty_action">Empty trash</string>
+    <string name="ml_trash_empty_confirm">Delete everything in the trash (%1$d items) forever? It can\'t be undone.</string>
+    <string name="ml_trash_restored">%1$d restored</string>
+    <string name="ml_trash_days_left">%1$d d</string>
+    <string name="ml_trash_move">Move to trash</string>
+    <string name="ml_trash_move_confirm">Move \"%1$s\" to the trash? You can restore it for %2$d days.</string>
+    <string name="ml_trash_move_many_confirm">Move %1$d items to the trash? You can restore them for %2$d days.</string>
+    <string name="ml_trash_folder_confirm">Move the folder \"%1$s\" with everything in it (%2$d photos and videos) to the trash? You can restore it for %3$d days.</string>
+    <string name="ml_trash_folders_confirm">Move %1$d folders with everything in them (%2$d photos and videos) to the trash? You can restore them for %3$d days.</string>
 </resources>

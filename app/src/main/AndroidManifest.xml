@@ -245,6 +245,12 @@
             android:label="@string/ml_gallery"
             android:taskAffinity="app.minimalauncher.gallery" />
 
+        <activity
+            android:name=".ui.gallery.TrashActivity"
+            android:exported="false"
+            android:label="@string/ml_trash"
+            android:taskAffinity="app.minimalauncher.gallery" />
+
         <activity-alias
             android:name=".GalleryAlias"
             android:exported="true"

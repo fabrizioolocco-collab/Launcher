@@ -943,4 +943,19 @@
     <string name="ml_player_speed">Velocità di riproduzione</string>
     <string name="ml_player_only_one">Nessun\'altra app in riproduzione</string>
     <string name="ml_player_hide">Nascondi</string>
+    <string name="ml_trash">Cestino</string>
+    <string name="ml_trash_subtitle">%1$d elementi · eliminati per sempre dopo %2$d giorni</string>
+    <string name="ml_trash_empty">Il cestino è vuoto</string>
+    <string name="ml_trash_restore">Ripristina</string>
+    <string name="ml_trash_delete_forever">Elimina per sempre</string>
+    <string name="ml_trash_delete_forever_confirm">Eliminare per sempre %1$d elementi? Non si può annullare.</string>
+    <string name="ml_trash_empty_action">Svuota cestino</string>
+    <string name="ml_trash_empty_confirm">Eliminare per sempre tutto il cestino (%1$d elementi)? Non si può annullare.</string>
+    <string name="ml_trash_restored">%1$d ripristinati</string>
+    <string name="ml_trash_days_left">%1$d g</string>
+    <string name="ml_trash_move">Sposta nel cestino</string>
+    <string name="ml_trash_move_confirm">Spostare \"%1$s\" nel cestino? Potrai ripristinarlo per %2$d giorni.</string>
+    <string name="ml_trash_move_many_confirm">Spostare %1$d elementi nel cestino? Potrai ripristinarli per %2$d giorni.</string>
+    <string name="ml_trash_folder_confirm">Spostare nel cestino la cartella \"%1$s\" con tutto il contenuto (%2$d foto e video)? Potrai ripristinarla per %3$d giorni.</string>
+    <string name="ml_trash_folders_confirm">Spostare nel cestino %1$d cartelle con tutto il contenuto (%2$d foto e video)? Potrai ripristinarle per %3$d giorni.</string>
 </resources>
