@@ -81,7 +81,8 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(prefs.effectiveTheme)
         super.onCreate(savedInstanceState)
         if (prefs.boldFont) theme.applyStyle(R.style.BoldFontOverlay, true)
-        if (prefs.tacticalTheme) theme.applyStyle(R.style.TacticalOverlay, true)
+        // The look's wallpaper (or the one there was before, back on no look)
+        lifecycleScope.launch(kotlinx.coroutines.Dispatchers.IO) { app.olauncher.helper.Skin.syncWallpaper(applicationContext) }
         if (isEinkDisplay() || isSystemAnimationsDisabled()) theme.applyStyle(R.style.NoAnimationOverlay, true)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -395,8 +396,8 @@ class MainActivity : AppCompatActivity() {
         timerJob?.cancel()
         timerJob = lifecycleScope.launch {
             delay(200)
-            // The tactical theme has colours of its own: nothing to check
-            if (prefs.tacticalTheme) return@launch
+            // The looks have colours of their own: nothing to check
+            if (prefs.skin.isNotEmpty()) return@launch
             if ((prefs.appTheme == AppCompatDelegate.MODE_NIGHT_YES && getColorFromAttr(R.attr.primaryColor) != getColor(R.color.white))
                 || (prefs.appTheme == AppCompatDelegate.MODE_NIGHT_NO && getColorFromAttr(R.attr.primaryColor) != getColor(R.color.black))
             )

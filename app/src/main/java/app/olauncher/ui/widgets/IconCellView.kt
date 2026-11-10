@@ -1,6 +1,6 @@
 package app.olauncher.ui.widgets
 
-import app.olauncher.helper.Tactical
+import app.olauncher.helper.Skin
 import android.content.Context
 import android.graphics.Bitmap
 import android.text.TextUtils
@@ -28,7 +28,10 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
     /** With notifications a tap lists them ([onNotifiedTap]) instead of launching. */
     val touch = GridItemTouch(this) { if (notified) onNotifiedTap?.invoke() ?: onTap() else onTap() }
 
-    private val tactical = Tactical.isOn(context)
+    private val skinned = Skin.isOn(context)
+    /** White line icons take the look's colour (military: sand). */
+    private val skinFilter = Skin.palette(context).iconTint.takeIf { skinned && it != 0 }
+        ?.let { android.graphics.PorterDuffColorFilter(it, android.graphics.PorterDuff.Mode.MULTIPLY) }
 
     private val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
     private val label = TextView(context, null, 0, R.style.TextSmall).apply {
@@ -71,9 +74,10 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         })
         addView(cardFrame, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         label.setTextColor(context.getColorFromAttr(R.attr.primaryColor))
-        // Tactical theme: condensed capitals, so the names fit
-        if (tactical) {
-            Tactical.body(context)?.let { label.typeface = it }
+        // Military and tactical looks: condensed capitals, so the names fit
+        icon.colorFilter = skinFilter
+        if (Skin.cut(context)) {
+            Skin.bodyFace(context)?.let { label.typeface = it }
             label.isAllCaps = true
             label.letterSpacing = 0.04f
         }
@@ -155,9 +159,8 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
     private fun updateFrame() {
         if (cardOn) {
             iconFrame.background = null
-            cardFrame.background = if (tactical) Tactical.panel(
-                if (notified) CARD_RED else context.getColorFromAttr(R.attr.cardColor),
-                if (notified) CARD_RED_STROKE else context.getColorFromAttr(R.attr.cardStrokeColor), 8,
+            cardFrame.background = if (skinned) Skin.panel(
+                context, if (notified) CARD_RED else null, if (notified) CARD_RED_STROKE else null, 8, 18,
             ) else android.graphics.drawable.GradientDrawable().apply {
                 cornerRadius = 18.dpToPx().toFloat()
                 setColor(if (notified) CARD_RED else context.getColorFromAttr(R.attr.cardColor))
@@ -182,7 +185,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         notified = count > 0
         updateFrame()
         // On a card the card turns red and the icon stays as it is
-        icon.colorFilter = if (notified && !cardOn) app.olauncher.ui.NotificationBadge.redFilter else null
+        icon.colorFilter = if (notified && !cardOn) app.olauncher.ui.NotificationBadge.redFilter else skinFilter
         label.setTextColor(if (notified && !cardOn) NotificationBadge.NOTIFICATION_COLOR else context.getColorFromAttr(R.attr.primaryColor))
     }
 

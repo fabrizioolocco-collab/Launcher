@@ -434,7 +434,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.appThemeText -> showAppThemeMenu(view, showSystem = false)
             R.id.textSizeValue -> showTextSizeDialog()
             R.id.boldFont -> toggleBoldFont()
-            R.id.tacticalTheme -> toggleTacticalTheme()
+            R.id.tacticalTheme -> chooseSkin()
 
             R.id.swipeLeftApp -> showSwipeAppMenu(view, left = true)
             R.id.swipeRightApp -> showSwipeAppMenu(view, left = false)
@@ -1089,15 +1089,27 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
     private fun populateBoldFont() {
         binding.boldFont.text = getString(if (prefs.boldFont) R.string.on else R.string.off)
-        binding.tacticalTheme.text = getString(if (prefs.tacticalTheme) R.string.on else R.string.off)
+        binding.tacticalTheme.text = getString(app.olauncher.helper.Skin.kind(requireContext()).label)
     }
 
-    /** Olive and sand, always dark: the whole launcher is rebuilt with it (or without it). */
-    private fun toggleTacticalTheme() {
-        prefs.tacticalTheme = !prefs.tacticalTheme
-        populateBoldFont()
-        AppCompatDelegate.setDefaultNightMode(prefs.effectiveTheme)
-        requireActivity().recreate()
+    /** The look of the whole launcher: colours, shapes, type and wallpaper. It is rebuilt with the one chosen. */
+    private fun chooseSkin() {
+        val ctx = requireContext()
+        val current = app.olauncher.helper.Skin.kind(ctx)
+        ctx.showMenuDialog(getString(R.string.ml_tactical_theme), app.olauncher.helper.Skin.Kind.values().map { kind ->
+            MenuEntry(getString(kind.label), value = if (kind == current) "✓" else null) {
+                if (kind != current) {
+                    prefs.skin = kind.id
+                    val appContext = ctx.applicationContext
+                    // The wallpaper first (the home is redrawn over it), then the launcher again
+                    viewLifecycleOwner.lifecycleScope.launch {
+                        withContext(Dispatchers.IO) { app.olauncher.helper.Skin.syncWallpaper(appContext) }
+                        AppCompatDelegate.setDefaultNightMode(prefs.effectiveTheme)
+                        activity?.recreate()
+                    }
+                }
+            }
+        })
     }
 
     private fun populateScreenTimeOnOff() {

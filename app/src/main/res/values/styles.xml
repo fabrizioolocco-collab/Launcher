@@ -64,8 +64,8 @@
         <item name="mainFontFamily">sans-serif</item>
     </style>
 
-    <!-- Applied over AppTheme (always dark) when the tactical theme is on: olive and sand -->
-    <style name="TacticalOverlay">
+    <!-- The looks (helper/Skin.kt), applied over the theme of every activity, always dark. Military: olive and sand -->
+    <style name="SkinMilitary">
         <item name="colorPrimary">#FFD9D2AE</item>
         <item name="colorAccent">#FFC8AE6E</item>
         <item name="primaryColor">#FFD9D2AE</item>
@@ -86,6 +86,54 @@
         <item name="tileColor">#FF1F2318</item>
         <item name="accentColor">#FFC8AE6E</item>
         <item name="mainFontFamily">sans-serif-condensed</item>
+    </style>
+
+    <!-- Tactical: graphite and steel on black -->
+    <style name="SkinTactical">
+        <item name="colorPrimary">#FFD5D8DA</item>
+        <item name="colorAccent">#FFB8BFC5</item>
+        <item name="primaryColor">#FFD5D8DA</item>
+        <item name="cardColor">#FF15171A</item>
+        <item name="cardStrokeColor">#FF2B2F33</item>
+        <item name="cardLineColor">#FF212427</item>
+        <item name="secondaryTextColor">#FF80868B</item>
+        <item name="primaryInverseColor">#FF0A0B0C</item>
+        <item name="primaryTextShadowColor">#800A0B0C</item>
+        <item name="primaryColorTrans50">#80D5D8DA</item>
+        <item name="primaryColorTrans80">#CCD5D8DA</item>
+        <item name="primaryColorInverseTrans50">#800A0B0C</item>
+        <item name="primaryColorInverseTrans80">#CC0A0B0C</item>
+        <item name="primaryColorInverseTrans90">#E60A0B0C</item>
+        <item name="primaryShadeColor">#1AB8BFC5</item>
+        <item name="primaryShadeDarkColor">#40B8BFC5</item>
+        <item name="dialogShadeColor">#800A0B0C</item>
+        <item name="tileColor">#FF15171A</item>
+        <item name="accentColor">#FFB8BFC5</item>
+        <item name="mainFontFamily">sans-serif-condensed</item>
+    </style>
+
+    <!-- Elegant: glass on deep blue -->
+    <style name="SkinElegant">
+        <item name="colorPrimary">#FFFFFFFF</item>
+        <item name="colorAccent">#FFE7C9A1</item>
+        <item name="primaryColor">#FFFFFFFF</item>
+        <item name="cardColor">#FF1D1F38</item>
+        <item name="cardStrokeColor">#FF3A3D5E</item>
+        <item name="cardLineColor">#FF2B2D4A</item>
+        <item name="secondaryTextColor">#FFB4B8CC</item>
+        <item name="primaryInverseColor">#FF15172B</item>
+        <item name="primaryTextShadowColor">#8015172B</item>
+        <item name="primaryColorTrans50">#80FFFFFF</item>
+        <item name="primaryColorTrans80">#CCFFFFFF</item>
+        <item name="primaryColorInverseTrans50">#8015172B</item>
+        <item name="primaryColorInverseTrans80">#CC15172B</item>
+        <item name="primaryColorInverseTrans90">#E615172B</item>
+        <item name="primaryShadeColor">#1AE7C9A1</item>
+        <item name="primaryShadeDarkColor">#40E7C9A1</item>
+        <item name="dialogShadeColor">#8015172B</item>
+        <item name="tileColor">#24FFFFFF</item>
+        <item name="accentColor">#FFE7C9A1</item>
+        <item name="mainFontFamily">sans-serif-light</item>
     </style>
 
     <style name="WindowAnimationTransition">

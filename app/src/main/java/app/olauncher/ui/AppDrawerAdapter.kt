@@ -445,7 +445,12 @@ class AppDrawerAdapter(
             title.isVisible = style.showLabels
         }
 
-        private fun cardBackground(notified: Boolean) = android.graphics.drawable.GradientDrawable().apply {
+        private fun cardBackground(notified: Boolean): android.graphics.drawable.Drawable =
+            if (app.olauncher.helper.Skin.isOn(root.context)) app.olauncher.helper.Skin.panel(
+                root.context, if (notified) CARD_RED else null, if (notified) CARD_RED_STROKE else null, 8, 18,
+            ) else roundCard(notified)
+
+        private fun roundCard(notified: Boolean) = android.graphics.drawable.GradientDrawable().apply {
             val ctx = root.context
             cornerRadius = 18.dpToPx().toFloat()
             setColor(if (notified) CARD_RED else ctx.getColorFromAttr(R.attr.cardColor))

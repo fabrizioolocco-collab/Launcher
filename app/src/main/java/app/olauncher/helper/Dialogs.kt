@@ -13,6 +13,7 @@ import androidx.annotation.StringRes
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.PopupMenu
 import androidx.core.view.isVisible
+import app.olauncher.R
 import app.olauncher.data.Prefs
 import app.olauncher.databinding.DialogBaseBinding
 
@@ -44,6 +45,17 @@ class OlDialog(context: Context) : AlertDialog(context) {
 
     private var blur: WindowBlur? = null
     private var screenBlur: View? = null
+
+    init {
+        // A look is on: the dialog in its shape (two cut corners, or a sheet of glass over the blur)
+        if (Skin.isOn(context)) window?.setBackgroundDrawable(
+            android.graphics.drawable.InsetDrawable(
+                if (Skin.cut(context)) Skin.panel(context, context.getColorFromAttr(R.attr.cardColor), context.getColorFromAttr(R.attr.cardStrokeColor), 14)
+                else Skin.panel(context, 0xD91D1F38.toInt(), 0x38FFFFFF, radiusDp = 24),
+                20.dpToPx(),
+            )
+        )
+    }
 
     /** Stronger blur of what's behind (px); null = the usual one. */
     var blurRadius: Int? = null

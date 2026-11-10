@@ -1,6 +1,6 @@
 package app.olauncher.ui.widgets
 
-import app.olauncher.helper.Tactical
+import app.olauncher.helper.Skin
 import androidx.core.app.ActivityCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
@@ -92,10 +92,12 @@ class CalendarWidgetView(
     private var loadedDay = Int.MIN_VALUE
     private var loadJob: Job? = null
     private val primary = activity.getColorFromAttr(R.attr.primaryColor)
-    /** Tactical theme: stencil sand clock, condensed type, military date, countdowns (T−08:54), H24. */
-    private val tactical = Tactical.isOn(activity)
-    private val stencilFace = if (tactical) Tactical.stencil(activity) else null
-    private val condensedFace = if (tactical) Tactical.body(activity) else null
+    /** A look is on (see Skin): its panel and its clock face. */
+    private val skinned = Skin.isOn(activity)
+    /** Military and tactical looks: stencil clock in the accent colour, condensed type, military date, countdowns (T−08:54), H24. */
+    private val tactical = Skin.cut(activity)
+    private val clockFace = Skin.clockFace(activity)
+    private val bodyFace = Skin.bodyFace(activity)
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     /** The next hours: hour, icon, temperature; a tap opens the Weather app (on the hour tapped). */
@@ -710,8 +712,8 @@ class CalendarWidgetView(
         player.active = config.showPlayer
         player.applyStyle()
         background = when {
-            // Tactical theme: an olive panel with two cut corners
-            tactical && (config.card || config.background > 0) -> Tactical.panel(cutDp = 12).apply {
+            // A look: its panel (two cut corners, or a sheet of glass)
+            skinned && (config.card || config.background > 0) -> Skin.panel(activity, cutDp = 12, radiusDp = 22).apply {
                 if (!config.card) alpha = config.background * 255 / 100
             }
             // A card like the menus' (the opacity setting fades its ground, the border stays)
@@ -1101,7 +1103,7 @@ class CalendarWidgetView(
             line.addView(text(CalendarText.STATUS).apply {
                 text = it
                 maxLines = 1
-                if (lateDays >= 0) setTextColor(if (tactical) Tactical.ALERT else TODO_LATE_COLOR)
+                if (lateDays >= 0) setTextColor(if (skinned) Skin.palette(activity).alert else TODO_LATE_COLOR)
                 else if (config.text(CalendarText.STATUS).color == 0) alpha = 0.7f
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 8.dpToPx() })
         }
@@ -1279,17 +1281,16 @@ class CalendarWidgetView(
     private fun styleText(view: TextView, t: CalendarText, extraStyle: Int = Typeface.NORMAL) {
         val s = config.text(t)
         val chosen = FontManager.typeface(activity, s.font)
-        val base = chosen ?: (if (tactical) tacticalFace(t) else null) ?: Typeface.DEFAULT
-        // The stencil face has one weight: no fake bold on it
-        val style = if (tactical && chosen == null && t == CalendarText.CLOCK) Typeface.NORMAL else s.style or extraStyle
+        val base = chosen ?: (if (t == CalendarText.CLOCK) clockFace else bodyFace) ?: Typeface.DEFAULT
+        // The looks' clock faces (stencil, thin) have one weight: no fake bold on them
+        val style = if (chosen == null && t == CalendarText.CLOCK && clockFace != null) Typeface.NORMAL else s.style or extraStyle
         view.typeface = Typeface.create(base, style)
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, s.sizeSp.toFloat())
-        view.setTextColor(if (s.color != 0) s.color else if (tactical && t == CalendarText.CLOCK) Tactical.SAND else primary)
+        view.setTextColor(if (s.color != 0) s.color else if (tactical && t == CalendarText.CLOCK) Skin.palette(activity).accent else primary)
         if (tactical && (t == CalendarText.HEADER || t == CalendarText.WEEK)) view.isAllCaps = true
         view.includeFontPadding = false
     }
 
-    private fun tacticalFace(t: CalendarText): Typeface? = if (t == CalendarText.CLOCK) stencilFace else condensedFace
 
     private fun iconButton(icon: Int, description: Int, onClick: (View) -> Unit) = ImageView(activity).apply {
         setImageResource(icon)

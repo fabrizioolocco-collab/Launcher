@@ -18,6 +18,7 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import app.olauncher.R
+import app.olauncher.helper.Skin
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 
@@ -117,18 +118,23 @@ object UiKit {
     }
 
     /** Thin rounded border (groups, fields), optional fill. */
-    fun border(ctx: Context, radiusDp: Int = 16, fill: Int = 0) = GradientDrawable().apply {
-        cornerRadius = radiusDp.dpToPx().toFloat()
-        if (fill != 0) setColor(fill)
-        setStroke(1.dpToPx(), line(ctx))
-    }
+    fun border(ctx: Context, radiusDp: Int = 16, fill: Int = 0, strokeColor: Int = line(ctx)): Drawable =
+        // Military and tactical looks: two cut corners instead of round ones
+        if (Skin.cut(ctx)) Skin.panel(ctx, fill, strokeColor, cutDp = (radiusDp * 0.6f).toInt().coerceAtLeast(3))
+        else GradientDrawable().apply {
+            cornerRadius = radiusDp.dpToPx().toFloat()
+            if (fill != 0) setColor(fill)
+            setStroke(1.dpToPx(), strokeColor)
+        }
 
     /** A card: the card color with its border. */
-    fun cardBackground(ctx: Context, radiusDp: Int = 20) = GradientDrawable().apply {
-        cornerRadius = radiusDp.dpToPx().toFloat()
-        setColor(card(ctx))
-        setStroke(1.dpToPx(), stroke(ctx))
-    }
+    fun cardBackground(ctx: Context, radiusDp: Int = 20): Drawable =
+        if (Skin.cut(ctx)) Skin.panel(ctx, card(ctx), stroke(ctx), cutDp = (radiusDp * 0.6f).toInt().coerceAtLeast(3))
+        else GradientDrawable().apply {
+            cornerRadius = radiusDp.dpToPx().toFloat()
+            setColor(card(ctx))
+            setStroke(1.dpToPx(), stroke(ctx))
+        }
 
     /** A text field with a rounded border. */
     fun styleInput(input: EditText) {

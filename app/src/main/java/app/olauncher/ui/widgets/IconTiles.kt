@@ -1,6 +1,6 @@
 package app.olauncher.ui.widgets
 
-import app.olauncher.helper.Tactical
+import app.olauncher.helper.Skin
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import app.olauncher.R
@@ -13,11 +13,15 @@ object IconTiles {
     /** Fraction of the tile taken by the icon itself. */
     const val ICON_FRACTION = 0.6f
 
-    fun drawable(context: Context, sizePx: Int): android.graphics.drawable.Drawable =
-        // Tactical theme: an olive square with two cut corners
-        if (Tactical.isOn(context)) Tactical.panel(
-            context.getColorFromAttr(R.attr.tileColor), context.getColorFromAttr(R.attr.cardStrokeColor), (sizePx * 0.2f / context.resources.displayMetrics.density).toInt().coerceAtLeast(4)
-        ) else rounded(context, sizePx)
+    fun drawable(context: Context, sizePx: Int): android.graphics.drawable.Drawable {
+        if (!Skin.isOn(context)) return rounded(context, sizePx)
+        // A look: its own shape (two cut corners, or a rounded sheet of glass)
+        val dp = sizePx / context.resources.displayMetrics.density
+        return Skin.panel(
+            context, context.getColorFromAttr(R.attr.tileColor), context.getColorFromAttr(R.attr.cardStrokeColor),
+            (dp * 0.2f).toInt().coerceAtLeast(4), (dp * 0.27f).toInt(),
+        )
+    }
 
     private fun rounded(context: Context, sizePx: Int): GradientDrawable = GradientDrawable().apply {
         shape = GradientDrawable.RECTANGLE

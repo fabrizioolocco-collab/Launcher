@@ -1,6 +1,6 @@
 package app.olauncher.ui
 
-import app.olauncher.helper.Tactical
+import app.olauncher.helper.Skin
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
@@ -136,7 +136,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         } ?: throw Exception("Invalid Activity")
 
         deviceManager = context?.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        applyTactical()
+        applySkin()
 
         // The main grid: widgets, app icons and the news strip share its cells
         widgets = HomeWidgetsController(
@@ -518,18 +518,19 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     }
 
-    /** Tactical theme: camouflage ground, cut-corner bars, stencil clock. */
-    private fun applyTactical() {
-        if (!prefs.tacticalTheme) return
+    /** A look is on: its shape for the bars under the home, its face and colour for the clock. */
+    private fun applySkin() {
         val ctx = requireContext()
-        binding.mainLayout.background = Tactical.ground()
+        if (!Skin.isOn(ctx)) return
         listOf(binding.searchBar, binding.detoxButton, binding.bookmarksButton, binding.appsButton).forEach {
-            it.background = Tactical.panel(cutDp = 8)
+            it.background = Skin.panel(ctx, cutDp = 8, radiusDp = 24)
         }
-        Tactical.stencil(ctx)?.let { binding.clock.typeface = it }
-        binding.clock.setTextColor(Tactical.SAND)
-        Tactical.body(ctx)?.let { binding.date.typeface = it }
-        binding.date.isAllCaps = true
+        Skin.clockFace(ctx)?.let { binding.clock.typeface = it }
+        if (Skin.cut(ctx)) {
+            binding.clock.setTextColor(Skin.palette(ctx).accent)
+            Skin.bodyFace(ctx)?.let { binding.date.typeface = it }
+            binding.date.isAllCaps = true
+        }
     }
 
     private fun setHomeAlignment(horizontalGravity: Int = prefs.homeAlignment) {

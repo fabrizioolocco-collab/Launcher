@@ -446,7 +446,7 @@ object BookmarksUi {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(14.dpToPx(), 0, 10.dpToPx(), 0)
-            background = UiKit.border(ctx, 14).apply { setStroke(1.dpToPx(), UiKit.stroke(ctx)) }
+            background = UiKit.border(ctx, 14, strokeColor = UiKit.stroke(ctx))
             foreground = UiKit.ripple(ctx)
             isClickable = true
             addView(folderText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))

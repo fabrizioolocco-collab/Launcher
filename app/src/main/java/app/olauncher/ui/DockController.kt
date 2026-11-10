@@ -1,6 +1,6 @@
 package app.olauncher.ui
 
-import app.olauncher.helper.Tactical
+import app.olauncher.helper.Skin
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -52,7 +52,7 @@ class DockController(
     private val repo = PinnedAppsRepository(context)
     private var dock: MutableList<PinnedApp> = repo.loadDock()
     private var apps: List<AppModel.App> = emptyList()
-    private val tactical = Tactical.isOn(context)
+    private val skinned = Skin.isOn(context)
     private var notifications: Map<String, AppNotifications> = emptyMap()
 
     fun setApps(list: List<AppModel.App>) {
@@ -126,7 +126,7 @@ class DockController(
         if (!container.isVisible) return
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = if (tactical) Tactical.panel(cutDp = 12) else UiKit.cardBackground(context, 20)
+            background = if (skinned) Skin.panel(context, cutDp = 12, radiusDp = 22) else UiKit.cardBackground(context, 20)
             // No side padding: the card is as wide as the home grid, the tiles sit in its columns
             setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
             // Long press on the card itself (between the tiles): add an app
@@ -152,9 +152,9 @@ class DockController(
 
     private fun tile(index: Int, dockApp: PinnedApp, app: AppModel.App) = ImageView(context).apply {
         val notified = notificationCount(app) > 0
-        background = if (tactical) Tactical.panel(
-            if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor),
-            if (notified) NotificationBadge.NOTIFICATION_COLOR else 0, 8,
+        background = if (skinned) Skin.panel(
+            context, if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor),
+            if (notified) NotificationBadge.NOTIFICATION_COLOR else 0, 8, 16,
         ) else GradientDrawable().apply {
             cornerRadius = 16.dpToPx().toFloat()
             if (notified) {
@@ -164,6 +164,9 @@ class DockController(
         }
         foreground = UiKit.ripple(context)
         scaleType = ImageView.ScaleType.CENTER
+        // White line icons take the look's text colour
+        if (skinned && Skin.palette(context).iconTint != 0)
+            colorFilter = android.graphics.PorterDuffColorFilter(Skin.palette(context).text, android.graphics.PorterDuff.Mode.MULTIPLY)
         contentDescription = app.appLabel
         isClickable = true
         isLongClickable = true
