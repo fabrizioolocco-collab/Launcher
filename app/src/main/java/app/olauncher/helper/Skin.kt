@@ -124,12 +124,27 @@ object Skin {
         val ground = palette(activity).ground
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(ground))
         window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-        if (Build.VERSION.SDK_INT < 35) {
-            // Before Android 15 the bars can still have a colour of their own
-            @Suppress("DEPRECATION")
-            window.statusBarColor = ground
-            @Suppress("DEPRECATION")
-            window.navigationBarColor = ground
+        // The theme's "translucent bars" lay a grey veil over the status and navigation bars: off,
+        // and the screen still drawn under them (its own padding keeps the content clear), so the
+        // bars show the look's ground
+        @Suppress("DEPRECATION")
+        window.clearFlags(
+            android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS or
+                    android.view.WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION
+        )
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        @Suppress("DEPRECATION")
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
+        // Light icons on the dark ground
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
         }
     }
 
