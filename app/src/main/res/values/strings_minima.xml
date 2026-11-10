@@ -967,4 +967,23 @@
     <string name="ml_skin_tactical">Tactical</string>
     <string name="ml_skin_elegant">Elegant</string>
     <string name="ml_tactical_late">OVERDUE</string>
+    <string name="ml_shop_app">Shopping</string>
+    <string name="ml_shop_default_list">Groceries</string>
+    <string name="ml_shop_add_hint">Add… (e.g. 2 milk)</string>
+    <string name="ml_shop_add">Add</string>
+    <string name="ml_shop_to_buy">%1$d to buy</string>
+    <string name="ml_shop_done_section">Bought · %1$d</string>
+    <string name="ml_shop_clear_done">Clear bought</string>
+    <string name="ml_shop_new_list">New list</string>
+    <string name="ml_shop_rename_list">Rename list</string>
+    <string name="ml_shop_delete_list">Delete list</string>
+    <string name="ml_shop_delete_list_confirm">Delete the list \"%1$s\" with everything in it?</string>
+    <string name="ml_shop_list_name">List name</string>
+    <string name="ml_shop_move_left">Move left</string>
+    <string name="ml_shop_move_right">Move right</string>
+    <string name="ml_shop_share">Share list</string>
+    <string name="ml_shop_nothing_to_share">Nothing to buy in this list</string>
+    <string name="ml_shop_edit">Edit</string>
+    <string name="ml_shop_empty">The list is empty: write above what to buy</string>
+    <string name="ml_shop_forgotten">\"%1$s\" removed from the suggestions</string>
 </resources>

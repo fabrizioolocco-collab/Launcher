@@ -964,4 +964,23 @@
     <string name="ml_skin_tactical">Tattico</string>
     <string name="ml_skin_elegant">Elegante</string>
     <string name="ml_tactical_late">SCADUTO</string>
+    <string name="ml_shop_app">Spesa</string>
+    <string name="ml_shop_default_list">Supermercato</string>
+    <string name="ml_shop_add_hint">Aggiungi… (es. 2 latte)</string>
+    <string name="ml_shop_add">Aggiungi</string>
+    <string name="ml_shop_to_buy">%1$d da comprare</string>
+    <string name="ml_shop_done_section">Presi · %1$d</string>
+    <string name="ml_shop_clear_done">Pulisci presi</string>
+    <string name="ml_shop_new_list">Nuova lista</string>
+    <string name="ml_shop_rename_list">Rinomina lista</string>
+    <string name="ml_shop_delete_list">Elimina lista</string>
+    <string name="ml_shop_delete_list_confirm">Eliminare la lista \"%1$s\" con tutte le sue voci?</string>
+    <string name="ml_shop_list_name">Nome della lista</string>
+    <string name="ml_shop_move_left">Sposta a sinistra</string>
+    <string name="ml_shop_move_right">Sposta a destra</string>
+    <string name="ml_shop_share">Condividi lista</string>
+    <string name="ml_shop_nothing_to_share">Niente da comprare in questa lista</string>
+    <string name="ml_shop_edit">Modifica</string>
+    <string name="ml_shop_empty">La lista è vuota: scrivi qui sopra cosa comprare</string>
+    <string name="ml_shop_forgotten">\"%1$s\" tolto dai suggerimenti</string>
 </resources>

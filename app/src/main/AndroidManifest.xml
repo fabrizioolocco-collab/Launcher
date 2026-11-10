@@ -302,6 +302,28 @@
             android:name="com.google.mlkit.vision.DEPENDENCIES"
             android:value="ocr" />
 
+        <!-- Shopping lists, listed as "Spesa" in the app list -->
+        <activity
+            android:name=".ui.shopping.ShoppingActivity"
+            android:exported="false"
+            android:label="@string/ml_shop_app"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.shopping"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity-alias
+            android:name=".ShoppingAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_shopping_launcher"
+            android:label="@string/ml_shop_app"
+            android:targetActivity=".ui.shopping.ShoppingActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <!-- ToDo app, also listed as "ToDo" in the app list -->
         <activity
             android:name=".ui.todo.TodoActivity"
