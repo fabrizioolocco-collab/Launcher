@@ -1,5 +1,6 @@
 package app.olauncher.ui.widgets
 
+import app.olauncher.helper.Tactical
 import android.content.Context
 import android.graphics.Bitmap
 import android.text.TextUtils
@@ -27,7 +28,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
     /** With notifications a tap lists them ([onNotifiedTap]) instead of launching. */
     val touch = GridItemTouch(this) { if (notified) onNotifiedTap?.invoke() ?: onTap() else onTap() }
 
-    private val tactical = app.olauncher.helper.Tactical.isOn(context)
+    private val tactical = Tactical.isOn(context)
 
     private val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
     private val label = TextView(context, null, 0, R.style.TextSmall).apply {
@@ -72,7 +73,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         label.setTextColor(context.getColorFromAttr(R.attr.primaryColor))
         // Tactical theme: condensed capitals, so the names fit
         if (tactical) {
-            app.olauncher.helper.Tactical.body(context)?.let { label.typeface = it }
+            Tactical.body(context)?.let { label.typeface = it }
             label.isAllCaps = true
             label.letterSpacing = 0.04f
         }
@@ -154,7 +155,7 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
     private fun updateFrame() {
         if (cardOn) {
             iconFrame.background = null
-            cardFrame.background = if (tactical) app.olauncher.helper.Tactical.panel(
+            cardFrame.background = if (tactical) Tactical.panel(
                 if (notified) CARD_RED else context.getColorFromAttr(R.attr.cardColor),
                 if (notified) CARD_RED_STROKE else context.getColorFromAttr(R.attr.cardStrokeColor), 8,
             ) else android.graphics.drawable.GradientDrawable().apply {

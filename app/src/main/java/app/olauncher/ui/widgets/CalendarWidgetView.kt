@@ -1,5 +1,6 @@
 package app.olauncher.ui.widgets
 
+import app.olauncher.helper.Tactical
 import androidx.core.app.ActivityCompat
 import androidx.core.graphics.ColorUtils
 import androidx.core.view.isVisible
@@ -92,9 +93,9 @@ class CalendarWidgetView(
     private var loadJob: Job? = null
     private val primary = activity.getColorFromAttr(R.attr.primaryColor)
     /** Tactical theme: stencil sand clock, condensed type, military date, countdowns (T−08:54), H24. */
-    private val tactical = app.olauncher.helper.Tactical.isOn(activity)
-    private val stencilFace = if (tactical) app.olauncher.helper.Tactical.stencil(activity) else null
-    private val condensedFace = if (tactical) app.olauncher.helper.Tactical.body(activity) else null
+    private val tactical = Tactical.isOn(activity)
+    private val stencilFace = if (tactical) Tactical.stencil(activity) else null
+    private val condensedFace = if (tactical) Tactical.body(activity) else null
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     /** The next hours: hour, icon, temperature; a tap opens the Weather app (on the hour tapped). */
@@ -710,7 +711,7 @@ class CalendarWidgetView(
         player.applyStyle()
         background = when {
             // Tactical theme: an olive panel with two cut corners
-            tactical && (config.card || config.background > 0) -> app.olauncher.helper.Tactical.panel(cutDp = 12).apply {
+            tactical && (config.card || config.background > 0) -> Tactical.panel(cutDp = 12).apply {
                 if (!config.card) alpha = config.background * 255 / 100
             }
             // A card like the menus' (the opacity setting fades its ground, the border stays)
@@ -1100,7 +1101,7 @@ class CalendarWidgetView(
             line.addView(text(CalendarText.STATUS).apply {
                 text = it
                 maxLines = 1
-                if (lateDays >= 0) setTextColor(if (tactical) app.olauncher.helper.Tactical.ALERT else TODO_LATE_COLOR)
+                if (lateDays >= 0) setTextColor(if (tactical) Tactical.ALERT else TODO_LATE_COLOR)
                 else if (config.text(CalendarText.STATUS).color == 0) alpha = 0.7f
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 8.dpToPx() })
         }
@@ -1283,7 +1284,7 @@ class CalendarWidgetView(
         val style = if (tactical && chosen == null && t == CalendarText.CLOCK) Typeface.NORMAL else s.style or extraStyle
         view.typeface = Typeface.create(base, style)
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, s.sizeSp.toFloat())
-        view.setTextColor(if (s.color != 0) s.color else if (tactical && t == CalendarText.CLOCK) app.olauncher.helper.Tactical.SAND else primary)
+        view.setTextColor(if (s.color != 0) s.color else if (tactical && t == CalendarText.CLOCK) Tactical.SAND else primary)
         if (tactical && (t == CalendarText.HEADER || t == CalendarText.WEEK)) view.isAllCaps = true
         view.includeFontPadding = false
     }

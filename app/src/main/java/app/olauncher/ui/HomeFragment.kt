@@ -1,5 +1,6 @@
 package app.olauncher.ui
 
+import app.olauncher.helper.Tactical
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.Intent
@@ -521,13 +522,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private fun applyTactical() {
         if (!prefs.tacticalTheme) return
         val ctx = requireContext()
-        binding.mainLayout.background = app.olauncher.helper.Tactical.ground()
+        binding.mainLayout.background = Tactical.ground()
         listOf(binding.searchBar, binding.detoxButton, binding.bookmarksButton, binding.appsButton).forEach {
-            it.background = app.olauncher.helper.Tactical.panel(cutDp = 8)
+            it.background = Tactical.panel(cutDp = 8)
         }
-        app.olauncher.helper.Tactical.stencil(ctx)?.let { binding.clock.typeface = it }
-        binding.clock.setTextColor(app.olauncher.helper.Tactical.SAND)
-        app.olauncher.helper.Tactical.body(ctx)?.let { binding.date.typeface = it }
+        Tactical.stencil(ctx)?.let { binding.clock.typeface = it }
+        binding.clock.setTextColor(Tactical.SAND)
+        Tactical.body(ctx)?.let { binding.date.typeface = it }
         binding.date.isAllCaps = true
     }
 

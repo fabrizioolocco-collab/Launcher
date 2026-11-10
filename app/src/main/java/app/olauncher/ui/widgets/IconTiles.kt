@@ -1,5 +1,6 @@
 package app.olauncher.ui.widgets
 
+import app.olauncher.helper.Tactical
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import app.olauncher.R
@@ -14,7 +15,7 @@ object IconTiles {
 
     fun drawable(context: Context, sizePx: Int): android.graphics.drawable.Drawable =
         // Tactical theme: an olive square with two cut corners
-        if (app.olauncher.helper.Tactical.isOn(context)) app.olauncher.helper.Tactical.panel(
+        if (Tactical.isOn(context)) Tactical.panel(
             context.getColorFromAttr(R.attr.tileColor), context.getColorFromAttr(R.attr.cardStrokeColor), (sizePx * 0.2f / context.resources.displayMetrics.density).toInt().coerceAtLeast(4)
         ) else rounded(context, sizePx)
 
