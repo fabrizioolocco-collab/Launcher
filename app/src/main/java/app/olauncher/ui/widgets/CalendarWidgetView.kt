@@ -91,6 +91,10 @@ class CalendarWidgetView(
     private var loadedDay = Int.MIN_VALUE
     private var loadJob: Job? = null
     private val primary = activity.getColorFromAttr(R.attr.primaryColor)
+    /** Tactical theme: stencil sand clock, condensed type, military date, countdowns (T−08:54), H24. */
+    private val tactical = app.olauncher.helper.Tactical.isOn(activity)
+    private val stencilFace = if (tactical) app.olauncher.helper.Tactical.stencil(activity) else null
+    private val condensedFace = if (tactical) app.olauncher.helper.Tactical.body(activity) else null
 
     private val content = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     /** The next hours: hour, icon, temperature; a tap opens the Weather app (on the hour tapped). */
@@ -705,6 +709,10 @@ class CalendarWidgetView(
         player.active = config.showPlayer
         player.applyStyle()
         background = when {
+            // Tactical theme: an olive panel with two cut corners
+            tactical && (config.card || config.background > 0) -> app.olauncher.helper.Tactical.panel(cutDp = 12).apply {
+                if (!config.card) alpha = config.background * 255 / 100
+            }
             // A card like the menus' (the opacity setting fades its ground, the border stays)
             config.card -> GradientDrawable().apply {
                 cornerRadius = 20.dpToPx().toFloat()
@@ -730,6 +738,8 @@ class CalendarWidgetView(
         val start = CalendarEvents.dayStart(first)
         val sameYear = SimpleDateFormat("yyyy", Locale.getDefault()).let { it.format(Date(start)) == it.format(Date()) }
         val pattern = when {
+            // Tactical theme: military date "VEN 06 NOV 26"
+            tactical -> "EEE dd MMM yy"
             config.shortDate && sameYear -> "EEE d MMM"
             config.shortDate -> "EEE d MMM yyyy"
             sameYear -> "EEEE, d MMMM"
@@ -737,7 +747,7 @@ class CalendarWidgetView(
         }
         // Some languages abbreviate with a dot ("sab." / "ott."): not in the short header
         dateText.text = SimpleDateFormat(pattern, Locale.getDefault()).format(Date(start)).uppercase(Locale.getDefault())
-            .let { if (config.shortDate) it.replace(".", "") else it }
+            .let { if (config.shortDate || tactical) it.replace(".", "") else it }
         clockText.text = android.text.format.DateFormat.getTimeFormat(activity).format(Date())
         weekText.text = activity.getString(R.string.ml_cal_week, isoWeek(start))
         if (config.weekView) {
@@ -1079,16 +1089,18 @@ class CalendarWidgetView(
             ellipsize = TextUtils.TruncateAt.END
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         val status = when {
-            lateDays >= 0 -> TodoLabels.late(activity, lateDays)
+            lateDays >= 0 -> if (tactical) activity.getString(R.string.ml_tactical_late) else TodoLabels.late(activity, lateDays)
             config.showStatus && todo.time != NO_TIME && todo.due == CalendarEvents.julianDay(now) ->
-                activity.getString(R.string.ml_cal_in, duration(CalendarEvents.dayStart(todo.due) + todo.time * 60_000L - now))
+                (CalendarEvents.dayStart(todo.due) + todo.time * 60_000L - now).let { ms ->
+                    if (tactical) countdown(ms, false) else activity.getString(R.string.ml_cal_in, duration(ms))
+                }
             else -> null
         }
         status?.let {
             line.addView(text(CalendarText.STATUS).apply {
                 text = it
                 maxLines = 1
-                if (lateDays >= 0) setTextColor(TODO_LATE_COLOR)
+                if (lateDays >= 0) setTextColor(if (tactical) app.olauncher.helper.Tactical.ALERT else TODO_LATE_COLOR)
                 else if (config.text(CalendarText.STATUS).color == 0) alpha = 0.7f
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 8.dpToPx() })
         }
@@ -1222,7 +1234,7 @@ class CalendarWidgetView(
 
     /** The times as seen on [day]: an event across midnight shows where it starts and where it ends. */
     private fun timeLabel(event: CalendarEvents.Event, day: Int): String {
-        if (event.allDay) return activity.getString(R.string.ml_cal_all_day)
+        if (event.allDay) return if (tactical) "H24" else activity.getString(R.string.ml_cal_all_day)
         val format = android.text.format.DateFormat.getTimeFormat(activity)
         val begin = format.format(Date(event.begin))
         val end = format.format(Date(event.end))
@@ -1236,8 +1248,17 @@ class CalendarWidgetView(
 
     private fun statusLabel(event: CalendarEvents.Event, now: Long, ongoing: Boolean, past: Boolean): String? {
         if (!config.showStatus || event.allDay || past) return null
+        if (tactical) return countdown(if (ongoing) event.end - now else event.begin - now, ongoing)
         return if (ongoing) activity.getString(R.string.ml_cal_left, duration(event.end - now))
         else activity.getString(R.string.ml_cal_in, duration(event.begin - now))
+    }
+
+    /** Tactical theme: "T−08:54" to the start, "+00:25" left of an event going on; days as "T−3G". */
+    private fun countdown(ms: Long, ongoing: Boolean): String {
+        val minutes = ((ms + 59_999) / 60_000).coerceAtLeast(1)
+        val sign = if (ongoing) "+" else "T\u2212"
+        if (minutes >= 24 * 60) return sign + activity.getString(R.string.ml_cal_days_short, ((minutes + 12 * 60) / (24 * 60)).toInt()).uppercase()
+        return sign + String.format(java.util.Locale.ROOT, "%02d:%02d", minutes / 60, minutes % 60)
     }
 
     /** "29 min", "1h 59m", "3 g". */
@@ -1256,12 +1277,18 @@ class CalendarWidgetView(
 
     private fun styleText(view: TextView, t: CalendarText, extraStyle: Int = Typeface.NORMAL) {
         val s = config.text(t)
-        val base = FontManager.typeface(activity, s.font) ?: Typeface.DEFAULT
-        view.typeface = Typeface.create(base, s.style or extraStyle)
+        val chosen = FontManager.typeface(activity, s.font)
+        val base = chosen ?: (if (tactical) tacticalFace(t) else null) ?: Typeface.DEFAULT
+        // The stencil face has one weight: no fake bold on it
+        val style = if (tactical && chosen == null && t == CalendarText.CLOCK) Typeface.NORMAL else s.style or extraStyle
+        view.typeface = Typeface.create(base, style)
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, s.sizeSp.toFloat())
-        view.setTextColor(if (s.color != 0) s.color else primary)
+        view.setTextColor(if (s.color != 0) s.color else if (tactical && t == CalendarText.CLOCK) app.olauncher.helper.Tactical.SAND else primary)
+        if (tactical && (t == CalendarText.HEADER || t == CalendarText.WEEK)) view.isAllCaps = true
         view.includeFontPadding = false
     }
+
+    private fun tacticalFace(t: CalendarText): Typeface? = if (t == CalendarText.CLOCK) stencilFace else condensedFace
 
     private fun iconButton(icon: Int, description: Int, onClick: (View) -> Unit) = ImageView(activity).apply {
         setImageResource(icon)

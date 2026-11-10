@@ -41,6 +41,7 @@ class Prefs(context: Context) {
     private val SHARE_SHOWN_TIME = "SHARE_SHOWN_TIME"
     private val TEXT_SIZE_SCALE = "TEXT_SIZE_SCALE"
     private val BOLD_FONT = "BOLD_FONT"
+    private val TACTICAL_THEME = "TACTICAL_THEME"
     private val PRO_MESSAGE_SHOWN = "PRO_MESSAGE_SHOWN"
     private val HIDE_SET_DEFAULT_LAUNCHER = "HIDE_SET_DEFAULT_LAUNCHER"
     private val SCREEN_TIME_LAST_UPDATED = "SCREEN_TIME_LAST_UPDATED"
@@ -468,6 +469,15 @@ class Prefs(context: Context) {
     var boldFont: Boolean
         get() = prefs.getBoolean(BOLD_FONT, false)
         set(value) = prefs.edit { putBoolean(BOLD_FONT, value).apply() }
+
+    /** The olive / sand "tactical" theme (always dark). */
+    var tacticalTheme: Boolean
+        get() = prefs.getBoolean(TACTICAL_THEME, false)
+        set(value) = prefs.edit { putBoolean(TACTICAL_THEME, value).apply() }
+
+    /** The night mode actually used: the tactical theme is always dark. */
+    val effectiveTheme: Int
+        get() = if (tacticalTheme) AppCompatDelegate.MODE_NIGHT_YES else appTheme
 
     var proMessageShown: Boolean
         get() = prefs.getBoolean(PRO_MESSAGE_SHOWN, false)

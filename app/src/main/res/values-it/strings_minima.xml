@@ -958,4 +958,6 @@
     <string name="ml_trash_move_many_confirm">Spostare %1$d elementi nel cestino? Potrai ripristinarli per %2$d giorni.</string>
     <string name="ml_trash_folder_confirm">Spostare nel cestino la cartella \"%1$s\" con tutto il contenuto (%2$d foto e video)? Potrai ripristinarla per %3$d giorni.</string>
     <string name="ml_trash_folders_confirm">Spostare nel cestino %1$d cartelle con tutto il contenuto (%2$d foto e video)? Potrai ripristinarle per %3$d giorni.</string>
+    <string name="ml_tactical_theme">Tema tattico</string>
+    <string name="ml_tactical_late">SCADUTO</string>
 </resources>

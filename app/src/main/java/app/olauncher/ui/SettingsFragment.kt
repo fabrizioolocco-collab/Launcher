@@ -434,6 +434,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.appThemeText -> showAppThemeMenu(view, showSystem = false)
             R.id.textSizeValue -> showTextSizeDialog()
             R.id.boldFont -> toggleBoldFont()
+            R.id.tacticalTheme -> toggleTacticalTheme()
 
             R.id.swipeLeftApp -> showSwipeAppMenu(view, left = true)
             R.id.swipeRightApp -> showSwipeAppMenu(view, left = false)
@@ -526,6 +527,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.appThemeText.setOnClickListener(this)
         binding.textSizeValue.setOnClickListener(this)
         binding.boldFont.setOnClickListener(this)
+        binding.tacticalTheme.setOnClickListener(this)
 
 
         binding.dailyWallpaper.setOnLongClickListener(this)
@@ -1087,6 +1089,15 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
     private fun populateBoldFont() {
         binding.boldFont.text = getString(if (prefs.boldFont) R.string.on else R.string.off)
+        binding.tacticalTheme.text = getString(if (prefs.tacticalTheme) R.string.on else R.string.off)
+    }
+
+    /** Olive and sand, always dark: the whole launcher is rebuilt with it (or without it). */
+    private fun toggleTacticalTheme() {
+        prefs.tacticalTheme = !prefs.tacticalTheme
+        populateBoldFont()
+        AppCompatDelegate.setDefaultNightMode(prefs.effectiveTheme)
+        requireActivity().recreate()
     }
 
     private fun populateScreenTimeOnOff() {

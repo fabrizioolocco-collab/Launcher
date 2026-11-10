@@ -64,6 +64,30 @@
         <item name="mainFontFamily">sans-serif</item>
     </style>
 
+    <!-- Applied over AppTheme (always dark) when the tactical theme is on: olive and sand -->
+    <style name="TacticalOverlay">
+        <item name="colorPrimary">#FFD9D2AE</item>
+        <item name="colorAccent">#FFC8AE6E</item>
+        <item name="primaryColor">#FFD9D2AE</item>
+        <item name="cardColor">#FF1F2318</item>
+        <item name="cardStrokeColor">#FF343A28</item>
+        <item name="cardLineColor">#FF2A2F22</item>
+        <item name="secondaryTextColor">#FF8E8A6C</item>
+        <item name="primaryInverseColor">#FF121410</item>
+        <item name="primaryTextShadowColor">#80121410</item>
+        <item name="primaryColorTrans50">#80D9D2AE</item>
+        <item name="primaryColorTrans80">#CCD9D2AE</item>
+        <item name="primaryColorInverseTrans50">#80121410</item>
+        <item name="primaryColorInverseTrans80">#CC121410</item>
+        <item name="primaryColorInverseTrans90">#E6121410</item>
+        <item name="primaryShadeColor">#1AC8AE6E</item>
+        <item name="primaryShadeDarkColor">#40C8AE6E</item>
+        <item name="dialogShadeColor">#80121410</item>
+        <item name="tileColor">#FF1F2318</item>
+        <item name="accentColor">#FFC8AE6E</item>
+        <item name="mainFontFamily">sans-serif-condensed</item>
+    </style>
+
     <style name="WindowAnimationTransition">
         <item name="android:windowEnterAnimation">@android:anim/fade_in</item>
         <item name="android:windowExitAnimation">@android:anim/fade_out</item>

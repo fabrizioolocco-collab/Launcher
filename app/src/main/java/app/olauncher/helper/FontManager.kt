@@ -45,6 +45,8 @@ object FontManager {
         "res:ml_playfair_display" to "Playfair Display",
         "res:ml_lora" to "Lora",
         "res:ml_jetbrains_mono" to "JetBrains Mono",
+        "res:ml_saira_condensed" to "Saira Condensed",
+        "res:ml_saira_stencil" to "Saira Stencil",
     )
 
     private val BUNDLED_RES = mapOf(
@@ -58,6 +60,8 @@ object FontManager {
         "res:ml_playfair_display" to R.font.ml_playfair_display,
         "res:ml_lora" to R.font.ml_lora,
         "res:ml_jetbrains_mono" to R.font.ml_jetbrains_mono,
+        "res:ml_saira_condensed" to R.font.ml_saira_condensed,
+        "res:ml_saira_stencil" to R.font.ml_saira_stencil,
     )
 
     private const val FILE_PREFIX = "file:"

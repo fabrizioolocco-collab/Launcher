@@ -961,4 +961,6 @@
     <string name="ml_trash_move_many_confirm">Move %1$d items to the trash? You can restore them for %2$d days.</string>
     <string name="ml_trash_folder_confirm">Move the folder \"%1$s\" with everything in it (%2$d photos and videos) to the trash? You can restore it for %3$d days.</string>
     <string name="ml_trash_folders_confirm">Move %1$d folders with everything in them (%2$d photos and videos) to the trash? You can restore them for %3$d days.</string>
+    <string name="ml_tactical_theme">Tactical theme</string>
+    <string name="ml_tactical_late">OVERDUE</string>
 </resources>

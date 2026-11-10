@@ -42,7 +42,8 @@ object SettingsStyle {
             val group = scrollLayout.getChildAt(i) as? LinearLayout ?: continue
             // Only the groups (the search field is no LinearLayout)
             if (group.background == null) continue
-            group.background = GradientDrawable().apply {
+            group.background = if (app.olauncher.helper.Tactical.isOn(ctx)) app.olauncher.helper.Tactical.panel(card, stroke, 12)
+            else GradientDrawable().apply {
                 cornerRadius = 20.dpToPx().toFloat()
                 setColor(card)
                 setStroke(1.dpToPx(), stroke)

@@ -51,6 +51,7 @@ class DockController(
     private val repo = PinnedAppsRepository(context)
     private var dock: MutableList<PinnedApp> = repo.loadDock()
     private var apps: List<AppModel.App> = emptyList()
+    private val tactical = app.olauncher.helper.Tactical.isOn(context)
     private var notifications: Map<String, AppNotifications> = emptyMap()
 
     fun setApps(list: List<AppModel.App>) {
@@ -124,7 +125,7 @@ class DockController(
         if (!container.isVisible) return
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
-            background = UiKit.cardBackground(context, 20)
+            background = if (tactical) app.olauncher.helper.Tactical.panel(cutDp = 12) else UiKit.cardBackground(context, 20)
             // No side padding: the card is as wide as the home grid, the tiles sit in its columns
             setPadding(0, 6.dpToPx(), 0, 6.dpToPx())
             // Long press on the card itself (between the tiles): add an app
@@ -150,7 +151,10 @@ class DockController(
 
     private fun tile(index: Int, dockApp: PinnedApp, app: AppModel.App) = ImageView(context).apply {
         val notified = notificationCount(app) > 0
-        background = GradientDrawable().apply {
+        background = if (tactical) app.olauncher.helper.Tactical.panel(
+            if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor),
+            if (notified) NotificationBadge.NOTIFICATION_COLOR else 0, 8,
+        ) else GradientDrawable().apply {
             cornerRadius = 16.dpToPx().toFloat()
             if (notified) {
                 setColor(TILE_RED)

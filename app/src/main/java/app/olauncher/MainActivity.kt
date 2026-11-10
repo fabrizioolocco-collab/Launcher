@@ -78,9 +78,10 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         prefs = Prefs(this)
         if (isEinkDisplay()) prefs.appTheme = AppCompatDelegate.MODE_NIGHT_NO
-        AppCompatDelegate.setDefaultNightMode(prefs.appTheme)
+        AppCompatDelegate.setDefaultNightMode(prefs.effectiveTheme)
         super.onCreate(savedInstanceState)
         if (prefs.boldFont) theme.applyStyle(R.style.BoldFontOverlay, true)
+        if (prefs.tacticalTheme) theme.applyStyle(R.style.TacticalOverlay, true)
         if (isEinkDisplay() || isSystemAnimationsDisabled()) theme.applyStyle(R.style.NoAnimationOverlay, true)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -206,7 +207,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        AppCompatDelegate.setDefaultNightMode(prefs.appTheme)
+        AppCompatDelegate.setDefaultNightMode(prefs.effectiveTheme)
         if (prefs.dailyWallpaper && AppCompatDelegate.getDefaultNightMode() == AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM) {
             setPlainWallpaper()
             viewModel.setWallpaperWorker()
@@ -394,6 +395,8 @@ class MainActivity : AppCompatActivity() {
         timerJob?.cancel()
         timerJob = lifecycleScope.launch {
             delay(200)
+            // The tactical theme has colours of its own: nothing to check
+            if (prefs.tacticalTheme) return@launch
             if ((prefs.appTheme == AppCompatDelegate.MODE_NIGHT_YES && getColorFromAttr(R.attr.primaryColor) != getColor(R.color.white))
                 || (prefs.appTheme == AppCompatDelegate.MODE_NIGHT_NO && getColorFromAttr(R.attr.primaryColor) != getColor(R.color.black))
             )

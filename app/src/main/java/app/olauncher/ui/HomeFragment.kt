@@ -135,6 +135,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         } ?: throw Exception("Invalid Activity")
 
         deviceManager = context?.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        applyTactical()
 
         // The main grid: widgets, app icons and the news strip share its cells
         widgets = HomeWidgetsController(
@@ -514,6 +515,20 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             NotificationRepository.openAccessSettings(requireContext())
         }
 
+    }
+
+    /** Tactical theme: camouflage ground, cut-corner bars, stencil clock. */
+    private fun applyTactical() {
+        if (!prefs.tacticalTheme) return
+        val ctx = requireContext()
+        binding.mainLayout.background = app.olauncher.helper.Tactical.ground()
+        listOf(binding.searchBar, binding.detoxButton, binding.bookmarksButton, binding.appsButton).forEach {
+            it.background = app.olauncher.helper.Tactical.panel(cutDp = 8)
+        }
+        app.olauncher.helper.Tactical.stencil(ctx)?.let { binding.clock.typeface = it }
+        binding.clock.setTextColor(app.olauncher.helper.Tactical.SAND)
+        app.olauncher.helper.Tactical.body(ctx)?.let { binding.date.typeface = it }
+        binding.date.isAllCaps = true
     }
 
     private fun setHomeAlignment(horizontalGravity: Int = prefs.homeAlignment) {
