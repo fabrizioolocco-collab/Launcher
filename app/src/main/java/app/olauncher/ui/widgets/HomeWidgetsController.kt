@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.View
+import app.olauncher.BuildConfig
 import app.olauncher.R
 import android.Manifest
 import androidx.core.app.ActivityCompat
@@ -874,7 +875,7 @@ class HomeWidgetsController(
     /** Puts an icon of [app] on the grid (on the preferred cell, else the first free one). False if it was already there. */
     fun addApp(app: AppModel.App): Boolean {
         val user = app.user.toString()
-        if (widgets.any { it.isApp && it.packageName == app.appPackage && it.user == user }) {
+        if (widgets.any { isSameApp(it, app, user) }) {
             preferredCell = null
             return false
         }
@@ -1294,11 +1295,19 @@ class HomeWidgetsController(
          * Pins [app] on the main home grid from outside home (app drawer, folder shortcuts); the
          * home picks the change up when it's shown again. Returns false if it was already there.
          */
+        /**
+         * [item] is an icon of [app]. The launcher's own apps (Files, ToDo, Gallery, Spesa...) share one
+         * package: they are told apart by their activity.
+         */
+        private fun isSameApp(item: HomeWidget, app: AppModel.App, user: String) =
+            item.isApp && item.packageName == app.appPackage && item.user == user &&
+                    (app.appPackage != BuildConfig.APPLICATION_ID || item.activityClassName == app.activityClassName)
+
         fun addAppToHome(context: android.content.Context, app: AppModel.App): Boolean {
             val repo = HomeWidgetsRepository(context, HomeWidgetsRepository.KEY)
             val items = repo.load()
             val user = app.user.toString()
-            if (items.any { it.isApp && it.packageName == app.appPackage && it.user == user }) return false
+            if (items.any { isSameApp(it, app, user) }) return false
             items.add(
                 HomeWidget(
                     // row -1: the home picks the cell, as it knows where the widgets are
