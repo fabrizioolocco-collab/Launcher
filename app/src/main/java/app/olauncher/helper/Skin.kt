@@ -98,6 +98,7 @@ object Skin {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
                 // Before Android 10 there is no "pre created": this still runs before the content is set
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) applyTo(activity)
+                solidWindow(activity)
             }
             override fun onActivityStarted(activity: Activity) {}
             override fun onActivityResumed(activity: Activity) {}
@@ -106,6 +107,30 @@ object Skin {
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
             override fun onActivityDestroyed(activity: Activity) {}
         })
+    }
+
+    /**
+     * The launcher's own screens (gallery, files, ToDo...) get the look's ground as their window: the
+     * theme shows the wallpaper, which then showed in the bands under the status bar and the navigation
+     * bar in another colour. The home keeps the wallpaper; see-through screens stay as they are.
+     */
+    private fun solidWindow(activity: Activity) {
+        if (!isOn(activity) || activity is app.olauncher.MainActivity) return
+        val a = activity.theme.obtainStyledAttributes(intArrayOf(android.R.attr.windowIsTranslucent))
+        val translucent = a.getBoolean(0, false)
+        a.recycle()
+        if (translucent) return
+        val window = activity.window
+        val ground = palette(activity).ground
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(ground))
+        window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+        if (Build.VERSION.SDK_INT < 35) {
+            // Before Android 15 the bars can still have a colour of their own
+            @Suppress("DEPRECATION")
+            window.statusBarColor = ground
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = ground
+        }
     }
 
     private fun applyTo(activity: Activity) {
