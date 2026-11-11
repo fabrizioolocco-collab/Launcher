@@ -29,6 +29,9 @@ import app.olauncher.helper.SwipeActions
 import app.olauncher.helper.FolderShortcuts
 import app.olauncher.helper.HomeShortcuts
 import app.olauncher.helper.AppRename
+import app.olauncher.helper.AppFolders
+import app.olauncher.helper.CustomIcons
+import app.olauncher.ui.AppFolderDialog
 import app.olauncher.helper.ParkingAuto
 import app.olauncher.helper.ParkingShortcut
 import app.olauncher.ui.NotificationBadge
@@ -39,6 +42,7 @@ import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getScreenDimensions
 import app.olauncher.helper.showConfirmDialog
+import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.HomeLock.showHomeItemMenu
 import app.olauncher.helper.showToast
@@ -91,6 +95,9 @@ class HomeWidgetsController(
     private var apps: List<AppModel.App> = emptyList()
     private var appsSignature = ""
     private var notifications: Map<String, AppNotifications> = emptyMap()
+
+    /** The folders of apps on home (see [AppFolders]), re-read whenever they change. */
+    private var folders: List<AppFolders.Folder> = AppFolders.all(activity)
 
     /** Where a new item goes when added from a long press on an empty cell. */
     private var preferredCell: Pair<Int, Int>? = null
@@ -191,6 +198,7 @@ class HomeWidgetsController(
         if (raw == loadedRaw) return
         loadedRaw = raw
         widgets = repo.load()
+        folders = AppFolders.all(activity)
         render()
     }
 
@@ -411,7 +419,11 @@ class HomeWidgetsController(
 
     /** Keys (package|user) of the app icons placed here. */
     fun appKeys(): Set<String> =
-        widgets.filter { it.isApp }.map { NotificationRepository.key(it.packageName.orEmpty(), it.user.orEmpty()) }.toSet()
+        widgets.filter { it.isApp }.flatMap { item ->
+            // A folder stands for the apps inside it
+            folderFor(item)?.apps?.map { NotificationRepository.key(it.packageName, it.user) }
+                ?: listOf(NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty()))
+        }.toSet()
 
     fun setNotifications(map: Map<String, AppNotifications>) {
         notifications = map
@@ -419,7 +431,8 @@ class HomeWidgetsController(
     }
 
     private fun findApp(item: HomeWidget): AppModel.App? =
-        apps.firstOrNull { it.appPackage == item.packageName && it.user.toString() == item.user && it.activityClassName == item.activityClassName }
+        if (AppFolders.isAppFolder(item.packageName)) folderFor(item)?.let { AppFolders.toApp(it) }
+        else apps.firstOrNull { it.appPackage == item.packageName && it.user.toString() == item.user && it.activityClassName == item.activityClassName }
             ?: apps.firstOrNull { it.appPackage == item.packageName && it.user.toString() == item.user }
 
     /** First row after everything on the grid. */
@@ -432,7 +445,11 @@ class HomeWidgetsController(
         for (i in 0 until grid.childCount) {
             val view = grid.getChildAt(i) as? IconCellView ?: continue
             val item = view.tag as HomeWidget
-            view.setNotified(notifications[NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty())]?.count ?: 0)
+            val folder = folderFor(item)
+            view.setNotified(
+                if (folder != null) folderApps(folder).sumOf { notificationCount(it) }
+                else notifications[NotificationRepository.key(item.packageName.orEmpty(), item.user.orEmpty())]?.count ?: 0
+            )
         }
     }
 
@@ -624,6 +641,7 @@ class HomeWidgetsController(
     }
 
     private fun iconView(item: HomeWidget, app: AppModel.App): View {
+        folderFor(item)?.let { return folderView(item, it) }
         val view = IconCellView(activity) { onLaunchApp(app) }
         view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
@@ -729,7 +747,10 @@ class HomeWidgetsController(
         when (val item = view.tag) {
             is HomeWidget -> if (item.isApp) {
                 val (col, row) = grid.dropCellFor(view, dx, dy)
-                grid.showDropPreview(col, row, item.colSpan, item.rowSpan, isFree(col, row, item.colSpan, item.rowSpan, item))
+                // Over another icon: it shows where the folder will be
+                val target = mergeTarget(item, col, row)
+                if (target != null) grid.showDropPreview(target.col, target.row, 1, target.rowSpan, true)
+                else grid.showDropPreview(col, row, item.colSpan, item.rowSpan, isFree(col, row, item.colSpan, item.rowSpan, item))
             }
 
             is Block -> {
@@ -775,6 +796,11 @@ class HomeWidgetsController(
                 view.layoutParams = p
                 widget.x = p.leftMargin.toDp(); widget.y = p.topMargin.toDp()
                 save()
+                return
+            }
+            // Dropped on another icon (after a real drag, so the rows are the ones shown): a folder
+            if (dragDx != 0f || dragDy != 0f) mergeTarget(widget, col, row)?.let {
+                mergeInto(widget, it)
                 return
             }
             if (isFree(col, row, widget.colSpan, widget.rowSpan, widget)) {
@@ -875,7 +901,7 @@ class HomeWidgetsController(
     /** Puts an icon of [app] on the grid (on the preferred cell, else the first free one). False if it was already there. */
     fun addApp(app: AppModel.App): Boolean {
         val user = app.user.toString()
-        if (widgets.any { isSameApp(it, app, user) }) {
+        if (widgets.any { isSameApp(it, app, user) } || folders.any { f -> f.apps.any { isSameMember(it, app, user) } }) {
             preferredCell = null
             return false
         }
@@ -933,6 +959,10 @@ class HomeWidgetsController(
     }
 
     private fun showIconMenu(item: HomeWidget) {
+        folderFor(item)?.let {
+            showFolderMenu(item, it)
+            return
+        }
         val app = findApp(item) ?: return
         if (ParkingShortcut.isParking(app.appPackage)) {
             activity.showHomeItemMenu(
@@ -976,6 +1006,188 @@ class HomeWidgetsController(
                 else base + DetoxController.whitelistEntry(activity, app)
             } + SwipeActions.menuEntries(activity, app) { apps },
             header = AppNotificationsView.create(activity, app),
+        )
+    }
+
+    // ---------------------------------------------------------------- folders of apps
+
+    /** The folder an icon on the grid stands for, or null for a plain app. */
+    private fun folderFor(item: HomeWidget): AppFolders.Folder? =
+        if (!AppFolders.isAppFolder(item.packageName)) null else folders.firstOrNull { it.packageName == item.packageName }
+
+    /** The installed app a folder member is (the launcher's own apps only by their activity). */
+    private fun memberApp(member: AppFolders.Member): AppModel.App? =
+        apps.firstOrNull { it.appPackage == member.packageName && it.user.toString() == member.user && it.activityClassName == member.activityClassName }
+            ?: if (member.packageName == BuildConfig.APPLICATION_ID) null
+            else apps.firstOrNull { it.appPackage == member.packageName && it.user.toString() == member.user }
+
+    /** The apps shown in a folder: installed, and allowed during detox. */
+    private fun folderApps(folder: AppFolders.Folder): List<AppModel.App> =
+        folder.apps.filter { DetoxManager.isAllowed(activity, it.packageName) }.mapNotNull { memberApp(it) }
+
+    private fun notificationCount(app: AppModel.App): Int =
+        notifications[NotificationRepository.key(app.appPackage, app.user.toString())]?.count ?: 0
+
+    private fun memberOf(item: HomeWidget) =
+        AppFolders.Member(item.packageName.orEmpty(), item.activityClassName, item.user.orEmpty())
+
+    /**
+     * The icon a dragged icon dropped on ([col], [row]) would go in a folder with: the one under
+     * the drop cell (closest row first). Folders don't go inside other folders.
+     */
+    private fun mergeTarget(item: HomeWidget, col: Int, row: Int): HomeWidget? {
+        if (!item.isApp || folderFor(item) != null) return null
+        return widgets.filter {
+            it !== item && holdsCell(it) && it.col == col && overlaps(it, col, row, 1, item.rowSpan) &&
+                    // Only icons that are drawn: not one hidden by detox
+                    DetoxManager.isAllowed(activity, it.packageName.orEmpty()) && findApp(it) != null
+        }
+            .minByOrNull { kotlin.math.abs(it.row - row) }
+    }
+
+    /** [dragged] was dropped on [target]: into the target's folder, or a new folder made of both. */
+    private fun mergeInto(dragged: HomeWidget, target: HomeWidget) {
+        val folder = folderFor(target)
+        if (folder != null) {
+            AppFolders.setApps(activity, folder, folder.apps + memberOf(dragged))
+        } else {
+            val created = AppFolders.create(
+                activity, activity.getString(R.string.ml_folder_default_name), listOf(memberOf(target), memberOf(dragged))
+            )
+            // The folder takes the target's cell
+            val index = widgets.indexOf(target)
+            widgets[index] = folderItem(created, target.col, target.row)
+        }
+        widgets.remove(dragged)
+        folders = AppFolders.all(activity)
+        save()
+        render()
+    }
+
+    private fun folderItem(folder: AppFolders.Folder, col: Int, row: Int) = HomeWidget(
+        appWidgetId = -1, col = col, row = row, colSpan = 1, rowSpan = rowDivisions,
+        packageName = folder.packageName, activityClassName = null, user = android.os.Process.myUserHandle().toString(),
+    )
+
+    /** A home icon of [member] (row -1: the home gives it the first free cell). */
+    private fun memberItem(member: AppFolders.Member, col: Int = 0, row: Int = -1) = HomeWidget(
+        appWidgetId = -1, col = col, row = row, colSpan = 1, rowSpan = rowDivisions,
+        packageName = member.packageName, activityClassName = member.activityClassName, user = member.user,
+    )
+
+    private fun folderView(item: HomeWidget, folder: AppFolders.Folder): View {
+        val view = IconCellView(activity) { openFolder(item) }
+        view.tag = item
+        view.layoutParams = WidgetGridLayout.CellParams(item.col, shownRow(item.row), 1, rowDivisions)
+        val showLabel = showLabels
+        val tile = prefs.iconTiles
+        val card = prefs.drawerCards
+        val size = homeIconSize(view, showLabel, card)
+        view.bind(folder.name, showLabel, size, tile, card)
+        view.touch.listener = dragListener(null)
+        val iconPack = prefs.iconPack
+        val context = activity.applicationContext
+        val bitmapSize = view.bitmapSizeFor(size, tile, card)
+        val inside = folderApps(folder)
+        val user = android.os.Process.myUserHandle()
+        scope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                if (CustomIcons.hasCustom(context, folder.packageName, null, user))
+                    IconPackManager.getIcon(context, folder.packageName, null, user, iconPack, bitmapSize)
+                else AppFolders.previewIcon(bitmapSize, inside) { app, s ->
+                    IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, s)
+                }
+            }
+            view.setIcon(bitmap)
+        }
+        return view
+    }
+
+    private fun openFolder(item: HomeWidget) {
+        val folder = folderFor(item) ?: return
+        val iconPack = prefs.iconPack
+        val context = activity.applicationContext
+        AppFolderDialog.show(
+            activity, folder.name, folderApps(folder), scope,
+            loadIcon = { app, size -> IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size) },
+            notifications = { notificationCount(it) },
+            onLaunch = { app ->
+                if (notificationCount(app) > 0) NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) }
+                else onLaunchApp(app)
+            },
+            onTakeOut = { app -> takeOut(item, folder, app) },
+            onRename = { renameFolder(folder) },
+        )
+    }
+
+    private fun renameFolder(folder: AppFolders.Folder) {
+        activity.showTextInputDialog(
+            title = activity.getString(R.string.ml_folder_rename),
+            initial = folder.name,
+            hint = activity.getString(R.string.ml_folder_default_name),
+            action = activity.getString(R.string.ml_save),
+        ) { name ->
+            AppFolders.rename(activity, folder, name)
+            folders = AppFolders.all(activity)
+            render()
+        }
+    }
+
+    /** [app] leaves the folder and goes back on home; a folder left with one app becomes that app. */
+    private fun takeOut(item: HomeWidget, folder: AppFolders.Folder, app: AppModel.App) {
+        val user = app.user.toString()
+        val member = folder.apps.firstOrNull { isSameMember(it, app, user) } ?: return
+        val remaining = folder.apps - member
+        widgets.add(memberItem(member))
+        if (remaining.size <= 1) {
+            val index = widgets.indexOf(item)
+            if (remaining.isNotEmpty() && index >= 0) widgets[index] = memberItem(remaining.first(), item.col, item.row)
+            else widgets.remove(item)
+            AppFolders.remove(activity, folder.id)
+        } else AppFolders.setApps(activity, folder, remaining)
+        folders = AppFolders.all(activity)
+        save()
+        render()
+    }
+
+    /** Undoes the folder: its apps back on home, the first one on the folder's cell. */
+    private fun dissolve(item: HomeWidget, folder: AppFolders.Folder) {
+        val index = widgets.indexOf(item)
+        folder.apps.forEachIndexed { i, member ->
+            if (i == 0 && index >= 0) widgets[index] = memberItem(member, item.col, item.row)
+            else widgets.add(memberItem(member))
+        }
+        if (folder.apps.isEmpty()) widgets.remove(item)
+        AppFolders.remove(activity, folder.id)
+        folders = AppFolders.all(activity)
+        save()
+        render()
+    }
+
+    private fun showFolderMenu(item: HomeWidget, folder: AppFolders.Folder) {
+        activity.showHomeItemMenu(
+            folder.name,
+            listOf(
+                MenuEntry(activity.getString(R.string.ml_folder_open)) { openFolder(item) },
+                MenuEntry(activity.getString(R.string.ml_folder_rename)) { renameFolder(folder) },
+                MenuEntry(activity.getString(R.string.ml_change_icon)) {
+                    IconChooser.show(activity, AppFolders.toApp(folder), scope, pickImage) { render() }
+                },
+                MenuEntry(activity.getString(R.string.ml_folder_dissolve)) { dissolve(item, folder) },
+                MenuEntry(activity.getString(R.string.ml_remove_from_home)) {
+                    activity.showConfirmDialog(
+                        title = activity.getString(R.string.ml_remove_from_home),
+                        message = activity.getString(R.string.ml_folder_remove_confirm),
+                        action = activity.getString(R.string.ml_remove_from_home),
+                    ) {
+                        widgets.remove(item)
+                        AppFolders.remove(activity, folder.id)
+                        folders = AppFolders.all(activity)
+                        save()
+                        render()
+                    }
+                },
+            )
         )
     }
 
@@ -1303,11 +1515,17 @@ class HomeWidgetsController(
             item.isApp && item.packageName == app.appPackage && item.user == user &&
                     (app.appPackage != BuildConfig.APPLICATION_ID || item.activityClassName == app.activityClassName)
 
+        /** [member] of a folder is [app]. */
+        private fun isSameMember(member: AppFolders.Member, app: AppModel.App, user: String) =
+            member.packageName == app.appPackage && member.user == user &&
+                    (app.appPackage != BuildConfig.APPLICATION_ID || member.activityClassName == app.activityClassName)
+
         fun addAppToHome(context: android.content.Context, app: AppModel.App): Boolean {
             val repo = HomeWidgetsRepository(context, HomeWidgetsRepository.KEY)
             val items = repo.load()
             val user = app.user.toString()
             if (items.any { isSameApp(it, app, user) }) return false
+            if (AppFolders.all(context).any { f -> f.apps.any { isSameMember(it, app, user) } }) return false
             items.add(
                 HomeWidget(
                     // row -1: the home picks the cell, as it knows where the widgets are

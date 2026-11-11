@@ -57,7 +57,7 @@ class MenuEntry(
     val onClick: () -> Unit = {},
 )
 
-private fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding> {
+internal fun Context.baseDialog(title: String): Pair<OlDialog, DialogBaseBinding> {
     val dialog = OlDialog(this)
     val binding = DialogBaseBinding.inflate(LayoutInflater.from(dialog.context))
     binding.tvTitle.text = title

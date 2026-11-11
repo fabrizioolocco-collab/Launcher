@@ -983,4 +983,10 @@
     <string name="ml_shop_edit">Modifica</string>
     <string name="ml_shop_empty">La lista è vuota: scrivi qui sopra cosa comprare</string>
     <string name="ml_shop_forgotten">\"%1$s\" tolto dai suggerimenti</string>
+    <string name="ml_folder_default_name">Cartella</string>
+    <string name="ml_folder_open">Apri</string>
+    <string name="ml_folder_rename">Rinomina cartella</string>
+    <string name="ml_folder_dissolve">Sciogli (app di nuovo sulla home)</string>
+    <string name="ml_folder_take_out">Togli dalla cartella</string>
+    <string name="ml_folder_remove_confirm">La cartella e le sue app spariscono dalla home (le app restano installate).</string>
 </resources>

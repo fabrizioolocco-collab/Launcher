@@ -986,4 +986,10 @@
     <string name="ml_shop_edit">Edit</string>
     <string name="ml_shop_empty">The list is empty: write above what to buy</string>
     <string name="ml_shop_forgotten">\"%1$s\" removed from the suggestions</string>
+    <string name="ml_folder_default_name">Folder</string>
+    <string name="ml_folder_open">Open</string>
+    <string name="ml_folder_rename">Rename folder</string>
+    <string name="ml_folder_dissolve">Ungroup (apps back on home)</string>
+    <string name="ml_folder_take_out">Take out of the folder</string>
+    <string name="ml_folder_remove_confirm">The folder and its apps leave the home (the apps stay installed).</string>
 </resources>

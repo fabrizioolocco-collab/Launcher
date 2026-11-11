@@ -306,7 +306,7 @@ object DetoxManager {
         if (isLockedOut(context)) return packageName in ALWAYS_ALLOWED || isLockoutApp(context, packageName) ||
                 packageName in inputMethods(context)
         // Folder shortcuts on home are not apps
-        if (FolderShortcuts.isFolder(packageName) || ParkingShortcut.isParking(packageName)) return true
+        if (FolderShortcuts.isFolder(packageName) || AppFolders.isAppFolder(packageName) || ParkingShortcut.isParking(packageName)) return true
         if (isStrict(context) && packageName in STRICT_BLOCKED) return false
         if (packageName in ALWAYS_ALLOWED) return true
         if (TestNotifications.isFake(packageName)) return packageName in whitelist(context)
