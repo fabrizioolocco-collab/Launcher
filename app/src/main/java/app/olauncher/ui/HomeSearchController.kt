@@ -137,8 +137,6 @@ class HomeSearchController(
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) = onQueryChanged()
         })
-        // OneDrive search was removed: forget its old sign-in
-        activity.deleteSharedPreferences("app.minimalauncher.onedrive")
     }
 
     private fun query() = input.text.toString().trim()
