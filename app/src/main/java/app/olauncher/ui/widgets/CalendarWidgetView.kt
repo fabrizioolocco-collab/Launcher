@@ -139,7 +139,7 @@ class CalendarWidgetView(
     private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
     private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
     private val buttons = listOf(calendarFilterButton, todoFilterButton, addButton, prevButton, nextButton)
-    /** Time passed toward a goal, as a percentage, next to the +; a tap opens it. */
+    /** Time passed toward a goal, as a percentage, on the right of the first day's title; a tap opens it. */
     private val goalCounter = GoalCounterView(activity, widgetId)
     private val divider = View(activity)
     private val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
@@ -184,8 +184,6 @@ class CalendarWidgetView(
         }
         header.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
         buttons.forEach { header.addView(it) }
-        header.addView(goalCounter, header.indexOfChild(addButton),
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         content.addView(weatherRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 8.dpToPx(); bottomMargin = 2.dpToPx()
@@ -214,7 +212,7 @@ class CalendarWidgetView(
             else lp.width.coerceAtLeast(0)
             return w + lp.marginStart + lp.marginEnd
         }
-        val others = need(clockText) + need(weekText) + need(goalCounter) + buttons.sumOf { need(it) }
+        val others = need(clockText) + need(weekText) + buttons.sumOf { need(it) }
         val max = (header.width - header.paddingLeft - header.paddingRight - others).coerceAtLeast(0)
         if (dateText.maxWidth != max) header.post { dateText.maxWidth = max }
     }
@@ -686,9 +684,6 @@ class CalendarWidgetView(
         styleText(dateText, CalendarText.HEADER)
         val iconSize = (config.text(CalendarText.HEADER).sizeSp * 1.35f).toInt().dpToPx()
         val tint = config.text(CalendarText.HEADER).color.takeIf { it != 0 } ?: primary
-        styleText(goalCounter, CalendarText.HEADER)
-        goalCounter.textSize = config.text(CalendarText.HEADER).sizeSp * 0.72f
-        goalCounter.setTextColor(tint)
         buttons.forEach {
             it.layoutParams = LinearLayout.LayoutParams(iconSize + 16.dpToPx(), iconSize + 12.dpToPx())
             it.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
@@ -798,6 +793,19 @@ class CalendarWidgetView(
 
     private fun todoVisible(category: Long) = config.todoCategories.isEmpty() || category in config.todoCategories
 
+    /** The first day's title with the goal counter on its right (moved there at every redraw). */
+    private fun withGoalCounter(title: TextView): View {
+        (goalCounter.parent as? ViewGroup)?.removeView(goalCounter)
+        styleText(goalCounter, CalendarText.DAY)
+        goalCounter.setPadding(8.dpToPx(), title.paddingTop, 0, title.paddingBottom)
+        return LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(title, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(goalCounter, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
+    }
+
     private fun showEvents() {
         updateHeader()
         list.removeAllViews()
@@ -817,10 +825,11 @@ class CalendarWidgetView(
             // A todo not done on its day moves on to today, late
             val dayTodos = todos.filter { (it.due == day && day >= today) || (day == today && it.due < today) }
             val dayDone = history.filter { it.day == day }
-            list.addView(text(CalendarText.DAY).apply {
+            val title = text(CalendarText.DAY).apply {
                 text = dayLabel(day)
                 setPadding(0, if (list.childCount == 0) 0 else 10.dpToPx(), 0, 4.dpToPx())
-            })
+            }
+            if (day == first) list.addView(withGoalCounter(title)) else list.addView(title)
             val eventItems = dayEvents.map { e ->
                 if (e.allDay || e.startDay < day) EventItem(e, 0, 0)
                 else EventItem(e, 3, ((e.begin - CalendarEvents.dayStart(day)) / 60_000L).toInt())

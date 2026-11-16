@@ -1007,4 +1007,5 @@
     <string name="ml_goal_days">giorni</string>
     <string name="ml_goal_hours">ore</string>
     <string name="ml_goal_minutes">minuti</string>
+    <string name="ml_goal_privacy">Privacy: invisibile, un tocco nella sua zona lo mostra / nasconde</string>
 </resources>

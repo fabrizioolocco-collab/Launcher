@@ -42,6 +42,8 @@ data class GoalCounter(
     val decimals: Int = 2,
     val name: String = "",
     val hidden: Boolean = false,
+    /** Invisible until its place is tapped, gone again at the next tap. */
+    val privacy: Boolean = false,
 ) {
     val isSet get() = start > 0 && goalMinutes > 0
     val goalMs get() = goalMinutes * 60_000L
@@ -80,6 +82,7 @@ object GoalCounterStore {
             decimals = p.getInt("${k}_decimals", 2),
             name = p.getString("${k}_name", "").orEmpty(),
             hidden = p.getBoolean("${k}_hidden", false),
+            privacy = p.getBoolean("${k}_privacy", false),
         )
     }
 
@@ -91,6 +94,7 @@ object GoalCounterStore {
             putInt("${k}_decimals", c.decimals)
             putString("${k}_name", c.name)
             putBoolean("${k}_hidden", c.hidden)
+            putBoolean("${k}_privacy", c.privacy)
         }
     }
 }
@@ -98,7 +102,8 @@ object GoalCounterStore {
 /**
  * The small percentage in the calendar widget's header, refreshed as often as its last digit
  * changes while it is on screen. Before a goal is set it shows an hourglass. A tap opens
- * [GoalCounterDialog].
+ * [GoalCounterDialog]; in privacy mode it is invisible and a tap shows / hides it instead (the
+ * dialog is then in the widget's + menu).
  */
 class GoalCounterView(private val activity: Activity, private val widgetId: Int) :
     androidx.appcompat.widget.AppCompatTextView(activity) {
@@ -120,16 +125,30 @@ class GoalCounterView(private val activity: Activity, private val widgetId: Int)
         setPadding(6.dpToPx(), 4.dpToPx(), 6.dpToPx(), 4.dpToPx())
         isClickable = true
         isFocusable = true
-        setOnClickListener { GoalCounterDialog.show(activity, widgetId) { reload() } }
+        setOnClickListener {
+            if (counter.privacy && counter.isSet) {
+                revealed = !revealed
+                applyPrivacy()
+            } else GoalCounterDialog.show(activity, widgetId) { reload() }
+        }
         // Tabular digits: the width doesn't jump while the number runs
         fontFeatureSettings = "tnum"
         show()
     }
 
+    /** Shown for now in privacy mode (until the next tap; the setting itself stays). */
+    private var revealed = false
+
     fun reload() {
         counter = GoalCounterStore.load(activity, widgetId)
         isVisible = !counter.hidden
+        applyPrivacy()
         restart()
+    }
+
+    /** Invisible but still there to be tapped. */
+    private fun applyPrivacy() {
+        alpha = if (counter.privacy && counter.isSet && !revealed) 0f else 1f
     }
 
     private fun show() {
@@ -212,6 +231,11 @@ object GoalCounterDialog {
                         action = activity.getString(R.string.ml_goal_restart),
                     ) { change { it.copy(start = System.currentTimeMillis()) } }
                 },
+                MenuEntry(activity.getString(R.string.ml_goal_privacy), checked = c.privacy, onToggle = { on ->
+                    GoalCounterStore.save(activity, widgetId, GoalCounterStore.load(activity, widgetId).copy(privacy = on))
+                    onChanged()
+                    true
+                }),
                 MenuEntry(activity.getString(R.string.ml_goal_show), checked = !c.hidden, onToggle = { on ->
                     GoalCounterStore.save(activity, widgetId, GoalCounterStore.load(activity, widgetId).copy(hidden = !on))
                     onChanged()
