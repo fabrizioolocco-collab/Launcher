@@ -992,4 +992,22 @@
     <string name="ml_folder_dissolve">Ungroup (apps back on home)</string>
     <string name="ml_folder_take_out">Take out of the folder</string>
     <string name="ml_folder_remove_confirm">The folder and its apps leave the home (the apps stay installed).</string>
+    <string name="ml_goal_title">Goal counter</string>
+    <string name="ml_goal_name">Name</string>
+    <string name="ml_goal_start">Start</string>
+    <string name="ml_goal_duration">Goal</string>
+    <string name="ml_goal_decimals">Decimals</string>
+    <string name="ml_goal_restart">Start again from now</string>
+    <string name="ml_goal_restart_confirm">The counter starts again from this moment.</string>
+    <string name="ml_goal_show">Show in the widget</string>
+    <string name="ml_goal_started">Started: %1$s</string>
+    <string name="ml_goal_elapsed">Passed: %1$s</string>
+    <string name="ml_goal_left">Left: %1$s</string>
+    <string name="ml_goal_reached">Goal reached %1$s ago</string>
+    <string name="ml_goal_end">Goal on: %1$s</string>
+    <string name="ml_goal_dhm">%1$d d %2$d h %3$d m</string>
+    <string name="ml_goal_hm">%1$d h %2$d m</string>
+    <string name="ml_goal_days">days</string>
+    <string name="ml_goal_hours">hours</string>
+    <string name="ml_goal_minutes">minutes</string>
 </resources>

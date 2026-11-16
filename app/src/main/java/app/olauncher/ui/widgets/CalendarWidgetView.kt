@@ -139,6 +139,8 @@ class CalendarWidgetView(
     private val prevButton = iconButton(R.drawable.ic_cal_prev, R.string.ml_cal_prev) { moveDays(-1) }
     private val nextButton = iconButton(R.drawable.ic_cal_next, R.string.ml_cal_next) { moveDays(1) }
     private val buttons = listOf(calendarFilterButton, todoFilterButton, addButton, prevButton, nextButton)
+    /** Time passed toward a goal, as a percentage, next to the +; a tap opens it. */
+    private val goalCounter = GoalCounterView(activity, widgetId)
     private val divider = View(activity)
     private val list = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
     private val scroll = ScrollView(activity).apply {
@@ -182,6 +184,8 @@ class CalendarWidgetView(
         }
         header.addView(View(activity), LinearLayout.LayoutParams(0, 1, 1f))
         buttons.forEach { header.addView(it) }
+        header.addView(goalCounter, header.indexOfChild(addButton),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         content.addView(header, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         content.addView(weatherRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 8.dpToPx(); bottomMargin = 2.dpToPx()
@@ -210,7 +214,7 @@ class CalendarWidgetView(
             else lp.width.coerceAtLeast(0)
             return w + lp.marginStart + lp.marginEnd
         }
-        val others = need(clockText) + need(weekText) + buttons.sumOf { need(it) }
+        val others = need(clockText) + need(weekText) + need(goalCounter) + buttons.sumOf { need(it) }
         val max = (header.width - header.paddingLeft - header.paddingRight - others).coerceAtLeast(0)
         if (dateText.maxWidth != max) header.post { dateText.maxWidth = max }
     }
@@ -682,6 +686,9 @@ class CalendarWidgetView(
         styleText(dateText, CalendarText.HEADER)
         val iconSize = (config.text(CalendarText.HEADER).sizeSp * 1.35f).toInt().dpToPx()
         val tint = config.text(CalendarText.HEADER).color.takeIf { it != 0 } ?: primary
+        styleText(goalCounter, CalendarText.HEADER)
+        goalCounter.textSize = config.text(CalendarText.HEADER).sizeSp * 0.72f
+        goalCounter.setTextColor(tint)
         buttons.forEach {
             it.layoutParams = LinearLayout.LayoutParams(iconSize + 16.dpToPx(), iconSize + 12.dpToPx())
             it.setColorFilter(tint, PorterDuff.Mode.SRC_IN)
@@ -1014,6 +1021,7 @@ class CalendarWidgetView(
             },
             MenuEntry(activity.getString(R.string.ml_cal_open_todo)) { TodoActivity.open(activity) },
             MenuEntry(activity.getString(R.string.ml_cal_go_to_date)) { pickDate() },
+            MenuEntry(activity.getString(R.string.ml_goal_title)) { GoalCounterDialog.show(activity, widgetId) { goalCounter.reload() } },
             MenuEntry(activity.getString(if (config.weekView) R.string.ml_cal_day_view else R.string.ml_cal_week_view)) { toggleWeek() },
         ))
     }

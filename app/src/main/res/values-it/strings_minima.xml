@@ -989,4 +989,22 @@
     <string name="ml_folder_dissolve">Sciogli (app di nuovo sulla home)</string>
     <string name="ml_folder_take_out">Togli dalla cartella</string>
     <string name="ml_folder_remove_confirm">La cartella e le sue app spariscono dalla home (le app restano installate).</string>
+    <string name="ml_goal_title">Contatore obiettivo</string>
+    <string name="ml_goal_name">Nome</string>
+    <string name="ml_goal_start">Inizio</string>
+    <string name="ml_goal_duration">Obiettivo</string>
+    <string name="ml_goal_decimals">Decimali</string>
+    <string name="ml_goal_restart">Riparti da adesso</string>
+    <string name="ml_goal_restart_confirm">Il contatore riparte da questo momento.</string>
+    <string name="ml_goal_show">Mostra nel widget</string>
+    <string name="ml_goal_started">Iniziato: %1$s</string>
+    <string name="ml_goal_elapsed">Trascorso: %1$s</string>
+    <string name="ml_goal_left">Mancano: %1$s</string>
+    <string name="ml_goal_reached">Obiettivo raggiunto da %1$s</string>
+    <string name="ml_goal_end">Traguardo: %1$s</string>
+    <string name="ml_goal_dhm">%1$d g %2$d h %3$d m</string>
+    <string name="ml_goal_hm">%1$d h %2$d m</string>
+    <string name="ml_goal_days">giorni</string>
+    <string name="ml_goal_hours">ore</string>
+    <string name="ml_goal_minutes">minuti</string>
 </resources>
