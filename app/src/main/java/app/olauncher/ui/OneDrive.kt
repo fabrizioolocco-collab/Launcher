@@ -40,6 +40,8 @@ class OneDrive(private val context: Context) {
         /** Thumbnail addresses (photos, videos, documents), small (~176 px) and large (~800 px). */
         val thumbnail: String? = null,
         val thumbnailLarge: String? = null,
+        /** Changes whenever the content changes (OneDrive's cTag, else eTag): a kept copy is still good while it's the same. */
+        val version: String? = null,
     )
 
     private val prefs = context.getSharedPreferences("app.minimalauncher.onedrive", Context.MODE_PRIVATE)
@@ -193,6 +195,7 @@ class OneDrive(private val context: Context) {
             modified = parseDate(o.optString("lastModifiedDateTime")),
             thumbnail = thumb("medium") ?: thumb("small"),
             thumbnailLarge = thumb("large") ?: thumb("medium"),
+            version = o.optString("cTag").ifBlank { o.optString("eTag") }.ifBlank { null },
         )
     }
 
@@ -344,19 +347,46 @@ class OneDrive(private val context: Context) {
         }
     }
 
-    /** Downloads [item] into the app cache so a local app (or the built-in viewers) can open it; null on errors. */
+    /**
+     * The file of [item] on the phone, so a local app (or the built-in viewers) can open it; null on
+     * errors. A copy downloaded before is kept and given back at once while the file is the same on
+     * OneDrive (same version and size): only new or changed files are downloaded.
+     */
     fun downloadToCache(item: Item, progress: ((Long) -> Boolean)? = null): File? {
-        val dir = File(cacheDir, item.id.replace(Regex("[^A-Za-z0-9_-]"), "_")).apply {
-            deleteRecursively()
-            mkdirs()
-        }
+        val dir = File(cacheDir, item.id.replace(Regex("[^A-Za-z0-9_-]"), "_"))
         val target = File(dir, item.name.replace('/', '_'))
-        return if (downloadTo(item, target, progress)) target else null
+        val marker = File(dir, VERSION_FILE)
+        val stamp = (item.version ?: item.modified.toString()) + "|" + item.size
+        if (target.isFile && target.length() == item.size && marker.isFile && marker.readText() == stamp) {
+            // Most recently used: kept longest when the space is trimmed
+            dir.setLastModified(System.currentTimeMillis())
+            return target
+        }
+        dir.deleteRecursively()
+        dir.mkdirs()
+        if (!downloadTo(item, target, progress)) return null
+        marker.writeText(stamp)
+        dir.setLastModified(System.currentTimeMillis())
+        return target
     }
 
-    /** Removes the files downloaded to open or share them. */
+    /** Space taken by the copies kept on the phone. */
+    fun cacheSize(): Long = cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+
+    /** Removes the copies kept on the phone. */
     fun clearCache() {
         cacheDir.deleteRecursively()
+    }
+
+    /** Keeps the copies under [maxBytes], dropping the ones not opened for longest. */
+    fun trimCache(maxBytes: Long = CACHE_LIMIT) {
+        val dirs = cacheDir.listFiles()?.filter { it.isDirectory } ?: return
+        var total = dirs.sumOf { d -> d.walkBottomUp().filter { it.isFile }.sumOf { it.length() } }
+        for (d in dirs.sortedBy { it.lastModified() }) {
+            if (total <= maxBytes) break
+            total -= d.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+            d.deleteRecursively()
+        }
     }
 
     private val cacheDir get() = File(context.cacheDir, "onedrive")
@@ -376,6 +406,11 @@ class OneDrive(private val context: Context) {
         private const val GRAPH = "https://graph.microsoft.com/v1.0/me/drive"
         private const val SMALL_UPLOAD = 4L * 1024 * 1024
         private const val CHUNK = 320 * 1024 * 16
+
+        /** Most space the copies of OneDrive files may take on the phone. */
+        const val CACHE_LIMIT = 3L * 1024 * 1024 * 1024
+        /** Next to each kept copy: the OneDrive version it was downloaded at. */
+        const val VERSION_FILE = ".onedrive-version"
 
         private const val KEY_SCOPE = "SCOPE"
         private const val KEY_ACCESS = "ACCESS"

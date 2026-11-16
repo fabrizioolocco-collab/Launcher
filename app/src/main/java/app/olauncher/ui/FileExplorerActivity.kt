@@ -212,7 +212,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         views = FolderViewsRepository(this)
         oneDrive = OneDrive(this)
-        oneDrive.clearCache()
+        // The copies of OneDrive files stay on the phone (opened again at once), within a limit
+        Thread { oneDrive.trimCache() }.start()
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = when {
@@ -1099,8 +1100,21 @@ open class FileExplorerActivity : AppCompatActivity() {
             return
         }
         if (entry.root is Location.Cloud && oneDrive.isConnected()) showMenuDialog(entry.name, listOf(
+            MenuEntry(getString(R.string.ml_onedrive_clear_cache)) {
+                lifecycleScope.launch {
+                    val size = withContext(Dispatchers.IO) { oneDrive.cacheSize() }
+                    showConfirmDialog(
+                        title = getString(R.string.ml_onedrive_clear_cache),
+                        message = getString(R.string.ml_onedrive_clear_cache_message, Formatter.formatShortFileSize(this@FileExplorerActivity, size)),
+                        action = getString(R.string.ml_onedrive_clear_cache),
+                    ) {
+                        lifecycleScope.launch(Dispatchers.IO) { oneDrive.clearCache() }
+                    }
+                }
+            },
             MenuEntry(getString(R.string.ml_onedrive_disconnect)) {
                 oneDrive.disconnect()
+                Thread { oneDrive.clearCache() }.start()
                 load()
             },
         ))

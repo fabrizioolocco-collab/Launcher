@@ -1011,4 +1011,6 @@
     <string name="ml_goal_hours">hours</string>
     <string name="ml_goal_minutes">minutes</string>
     <string name="ml_goal_privacy">Privacy: invisible, a tap on its place shows / hides it</string>
+    <string name="ml_onedrive_clear_cache">Free the space of downloaded files</string>
+    <string name="ml_onedrive_clear_cache_message">The copies of OneDrive files kept on the phone (%1$s) are deleted: they download again when opened. Nothing changes on OneDrive.</string>
 </resources>

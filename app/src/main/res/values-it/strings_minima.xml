@@ -1008,4 +1008,6 @@
     <string name="ml_goal_hours">ore</string>
     <string name="ml_goal_minutes">minuti</string>
     <string name="ml_goal_privacy">Privacy: invisibile, un tocco nella sua zona lo mostra / nasconde</string>
+    <string name="ml_onedrive_clear_cache">Libera lo spazio dei file scaricati</string>
+    <string name="ml_onedrive_clear_cache_message">Le copie dei file di OneDrive tenute sul telefono (%1$s) vengono cancellate: si riscaricano quando le apri. Su OneDrive non cambia nulla.</string>
 </resources>
