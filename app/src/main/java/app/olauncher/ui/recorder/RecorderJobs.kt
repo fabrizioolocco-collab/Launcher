@@ -304,13 +304,15 @@ class RecorderJobService : Service() {
             }
         } finally {
             parts.forEach { (file, _) -> if (file != audio) file.delete() }
+            if (parts.size > 1) File(cacheDir, "recorder-parts").deleteRecursively()
         }
         return Groq.Transcription(segments, words)
     }
 
     /**
-     * Groq takes 25 MB at a time: a longer recording is cut (without re-encoding) into pieces, each
-     * with the second it starts at. A recording that fits is returned as it is.
+     * Groq takes 25 MB at a time: a longer recording is cut into pieces, each with the second it
+     * starts at: without re-encoding where it can be (Opus, AAC), as WAV otherwise. A recording that
+     * fits is returned as it is.
      */
     private fun split(audio: File): List<Pair<File, Double>> {
         if (audio.length() <= MAX_UPLOAD) return listOf(audio to 0.0)
@@ -331,14 +333,11 @@ class RecorderJobService : Service() {
                 mime == MediaFormat.MIMETYPE_AUDIO_AAC -> MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4 to "m4a"
                 else -> throw Exception(mime)
             }
-            val duration = format.getLong(MediaFormat.KEY_DURATION)
-            val count = (audio.length() / PART_SIZE + 1).toInt()
-            val partUs = duration / count + 1
             extractor.selectTrack(track)
             val size = if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE) else 0
             val buffer = ByteBuffer.allocate(maxOf(size, 256 * 1024))
             val info = MediaCodec.BufferInfo()
-            var part = -1
+            var written = 0L
             var partStart = 0L
             var outTrack = 0
             while (true) {
@@ -346,15 +345,15 @@ class RecorderJobService : Service() {
                 val read = extractor.readSampleData(buffer, 0)
                 if (read < 0) break
                 val time = extractor.sampleTime
-                val index = (time / partUs).toInt().coerceIn(0, count - 1)
-                if (index != part) {
+                // A new piece when this one is full
+                if (muxer == null || written + read > PART_SIZE) {
                     muxer?.let {
                         it.stop()
                         it.release()
                     }
-                    part = index
+                    written = 0
                     partStart = time
-                    val file = File(dir, "part-$index.$ext")
+                    val file = File(dir, "part-${parts.size}.$ext")
                     parts += file to time / 1_000_000.0
                     muxer = MediaMuxer(file.absolutePath, container).also {
                         outTrack = it.addTrack(format)
@@ -363,6 +362,7 @@ class RecorderJobService : Service() {
                 }
                 info.set(0, read, time - partStart, MediaCodec.BUFFER_FLAG_KEY_FRAME)
                 muxer?.writeSampleData(outTrack, buffer, info)
+                written += read
                 extractor.advance()
             }
             muxer?.let {
@@ -381,8 +381,20 @@ class RecorderJobService : Service() {
                 muxer?.release()
             } catch (ignored: Exception) {
             }
+            // It can't be cut as it is (an MP3, a WAV...): played out and cut into WAV pieces instead
             dir.deleteRecursively()
-            throw Exception(getString(R.string.ml_rec_too_long))
+            dir.mkdirs()
+            progress(audio, getString(R.string.ml_rec_preparing))
+            return try {
+                LocalWhisper.wavPieces(audio, dir, WAV_SECONDS) { cancelled }.ifEmpty { throw Exception("empty") }
+            } catch (stopped: LocalWhisper.Stopped) {
+                dir.deleteRecursively()
+                throw Cancelled()
+            } catch (failed: Exception) {
+                failed.printStackTrace()
+                dir.deleteRecursively()
+                throw Exception(getString(R.string.ml_rec_too_long) + " (" + (failed.message ?: failed.javaClass.simpleName) + ")")
+            }
         } finally {
             extractor.release()
         }
@@ -489,6 +501,8 @@ class RecorderJobService : Service() {
         private const val MAX_WORK = 10 * 60 * 60 * 1000L
         private const val MAX_UPLOAD = 24L * 1024 * 1024
         private const val PART_SIZE = 18L * 1024 * 1024
+        /** Ten minutes of 16 kHz WAV are 19 MB. */
+        private const val WAV_SECONDS = 600
         /** Characters of transcript in one request (about 3,000 tokens: the free plan takes 6,000 a minute on some models). */
         private const val PIECE = 8_000
     }

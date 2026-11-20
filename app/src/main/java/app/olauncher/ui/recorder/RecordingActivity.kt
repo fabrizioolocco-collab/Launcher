@@ -54,6 +54,7 @@ class RecordingActivity : AppCompatActivity() {
     private lateinit var chips: LinearLayout
     private lateinit var status: TextView
     private lateinit var working: WorkingBar
+    private lateinit var workingRow: LinearLayout
     private lateinit var text: TextView
     private lateinit var scroll: ScrollView
 
@@ -182,9 +183,22 @@ class RecordingActivity : AppCompatActivity() {
             }
         }
         layout.addView(status)
-        working = WorkingBar(this).apply { isVisible = false }
-        layout.addView(working, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 6.dpToPx()).apply {
-            setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 2.dpToPx())
+        // The bar of what is being made, with the button that stops it
+        working = WorkingBar(this)
+        workingRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isVisible = false
+        }
+        workingRow.addView(working, LinearLayout.LayoutParams(0, 6.dpToPx(), 1f).apply { marginEnd = 12.dpToPx() })
+        workingRow.addView(pillButton(this, getString(R.string.ml_rec_halt), filled = false, color = primary) {
+            RecorderJobs.cancel(this)
+        }.apply {
+            textSize = 13.5f
+            setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 34.dpToPx()))
+        layout.addView(workingRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(12.dpToPx(), 6.dpToPx(), 8.dpToPx(), 2.dpToPx())
         })
         text = TextView(this, null, 0, R.style.TextSmall).apply {
             textSize = 16f
@@ -431,7 +445,7 @@ class RecordingActivity : AppCompatActivity() {
         status.setTextColor(if (job == null && error != null) 0xFFD9534F.toInt() else UiKit.primary(this))
         status.isVisible = job != null || error != null
         working.fraction = WorkingBar.fractionOf(job)
-        working.isVisible = job != null
+        workingRow.isVisible = job != null
     }
 
     /** Nothing going on for this recording, and what [forAi] (or a transcript) needs is there. */

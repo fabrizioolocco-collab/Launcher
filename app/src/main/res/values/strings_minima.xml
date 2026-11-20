@@ -1120,4 +1120,6 @@
     <string name="ml_rec_today">Today · %1$s</string>
     <string name="ml_rec_import">Import audio</string>
     <string name="ml_rec_import_failed">%1$d files could not be imported</string>
+    <string name="ml_rec_preparing">Preparing the audio</string>
+    <string name="ml_rec_halt">Stop</string>
 </resources>

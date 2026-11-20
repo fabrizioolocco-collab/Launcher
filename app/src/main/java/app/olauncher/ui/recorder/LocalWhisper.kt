@@ -236,7 +236,13 @@ object LocalWhisper {
 
     /** The next piece from [from]: two minutes, ending in the quietest spot of its last seconds so no word is cut. */
     private fun window(raf: RandomAccessFile, from: Long, total: Long): FloatArray {
-        var count = minOf(WINDOW.toLong(), total - from).toInt()
+        val shorts = ByteBuffer.wrap(piece(raf, from, total, WINDOW)).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
+        return FloatArray(shorts.remaining()) { shorts.get(it) / 32768f }
+    }
+
+    /** At most [limit] samples from [from], as 16-bit bytes, ending in the quietest spot of their last seconds unless they are the last. */
+    private fun piece(raf: RandomAccessFile, from: Long, total: Long, limit: Int): ByteArray {
+        var count = minOf(limit.toLong(), total - from).toInt()
         val bytes = ByteArray(count * 2)
         raf.seek(from * 2)
         raf.readFully(bytes)
@@ -259,7 +265,42 @@ object LocalWhisper {
             }
             count = best
         }
-        return FloatArray(count) { shorts.get(it) / 32768f }
+        return if (count * 2 == bytes.size) bytes else bytes.copyOf(count * 2)
+    }
+
+    /**
+     * [audio] of any kind the phone can play, as WAV files of at most [seconds] each in [dir], cut at
+     * quiet spots: each with the second it starts at. For what Groq can't take whole.
+     */
+    fun wavPieces(audio: File, dir: File, seconds: Int, cancelled: () -> Boolean): List<Pair<File, Double>> {
+        val pcm = File(dir, "all.pcm")
+        decode(audio, pcm, cancelled)
+        val total = pcm.length() / 2
+        val pieces = mutableListOf<Pair<File, Double>>()
+        try {
+            RandomAccessFile(pcm, "r").use { raf ->
+                var next = 0L
+                while (next < total) {
+                    if (cancelled()) throw Stopped()
+                    val bytes = piece(raf, next, total, seconds * RATE)
+                    if (bytes.isEmpty()) break
+                    val file = File(dir, "piece-${pieces.size}.wav")
+                    file.outputStream().use { out ->
+                        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN)
+                        header.put("RIFF".toByteArray()).putInt(36 + bytes.size).put("WAVE".toByteArray())
+                        header.put("fmt ".toByteArray()).putInt(16).putShort(1).putShort(1).putInt(RATE).putInt(RATE * 2).putShort(2).putShort(16)
+                        header.put("data".toByteArray()).putInt(bytes.size)
+                        out.write(header.array())
+                        out.write(bytes)
+                    }
+                    pieces += file to next.toDouble() / RATE
+                    next += bytes.size / 2
+                }
+            }
+        } finally {
+            pcm.delete()
+        }
+        return pieces
     }
 
     /** Decodes [audio] into 16 kHz mono 16-bit samples in [out]. */

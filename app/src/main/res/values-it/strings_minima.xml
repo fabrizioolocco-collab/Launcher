@@ -1117,4 +1117,6 @@
     <string name="ml_rec_today">Oggi · %1$s</string>
     <string name="ml_rec_import">Importa audio</string>
     <string name="ml_rec_import_failed">%1$d file non sono stati importati</string>
+    <string name="ml_rec_preparing">Preparazione dell\'audio</string>
+    <string name="ml_rec_halt">Ferma</string>
 </resources>
