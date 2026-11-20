@@ -403,44 +403,29 @@ class RecorderJobService : Service() {
     // ---------------------------------------------------------------- write-ups
 
     /**
-     * The free plan takes a few thousand words a minute, so a long transcript goes piece by piece:
+     * Groq's free plan takes a few thousand words a minute, so there a long transcript goes piece by piece:
      * notes of each piece first, then the write-up from the notes (or, for a [rewrite], the pieces
      * rewritten one after the other).
      */
     private fun elaborate(audio: File, title: String, instruction: String, rewrite: Boolean) {
-        val key = key()
-        // No model chosen: the best one Groq has now (they come and go)
-        var model = if (RecorderStore.chatModelChosen(this)) RecorderStore.chatModel(this) else try {
-            Groq.bestChatModel(Groq.chatModels(key))
-        } catch (e: Groq.GroqException) {
-            if (e.code == 401) throw e else null
-        } ?: RecorderStore.DEFAULT_CHAT
-        var replaced = false
+        RecorderAi.blocker(this)?.let { throw Exception(it) }
         val source = RecorderStore.transcript(audio)
         if (!source.isFile) throw Exception(getString(R.string.ml_rec_no_transcript))
         val text = source.readText().trim()
         val system = getString(R.string.ml_rec_prompt_system)
+        // What fits in one request: a whole transcript with Gemini, a few minutes of it with Groq
+        val piece = RecorderAi.pieceSize(this)
         var done = 0
         var total = 1
         fun ask(user: String): String {
             if (cancelled) throw Cancelled()
             val step = if (total > 1) "$title ${done + 1}/$total" else title
             progress(audio, step)
-            val answer = try {
-                Groq.chat(key, model, system, user, waiting(audio)) { cancelled }
-            } catch (e: Groq.GroqException) {
-                // The model is gone or isn't for this key: another one, once
-                val other = if (replaced || e.code !in listOf(400, 403, 404) || e.message?.contains("model", ignoreCase = true) != true) null
-                else Groq.bestChatModel(Groq.chatModels(key).filter { it != model })
-                if (other == null) throw e
-                replaced = true
-                model = other
-                Groq.chat(key, model, system, user, waiting(audio)) { cancelled }
-            }
+            val answer = RecorderAi.ask(this, listOf("system" to system, "user" to user), waiting(audio)) { cancelled }
             done++
             return answer
         }
-        val pieces = RecorderAi.chunks(text.split(Regex("\n\\s*\n")), PIECE)
+        val pieces = RecorderAi.chunks(text.split(Regex("\n\\s*\n")), piece)
         val result = when {
             pieces.size <= 1 -> ask(instruction + "\n\n" + getString(R.string.ml_rec_prompt_transcript) + "\n" + text)
             rewrite -> {
@@ -454,8 +439,8 @@ class RecorderJobService : Service() {
                 var notes = pieces.mapIndexed { i, piece -> ask(getString(R.string.ml_rec_prompt_notes, i + 1, pieces.size) + "\n\n" + piece) }
                 // Too many notes for one request: they are condensed first
                 var rounds = 0
-                while (notes.sumOf { it.length } > PIECE && notes.size > 1 && rounds++ < 4) {
-                    val groups = RecorderAi.chunks(notes, PIECE)
+                while (notes.sumOf { it.length } > piece && notes.size > 1 && rounds++ < 4) {
+                    val groups = RecorderAi.chunks(notes, piece)
                     if (groups.size >= notes.size) break
                     total += groups.size
                     notes = groups.map { ask(getString(R.string.ml_rec_prompt_condense) + "\n\n" + it) }
@@ -503,7 +488,5 @@ class RecorderJobService : Service() {
         private const val PART_SIZE = 18L * 1024 * 1024
         /** Ten minutes of 16 kHz WAV are 19 MB. */
         private const val WAV_SECONDS = 600
-        /** Characters of transcript in one request (about 3,000 tokens: the free plan takes 6,000 a minute on some models). */
-        private const val PIECE = 8_000
     }
 }

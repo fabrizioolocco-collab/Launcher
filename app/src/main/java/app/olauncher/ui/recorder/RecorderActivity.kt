@@ -685,6 +685,9 @@ class RecorderActivity : AppCompatActivity() {
 
     private fun showSettings() {
         val key = RecorderStore.apiKey(this)
+        val geminiKey = RecorderStore.geminiKey(this)
+        val gemini = RecorderAi.provider(this) == RecorderAi.GEMINI
+        val chosenModel = if (gemini) RecorderStore.geminiModel(this) else if (RecorderStore.chatModelChosen(this)) RecorderStore.chatModel(this) else ""
         val language = RecorderStore.language(this)
         showMenuDialog(getString(R.string.ml_rec_settings), listOf(
             MenuEntry(getString(R.string.ml_rec_key), section = getString(R.string.ml_rec_section_groq),
@@ -716,7 +719,24 @@ class RecorderActivity : AppCompatActivity() {
                 RecorderStore.setAutoTranscribe(this, on)
                 true
             }),
-            MenuEntry(getString(R.string.ml_rec_model_chat), section = getString(R.string.ml_rec_section_ai), value = if (RecorderStore.chatModelChosen(this)) RecorderStore.chatModel(this) else getString(R.string.ml_rec_language_auto)) { pickChatModel() },
+            MenuEntry(getString(R.string.ml_rec_ai_with), section = getString(R.string.ml_rec_section_ai), value = if (gemini) "Gemini" else "Groq") {
+                showMenuDialog(getString(R.string.ml_rec_ai_with), listOf(
+                    MenuEntry(getString(R.string.ml_rec_ai_gemini)) { RecorderStore.setAiProvider(this, RecorderAi.GEMINI) },
+                    MenuEntry(getString(R.string.ml_rec_ai_groq)) { RecorderStore.setAiProvider(this, RecorderAi.GROQ) },
+                ))
+            },
+            MenuEntry(getString(R.string.ml_rec_gemini_key), value = if (geminiKey.isEmpty()) getString(R.string.ml_rec_key_none) else "…" + geminiKey.takeLast(4)) {
+                showTextInputDialog(getString(R.string.ml_rec_gemini_key), geminiKey, "AIza…", getString(R.string.ml_save), allowBlank = true,
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) { RecorderStore.setGeminiKey(this, it) }
+            },
+            MenuEntry(getString(R.string.ml_rec_gemini_key_get)) {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
+                } catch (e: Exception) {
+                    showToast(getString(R.string.ml_rec_cannot))
+                }
+            },
+            MenuEntry(getString(R.string.ml_rec_model_chat), value = chosenModel.ifEmpty { getString(R.string.ml_rec_language_auto) }) { pickChatModel() },
             MenuEntry(getString(R.string.ml_rec_root), section = getString(R.string.ml_rec_section_files), value = root.name) {
                 pickFolder(root.parentFile ?: root) { target ->
                     RecorderStore.setRoot(this, target)
@@ -774,23 +794,33 @@ class RecorderActivity : AppCompatActivity() {
     private fun languageName(code: String) =
         if (code.isEmpty()) getString(R.string.ml_rec_language_auto) else java.util.Locale(code).getDisplayLanguage(java.util.Locale.getDefault()).replaceFirstChar { it.uppercase() }
 
-    /** The text models Groq offers right now (they change over time), to choose from. */
+    /** The text models the chosen AI offers right now (they change over time), to choose from; "Automatic" lets the app pick. */
     private fun pickChatModel() {
-        val key = RecorderStore.apiKey(this)
-        if (key.isEmpty()) return showToast(getString(R.string.ml_rec_key_missing))
+        RecorderAi.blocker(this)?.let { return showToast(it) }
+        val gemini = RecorderAi.provider(this) == RecorderAi.GEMINI
         lifecycleScope.launch {
+            var failure: String? = null
             val models = withContext(Dispatchers.IO) {
                 try {
-                    Groq.chatModels(key)
+                    RecorderAi.models(this@RecorderActivity)
+                } catch (e: Groq.GroqException) {
+                    failure = e.message
+                    null
                 } catch (e: Exception) {
                     null
                 }
             }
-            if (models.isNullOrEmpty()) return@launch showToast(getString(R.string.ml_rec_no_network))
-            val current = RecorderStore.chatModel(this@RecorderActivity)
-            showMenuDialog(getString(R.string.ml_rec_model_chat), models.map { model ->
-                MenuEntry(if (model == current) "$model ✓" else model) { RecorderStore.setChatModel(this@RecorderActivity, model) }
+            if (models.isNullOrEmpty()) return@launch showToast(failure ?: getString(R.string.ml_rec_no_network), android.widget.Toast.LENGTH_LONG)
+            val ctx = this@RecorderActivity
+            val current = if (gemini) RecorderStore.geminiModel(ctx) else if (RecorderStore.chatModelChosen(ctx)) RecorderStore.chatModel(ctx) else ""
+            fun mark(label: String, chosen: Boolean) = if (chosen) "$label ✓" else label
+            val entries = mutableListOf(MenuEntry(mark(getString(R.string.ml_rec_language_auto), current.isEmpty())) {
+                if (gemini) RecorderStore.setGeminiModel(ctx, "") else RecorderStore.clearChatModel(ctx)
             })
+            entries += models.map { model ->
+                MenuEntry(mark(model, model == current)) { if (gemini) RecorderStore.setGeminiModel(ctx, model) else RecorderStore.setChatModel(ctx, model) }
+            }
+            showMenuDialog(getString(R.string.ml_rec_model_chat), entries)
         }
     }
 

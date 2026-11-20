@@ -209,8 +209,7 @@ class ChatActivity : AppCompatActivity() {
     private fun send() {
         val question = input.text.toString().trim()
         if (question.isEmpty() || busy) return
-        val key = RecorderStore.apiKey(this)
-        if (key.isEmpty()) return showToast(getString(R.string.ml_rec_key_missing))
+        RecorderAi.blocker(this)?.let { return showToast(it) }
         val transcript = RecorderStore.transcript(audio)
         if (!transcript.isFile) return showToast(getString(R.string.ml_rec_no_transcript))
         input.setText("")
@@ -225,14 +224,13 @@ class ChatActivity : AppCompatActivity() {
             var about: String? = known
             val answer = withContext(Dispatchers.IO) {
                 try {
-                    val model = RecorderAi.model(this@ChatActivity, key)
-                    val read = known ?: RecorderAi.context(this@ChatActivity, key, model, transcript.readText(), { done, total ->
+                    val read = known ?: RecorderAi.context(this@ChatActivity, transcript.readText(), { done, total ->
                         runOnUiThread { if (busy) showStatus(getString(R.string.ml_rec_chat_reading, done + 1, total)) }
                     }, { waiting(it) }) { closed }
                     about = read
                     runOnUiThread { if (busy) showStatus(getString(R.string.ml_rec_chat_thinking)) }
                     val system = getString(R.string.ml_rec_chat_system) + "\n\n" + read
-                    Groq.chatMessages(key, model, listOf("system" to system) + earlier + ("user" to question), { waiting(it) }) { closed }
+                    RecorderAi.ask(this@ChatActivity, listOf("system" to system) + earlier + ("user" to question), { waiting(it) }) { closed }
                 } catch (e: Groq.GroqException) {
                     failure = if (e.code == 401) getString(R.string.ml_rec_key_wrong) else e.message
                     null

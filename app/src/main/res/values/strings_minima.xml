@@ -1016,7 +1016,7 @@
     <string name="ml_rec_cannot">It can\'t be done</string>
     <string name="ml_rec_search_hint">Words in the names or in the texts</string>
     <string name="ml_rec_settings">Settings</string>
-    <string name="ml_rec_section_groq">Groq (free)</string>
+    <string name="ml_rec_section_groq">Groq (online transcripts)</string>
     <string name="ml_rec_section_transcript">Transcript</string>
     <string name="ml_rec_section_ai">AI write-ups</string>
     <string name="ml_rec_section_files">Files</string>
@@ -1098,9 +1098,9 @@
     <string name="ml_rec_chat_reading">Long recording: reading it, part %1$d of %2$d (only the first time)…</string>
     <string name="ml_rec_chat_system">You answer questions about an audio recording, using only what is in its text below (a transcript made automatically, which may contain recognition mistakes, or detailed notes taken from it). If the answer is not there, say so instead of guessing. Answer in the language of the question, briefly and to the point, quoting names, numbers and dates exactly. Text of the recording:</string>
     <string name="ml_rec_error_shown_plain">Not done: %1$s</string>
-    <string name="ml_rec_usage">Groq free plan left</string>
+    <string name="ml_rec_usage">Free plans left</string>
     <string name="ml_rec_usage_none">Nothing yet: it shows after the first write-up or chat</string>
-    <string name="ml_rec_usage_ai">AI (write-ups and chat)</string>
+    <string name="ml_rec_usage_ai">AI on Groq</string>
     <string name="ml_rec_usage_requests">Requests today</string>
     <string name="ml_rec_usage_tokens">Tokens this minute</string>
     <string name="ml_rec_usage_left">%1$s of %2$s left</string>
@@ -1129,4 +1129,14 @@
     <string name="ml_audio_next">Next</string>
     <string name="ml_audio_play">Play</string>
     <string name="ml_audio_pause">Pause</string>
+    <string name="ml_rec_gemini_key_missing">Set the Gemini key first: Recorder > Settings</string>
+    <string name="ml_rec_no_model">Gemini offers no model to this key</string>
+    <string name="ml_rec_ai_with">AI by</string>
+    <string name="ml_rec_ai_gemini">Gemini (reads the whole recording)</string>
+    <string name="ml_rec_ai_groq">Groq (a long recording goes piece by piece)</string>
+    <string name="ml_rec_gemini_key">Gemini API key</string>
+    <string name="ml_rec_gemini_key_get">Get the free key (aistudio.google.com)</string>
+    <string name="ml_rec_usage_gemini">AI on Gemini</string>
+    <string name="ml_rec_usage_gemini_made">Requests made today</string>
+    <string name="ml_rec_usage_gemini_note">Gemini doesn\'t say how many are left: the limit of your model is in Google AI Studio</string>
 </resources>

@@ -126,6 +126,21 @@ object GroqUsage {
         changes.postValue((changes.value ?: 0) + 1)
     }
 
+    /** The day Gemini counts its requests by (it starts again at midnight in California). */
+    private fun geminiDay() = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+        .apply { timeZone = java.util.TimeZone.getTimeZone("America/Los_Angeles") }.format(java.util.Date())
+
+    /** Counts a request made to Gemini (it doesn't say how many are left: the ones made today are counted here). */
+    @Synchronized
+    fun addGemini(ctx: Context) {
+        val day = geminiDay()
+        val made = if (prefs(ctx).getString("usage_gemini_day", "") == day) prefs(ctx).getInt("usage_gemini_count", 0) else 0
+        prefs(ctx).edit { putString("usage_gemini_day", day).putInt("usage_gemini_count", made + 1) }
+        changes.postValue((changes.value ?: 0) + 1)
+    }
+
+    fun geminiToday(ctx: Context) = if (prefs(ctx).getString("usage_gemini_day", "") == geminiDay()) prefs(ctx).getInt("usage_gemini_count", 0) else 0
+
     /** Seconds of audio sent in the last hour and in the last 24 hours. */
     fun audioUsed(ctx: Context): Pair<Int, Int> {
         val log = audioLog(ctx)
@@ -137,7 +152,8 @@ object GroqUsage {
     fun left(ctx: Context): Float? {
         val now = System.currentTimeMillis()
         val parts = mutableListOf<Float>()
-        listOf("chat", "audio").forEach { kind ->
+        // Groq's word on the AI counts only while Groq is the AI
+        listOf("chat", "audio").filter { it != "chat" || RecorderAi.provider(ctx) == RecorderAi.GROQ }.forEach { kind ->
             snapshot(ctx, kind)?.takeIf { it.requestLimit > 0 }?.let { parts += it.requestsNow(now).toFloat() / it.requestLimit }
         }
         val (hour, day) = audioUsed(ctx)
@@ -154,8 +170,15 @@ object GroqUsage {
         fun time(at: Long) = DateFormat.getTimeFormat(ctx).format(at)
         fun count(n: Int) = if (n >= 10_000) "${n / 1000}k" else n.toString()
         val entries = mutableListOf<MenuEntry>()
+        val gemini = RecorderAi.provider(ctx) == RecorderAi.GEMINI
+        if (gemini || geminiToday(ctx) > 0) {
+            entries += MenuEntry(ctx.getString(R.string.ml_rec_usage_gemini_made), section = ctx.getString(R.string.ml_rec_usage_gemini), value = geminiToday(ctx).toString())
+            entries += MenuEntry(ctx.getString(R.string.ml_rec_usage_gemini_note))
+        }
         val chat = snapshot(ctx, "chat")
-        if (chat == null) entries += MenuEntry(ctx.getString(R.string.ml_rec_usage_none), section = ctx.getString(R.string.ml_rec_usage_ai))
+        if (gemini && chat == null) {
+            // Groq isn't used for the AI: nothing to say about it
+        } else if (chat == null) entries += MenuEntry(ctx.getString(R.string.ml_rec_usage_none), section = ctx.getString(R.string.ml_rec_usage_ai))
         else {
             if (chat.requestLimit > 0) entries += MenuEntry(ctx.getString(R.string.ml_rec_usage_requests), section = ctx.getString(R.string.ml_rec_usage_ai),
                 value = ctx.getString(R.string.ml_rec_usage_left, count(chat.requestsNow(now)), count(chat.requestLimit)))

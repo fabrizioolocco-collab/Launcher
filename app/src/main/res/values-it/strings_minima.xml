@@ -1013,7 +1013,7 @@
     <string name="ml_rec_cannot">Operazione non riuscita</string>
     <string name="ml_rec_search_hint">Parole nei nomi o nei testi</string>
     <string name="ml_rec_settings">Impostazioni</string>
-    <string name="ml_rec_section_groq">Groq (gratuito)</string>
+    <string name="ml_rec_section_groq">Groq (trascrizione online)</string>
     <string name="ml_rec_section_transcript">Trascrizione</string>
     <string name="ml_rec_section_ai">Elaborati AI</string>
     <string name="ml_rec_section_files">File</string>
@@ -1095,9 +1095,9 @@
     <string name="ml_rec_chat_reading">Registrazione lunga: la sto leggendo, parte %1$d di %2$d (solo la prima volta)…</string>
     <string name="ml_rec_chat_system">Rispondi a domande su una registrazione audio, usando solo ciò che c\'è nel suo testo qui sotto (una trascrizione automatica, che può contenere errori di riconoscimento, oppure appunti dettagliati ricavati da essa). Se la risposta non c\'è, dillo invece di tirare a indovinare. Rispondi nella lingua della domanda, in modo breve e diretto, riportando esattamente nomi, numeri e date. Testo della registrazione:</string>
     <string name="ml_rec_error_shown_plain">Non riuscito: %1$s</string>
-    <string name="ml_rec_usage">Residuo del piano gratuito Groq</string>
+    <string name="ml_rec_usage">Residuo dei piani gratuiti</string>
     <string name="ml_rec_usage_none">Ancora nessun dato: compare dopo il primo elaborato o la prima chat</string>
-    <string name="ml_rec_usage_ai">AI (elaborati e chat)</string>
+    <string name="ml_rec_usage_ai">AI su Groq</string>
     <string name="ml_rec_usage_requests">Richieste oggi</string>
     <string name="ml_rec_usage_tokens">Token in questo minuto</string>
     <string name="ml_rec_usage_left">%1$s di %2$s rimasti</string>
@@ -1126,4 +1126,14 @@
     <string name="ml_audio_next">Successivo</string>
     <string name="ml_audio_play">Riproduci</string>
     <string name="ml_audio_pause">Pausa</string>
+    <string name="ml_rec_gemini_key_missing">Prima imposta la chiave Gemini: Registratore > Impostazioni</string>
+    <string name="ml_rec_no_model">Gemini non offre modelli a questa chiave</string>
+    <string name="ml_rec_ai_with">AI con</string>
+    <string name="ml_rec_ai_gemini">Gemini (legge tutta la registrazione)</string>
+    <string name="ml_rec_ai_groq">Groq (una registrazione lunga va a pezzi)</string>
+    <string name="ml_rec_gemini_key">Chiave API Gemini</string>
+    <string name="ml_rec_gemini_key_get">Ottieni la chiave gratuita (aistudio.google.com)</string>
+    <string name="ml_rec_usage_gemini">AI su Gemini</string>
+    <string name="ml_rec_usage_gemini_made">Richieste fatte oggi</string>
+    <string name="ml_rec_usage_gemini_note">Gemini non dice quante ne restano: il limite del tuo modello è in Google AI Studio</string>
 </resources>

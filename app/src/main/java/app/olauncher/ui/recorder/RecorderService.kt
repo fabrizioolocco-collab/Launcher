@@ -165,7 +165,7 @@ class RecorderService : Service() {
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         if (file != null && file.length() == 0L) file.delete()
         RecorderJobs.changed()
-        if (file != null && file.isFile && RecorderStore.autoTranscribe(this) && RecorderStore.apiKey(this).isNotEmpty())
+        if (file != null && file.isFile && RecorderStore.autoTranscribe(this) && RecorderJobs.transcriptBlocker(this) == null)
             RecorderJobs.transcribe(this, file)
     }
 

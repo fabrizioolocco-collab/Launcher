@@ -452,7 +452,7 @@ class RecordingActivity : AppCompatActivity() {
     private fun ready(forAi: Boolean): Boolean {
         val blocker = when {
             RecorderJobs.isBusy(audio) -> getString(R.string.ml_rec_busy)
-            forAi -> if (RecorderStore.apiKey(this).isEmpty()) getString(R.string.ml_rec_key_missing) else null
+            forAi -> RecorderAi.blocker(this)
             else -> RecorderJobs.transcriptBlocker(this)
         }
         if (blocker != null) showToast(blocker, android.widget.Toast.LENGTH_LONG)
@@ -481,8 +481,7 @@ class RecordingActivity : AppCompatActivity() {
             MenuEntry(getString(R.string.ml_rec_chat_open), icon = R.drawable.ic_m_chat) { ChatActivity.open(this, audio) },
         ), header = { dialog ->
             TextView(dialog.context, null, 0, R.style.TextSmall).apply {
-                text = getString(R.string.ml_rec_ai_model,
-                    if (RecorderStore.chatModelChosen(this@RecordingActivity)) RecorderStore.chatModel(this@RecordingActivity) else getString(R.string.ml_rec_language_auto))
+                text = getString(R.string.ml_rec_ai_model, if (RecorderAi.provider(this@RecordingActivity) == RecorderAi.GEMINI) "Gemini" else "Groq")
                 alpha = 0.6f
                 setTextColor(UiKit.primary(dialog.context))
                 setPadding(0, 8.dpToPx(), 0, 4.dpToPx())

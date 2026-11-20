@@ -77,7 +77,7 @@ object Groq {
     }
 
     /** Runs [call] again after the wait Groq asks for when a rate limit is hit (free plan: per minute). */
-    private fun <T> retrying(onWait: (Long) -> Unit, cancelled: () -> Boolean, call: () -> T): T {
+    internal fun <T> retrying(onWait: (Long) -> Unit, cancelled: () -> Boolean, call: () -> T): T {
         var attempts = 0
         while (true) {
             try {

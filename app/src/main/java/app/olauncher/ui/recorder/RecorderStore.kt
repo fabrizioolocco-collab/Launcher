@@ -59,6 +59,19 @@ object RecorderStore {
 
     /** The user chose the AI model (otherwise the best one Groq has is used). */
     fun chatModelChosen(ctx: Context) = prefs(ctx).contains("chat")
+    fun clearChatModel(ctx: Context) = prefs(ctx).edit { remove("chat") }
+
+    fun geminiKey(ctx: Context): String = keys(ctx).getString("gemini", "").orEmpty()
+    fun setGeminiKey(ctx: Context, key: String) = keys(ctx).edit { putString("gemini", key.trim()) }
+
+    /** The Gemini model chosen, "" for the best one there is now. */
+    fun geminiModel(ctx: Context): String = prefs(ctx).getString("gemini_model", "").orEmpty()
+    fun setGeminiModel(ctx: Context, model: String) = prefs(ctx).edit { putString("gemini_model", model) }
+
+    /** What makes the write-ups and answers the chat: Gemini once its key is there, unless Groq was chosen. */
+    fun aiProvider(ctx: Context): String =
+        prefs(ctx).getString("ai", null) ?: if (geminiKey(ctx).isNotEmpty()) RecorderAi.GEMINI else RecorderAi.GROQ
+    fun setAiProvider(ctx: Context, provider: String) = prefs(ctx).edit { putString("ai", provider) }
 
     /** Recordings whose transcription was started and hasn't ended: they go on when the recorder is opened again. */
     fun pending(ctx: Context): Set<String> = prefs(ctx).getStringSet("pending", emptySet()).orEmpty().toSet()
