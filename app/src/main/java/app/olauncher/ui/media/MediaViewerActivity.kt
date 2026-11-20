@@ -246,15 +246,38 @@ class MediaViewerActivity : AppCompatActivity() {
         }
     }
 
+    /** Position of the video left open when the viewer went to the background, -1 if none. */
+    private var resumeAt = -1
+    private var resumePlaying = false
+
     override fun onPause() {
         super.onPause()
-        (pager.layoutManager?.findViewByPosition(current) as? FrameLayout)?.let { stopVideo(it) }
+        val page = pager.layoutManager?.findViewByPosition(current) as? FrameLayout ?: return
+        val video = page.getChildAt(0) as? VideoView ?: return
+        if (page.getChildAt(1)?.isVisible == false) {
+            // Playback started: remember where, to continue from there when back (not from the start)
+            resumeAt = video.currentPosition
+            resumePlaying = video.isPlaying
+            video.pause()
+        } else {
+            stopVideo(page)
+        }
     }
 
     private var firstResume = true
 
     override fun onResume() {
         super.onResume()
+        if (resumeAt >= 0) {
+            (pager.layoutManager?.findViewByPosition(current) as? FrameLayout)?.let { page ->
+                (page.getChildAt(0) as? VideoView)?.let { video ->
+                    // The surface is recreated and the video reopened: seek there before it is prepared
+                    video.seekTo(resumeAt)
+                    if (resumePlaying) video.start()
+                }
+            }
+            resumeAt = -1
+        }
         if (firstResume) {
             firstResume = false
             return
