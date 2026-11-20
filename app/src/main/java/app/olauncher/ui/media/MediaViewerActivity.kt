@@ -2,6 +2,8 @@ package app.olauncher.ui.media
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -77,6 +79,9 @@ class MediaViewerActivity : AppCompatActivity() {
         media = MediaThumbnails.mediaIn(dirs).ifEmpty { listOf(start) }
         current = media.indexOfFirst { it.absolutePath == start.absolutePath }.coerceAtLeast(0)
 
+        // Turns with the phone even with the rotation locked (landscape videos, photos): only this screen,
+        // the system setting is not touched, so leaving it everything is as before
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.statusBarColor = Color.TRANSPARENT
         window.navigationBarColor = Color.TRANSPARENT
@@ -292,6 +297,13 @@ class MediaViewerActivity : AppCompatActivity() {
         } else {
             stopVideo(page)
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Turned: the pages change width, keep the one shown in place (not half of two) at normal size
+        currentPage()?.let { ((it.getChildAt(0) as? VideoView)?.tag as? VideoZoom)?.reset() }
+        pager.post { pager.scrollToPosition(current) }
     }
 
     private var firstResume = true
