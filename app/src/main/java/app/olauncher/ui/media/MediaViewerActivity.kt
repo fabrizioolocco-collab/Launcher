@@ -22,7 +22,6 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.MediaController
 import android.widget.TextView
 import android.widget.VideoView
 import androidx.appcompat.app.AppCompatActivity
@@ -52,9 +51,9 @@ import java.io.File
 
 /**
  * Built-in photo and video viewer: swipe between the media of a folder (newest first), pinch and
- * double-tap zoom on photos ([ZoomImageView]), video playback with controls (double tap on the right /
- * left half: forward / back 10 s). A tap shows or hides
- * the top bar (share, edit, delete, details). Alternative to the gallery app, see Prefs.builtInViewer.
+ * double-tap zoom on photos ([ZoomImageView]), video playback with [VideoControls] in the middle (double tap
+ * on the right / left half: forward / back 10 s). A tap shows or hides the top bar (share, edit, delete,
+ * details) and the video controls, which hide by themselves while the video plays. Alternative to the gallery app, see Prefs.builtInViewer.
  */
 class MediaViewerActivity : AppCompatActivity() {
 
@@ -64,6 +63,8 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var title: TextView
     private lateinit var counter: TextView
     private var chromeVisible = true
+    /** Height of the navigation bar, kept clear by the video controls. */
+    private var bottomInset = 0
     private var current = 0
     /** The folders swiped through (one, or those of the home gallery). */
     private var dirs: List<File> = emptyList()
@@ -127,6 +128,8 @@ class MediaViewerActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(topBar) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(4.dpToPx() + bars.left, bars.top + 8.dpToPx(), 4.dpToPx() + bars.right, 20.dpToPx())
+            bottomInset = insets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars()).bottom
+            currentControls()?.setBottomInset(bottomInset)
             insets
         }
         root.addView(topBar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
@@ -144,6 +147,26 @@ class MediaViewerActivity : AppCompatActivity() {
     private fun toggleChrome() {
         chromeVisible = !chromeVisible
         updateChrome()
+        if (chromeVisible) scheduleHide()
+    }
+
+    private fun currentPage() = pager.layoutManager?.findViewByPosition(current) as? FrameLayout
+
+    /** The controls of the video shown, null on a photo. */
+    private fun currentControls() = currentPage()?.getChildAt(3) as? VideoControls
+
+    private val hideChrome = Runnable {
+        val video = currentPage()?.getChildAt(0) as? VideoView ?: return@Runnable
+        if (chromeVisible && video.isPlaying) {
+            chromeVisible = false
+            updateChrome()
+        }
+    }
+
+    /** While a video plays, the bar and its controls hide after a few seconds without use. */
+    private fun scheduleHide() {
+        pager.removeCallbacks(hideChrome)
+        pager.postDelayed(hideChrome, HIDE_DELAY_MS)
     }
 
     private fun updateChrome() {
@@ -151,6 +174,10 @@ class MediaViewerActivity : AppCompatActivity() {
             topBar.isVisible = chromeVisible
         }.start()
         if (chromeVisible) topBar.isVisible = true
+        // The video controls follow, once playback has started (before, the poster has its play button)
+        currentPage()?.let { page ->
+            (page.getChildAt(3) as? VideoControls)?.setShown(chromeVisible && page.getChildAt(1)?.isVisible == false)
+        }
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         if (chromeVisible) controller.show(WindowInsetsCompat.Type.systemBars()) else controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -243,6 +270,7 @@ class MediaViewerActivity : AppCompatActivity() {
         (page.getChildAt(0) as? VideoView)?.let {
             it.stopPlayback()
             page.getChildAt(1)?.isVisible = true
+            (page.getChildAt(3) as? VideoControls)?.hideNow()
         }
     }
 
@@ -335,6 +363,8 @@ class MediaViewerActivity : AppCompatActivity() {
                     }
                     isVisible = false
                 }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
+                page.addView(VideoControls(parent.context, page.getChildAt(0) as VideoView) { scheduleHide() },
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             } else {
                 page.addView(ZoomImageView(parent.context).apply { onSingleTap = { toggleChrome() } },
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -353,14 +383,16 @@ class MediaViewerActivity : AppCompatActivity() {
                 poster.isVisible = true
                 image.setImageBitmap(null)
                 MediaThumbnails.load(lifecycleScope, image, file, 1024)
-                val controller = MediaController(this@MediaViewerActivity).apply { setAnchorView(video) }
-                video.setMediaController(controller)
+                val controls = page.getChildAt(3) as VideoControls
+                controls.hideNow()
+                controls.setBottomInset(bottomInset)
+                video.setOnPreparedListener { controls.player = it }
                 val seekLabel = page.getChildAt(2) as TextView
                 // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s
                 val gestures = GestureDetector(this@MediaViewerActivity, object : GestureDetector.SimpleOnGestureListener() {
                     override fun onDown(e: MotionEvent) = true
                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                        if (controller.isShowing) controller.hide() else controller.show()
+                        toggleChrome()
                         return true
                     }
                     override fun onDoubleTap(e: MotionEvent): Boolean {
@@ -369,6 +401,7 @@ class MediaViewerActivity : AppCompatActivity() {
                         val forward = e.x >= video.width / 2f
                         val target = (video.currentPosition + if (forward) SEEK_STEP_MS else -SEEK_STEP_MS).coerceIn(0, duration)
                         video.seekTo(target)
+                        controls.refresh()
                         seekLabel.text = if (forward) "+10 s  \u00BB" else "\u00AB  -10 s"
                         (seekLabel.layoutParams as FrameLayout.LayoutParams).apply {
                             gravity = Gravity.CENTER_VERTICAL or (if (forward) Gravity.END else Gravity.START)
@@ -385,16 +418,24 @@ class MediaViewerActivity : AppCompatActivity() {
                     }
                 })
                 video.setOnTouchListener { _, ev -> gestures.onTouchEvent(ev); true }
-                video.setOnCompletionListener { poster.isVisible = true }
+                video.setOnCompletionListener {
+                    poster.isVisible = true
+                    controls.hideNow()
+                    chromeVisible = true
+                    updateChrome()
+                }
                 video.setOnErrorListener { _, _, _ ->
                     showToast(getString(R.string.ml_search_cannot_open))
                     poster.isVisible = true
+                    controls.hideNow()
                     true
                 }
                 play.setOnClickListener {
                     poster.isVisible = false
                     video.setVideoPath(file.absolutePath)
                     video.start()
+                    updateChrome()
+                    scheduleHide()
                 }
             } else {
                 val image = page.getChildAt(0) as ZoomImageView
@@ -432,6 +473,7 @@ class MediaViewerActivity : AppCompatActivity() {
 
     companion object {
         private const val SEEK_STEP_MS = 10_000
+        private const val HIDE_DELAY_MS = 3_000L
 
         private const val EXTRA_PATH = "path"
         private const val EXTRA_DIRS = "dirs"

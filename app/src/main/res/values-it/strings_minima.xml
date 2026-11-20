@@ -374,6 +374,7 @@
     <string name="ml_viewer_path">Percorso: %1$s</string>
     <string name="ml_viewer_dimensions">Dimensioni: %1$s</string>
     <string name="ml_viewer_duration">Durata: %1$s</string>
+    <string name="ml_viewer_mute">Audio sì / no</string>
     <string name="ml_viewer_camera">Fotocamera: %1$s</string>
     <!-- Photo editor -->
     <string name="ml_edit_crop">Ritaglia</string>
