@@ -30,7 +30,7 @@ class WorkingBar(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val track = Paint(Paint.ANTI_ALIAS_FLAG)
     private val box = RectF()
-    private val matrix = Matrix()
+    private val flow = Matrix()
     private var gradient: LinearGradient? = null
     private var span = 1f
     private var shift = 0f
@@ -78,8 +78,8 @@ class WorkingBar(context: Context) : View(context) {
         track.color = ColorUtils.setAlphaComponent(UiKit.primary(context), 0x26)
         canvas.drawRoundRect(box, radius, radius, track)
         val shader = gradient ?: return
-        matrix.setTranslate(shift * span, 0f)
-        shader.setLocalMatrix(matrix)
+        flow.setTranslate(shift * span, 0f)
+        shader.setLocalMatrix(flow)
         paint.shader = shader
         val part = fraction
         // Never so short that it can't be seen
