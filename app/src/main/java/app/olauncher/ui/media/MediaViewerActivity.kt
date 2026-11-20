@@ -156,6 +156,13 @@ class MediaViewerActivity : AppCompatActivity() {
         }
     }
 
+    /** Play pressed: the bar and the controls get out of the way at once. */
+    private fun hideChromeNow() {
+        pager.removeCallbacks(hideChrome)
+        chromeVisible = false
+        updateChrome()
+    }
+
     /** While a video plays, the bar and its controls hide after a few seconds without use. */
     private fun scheduleHide() {
         pager.removeCallbacks(hideChrome)
@@ -356,7 +363,7 @@ class MediaViewerActivity : AppCompatActivity() {
                     }
                     isVisible = false
                 }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
-                page.addView(VideoControls(parent.context, page.getChildAt(0) as VideoView) { scheduleHide() },
+                page.addView(VideoControls(parent.context, page.getChildAt(0) as VideoView, onActivity = { scheduleHide() }, onPlay = { hideChromeNow() }),
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             } else {
                 page.addView(ZoomImageView(parent.context).apply { onSingleTap = { toggleChrome() } },
@@ -390,7 +397,7 @@ class MediaViewerActivity : AppCompatActivity() {
                     override fun onDoubleTap(e: MotionEvent): Boolean {
                         val duration = video.duration
                         if (duration <= 0) return false
-                        val forward = e.x >= video.width / 2f
+                        val forward = e.x >= page.width / 2f
                         val target = (video.currentPosition + if (forward) SEEK_STEP_MS else -SEEK_STEP_MS).coerceIn(0, duration)
                         video.seekTo(target)
                         controls.refresh()
@@ -409,7 +416,8 @@ class MediaViewerActivity : AppCompatActivity() {
                         return true
                     }
                 })
-                video.setOnTouchListener { _, ev -> gestures.onTouchEvent(ev); true }
+                // On the page, not the video: the black bands around it (the video keeps its proportions) count too
+                page.setOnTouchListener { _, ev -> gestures.onTouchEvent(ev); true }
                 video.setOnCompletionListener {
                     poster.isVisible = true
                     controls.hideNow()
@@ -426,8 +434,7 @@ class MediaViewerActivity : AppCompatActivity() {
                     poster.isVisible = false
                     video.setVideoPath(file.absolutePath)
                     video.start()
-                    updateChrome()
-                    scheduleHide()
+                    hideChromeNow()
                 }
             } else {
                 val image = page.getChildAt(0) as ZoomImageView

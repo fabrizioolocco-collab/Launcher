@@ -23,9 +23,15 @@ import java.text.DecimalFormat
 /**
  * Controls drawn over a video of [MediaViewerActivity]: one card in the middle of the screen with the
  * elapsed and total time, the bar, then speed, back 10 s, play-pause, forward 10 s and audio. Touches outside the buttons and the bar go through to the video (tap, double tap).
- * [onActivity] is told of every use, to restart the auto-hide countdown.
+ * [onActivity] is told of every use, to restart the auto-hide countdown; [onPlay] of play pressed (the
+ * controls then get out of the way at once).
  */
-class VideoControls(context: Context, private val video: VideoView, private val onActivity: () -> Unit) : FrameLayout(context) {
+class VideoControls(
+    context: Context,
+    private val video: VideoView,
+    private val onActivity: () -> Unit,
+    private val onPlay: () -> Unit,
+) : FrameLayout(context) {
 
     /** The player of the open video (set when prepared): speed and volume. */
     var player: MediaPlayer? = null
@@ -199,12 +205,15 @@ class VideoControls(context: Context, private val video: VideoView, private val 
     }
 
     private fun togglePlay() {
-        if (video.isPlaying) video.pause() else {
+        if (video.isPlaying) {
+            video.pause()
+            refresh()
+            onActivity()
+        } else {
             video.start()
             onStarted()
+            onPlay()
         }
-        refresh()
-        onActivity()
     }
 
     private fun jump(ms: Int) {
