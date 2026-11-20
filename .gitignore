@@ -16,3 +16,7 @@
 .externalNativeBuild
 .cxx
 google-services.json
+
+# The whisper library CI built before (see the workflows)
+app/src/main/jniLibs/
+whisper-prebuilt/

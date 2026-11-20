@@ -59,6 +59,24 @@ jobs:
           printf '%s' "$KEYSTORE_BASE64" | tr -d '[:space:]' | base64 -d > "$RUNNER_TEMP/release.keystore"
           echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
 
+      # The whisper library (src/main/cpp) takes minutes to compile: the one built before is used
+      # again for as long as that folder doesn't change
+      - name: Whisper library built before
+        id: whisper
+        uses: actions/cache@v4
+        with:
+          path: whisper-prebuilt
+          key: whisper-arm64-v1-${{ hashFiles('app/src/main/cpp/**') }}
+
+      - name: Use the whisper library built before
+        if: steps.whisper.outputs.cache-hit == 'true'
+        run: |
+          if [ -s whisper-prebuilt/libminima_whisper.so ]; then
+            mkdir -p app/src/main/jniLibs/arm64-v8a
+            cp whisper-prebuilt/libminima_whisper.so app/src/main/jniLibs/arm64-v8a/
+            echo "WHISPER_ARGS=-PprebuiltWhisper=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Build signed release APK
         env:
           KS_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -70,9 +88,15 @@ jobs:
           export SIGNING_KEY_PASSWORD="$SIGNING_KEYSTORE_PASSWORD"
           export SIGNING_KEY_ALIAS="$(printf '%s' "${KS_ALIAS:-minimalauncher}" | tr -d '[:space:]')"
           chmod +x gradlew
-          ./gradlew --no-daemon assembleRelease \
+          ./gradlew --no-daemon assembleRelease $WHISPER_ARGS \
             -PversionCode=${{ steps.version.outputs.code }} \
             -PversionName=${{ steps.version.outputs.name }}
+
+      - name: Keep the whisper library for the next builds
+        if: steps.whisper.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p whisper-prebuilt
+          unzip -j -o "$(ls app/build/outputs/apk/release/*.apk | head -1)" lib/arm64-v8a/libminima_whisper.so -d whisper-prebuilt
 
       - name: Verify signature and rename APK
         run: |

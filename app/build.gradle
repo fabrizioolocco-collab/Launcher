@@ -24,11 +24,14 @@ android {
         resourceConfigurations += ["en", "ar", "cs", "da", "de", "el", "es-rES", "es-rUS", "fi", "fr", "he", "hi", "hr", "hu", "in", "it", "ja", "ko", "nb", "nl", "pl", "pt-rBR", "ro", "ru-rRU", "sv", "th", "tr", "uk", "vi", "zh"]
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
-        // Whisper for the recorder (src/main/cpp): only for 64-bit ARM phones, the others transcribe online
-        externalNativeBuild {
-            cmake {
-                abiFilters "arm64-v8a"
-                arguments "-DANDROID_STL=c++_static"
+        // Whisper for the recorder (src/main/cpp): only for 64-bit ARM phones, the others transcribe online.
+        // With -PprebuiltWhisper CI puts the library it built before in src/main/jniLibs instead of compiling it.
+        if (!project.hasProperty("prebuiltWhisper")) {
+            externalNativeBuild {
+                cmake {
+                    abiFilters "arm64-v8a"
+                    arguments "-DANDROID_STL=c++_static"
+                }
             }
         }
     }
@@ -60,10 +63,12 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
+    if (!project.hasProperty("prebuiltWhisper")) {
+        externalNativeBuild {
+            cmake {
+                path "src/main/cpp/CMakeLists.txt"
+                version "3.22.1"
+            }
         }
     }
     buildFeatures {

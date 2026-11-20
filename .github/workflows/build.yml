@@ -19,10 +19,34 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # The whisper library (src/main/cpp) takes minutes to compile: the one built before is used
+      # again for as long as that folder doesn't change
+      - name: Whisper library built before
+        id: whisper
+        uses: actions/cache@v4
+        with:
+          path: whisper-prebuilt
+          key: whisper-arm64-v1-${{ hashFiles('app/src/main/cpp/**') }}
+
+      - name: Use the whisper library built before
+        if: steps.whisper.outputs.cache-hit == 'true'
+        run: |
+          if [ -s whisper-prebuilt/libminima_whisper.so ]; then
+            mkdir -p app/src/main/jniLibs/arm64-v8a
+            cp whisper-prebuilt/libminima_whisper.so app/src/main/jniLibs/arm64-v8a/
+            echo "WHISPER_ARGS=-PprebuiltWhisper=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Build debug APK
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon assembleDebug $WHISPER_ARGS
+
+      - name: Keep the whisper library for the next builds
+        if: steps.whisper.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p whisper-prebuilt
+          unzip -j -o "$(ls app/build/outputs/apk/debug/*.apk | head -1)" lib/arm64-v8a/libminima_whisper.so -d whisper-prebuilt
 
       - uses: actions/upload-artifact@v4
         with:
