@@ -81,7 +81,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     private var dialog: OlDialog? = null
 
     private var pendingFontTarget: ((String) -> Unit)? = null
-    private val fontPicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+    private val fontPicker = registerForActivityResult(PickFiles()) { picked ->
         val uri = picked.firstOrNull()
         viewModel.keepCurrentScreen = false
         val target = pendingFontTarget
@@ -114,7 +114,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         }
     }
 
-    private val backupPicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+    private val backupPicker = registerForActivityResult(PickFiles()) { picked ->
         val uri = picked.firstOrNull()
         viewModel.keepCurrentScreen = false
         if (uri == null) return@registerForActivityResult
@@ -409,7 +409,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             }
             R.id.backupImport -> {
                 viewModel.keepCurrentScreen = true
-                backupPicker.launch(app.olauncher.ui.PickFiles.Request(extensions = arrayOf("zip")))
+                backupPicker.launch(PickFiles.Request(extensions = arrayOf("zip")))
             }
             R.id.widgetLog -> {
                 val ctx = requireContext()
@@ -656,7 +656,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 LOAD_FONT_ID -> {
                     pendingFontTarget = onPick
                     viewModel.keepCurrentScreen = true
-                    fontPicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("font/*"), extensions = arrayOf("ttf", "otf", "ttc")))
+                    fontPicker.launch(PickFiles.Request(types = arrayOf("font/*"), extensions = arrayOf("ttf", "otf", "ttc")))
                     return@showPopupMenu
                 }
 
