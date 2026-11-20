@@ -90,6 +90,18 @@
             android:windowSoftInputMode="adjustResize" />
 
 
+        <!-- The phone's storage as a place in the system's file picker, for the apps that only use that one -->
+        <provider
+            android:name=".helper.ExplorerDocumentsProvider"
+            android:authorities="${applicationId}.documents"
+            android:exported="true"
+            android:grantUriPermissions="true"
+            android:permission="android.permission.MANAGE_DOCUMENTS">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
         <!-- The explorer as a file picker: for the launcher's own screens, and for other apps asking for a file -->
         <activity
             android:name=".ui.FilePickerActivity"

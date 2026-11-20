@@ -72,6 +72,16 @@ open class FileExplorerActivity : AppCompatActivity() {
     private val pickMultiple
         get() = filePick && (intent?.getBooleanExtra(EXTRA_PICK_MULTIPLE, false) == true || intent?.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false) == true)
 
+    /** Only pictures (photos, videos) are being picked: the explorer shows them as a gallery would. */
+    private val pickingPictures: Boolean
+        get() {
+            if (!filePick) return false
+            val types = (intent?.getStringArrayExtra(EXTRA_PICK_TYPES) ?: emptyArray()).toMutableList()
+            intent?.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.let { types += it }
+            if (intent?.action == Intent.ACTION_GET_CONTENT) intent?.type?.let { types += it }
+            return types.isNotEmpty() && types.all { it.startsWith("image/") || it.startsWith("video/") }
+        }
+
     /** A file of a kind the one who asked wants (its own request, or another app's "get content"). */
     private fun pickAccepts(name: String, mime: String?): Boolean {
         val types = (intent?.getStringArrayExtra(EXTRA_PICK_TYPES) ?: emptyArray()).toMutableList()
@@ -233,7 +243,10 @@ open class FileExplorerActivity : AppCompatActivity() {
     }
 
     private fun startLocation(intent: Intent?): File =
-        intent?.getStringExtra(EXTRA_LOCAL_PATH)?.let { File(it) } ?: storageRoot
+        intent?.getStringExtra(EXTRA_LOCAL_PATH)?.let { File(it) }
+            // Picking a photo: from where the camera puts them
+            ?: (if (pickingPictures) File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Camera").takeIf { it.isDirectory } else null)
+            ?: storageRoot
 
     // ---------------------------------------------------------------- layout
 
@@ -725,7 +738,8 @@ open class FileExplorerActivity : AppCompatActivity() {
             return
         }
         views.effective(dir).let { (v, source) ->
-            view = v
+            // Picking a photo in a folder with no view of its own: thumbnails, the newest first
+            view = if (pickingPictures && source == null) v.copy(grid = true, columns = 3, sort = FolderView.SORT_DATE, descending = true) else v
             viewSource = source
         }
         hiddenNames = views.hidden(dir)

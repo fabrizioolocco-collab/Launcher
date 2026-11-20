@@ -399,7 +399,8 @@ class AppDrawerFragment : BaseFragment() {
     }
 
     private var onImagePicked: ((android.net.Uri) -> Unit)? = null
-    private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    private val imagePicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        val uri = picked.firstOrNull()
         viewModel.keepCurrentScreen = false
         if (uri != null) onImagePicked?.invoke(uri)
         onImagePicked = null
@@ -409,7 +410,7 @@ class AppDrawerFragment : BaseFragment() {
         IconChooser.show(requireContext(), appModel, uiScope, { callback ->
             onImagePicked = callback
             viewModel.keepCurrentScreen = true
-            imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
         }) {
             adapter.refreshBadges()
         }

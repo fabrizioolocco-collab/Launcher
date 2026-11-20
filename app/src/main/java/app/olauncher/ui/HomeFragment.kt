@@ -105,7 +105,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     private var onImagePicked: ((Uri) -> Unit)? = null
-    private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    private val imagePicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        val uri = picked.firstOrNull()
         if (uri != null) onImagePicked?.invoke(uri)
         onImagePicked = null
     }
@@ -117,7 +118,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     private var onFilePicked: ((Uri) -> Unit)? = null
-    private val filePicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    private val filePicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        // An address other apps can open (the swipe action hands the file to them)
+        val uri = try {
+            picked.firstOrNull()?.path?.let { androidx.core.content.FileProvider.getUriForFile(requireContext(), requireContext().packageName + ".files", java.io.File(it)) }
+        } catch (e: Exception) {
+            null
+        }
         if (uri != null) onFilePicked?.invoke(uri)
         onFilePicked = null
     }
@@ -150,7 +157,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             onLaunchApp = { app -> launchHomeApp(app) },
             pickImage = { callback ->
                 onImagePicked = callback
-                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
             },
         )
         viewModel.homeApps.value?.let { widgets.setApps(it) }
@@ -164,7 +171,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             onLaunch = { app -> launchHomeApp(app) },
             pickImage = { callback ->
                 onImagePicked = callback
-                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
             },
             onChanged = { news.render() },
         )
@@ -180,7 +187,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             dock = dock,
             pickImage = { callback ->
                 onImagePicked = callback
-                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
             },
         )
         viewModel.homeApps.value?.let { news.setApps(it) }
@@ -200,7 +207,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         }
         SwipeActions.filePicker = { callback ->
             onFilePicked = callback
-            filePicker.launch(arrayOf("*/*"))
+            filePicker.launch(app.olauncher.ui.PickFiles.Request())
         }
 
         search = HomeSearchController(
@@ -817,7 +824,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             entries += MenuEntry(getString(R.string.ml_change_icon)) {
                 IconChooser.show(ctx, app, uiScope, { callback ->
                     onImagePicked = callback
-                    imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
                 }) { onChanged() }
             }
             AppRename.menuEntry(ctx, app)?.let { entries += it }
@@ -827,7 +834,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         entries += MenuEntry(getString(R.string.ml_change_icon)) {
             IconChooser.show(ctx, app, uiScope, { callback ->
                 onImagePicked = callback
-                imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
             }) { onChanged() }
         }
         AppRename.menuEntry(ctx, app)?.let { entries += it }

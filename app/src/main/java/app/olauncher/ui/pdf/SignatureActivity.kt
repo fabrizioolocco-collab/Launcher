@@ -36,7 +36,8 @@ class SignatureActivity : AppCompatActivity() {
 
     private lateinit var pad: PadView
 
-    private val imagePicker = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+    private val imagePicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        val uri = picked.firstOrNull()
         if (uri == null) return@registerForActivityResult
         lifecycleScope.launch {
             val bitmap = withContext(Dispatchers.IO) {
@@ -65,7 +66,7 @@ class SignatureActivity : AppCompatActivity() {
             this, getString(R.string.ml_signature), { finish() },
             listOf(
                 UiKit.iconButton(this, R.drawable.ic_m_image, getString(R.string.ml_signature_image)) {
-                    imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    imagePicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
                 },
                 UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_signature_clear)) { pad.clear() },
                 UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_signature_use)) {

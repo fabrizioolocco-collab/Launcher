@@ -1131,6 +1131,7 @@
     <string name="ml_save_to">Salva in…</string>
     <string name="ml_save_to_done">Salvato in «%1$s»</string>
     <string name="ml_save_to_failed">%1$d file non sono stati salvati</string>
+    <string name="ml_docs_root">File del launcher</string>
     <string name="ml_audio_channel">Lettore audio</string>
     <string name="ml_audio_previous">Precedente</string>
     <string name="ml_audio_next">Successivo</string>

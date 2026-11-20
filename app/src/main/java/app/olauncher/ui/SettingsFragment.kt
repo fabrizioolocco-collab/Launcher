@@ -101,7 +101,10 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         if (_binding != null) populateTextStyle()
     }
 
-    private val backupSaver = registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+    private val backupSaver = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        // The folder chosen in the launcher's explorer: the backup goes in it under its dated name
+        val uri = result.data?.getStringExtra(app.olauncher.ui.FileExplorerActivity.EXTRA_LOCAL_PATH)
+            ?.let { android.net.Uri.fromFile(java.io.File(it, SettingsBackup.suggestedName())) }
         viewModel.keepCurrentScreen = false
         if (uri == null) return@registerForActivityResult
         val ctx = requireContext().applicationContext
@@ -397,7 +400,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             }
             R.id.backupExport -> {
                 viewModel.keepCurrentScreen = true
-                backupSaver.launch(SettingsBackup.suggestedName())
+                backupSaver.launch(
+                    android.content.Intent(requireContext(), app.olauncher.ui.FolderPickerActivity::class.java).putExtra(
+                        app.olauncher.ui.FileExplorerActivity.EXTRA_LOCAL_PATH,
+                        android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).absolutePath,
+                    )
+                )
             }
             R.id.backupImport -> {
                 viewModel.keepCurrentScreen = true
