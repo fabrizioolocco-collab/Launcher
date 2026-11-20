@@ -19,7 +19,6 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -41,7 +40,6 @@ import app.olauncher.helper.pillButton
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showDropdown
 import app.olauncher.helper.showMenuDialog
-import app.olauncher.helper.showProgressDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.scanner.ScannerActivity
@@ -51,67 +49,45 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
- * Simple file explorer for the phone storage and OneDrive: browse, open with the phone's apps,
- * share, rename, delete, copy and move (also between phone and OneDrive).
+ * Simple file explorer for the phone storage: browse, open with the phone's apps,
+ * share, rename, delete, copy and move.
  *
  * Each folder can have its own view (the sliders icon): list or grid with 2-6 columns, sort order (or a manual
  * order, set by dragging), what to show. Subfolders use the settings of the closest folder above
  * that has some ([FolderViewsRepository]).
  *
  * Opened from the home search (a folder, or the folder of a file), the home menu or its own
- * "File" icon in the app list. Extras pick the starting folder: [EXTRA_LOCAL_PATH] for the phone,
- * [EXTRA_CLOUD] for the OneDrive root; none shows the two roots (Phone and OneDrive).
+ * "File" icon in the app list. [EXTRA_LOCAL_PATH] picks the starting folder; none starts at the
+ * storage root.
  */
 open class FileExplorerActivity : AppCompatActivity() {
 
     /** Folder picker mode (see [FolderPickerActivity]): a bar returns the folder shown. */
     protected open val pickMode = false
 
-    /** OneDrive offered too: always when browsing, in picker mode when asked ([EXTRA_ALLOW_CLOUD], e.g. home folders). */
-    private val allowCloud get() = !pickMode || intent?.getBooleanExtra(EXTRA_ALLOW_CLOUD, false) == true
     private var useButton: View? = null
 
 
-    /** Where we are: the roots list, a phone folder or a OneDrive folder (id null = root). */
-    private sealed class Location {
-        object Roots : Location()
-        data class Local(val dir: File) : Location()
-        /** [parent] is where "up" goes (null at the root). */
-        data class Cloud(val id: String?, val name: String, val parent: Cloud?) : Location() {
-            /** Path from the OneDrive root ("" at the root). */
-            val path: String get() = if (parent == null) "" else parent.path + "/" + name
-        }
-    }
-
-    /** A phone file ([file]), a OneDrive item ([cloud]) or, in the roots list, a root ([root]). */
+    /** A phone file, or (only in the search results) one with its folder as [info]. */
     private class Entry(
         val name: String,
         val isFolder: Boolean,
         val size: Long,
         val modified: Long,
-        val file: File? = null,
+        val file: File,
         val mime: String? = null,
-        val cloud: OneDrive.Item? = null,
-        val root: Location? = null,
         /** Second line in place of size and date. */
         val info: String? = null,
     ) {
         /** Identity for the selection. */
-        val key: String get() = file?.absolutePath ?: cloud?.let { "onedrive:" + it.id } ?: "root:$name"
+        val key: String get() = file.absolutePath
     }
 
     private class Clip(val entries: List<Entry>, val move: Boolean)
 
-    /**
-     * A OneDrive file opened from its copy in the cache: when the explorer comes back, the copy (if
-     * edited) and files saved next to it (copies made by the editors) go back to [folder].
-     */
-    private class Opened(val file: File, val folder: Location.Cloud, var modified: Long, var names: Set<String>)
-
     /** A tool of the bottom bars: line icon, label, action. */
     private class Tool(val icon: Int, val label: Int, val action: () -> Unit)
 
-    private lateinit var oneDrive: OneDrive
     private lateinit var title: TextView
     private lateinit var subtitle: TextView
     private lateinit var status: TextView
@@ -123,7 +99,8 @@ open class FileExplorerActivity : AppCompatActivity() {
     private lateinit var newFolder: ImageView
     private lateinit var emptyView: View
 
-    private lateinit var location: Location
+    /** The folder shown. */
+    private lateinit var location: File
     private lateinit var views: FolderViewsRepository
     /** Settings of the folder shown and where they come from (null = defaults). */
     private var view = FolderView()
@@ -153,67 +130,22 @@ open class FileExplorerActivity : AppCompatActivity() {
     private lateinit var selectionBar: LinearLayout
     private lateinit var headerButtons: List<View>
     private var waitingAccess = false
-    private val opened = mutableListOf<Opened>()
-
-    /** OneDrive folder a scan is being made for. */
-    private var scanFolder: Location.Cloud? = null
-
-    /** A scan made for OneDrive comes back as a PDF in the cache: it is uploaded to the folder it was made for. */
-    private val scanLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val folder = scanFolder ?: return@registerForActivityResult
-        scanFolder = null
-        val pdf = result.data?.getStringExtra(ScannerActivity.EXTRA_PDF_PATH)?.let { File(it) } ?: return@registerForActivityResult
-        run(getString(R.string.ml_onedrive_uploading)) {
-            val ok = oneDrive.upload(pdf, folder.id)
-            pdf.parentFile?.deleteRecursively()
-            ok
-        }
-    }
 
     private val storageRoot: File get() = Environment.getExternalStorageDirectory()
 
-    private fun cloudRoot() = Location.Cloud(null, getString(R.string.ml_search_onedrive), null)
+    /** Identity of a place, for the back gesture and the selection. */
+    private fun keyOf(dir: File): String = dir.absolutePath
 
-    /** A OneDrive folder as a path that can be stored: "onedrive:" + its chain of folders (id, name) from the root. */
-    private fun cloudPathOf(loc: Location.Cloud): String {
-        val chain = generateSequence(loc) { it.parent }.filter { it.id != null }.toList().reversed()
-        val array = org.json.JSONArray()
-        chain.forEach { array.put(org.json.JSONObject().put("id", it.id).put("name", it.name)) }
-        return CLOUD_PREFIX + array
-    }
-
-    private fun cloudLocationOf(path: String): Location.Cloud? = try {
-        val array = org.json.JSONArray(path.removePrefix(CLOUD_PREFIX))
-        (0 until array.length()).fold(cloudRoot()) { parent, i ->
-            val o = array.getJSONObject(i)
-            Location.Cloud(o.getString("id"), o.optString("name"), parent)
-        }
-    } catch (e: Exception) {
-        null
-    }
-
-    /** Identity of a place, for the back gesture and the selection ("" = the roots, above everything). */
-    private fun keyOf(loc: Location): String = when (loc) {
-        Location.Roots -> ""
-        is Location.Local -> loc.dir.absolutePath
-        is Location.Cloud -> "onedrive:" + loc.path
-    }
-
-    /** The folder the view settings of a place are saved for (OneDrive folders under a virtual /onedrive). */
-    private fun viewDirOf(loc: Location): File = when (loc) {
-        Location.Roots -> File("/")
-        is Location.Local -> loc.dir
-        is Location.Cloud -> File(CLOUD_VIEWS, loc.path.trimStart('/'))
-    }
-
-    private val viewDir: File get() = viewDirOf(location)
+    private val viewDir: File get() = location
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         views = FolderViewsRepository(this)
-        oneDrive = OneDrive(this)
-        // The copies of OneDrive files stay on the phone (opened again at once), within a limit
-        Thread { oneDrive.trimCache() }.start()
+        // Left by the OneDrive access of older versions (sign-in and downloaded copies)
+        Thread {
+            deleteSharedPreferences("app.minimalauncher.onedrive")
+            File(cacheDir, "onedrive").deleteRecursively()
+        }.start()
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = when {
@@ -247,19 +179,14 @@ open class FileExplorerActivity : AppCompatActivity() {
             waitingAccess = false
             load()
         } else if (!firstResume && ::location.isInitialized) {
-            // Back from the viewer/editor: edited OneDrive files go back; phone folders show saved copies
-            if (!syncBack() && location is Location.Local) load()
+            // Back from the viewer/editor: show the copies saved meanwhile
+            load()
         }
         firstResume = false
     }
 
-    private fun startLocation(intent: Intent?): Location {
-        intent?.getStringExtra(EXTRA_CLOUD_PATH)?.let { path -> cloudLocationOf(path)?.let { return it } }
-        intent?.getStringExtra(EXTRA_LOCAL_PATH)?.let { return Location.Local(File(it)) }
-        if (pickMode && !allowCloud) return Location.Local(storageRoot)
-        if (intent?.getBooleanExtra(EXTRA_CLOUD, false) == true) return cloudRoot()
-        return Location.Roots
-    }
+    private fun startLocation(intent: Intent?): File =
+        intent?.getStringExtra(EXTRA_LOCAL_PATH)?.let { File(it) } ?: storageRoot
 
     // ---------------------------------------------------------------- layout
 
@@ -347,7 +274,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         dragSelect = DragSelect(list, { selecting },
             isSelected = { p -> entries.getOrNull(p)?.key in selected },
             setSelected = { p, on ->
-                entries.getOrNull(p)?.takeIf { it.root == null }?.let { if (on) selected.add(it.key) else selected.remove(it.key) }
+                entries.getOrNull(p)?.let { if (on) selected.add(it.key) else selected.remove(it.key) }
             },
             onChanged = {
                 updateSelection()
@@ -402,13 +329,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 0)
         })
         if (pickMode) useButton = pillButton(this, getString(R.string.ml_explorer_use_folder), filled = true, color = primary) {
-            // A OneDrive folder comes back as a "onedrive:" path (see cloudPathOf)
-            val path = when (val loc = location) {
-                is Location.Cloud -> cloudPathOf(loc)
-                is Location.Local -> loc.dir.absolutePath
-                Location.Roots -> return@pillButton
-            }
-            setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, path))
+            setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, location.absolutePath))
             finish()
         }.also {
             root.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48.dpToPx()).apply {
@@ -418,7 +339,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         return root
     }
 
-    /** The phone or cloud icon before the path. */
+    /** The phone icon before the path. */
     private fun setSubtitleIcon(res: Int) {
         ContextCompat.getDrawable(this, res)?.mutate()?.let { d ->
             d.setTint(UiKit.secondary(this))
@@ -449,25 +370,19 @@ open class FileExplorerActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- navigation
 
     private fun goUp() {
-        val up: Location? = when (val loc = location) {
-            Location.Roots -> null
-            is Location.Local ->
-                if (loc.dir.absolutePath != storageRoot.absolutePath) Location.Local(loc.dir.parentFile ?: storageRoot)
-                else if (!allowCloud) null else Location.Roots
-            is Location.Cloud -> loc.parent ?: Location.Roots
-        }
-        if (up == null) finish() else open(up)
+        val dir = location
+        if (dir.absolutePath == storageRoot.absolutePath) finish() else open(dir.parentFile ?: storageRoot)
     }
 
     /** Back gesture: up one folder while inside the place the explorer was opened in; past it, leave the explorer. */
     private fun goBack() {
         val entry = entryKey
         val key = keyOf(location)
-        val inside = key != entry && (entry.isEmpty() || key.startsWith("$entry/"))
+        val inside = key != entry && key.startsWith("$entry/")
         if (inside) goUp() else finish()
     }
 
-    private fun open(loc: Location) {
+    private fun open(loc: File) {
         location = loc
         load()
     }
@@ -480,19 +395,12 @@ open class FileExplorerActivity : AppCompatActivity() {
         if (changed && searchRow.isVisible) closeSearch(reload = false)
         loadedKey = key
         updatePasteBar()
-        when (val loc = location) {
-            Location.Roots -> showRoots()
-            is Location.Local -> loadLocal(loc)
-            is Location.Cloud -> loadCloud(loc, clear = changed)
-        }
+        loadLocal(location)
         updateSelection()
     }
 
-    private fun titleOf(loc: Location): String = when (loc) {
-        Location.Roots -> getString(R.string.ml_explorer)
-        is Location.Local -> if (loc.dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else loc.dir.name
-        is Location.Cloud -> loc.name
-    }
+    private fun titleOf(dir: File): String =
+        if (dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else dir.name
 
     // ---------------------------------------------------------------- multiple selection
 
@@ -514,8 +422,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         backButton.setImageResource(if (selecting) R.drawable.ic_m_close else R.drawable.ic_m_arrow_back)
         backButton.contentDescription = getString(if (selecting) R.string.close else R.string.ml_cal_back)
         selectionBar.isVisible = selecting
-        headerButtons.forEach { it.isVisible = !selecting && location != Location.Roots }
-        useButton?.isVisible = location != Location.Roots
+        headerButtons.forEach { it.isVisible = !selecting }
         if (selecting) {
             title.text = getString(R.string.ml_explorer_selected, selected.size)
             pasteBar.isVisible = false
@@ -531,25 +438,21 @@ open class FileExplorerActivity : AppCompatActivity() {
             showToast(getString(R.string.ml_explorer_share_no_folders))
             return
         }
-        withLocalFiles(chosen) { files ->
-            val intent = if (files.size == 1) Intent(Intent.ACTION_SEND).setType(chosen[0].mime ?: "*/*")
-                .putExtra(Intent.EXTRA_STREAM, uriFor(files[0]))
-            else Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*")
-                .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(files.map { uriFor(it) }))
-            startActivity(Intent.createChooser(intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
-        }
+        val files = chosen.map { it.file }
+        val intent = if (files.size == 1) Intent(Intent.ACTION_SEND).setType(chosen[0].mime ?: "*/*")
+            .putExtra(Intent.EXTRA_STREAM, uriFor(files[0]))
+        else Intent(Intent.ACTION_SEND_MULTIPLE).setType("*/*")
+            .putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(files.map { uriFor(it) }))
+        startActivity(Intent.createChooser(intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
     }
 
     private fun clipSelected(move: Boolean) {
-        val chosen = selectedEntries()
-        if (move && needsWriteAccess(chosen)) return
-        clip = Clip(chosen, move)
+        clip = Clip(selectedEntries(), move)
         clearSelection()
     }
 
     private fun deleteSelected() {
         val chosen = selectedEntries()
-        if (needsWriteAccess(chosen)) return
         showConfirmDialog(
             getString(R.string.ml_explorer_delete),
             if (chosen.size == 1) getString(R.string.ml_explorer_delete_confirm, chosen[0].name)
@@ -558,7 +461,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         ) {
             selected.clear()
             run(getString(R.string.ml_explorer_delete)) {
-                chosen.map { it.file?.deleteRecursively() ?: it.cloud?.let { item -> oneDrive.delete(item.id) } ?: false }.all { it }
+                chosen.map { it.file.deleteRecursively() }.all { it }
             }
         }
     }
@@ -569,7 +472,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         val items = mutableListOf<MenuEntry>()
         chosen.singleOrNull()?.let { entry ->
             if (!entry.isFolder) items += MenuEntry(getString(R.string.ml_explorer_open_with)) {
-                withLocalFiles(listOf(entry)) { view(it[0], entry.mime, chooser = true) }
+                view(entry.file, entry.mime, chooser = true)
             }
             items += MenuEntry(getString(R.string.rename)) {
                 clearSelection()
@@ -688,8 +591,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         val here = folderEntries.filter { fold(it.name).contains(key) }
         showEntries(here)
         emptyView.isVisible = false
-        val loc = location as? Location.Local
-        if (loc == null || !hasFilesAccess()) {
+        val loc = location
+        if (!hasFilesAccess()) {
             showStatus(if (here.isEmpty()) getString(R.string.ml_explorer_no_results) else null)
             return
         }
@@ -709,13 +612,13 @@ open class FileExplorerActivity : AppCompatActivity() {
                         if (f.isDirectory) walk(f, depth + 1)
                     }
                 }
-                walk(loc.dir, 0)
+                walk(loc, 0)
                 found.sortedWith(compareBy<File> { !it.isDirectory }.thenBy { it.name.lowercase() })
             }
             if (location != loc || fold(query) != key) return@launch
             val more = deeper.map { f ->
                 Entry(f.name, f.isDirectory, if (f.isDirectory) 0 else f.length(), f.lastModified(), f, mimeOf(f.name),
-                    info = "/" + relative(f.parentFile ?: loc.dir))
+                    info = "/" + relative(f.parentFile ?: loc))
             }
             if (more.isNotEmpty()) {
                 val start = entries.size
@@ -746,55 +649,39 @@ open class FileExplorerActivity : AppCompatActivity() {
         load()
     }
 
-    /** The two roots: the phone storage and OneDrive. */
-    private fun showRoots() {
-        title.text = titleOf(Location.Roots)
-        emptyView.isVisible = false
-        subtitle.isVisible = false
-        showStatus(null)
-        view = FolderView()
-        viewSource = null
-        hiddenNames = emptySet()
-        setEntries(listOf(
-            Entry(getString(R.string.ml_search_phone), true, 0, 0, root = Location.Local(storageRoot), info = getString(R.string.ml_explorer_phone_storage)),
-            Entry(getString(R.string.ml_search_onedrive), true, 0, 0, root = cloudRoot(),
-                info = getString(if (oneDrive.isConnected()) R.string.ml_onedrive_personal else R.string.ml_onedrive_connect)),
-        ), sort = false)
-    }
-
-    private fun loadLocal(loc: Location.Local) {
-        title.text = titleOf(loc)
+    private fun loadLocal(dir: File) {
+        title.text = titleOf(dir)
         emptyView.isVisible = false
         setSubtitleIcon(R.drawable.ic_m_phone)
-        subtitle.text = "/" + relative(loc.dir)
+        subtitle.text = "/" + relative(dir)
         subtitle.isVisible = true
         // An album folder (only photos and videos) shows no path, like the album grid
         lifecycleScope.launch {
-            if (location == loc && albumCover(loc.dir) != null) subtitle.isVisible = false
+            if (location == dir && albumCover(dir) != null) subtitle.isVisible = false
         }
         if (!hasFilesAccess()) {
             setEntries(emptyList())
             showStatus(getString(R.string.ml_search_allow_files)) { askFilesAccess() }
             return
         }
-        views.effective(loc.dir).let { (v, source) ->
+        views.effective(dir).let { (v, source) ->
             view = v
             viewSource = source
         }
-        hiddenNames = views.hidden(loc.dir)
+        hiddenNames = views.hidden(dir)
         // Read off the main thread: a chat folder holds thousands of files, each one read for its
         // kind, size and date, which froze the screen (the tap on the folder seemed to do nothing)
         localLoad?.cancel()
         // Another folder: its items must not stay tappable while the new one is read
-        if (folderEntries.firstOrNull()?.file?.parentFile != loc.dir) setEntries(emptyList())
+        if (folderEntries.firstOrNull()?.file?.parentFile != dir) setEntries(emptyList())
         localLoad = lifecycleScope.launch {
             val listed = withContext(Dispatchers.IO) {
-                loc.dir.listFiles()?.map { f ->
+                dir.listFiles()?.map { f ->
                     val folder = f.isDirectory
                     Entry(f.name, folder, if (folder) 0 else f.length(), f.lastModified(), f, mimeOf(f.name))
                 }
             }
-            if (location != loc) return@launch
+            if (location != dir) return@launch
             if (listed == null) {
                 setEntries(emptyList())
                 showStatus(getString(R.string.ml_explorer_cannot_read))
@@ -808,44 +695,6 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     /** The phone folder being read, cancelled when another one is opened. */
     private var localLoad: kotlinx.coroutines.Job? = null
-
-    /** A OneDrive folder; [clear] empties the list while loading (a new folder, not a reload). */
-    private fun loadCloud(loc: Location.Cloud, clear: Boolean) {
-        title.text = titleOf(loc)
-        emptyView.isVisible = false
-        setSubtitleIcon(R.drawable.ic_m_cloud_line)
-        subtitle.text = "/" + loc.path.trimStart('/')
-        subtitle.isVisible = true
-        views.effective(viewDirOf(loc)).let { (v, source) ->
-            view = v
-            viewSource = source
-        }
-        hiddenNames = views.hidden(viewDirOf(loc))
-        if (!oneDrive.isConnected()) {
-            setEntries(emptyList())
-            // Why the sign-in was lost, if it was (e.g. Microsoft refused to renew it)
-            val reason = oneDrive.lastSignInError()?.let { "\n" + getString(R.string.ml_onedrive_reason, it) }.orEmpty()
-            showStatus(getString(R.string.ml_onedrive_connect) + reason) { oneDrive.connect() }
-            return
-        }
-        if (clear) setEntries(emptyList())
-        showStatus(getString(R.string.ml_explorer_loading), busy = true)
-        lifecycleScope.launch {
-            val items = withContext(Dispatchers.IO) { oneDrive.children(loc.id) }
-            if (location != loc) return@launch
-            if (items == null) {
-                setEntries(emptyList())
-                val reason = oneDrive.lastSignInError()?.let { "\n" + getString(R.string.ml_onedrive_reason, it) }.orEmpty()
-                showStatus(getString(R.string.ml_onedrive_error) + reason) { oneDrive.connect() }
-                return@launch
-            }
-            setEntries(items.filter { view.showHidden || !isHidden(it.name) }.map {
-                Entry(it.name, it.isFolder, it.size, it.modified, mime = it.mimeType ?: mimeOf(it.name), cloud = it)
-            })
-            showStatus(null)
-            emptyView.isVisible = entries.isEmpty()
-        }
-    }
 
     // ---------------------------------------------------------------- view settings
 
@@ -912,8 +761,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         val source = viewSource
         val info = when {
             own -> getString(R.string.ml_explorer_view_own)
-            source != null -> getString(R.string.ml_explorer_view_from,
-                if (source == CLOUD_VIEWS) getString(R.string.ml_search_onedrive) else source.name.ifBlank { "/" })
+            source != null -> getString(R.string.ml_explorer_view_from, source.name.ifBlank { "/" })
             else -> getString(R.string.ml_explorer_view_default)
         }
         showMenuDialog(getString(R.string.ml_explorer_view), entries, header = { dialog ->
@@ -981,105 +829,14 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private fun onTap(entry: Entry) {
         if (selecting) return toggleSelect(entry)
-        entry.root?.let { return open(it) }
-        entry.cloud?.let { item ->
-            return if (item.isFolder) open(Location.Cloud(item.id, item.name, location as? Location.Cloud))
-            else withLocalFiles(listOf(entry)) { view(it[0], entry.mime) }
-        }
-        val file = entry.file ?: return
+        val file = entry.file
         if (!entry.isFolder) return view(file, entry.mime)
-        if (pickMode) return open(Location.Local(file))
+        if (pickMode) return open(file)
         // A folder with only photos and videos opens as an album grid, like from the search
         lifecycleScope.launch {
             val album = albumCover(file) != null
-            if (album) AlbumActivity.open(this@FileExplorerActivity, file) else open(Location.Local(file))
+            if (album) AlbumActivity.open(this@FileExplorerActivity, file) else open(file)
         }
-    }
-
-    /**
-     * The entries as local files: themselves on the phone, fresh downloads (in the cache) for
-     * OneDrive; [action] runs only when all of them are there.
-     */
-    private fun withLocalFiles(chosen: List<Entry>, action: (List<File>) -> Unit) {
-        if (chosen.all { it.file != null }) return action(chosen.mapNotNull { it.file })
-        // A dialog with the progress, so a slow download doesn't look stuck; Cancel stops it
-        val total = chosen.sumOf { it.cloud?.size ?: 0L }
-        val cancelled = java.util.concurrent.atomic.AtomicBoolean(false)
-        val dialog = showProgressDialog(getString(R.string.ml_onedrive_downloading_title), chosen.singleOrNull()?.name ?: "") { cancelled.set(true) }
-        var lastUpdate = 0L
-        fun progress(done: Long) {
-            val now = System.currentTimeMillis()
-            if (now - lastUpdate < 100) return
-            lastUpdate = now
-            runOnUiThread {
-                if (total <= 0) return@runOnUiThread dialog.setProgress(null)
-                dialog.setProgress(done.toFloat() / total)
-                dialog.setMessage(listOfNotNull(
-                    chosen.singleOrNull()?.name,
-                    getString(R.string.ml_onedrive_progress, Formatter.formatShortFileSize(this, done), Formatter.formatShortFileSize(this, total)),
-                ).joinToString("\n"))
-            }
-        }
-        lifecycleScope.launch {
-            val folder = location as? Location.Cloud
-            var before = 0L
-            val files = withContext(Dispatchers.IO) {
-                chosen.map { entry ->
-                    if (cancelled.get()) return@map null
-                    entry.file ?: entry.cloud?.let { item ->
-                        val start = before
-                        oneDrive.downloadToCache(item) { done ->
-                            progress(start + done)
-                            !cancelled.get()
-                        }.also { before = start + item.size }
-                    }
-                }
-            }
-            dialog.dismiss()
-            if (cancelled.get()) return@launch
-            if (files.any { it == null }) {
-                showToast(getString(R.string.ml_onedrive_download_failed))
-                return@launch
-            }
-            if (folder != null) chosen.zip(files).filter { it.first.cloud != null }.forEach { (_, f) ->
-                val file = f ?: return@forEach
-                opened += Opened(file, folder, file.lastModified(), file.parentFile?.list()?.toSet().orEmpty())
-            }
-            action(files.filterNotNull())
-        }
-    }
-
-    /**
-     * Uploads OneDrive files edited since they were opened (replacing them) and files saved next to
-     * them; true when there was something to upload (the folder reloads afterwards).
-     */
-    private fun syncBack(): Boolean {
-        val uploads = mutableListOf<Triple<File, Location.Cloud, Boolean>>()
-        for (o in opened) {
-            val dir = o.file.parentFile ?: continue
-            if (o.file.exists() && o.file.lastModified() != o.modified) uploads += Triple(o.file, o.folder, true)
-            val names = dir.list()?.toSet().orEmpty()
-            (names - o.names).forEach { uploads += Triple(File(dir, it), o.folder, false) }
-            o.modified = o.file.lastModified()
-            o.names = names
-        }
-        if (uploads.isEmpty()) return false
-        run(getString(R.string.ml_onedrive_uploading)) {
-            uploads.map { (file, folder, replace) -> file.isFile && oneDrive.upload(file, folder.id, replace) }.all { it }
-        }
-        return true
-    }
-
-    /** True (and asks to connect again) when changing OneDrive needs an editing permission the sign-in lacks. */
-    private fun needsWriteAccess(chosen: List<Entry> = emptyList()): Boolean {
-        val cloud = location is Location.Cloud || chosen.any { it.cloud != null }
-        if (cloud && !oneDrive.canWrite()) {
-            showConfirmDialog(
-                getString(R.string.ml_search_onedrive), getString(R.string.ml_explorer_reconnect), getString(R.string.ml_onedrive_connect),
-            ) { oneDrive.connect() }
-            return true
-        }
-        return false
     }
 
     /** Album covers found so far (folder path -> newest photo/video, or null when not an album). */
@@ -1092,32 +849,10 @@ open class FileExplorerActivity : AppCompatActivity() {
         return cover
     }
 
-    /** Long press: starts (or extends) the multiple selection; on the OneDrive root, offers to disconnect it. */
+    /** Long press: starts (or extends) the multiple selection. */
     private fun onLongPress(entry: Entry) {
-        if (entry.root == null) {
-            toggleSelect(entry)
-            dragSelect.start(entries.indexOf(entry))
-            return
-        }
-        if (entry.root is Location.Cloud && oneDrive.isConnected()) showMenuDialog(entry.name, listOf(
-            MenuEntry(getString(R.string.ml_onedrive_clear_cache)) {
-                lifecycleScope.launch {
-                    val size = withContext(Dispatchers.IO) { oneDrive.cacheSize() }
-                    showConfirmDialog(
-                        title = getString(R.string.ml_onedrive_clear_cache),
-                        message = getString(R.string.ml_onedrive_clear_cache_message, Formatter.formatShortFileSize(this@FileExplorerActivity, size)),
-                        action = getString(R.string.ml_onedrive_clear_cache),
-                    ) {
-                        lifecycleScope.launch(Dispatchers.IO) { oneDrive.clearCache() }
-                    }
-                }
-            },
-            MenuEntry(getString(R.string.ml_onedrive_disconnect)) {
-                oneDrive.disconnect()
-                Thread { oneDrive.clearCache() }.start()
-                load()
-            },
-        ))
+        toggleSelect(entry)
+        dragSelect.start(entries.indexOf(entry))
     }
 
     private fun uriFor(file: File): Uri = FileProvider.getUriForFile(this, "$packageName.files", file)
@@ -1133,8 +868,6 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
         val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uriFor(file), mime ?: "*/*")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        // A OneDrive copy can be edited by the app that opens it: the changes go back when returning here
-        if (file.absolutePath.startsWith(File(cacheDir, "onedrive").absolutePath + "/")) intent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         try {
             startActivity(if (chooser) Intent.createChooser(intent, file.name) else intent)
         } catch (e: Exception) {
@@ -1143,7 +876,6 @@ open class FileExplorerActivity : AppCompatActivity() {
     }
 
     private fun askRename(entry: Entry) {
-        if (needsWriteAccess(listOf(entry))) return
         showTextInputDialog(getString(R.string.rename), entry.name, entry.name, getString(R.string.ml_save)) { name ->
             // A hidden item stays hidden under its new name
             if (entry.name in hiddenNames) {
@@ -1151,8 +883,7 @@ open class FileExplorerActivity : AppCompatActivity() {
                 views.setHidden(viewDir, listOf(name), hide = true)
             }
             run(getString(R.string.rename)) {
-                entry.file?.let { it.renameTo(File(it.parentFile, name)) }
-                    ?: entry.cloud?.let { oneDrive.rename(it.id, name) } ?: false
+                entry.file.renameTo(File(entry.file.parentFile, name))
             }
         }
     }
@@ -1161,39 +892,15 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun showAddMenu() {
         newFolder.showDropdown(listOf(
             MenuEntry(getString(R.string.ml_explorer_new_folder), icon = R.drawable.ic_m_folder) { askNewFolder() },
-            MenuEntry(getString(R.string.ml_scan_start), icon = R.drawable.ic_m_scan) {
-                val loc = location
-                if (loc !is Location.Cloud) ScannerActivity.open(this, viewDir)
-                else if (!needsWriteAccess()) {
-                    scanFolder = loc
-                    scanLauncher.launch(ScannerActivity.namedIntent(this))
-                }
-            },
+            MenuEntry(getString(R.string.ml_scan_start), icon = R.drawable.ic_m_scan) { ScannerActivity.open(this, viewDir) },
         ))
     }
 
     private fun askNewFolder() {
-        if (location == Location.Roots || needsWriteAccess()) return
         showTextInputDialog(getString(R.string.ml_explorer_new_folder), "", getString(R.string.ml_explorer_folder_name), getString(R.string.ml_save)) { name ->
-            val label = getString(R.string.ml_explorer_new_folder)
             // While copying or moving, go into the new folder: more can be made inside, then paste
-            when (val loc = location) {
-                is Location.Local -> {
-                    val dir = File(loc.dir, name)
-                    run(label, then = { ok -> if (ok && clip != null) open(Location.Local(dir)) }) { dir.mkdirs() }
-                }
-                is Location.Cloud -> {
-                    var made: OneDrive.Item? = null
-                    run(label, then = { ok ->
-                        val item = made
-                        if (ok && clip != null && item != null) open(Location.Cloud(item.id, item.name, loc))
-                    }) {
-                        made = oneDrive.createFolder(loc.id, name)
-                        made != null
-                    }
-                }
-                Location.Roots -> {}
-            }
+            val dir = File(location, name)
+            run(getString(R.string.ml_explorer_new_folder), then = { ok -> if (ok && clip != null) open(dir) }) { dir.mkdirs() }
         }
     }
 
@@ -1219,7 +926,7 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private fun updatePasteBar() {
         val c = clip
-        pasteBar.isVisible = c != null && !selecting && location != Location.Roots
+        pasteBar.isVisible = c != null && !selecting
         if (c != null) pasteText.text = when (c.entries.size) {
             1 -> getString(if (c.move) R.string.ml_explorer_moving else R.string.ml_explorer_copying, c.entries[0].name)
             else -> getString(if (c.move) R.string.ml_explorer_moving_many else R.string.ml_explorer_copying_many, c.entries.size)
@@ -1229,22 +936,15 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun paste() {
         val c = clip ?: return
         val target = location
-        if (target == Location.Roots || needsWriteAccess(if (c.move) c.entries else emptyList())) return
         // A folder can't go inside itself
-        if (target is Location.Local && c.entries.any { e -> e.file?.let { (target.dir.absolutePath + "/").startsWith(it.absolutePath + "/") } == true }) {
+        if (c.entries.any { e -> (target.absolutePath + "/").startsWith(e.file.absolutePath + "/") }) {
             showToast(getString(R.string.ml_explorer_into_itself))
             return
         }
         clip = null
         val label = getString(if (c.move) R.string.ml_explorer_move else R.string.ml_explorer_copy)
         run(label) {
-            c.entries.map { entry ->
-                when (target) {
-                    is Location.Local -> pasteToLocal(entry, target.dir, c.move)
-                    is Location.Cloud -> pasteToCloud(entry, target.id, c.move)
-                    Location.Roots -> false
-                }
-            }.all { it }
+            c.entries.map { entry -> pasteToLocal(entry, target, c.move) }.all { it }
         }
     }
 
@@ -1259,52 +959,22 @@ open class FileExplorerActivity : AppCompatActivity() {
     }
 
     private fun pasteToLocal(entry: Entry, dir: File, move: Boolean): Boolean {
-        entry.file?.let { src ->
-            val dest = uniqueTarget(dir, src.name)
-            if (move && src.renameTo(dest)) return true
-            if (!src.copyRecursively(dest)) return false
-            return !move || src.deleteRecursively()
-        }
-        val item = entry.cloud ?: return false
-        if (!downloadTree(item, uniqueTarget(dir, item.name))) return false
-        return !move || oneDrive.delete(item.id)
-    }
-
-    private fun downloadTree(item: OneDrive.Item, dest: File): Boolean {
-        if (!item.isFolder) return oneDrive.downloadTo(item, dest)
-        if (!dest.mkdirs()) return false
-        val children = oneDrive.children(item.id) ?: return false
-        return children.all { downloadTree(it, File(dest, it.name)) }
-    }
-
-    private fun pasteToCloud(entry: Entry, folderId: String?, move: Boolean): Boolean {
-        entry.cloud?.let { item ->
-            return if (move) oneDrive.move(item.id, folderId) else oneDrive.copy(item.id, folderId)
-        }
-        val src = entry.file ?: return false
-        if (!uploadTree(src, folderId)) return false
+        val src = entry.file
+        val dest = uniqueTarget(dir, src.name)
+        if (move && src.renameTo(dest)) return true
+        if (!src.copyRecursively(dest)) return false
         return !move || src.deleteRecursively()
-    }
-
-    private fun uploadTree(src: File, folderId: String?): Boolean {
-        if (!src.isDirectory) return oneDrive.upload(src, folderId)
-        val folder = oneDrive.createFolder(folderId, src.name) ?: return false
-        return src.listFiles().orEmpty().all { uploadTree(it, folder.id) }
     }
 
     // ---------------------------------------------------------------- list
 
-    private fun kindOf(entry: Entry) = when (entry.root) {
-        is Location.Local -> UiKit.FileKind.PHONE
-        is Location.Cloud -> UiKit.FileKind.CLOUD
-        else -> UiKit.kindOf(entry.name, entry.mime, entry.isFolder)
-    }
+    private fun kindOf(entry: Entry) = UiKit.kindOf(entry.name, entry.mime, entry.isFolder)
 
     private fun shownName(entry: Entry) =
         if (view.showExtension || entry.isFolder || !entry.name.contains('.')) entry.name else entry.name.substringBeforeLast('.')
 
-    private fun hasThumbnail(entry: Entry) = view.showThumbnails && !entry.isFolder && (entry.cloud?.thumbnail != null ||
-            entry.file != null && (entry.mime?.startsWith("image/") == true || entry.mime?.startsWith("video/") == true))
+    private fun hasThumbnail(entry: Entry) = view.showThumbnails && !entry.isFolder &&
+            (entry.mime?.startsWith("image/") == true || entry.mime?.startsWith("video/") == true)
 
     /** Thumbnail with 12 dp rounded corners (clipped to its background). */
     private fun roundedImage() = ImageView(this).apply {
@@ -1413,17 +1083,13 @@ open class FileExplorerActivity : AppCompatActivity() {
             tileHolder.isVisible = !thumb
             image.isVisible = thumb
             val size = if (view.grid) iconBox.layoutParams.width.coerceAtLeast(64) else 40.dpToPx()
-            if (thumb && entry.file != null) MediaThumbnails.load(lifecycleScope, image, entry.file, size)
-            else if (thumb && entry.cloud != null) {
-                val item = entry.cloud
-                val url = (if (size > 200) item.thumbnailLarge else null) ?: item.thumbnail
-                MediaThumbnails.loadBytes(lifecycleScope, image, "onedrive:${item.id}:${item.modified}", size) { url?.let { oneDrive.thumbnailBytes(it) } }
-            } else {
+            if (thumb) MediaThumbnails.load(lifecycleScope, image, entry.file, size)
+            else {
                 image.tag = null
                 image.setImageBitmap(null)
             }
             // Albums show their newest photo instead of the folder icon
-            if (entry.isFolder && view.showThumbnails && entry.file != null) {
+            if (entry.isFolder && view.showThumbnails) {
                 val folder = entry.file
                 val path = folder.absolutePath
                 image.tag = path
@@ -1460,12 +1126,12 @@ open class FileExplorerActivity : AppCompatActivity() {
             // Hidden items (shown with "Hidden files" on) are faded
             root.alpha = when {
                 selecting && !isSelected -> 0.6f
-                entry.root == null && isHidden(entry.name) -> 0.45f
+                isHidden(entry.name) -> 0.45f
                 else -> 1f
             }
             root.setOnClickListener { onTap(entry) }
             // In manual order a long press drags the item (the menu opens if it isn't moved)
-            if (view.sort == FolderView.SORT_MANUAL && !searching && entry.root == null) root.setOnLongClickListener(null)
+            if (view.sort == FolderView.SORT_MANUAL && !searching) root.setOnLongClickListener(null)
             else root.setOnLongClickListener {
                 onLongPress(entry)
                 true
@@ -1478,43 +1144,16 @@ open class FileExplorerActivity : AppCompatActivity() {
         private const val MAX_SEARCH_DEPTH = 8
 
         const val EXTRA_LOCAL_PATH = "local_path"
-        const val EXTRA_CLOUD = "cloud"
-        /** A OneDrive folder to open, as made by [cloudPathOf] (e.g. a home folder shortcut). */
-        const val EXTRA_CLOUD_PATH = "cloud_path"
-        /** Folder picker: OneDrive folders can be picked too (they come back as "onedrive:" paths). */
-        const val EXTRA_ALLOW_CLOUD = "allow_cloud"
-        const val CLOUD_PREFIX = "onedrive:"
 
-        fun isCloudPath(path: String?) = path?.startsWith(CLOUD_PREFIX) == true
-
-        /** Name of the folder a path (phone or OneDrive) stands for. */
-        fun folderName(context: Context, path: String): String =
-            if (!isCloudPath(path)) File(path).name
-            else try {
-                val chain = org.json.JSONArray(path.removePrefix(CLOUD_PREFIX))
-                if (chain.length() == 0) context.getString(R.string.ml_search_onedrive) else chain.getJSONObject(chain.length() - 1).optString("name")
-            } catch (e: Exception) {
-                context.getString(R.string.ml_search_onedrive)
-            }
-
-        fun openCloudPath(context: Context, path: String) = context.startActivity(
-            Intent(context, FileExplorerActivity::class.java).putExtra(EXTRA_CLOUD_PATH, path)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-
-        /** Virtual folder the OneDrive view settings are saved under. */
-        private val CLOUD_VIEWS = File("/onedrive")
+        /** Name of the folder a stored path stands for. */
+        fun folderName(path: String): String = File(path).name
 
         fun openLocal(context: Context, dir: File) = context.startActivity(
             Intent(context, FileExplorerActivity::class.java).putExtra(EXTRA_LOCAL_PATH, dir.absolutePath)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )
 
-        fun openCloud(context: Context) = context.startActivity(
-            Intent(context, FileExplorerActivity::class.java).putExtra(EXTRA_CLOUD, true)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        )
-
+        /** Opens the explorer at the storage root. */
         fun openRoots(context: Context) = context.startActivity(
             Intent(context, FileExplorerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         )

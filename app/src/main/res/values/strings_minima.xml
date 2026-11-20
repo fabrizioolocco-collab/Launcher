@@ -216,20 +216,6 @@
     <string name="ml_search_open_folder">Open folder</string>
     <!-- File explorer -->
     <string name="ml_explorer">Files</string>
-    <string name="ml_search_onedrive">OneDrive</string>
-    <string name="ml_onedrive_connect">Connect OneDrive</string>
-    <string name="ml_onedrive_personal">Personal Microsoft account</string>
-    <string name="ml_onedrive_error">OneDrive is not responding: tap to sign in again</string>
-    <string name="ml_onedrive_connected">OneDrive connected</string>
-    <string name="ml_onedrive_failed">OneDrive sign-in failed</string>
-    <string name="ml_onedrive_disconnect">Disconnect OneDrive</string>
-    <string name="ml_onedrive_uploading">Saving to OneDrive</string>
-    <string name="ml_onedrive_downloading_title">Downloading from OneDrive</string>
-    <string name="ml_onedrive_progress">%1$s of %2$s</string>
-    <string name="ml_onedrive_reason">Reason: %1$s</string>
-    <string name="ml_onedrive_download_failed">Download from OneDrive failed</string>
-    <string name="ml_explorer_reconnect">To change files on OneDrive, connect it again and allow editing.</string>
-    <string name="ml_explorer_phone_storage">Internal storage</string>
     <string name="ml_file_manager">File manager</string>
     <string name="ml_phone_folders">Open phone folders in</string>
     <string name="ml_explorer_new_folder">New folder</string>
@@ -924,7 +910,7 @@
     <string name="ml_backup_error">Couldn\'t save the backup</string>
     <string name="ml_backup_invalid">This file isn\'t a MinimaLauncher backup</string>
     <string name="ml_backup_restore_title">Restore backup?</string>
-    <string name="ml_backup_restore_message">All the current settings, home layout, tabs, bookmarks and to-dos are replaced by the ones in the backup, then the launcher restarts. Widgets of other apps and the OneDrive sign-in have to be added again.</string>
+    <string name="ml_backup_restore_message">All the current settings, home layout, tabs, bookmarks and to-dos are replaced by the ones in the backup, then the launcher restarts. Widgets of other apps have to be added again.</string>
     <string name="ml_search_tab_events">Events</string>
     <string name="ml_search_allow_calendar">Allow calendar access to search the events</string>
     <string name="ml_search_event_all_day">all day</string>
@@ -1012,6 +998,4 @@
     <string name="ml_goal_hours">hours</string>
     <string name="ml_goal_minutes">minutes</string>
     <string name="ml_goal_privacy">Privacy: invisible, a tap on its place shows / hides it</string>
-    <string name="ml_onedrive_clear_cache">Free the space of downloaded files</string>
-    <string name="ml_onedrive_clear_cache_message">The copies of OneDrive files kept on the phone (%1$s) are deleted: they download again when opened. Nothing changes on OneDrive.</string>
 </resources>

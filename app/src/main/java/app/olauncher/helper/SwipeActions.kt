@@ -176,7 +176,7 @@ object SwipeActions {
         }
         folderPicker?.let { picker ->
             entries += MenuEntry(context.getString(R.string.ml_swipe_open_folder)) {
-                picker { path -> save(Action(TYPE_FOLDER, FileExplorerActivity.folderName(context, path), uri = path)) }
+                picker { path -> save(Action(TYPE_FOLDER, FileExplorerActivity.folderName(path), uri = path)) }
             }
         }
         filePicker?.let { picker ->

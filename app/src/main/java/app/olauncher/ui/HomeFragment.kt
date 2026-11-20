@@ -767,15 +767,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private fun createFolderShortcut() {
         pickFolder { path ->
             val ctx = requireContext()
-            ctx.showTextInputDialog(getString(R.string.ml_folder_new), FileExplorerActivity.folderName(ctx, path), getString(R.string.ml_explorer_folder_name), getString(R.string.ml_save)) { name ->
+            ctx.showTextInputDialog(getString(R.string.ml_folder_new), FileExplorerActivity.folderName(path), getString(R.string.ml_explorer_folder_name), getString(R.string.ml_save)) { name ->
                 fun add(inExplorer: Boolean) {
                     val folder = FolderShortcuts.add(ctx, path, name, inExplorer)
                     widgets.addApp(FolderShortcuts.toApp(folder))
                     viewModel.loadHomeApps()
                     news.render()
                 }
-                // A OneDrive folder opens only in the built-in explorer: nothing to choose
-                if (FileExplorerActivity.isCloudPath(path)) return@showTextInputDialog add(true)
                 ctx.showMenuDialog(getString(R.string.ml_folder_open_with), listOf(true, false).map { inExplorer ->
                     MenuEntry(getString(if (inExplorer) R.string.ml_explorer else R.string.ml_file_manager)) { add(inExplorer) }
                 })
@@ -798,7 +796,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     /** Our own folder picker (the system one refuses Download and the storage root). */
     private fun pickFolder(onPicked: (String) -> Unit) {
         onFolderPicked = onPicked
-        folderPicker.launch(Intent(requireContext(), FolderPickerActivity::class.java).putExtra(FileExplorerActivity.EXTRA_ALLOW_CLOUD, true))
+        folderPicker.launch(Intent(requireContext(), FolderPickerActivity::class.java))
     }
 
     /**

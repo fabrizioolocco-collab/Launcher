@@ -99,32 +99,6 @@ object MediaThumbnails {
         }
     }
 
-    /** Shows a thumbnail whose image comes from [fetch] (e.g. a OneDrive thumbnail), cached under [key]. */
-    fun loadBytes(scope: CoroutineScope, view: ImageView, key: String, size: Int, fetch: () -> ByteArray?) {
-        val cacheKey = key + "@" + size
-        jobs.remove(view)?.cancel()
-        view.tag = cacheKey
-        val cached = cache.get(cacheKey)
-        view.setImageBitmap(cached)
-        if (cached != null) return
-        jobs[view] = scope.launch {
-            val bitmap = withContext(workers) {
-                try {
-                    val bytes = fetch() ?: return@withContext null
-                    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                    var sample = 1
-                    while (bounds.outWidth / (sample * 2) >= size && bounds.outHeight / (sample * 2) >= size) sample *= 2
-                    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-                } catch (e: Throwable) {
-                    null
-                }
-            } ?: return@launch
-            cache.put(cacheKey, bitmap)
-            if (view.tag == cacheKey) view.setImageBitmap(bitmap)
-        }
-    }
-
     @Volatile private var writes = 0
 
     /** Where the thumbnail of [file] at [size] is kept; a changed file (date, length) gets a new name. */

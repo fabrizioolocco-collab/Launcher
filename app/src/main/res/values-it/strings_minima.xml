@@ -213,20 +213,6 @@
     <string name="ml_search_open_folder">Apri cartella</string>
     <!-- File explorer -->
     <string name="ml_explorer">File</string>
-    <string name="ml_search_onedrive">OneDrive</string>
-    <string name="ml_onedrive_connect">Collega OneDrive</string>
-    <string name="ml_onedrive_personal">Account Microsoft personale</string>
-    <string name="ml_onedrive_error">OneDrive non risponde: tocca per accedere di nuovo</string>
-    <string name="ml_onedrive_connected">OneDrive collegato</string>
-    <string name="ml_onedrive_failed">Accesso a OneDrive non riuscito</string>
-    <string name="ml_onedrive_disconnect">Scollega OneDrive</string>
-    <string name="ml_onedrive_uploading">Salvataggio su OneDrive</string>
-    <string name="ml_onedrive_downloading_title">Download da OneDrive</string>
-    <string name="ml_onedrive_progress">%1$s di %2$s</string>
-    <string name="ml_onedrive_reason">Motivo: %1$s</string>
-    <string name="ml_onedrive_download_failed">Download da OneDrive non riuscito</string>
-    <string name="ml_explorer_reconnect">Per modificare i file su OneDrive collegalo di nuovo e consenti la modifica.</string>
-    <string name="ml_explorer_phone_storage">Memoria interna</string>
     <string name="ml_file_manager">File manager</string>
     <string name="ml_phone_folders">Apri le cartelle del telefono in</string>
     <string name="ml_explorer_new_folder">Nuova cartella</string>
@@ -921,7 +907,7 @@
     <string name="ml_backup_error">Impossibile salvare il backup</string>
     <string name="ml_backup_invalid">Questo file non è un backup di MinimaLauncher</string>
     <string name="ml_backup_restore_title">Ripristinare il backup?</string>
-    <string name="ml_backup_restore_message">Tutte le impostazioni attuali, la home, le schede, i preferiti e le to-do vengono sostituiti da quelli del backup, poi il launcher si riavvia. I widget di altre app e l\'accesso a OneDrive vanno aggiunti di nuovo.</string>
+    <string name="ml_backup_restore_message">Tutte le impostazioni attuali, la home, le schede, i preferiti e le to-do vengono sostituiti da quelli del backup, poi il launcher si riavvia. I widget di altre app vanno aggiunti di nuovo.</string>
     <string name="ml_search_tab_events">Eventi</string>
     <string name="ml_search_allow_calendar">Consenti l\'accesso al calendario per cercare gli eventi</string>
     <string name="ml_search_event_all_day">tutto il giorno</string>
@@ -1009,6 +995,4 @@
     <string name="ml_goal_hours">ore</string>
     <string name="ml_goal_minutes">minuti</string>
     <string name="ml_goal_privacy">Privacy: invisibile, un tocco nella sua zona lo mostra / nasconde</string>
-    <string name="ml_onedrive_clear_cache">Libera lo spazio dei file scaricati</string>
-    <string name="ml_onedrive_clear_cache_message">Le copie dei file di OneDrive tenute sul telefono (%1$s) vengono cancellate: si riscaricano quando le apri. Su OneDrive non cambia nulla.</string>
 </resources>

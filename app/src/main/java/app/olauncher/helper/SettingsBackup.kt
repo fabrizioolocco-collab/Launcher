@@ -15,7 +15,7 @@ import kotlin.system.exitProcess
  * Backup of every setting of the launcher to a single file, to move it to another phone:
  * all its SharedPreferences (as typed JSON) and the files it keeps (fonts, custom icons,
  * bookmarks, to-dos, signature...), zipped. Restoring replaces them and restarts the app.
- * Left out: the OneDrive sign-in (tokens), logs and caches. Widgets of other apps can't move
+ * Left out: logs and caches. Widgets of other apps can't move
  * (their ids belong to the old phone): they are dropped and have to be added again.
  */
 object SettingsBackup {
