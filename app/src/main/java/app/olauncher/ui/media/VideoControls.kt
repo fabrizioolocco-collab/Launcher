@@ -21,9 +21,8 @@ import app.olauncher.helper.dpToPx
 import java.text.DecimalFormat
 
 /**
- * Controls drawn over a video of [MediaViewerActivity], as on iOS: back 10 s / play-pause / forward 10 s
- * in the middle of the screen, at the bottom the bar with the elapsed and remaining time, the speed and the
- * audio. Touches outside the buttons and the bar go through to the video (tap, double tap).
+ * Controls drawn over a video of [MediaViewerActivity]: one card in the middle of the screen with the
+ * elapsed and total time, the bar, then speed, back 10 s, play-pause, forward 10 s and audio. Touches outside the buttons and the bar go through to the video (tap, double tap).
  * [onActivity] is told of every use, to restart the auto-hide countdown.
  */
 class VideoControls(context: Context, private val video: VideoView, private val onActivity: () -> Unit) : FrameLayout(context) {
@@ -41,13 +40,13 @@ class VideoControls(context: Context, private val video: VideoView, private val 
     private var muted = false
     private var dragging = false
 
-    private val playIcon = ImageView(context)
+    private val playIcon = ImageView(context).apply { setColorFilter(0xFF12161C.toInt()) }
     private val seek = SeekBar(context)
     private val elapsed = timeText()
-    private val remaining = timeText().apply { gravity = Gravity.END }
+    private val total = timeText().apply { gravity = Gravity.END }
     private val speedChip = TextView(context)
     private val muteIcon = ImageView(context)
-    private val bottom = LinearLayout(context)
+    private val card = LinearLayout(context)
 
     private val ticker = object : Runnable {
         override fun run() {
@@ -57,30 +56,26 @@ class VideoControls(context: Context, private val video: VideoView, private val 
     }
 
     init {
-        setBackgroundColor(0x4D000000)
+        setBackgroundColor(0x33000000)
         isVisible = false
 
-        val center = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        // One dark card in the middle: the times, the bar, then speed, -10 s, play, +10 s, audio
+        card.orientation = LinearLayout.VERTICAL
+        card.background = GradientDrawable().apply {
+            cornerRadius = 28.dpToPx().toFloat()
+            setColor(0xC7121620.toInt())
+            setStroke(1.dpToPx(), 0x1FFFFFFF)
         }
-        center.addView(skipButton(R.drawable.ic_mp_replay, R.string.ml_player_back) { jump(-SKIP_MS) }, LinearLayout.LayoutParams(60.dpToPx(), 60.dpToPx()))
-        center.addView(FrameLayout(context).apply {
-            background = circle(0x73000000)
-            contentDescription = context.getString(R.string.ml_player_play_pause)
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { togglePlay() }
-            addView(playIcon, LayoutParams(36.dpToPx(), 36.dpToPx(), Gravity.CENTER))
-        }, LinearLayout.LayoutParams(80.dpToPx(), 80.dpToPx()).apply {
-            marginStart = 40.dpToPx()
-            marginEnd = 40.dpToPx()
-        })
-        center.addView(skipButton(R.drawable.ic_mp_forward, R.string.ml_player_forward) { jump(SKIP_MS) }, LinearLayout.LayoutParams(60.dpToPx(), 60.dpToPx()))
-        addView(center, LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        card.setPadding(20.dpToPx(), 18.dpToPx(), 20.dpToPx(), 12.dpToPx())
 
-        // Bottom: the bar, then the times with speed and audio between them
-        bottom.orientation = LinearLayout.VERTICAL
+        val times = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+        times.addView(elapsed, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        times.addView(total, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        card.addView(times, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginStart = 4.dpToPx()
+            marginEnd = 4.dpToPx()
+        })
+
         seek.progressTintList = ColorStateList.valueOf(Color.WHITE)
         seek.progressBackgroundTintList = ColorStateList.valueOf(0x80FFFFFF.toInt())
         seek.thumbTintList = ColorStateList.valueOf(Color.WHITE)
@@ -105,49 +100,62 @@ class VideoControls(context: Context, private val video: VideoView, private val 
             if (ev.actionMasked == MotionEvent.ACTION_DOWN) v.parent?.requestDisallowInterceptTouchEvent(true)
             false
         }
-        bottom.addView(seek, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 36.dpToPx()))
+        card.addView(seek, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 36.dpToPx()).apply { topMargin = 4.dpToPx() })
 
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        row.addView(elapsed, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         speedChip.apply {
             setTextColor(Color.WHITE)
-            textSize = 13f
+            textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
-            setPadding(14.dpToPx(), 0, 14.dpToPx(), 0)
-            minWidth = 40.dpToPx()
-            background = GradientDrawable().apply {
-                cornerRadius = 20.dpToPx().toFloat()
-                setColor(0x29FFFFFF)
-            }
+            background = circle(0x00000000)
             contentDescription = context.getString(R.string.ml_player_speed)
             setOnClickListener { nextSpeed() }
         }
-        row.addView(speedChip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 40.dpToPx()))
-        row.addView(FrameLayout(context).apply {
-            background = circle(0x29FFFFFF)
+        val play = FrameLayout(context).apply {
+            background = circle(Color.WHITE)
+            contentDescription = context.getString(R.string.ml_player_play_pause)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { togglePlay() }
+            addView(playIcon, LayoutParams(30.dpToPx(), 30.dpToPx(), Gravity.CENTER))
+        }
+        val mute = FrameLayout(context).apply {
             contentDescription = context.getString(R.string.ml_viewer_mute)
             isClickable = true
             isFocusable = true
             setOnClickListener { toggleMute() }
-            addView(muteIcon, LayoutParams(20.dpToPx(), 20.dpToPx(), Gravity.CENTER))
-        }, LinearLayout.LayoutParams(40.dpToPx(), 40.dpToPx()).apply { marginStart = 8.dpToPx() })
-        row.addView(remaining, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        bottom.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 2.dpToPx() })
-        addView(bottom, LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
-        setBottomInset(0)
+            addView(muteIcon, LayoutParams(22.dpToPx(), 22.dpToPx(), Gravity.CENTER))
+        }
+        val buttons = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        listOf(
+            speedChip to 48,
+            skipButton(R.drawable.ic_mp_replay, R.string.ml_player_back) { jump(-SKIP_MS) } to 52,
+            play to 68,
+            skipButton(R.drawable.ic_mp_forward, R.string.ml_player_forward) { jump(SKIP_MS) } to 52,
+            mute to 48,
+        ).forEach { (v, size) ->
+            buttons.addView(FrameLayout(context).apply {
+                addView(v, LayoutParams(size.dpToPx(), size.dpToPx(), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        }
+        card.addView(buttons, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 6.dpToPx() })
+        addView(card, LayoutParams(360.dpToPx(), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
 
         speedChip.text = speedLabel()
         muteIcon.setImageResource(R.drawable.ic_m_volume)
         refresh()
     }
 
-    /** Room left at the bottom for the navigation bar. */
-    fun setBottomInset(px: Int) {
-        bottom.setPadding(16.dpToPx(), 0, 16.dpToPx(), 28.dpToPx() + px)
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        // As wide as the screen allows, up to 400 dp
+        val width = (w - 48.dpToPx()).coerceIn(0, 400.dpToPx())
+        if (card.layoutParams.width != width) post {
+            card.layoutParams = card.layoutParams.apply { this.width = width }
+        }
     }
 
     /** Shows or hides the controls, fading. */
@@ -241,7 +249,7 @@ class VideoControls(context: Context, private val video: VideoView, private val 
 
     private fun showTimes(position: Int, duration: Int) {
         elapsed.text = MediaViewerActivity.formatDuration(position.toLong())
-        remaining.text = if (duration > 0) "-" + MediaViewerActivity.formatDuration((duration - position).coerceAtLeast(0).toLong()) else ""
+        total.text = if (duration > 0) MediaViewerActivity.formatDuration(duration.toLong()) else ""
     }
 
     private fun speedLabel() = DecimalFormat("0.##").format(speed) + "×"
@@ -258,7 +266,6 @@ class VideoControls(context: Context, private val video: VideoView, private val 
     }
 
     private fun skipButton(icon: Int, description: Int, onClick: () -> Unit) = FrameLayout(context).apply {
-        background = circle(0x59000000)
         contentDescription = context.getString(description)
         isClickable = true
         isFocusable = true

@@ -63,8 +63,6 @@ class MediaViewerActivity : AppCompatActivity() {
     private lateinit var title: TextView
     private lateinit var counter: TextView
     private var chromeVisible = true
-    /** Height of the navigation bar, kept clear by the video controls. */
-    private var bottomInset = 0
     private var current = 0
     /** The folders swiped through (one, or those of the home gallery). */
     private var dirs: List<File> = emptyList()
@@ -128,8 +126,6 @@ class MediaViewerActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(topBar) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(4.dpToPx() + bars.left, bars.top + 8.dpToPx(), 4.dpToPx() + bars.right, 20.dpToPx())
-            bottomInset = insets.getInsetsIgnoringVisibility(WindowInsetsCompat.Type.systemBars()).bottom
-            currentControls()?.setBottomInset(bottomInset)
             insets
         }
         root.addView(topBar, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP))
@@ -151,9 +147,6 @@ class MediaViewerActivity : AppCompatActivity() {
     }
 
     private fun currentPage() = pager.layoutManager?.findViewByPosition(current) as? FrameLayout
-
-    /** The controls of the video shown, null on a photo. */
-    private fun currentControls() = currentPage()?.getChildAt(3) as? VideoControls
 
     private val hideChrome = Runnable {
         val video = currentPage()?.getChildAt(0) as? VideoView ?: return@Runnable
@@ -385,7 +378,6 @@ class MediaViewerActivity : AppCompatActivity() {
                 MediaThumbnails.load(lifecycleScope, image, file, 1024)
                 val controls = page.getChildAt(3) as VideoControls
                 controls.hideNow()
-                controls.setBottomInset(bottomInset)
                 video.setOnPreparedListener { controls.player = it }
                 val seekLabel = page.getChildAt(2) as TextView
                 // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s
