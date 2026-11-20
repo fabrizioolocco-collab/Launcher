@@ -204,7 +204,8 @@ class VideoControls(
         }
     }
 
-    private fun togglePlay() {
+    /** Pauses or starts the video, as the play button. */
+    fun togglePlay() {
         if (video.isPlaying) {
             video.pause()
             refresh()

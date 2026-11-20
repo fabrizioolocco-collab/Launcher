@@ -15,6 +15,7 @@ import android.text.format.DateFormat
 import android.text.format.Formatter
 import android.view.GestureDetector
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -52,7 +53,7 @@ import java.io.File
 /**
  * Built-in photo and video viewer: swipe between the media of a folder (newest first), pinch and
  * double-tap zoom on photos ([ZoomImageView]), video playback with [VideoControls] in the middle (double tap
- * on the right / left half: forward / back 10 s). A tap shows or hides the top bar (share, edit, delete,
+ * on the right / left half: forward / back 10 s, long press: pause / play). A tap shows or hides the top bar (share, edit, delete,
  * details) and the video controls, which hide by themselves while the video plays. Alternative to the gallery app, see Prefs.builtInViewer.
  */
 class MediaViewerActivity : AppCompatActivity() {
@@ -387,7 +388,8 @@ class MediaViewerActivity : AppCompatActivity() {
                 controls.hideNow()
                 video.setOnPreparedListener { controls.player = it }
                 val seekLabel = page.getChildAt(2) as TextView
-                // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s
+                // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s;
+                // long press: pause / play
                 val gestures = GestureDetector(this@MediaViewerActivity, object : GestureDetector.SimpleOnGestureListener() {
                     override fun onDown(e: MotionEvent) = true
                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -401,19 +403,16 @@ class MediaViewerActivity : AppCompatActivity() {
                         val target = (video.currentPosition + if (forward) SEEK_STEP_MS else -SEEK_STEP_MS).coerceIn(0, duration)
                         video.seekTo(target)
                         controls.refresh()
-                        seekLabel.text = if (forward) "+10 s  \u00BB" else "\u00AB  -10 s"
-                        (seekLabel.layoutParams as FrameLayout.LayoutParams).apply {
-                            gravity = Gravity.CENTER_VERTICAL or (if (forward) Gravity.END else Gravity.START)
-                            marginStart = 32.dpToPx()
-                            marginEnd = 32.dpToPx()
-                        }
-                        seekLabel.requestLayout()
-                        seekLabel.animate().cancel()
-                        seekLabel.alpha = 1f
-                        seekLabel.isVisible = true
-                        seekLabel.animate().alpha(0f).setStartDelay(500).setDuration(300)
-                            .withEndAction { seekLabel.isVisible = false }.start()
+                        flash(seekLabel, if (forward) "+10 s  \u00BB" else "\u00AB  -10 s", if (forward) Gravity.END else Gravity.START)
                         return true
+                    }
+                    // Long press: pause / play, without opening the controls
+                    override fun onLongPress(e: MotionEvent) {
+                        if (video.duration <= 0) return
+                        page.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        val pausing = video.isPlaying
+                        controls.togglePlay()
+                        flash(seekLabel, if (pausing) "\u275A\u275A" else "\u25B6", Gravity.CENTER_HORIZONTAL)
                     }
                 })
                 // On the page, not the video: the black bands around it (the video keeps its proportions) count too
@@ -446,6 +445,22 @@ class MediaViewerActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    /** Shows [text] for a moment over the video, at the side given by [horizontal] (double tap, long press). */
+    private fun flash(label: TextView, text: String, horizontal: Int) {
+        label.text = text
+        (label.layoutParams as FrameLayout.LayoutParams).apply {
+            gravity = Gravity.CENTER_VERTICAL or horizontal
+            marginStart = 32.dpToPx()
+            marginEnd = 32.dpToPx()
+        }
+        label.requestLayout()
+        label.animate().cancel()
+        label.alpha = 1f
+        label.isVisible = true
+        label.animate().alpha(0f).setStartDelay(500).setDuration(300)
+            .withEndAction { label.isVisible = false }.start()
     }
 
     /** Decodes the photo at up to about twice the screen size (enough for zooming), honouring EXIF rotation. */
