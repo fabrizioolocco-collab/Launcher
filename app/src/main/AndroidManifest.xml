@@ -23,6 +23,10 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- Recorder: the microphone, and its recording / transcription services -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!--Used only for opening alarm app-->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- ToDo alerts: on time (notification or alarm), again after a reboot -->
@@ -304,6 +308,43 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity-alias>
+
+        <!-- Recorder with transcripts and AI write-ups, listed as "Recorder" in the app list -->
+        <activity
+            android:name=".ui.recorder.RecorderActivity"
+            android:exported="false"
+            android:label="@string/ml_rec_app"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.recorder" />
+
+        <activity
+            android:name=".ui.recorder.RecordingActivity"
+            android:exported="false"
+            android:label="@string/ml_rec_app"
+            android:taskAffinity="app.minimalauncher.recorder" />
+
+        <activity-alias
+            android:name=".RecorderAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_recorder_launcher"
+            android:label="@string/ml_rec_app"
+            android:targetActivity=".ui.recorder.RecorderActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <service
+            android:name=".ui.recorder.RecorderService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
+        <service
+            android:name=".ui.recorder.RecorderJobService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- ToDo app, also listed as "ToDo" in the app list -->
         <activity

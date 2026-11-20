@@ -26,7 +26,7 @@ object SettingsBackup {
 
     /** Preferences that hold sign-ins, logs or device state that makes no sense elsewhere. */
     private val SKIPPED_PREFS = setOf(
-        "app.minimalauncher.onedrive",
+        "app.minimalauncher.groq",
         "app.minimalauncher.widgetlog",
         "app.minimalauncher.test",
     )
