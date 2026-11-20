@@ -240,11 +240,18 @@ class RecorderJobService : Service() {
 
     private fun transcribe(audio: File) {
         val local = RecorderStore.localModel(this)
-        val segments = if (local != null) transcribeLocal(audio, local) else transcribeGroq(audio)
+        val made = if (local != null) Groq.Transcription(transcribeLocal(audio, local), emptyList()) else transcribeGroq(audio)
+        val segments = made.segments
         if (cancelled) throw Cancelled()
         if (segments.isEmpty()) throw Exception(getString(R.string.ml_rec_no_speech))
         val target = RecorderStore.transcript(audio)
-        target.writeText(format(segments, RecorderStore.timestamps(this)))
+        target.writeText(TranscriptText.build(segments, RecorderStore.timestamps(this)).text)
+        // Where each phrase and word is in the audio, for the text that follows it
+        try {
+            TranscriptText.save(RecorderStore.timing(audio), segments, made.words)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         RecorderJobs.produced = audio.absolutePath to target.absolutePath
     }
 
@@ -277,12 +284,13 @@ class RecorderJobService : Service() {
         }) { cancelled }
     }
 
-    private fun transcribeGroq(audio: File): List<Groq.Segment> {
+    private fun transcribeGroq(audio: File): Groq.Transcription {
         val key = key()
         val label = getString(R.string.ml_rec_transcribing)
         progress(audio, label)
         val parts = split(audio)
         val segments = mutableListOf<Groq.Segment>()
+        val words = mutableListOf<Groq.Segment>()
         try {
             parts.forEachIndexed { i, (file, offset) ->
                 if (cancelled) throw Cancelled()
@@ -291,33 +299,13 @@ class RecorderJobService : Service() {
                 val found = Groq.transcribe(key, file, RecorderStore.whisperModel(this), RecorderStore.language(this), waiting(audio)) { cancelled }
                 progress(audio, step)
                 GroqUsage.addAudio(this, GroqUsage.seconds(file))
-                segments += found.map { Groq.Segment(it.start + offset, it.end + offset, it.text) }
+                segments += found.segments.map { Groq.Segment(it.start + offset, it.end + offset, it.text) }
+                words += found.words.map { Groq.Segment(it.start + offset, it.end + offset, it.text) }
             }
         } finally {
             parts.forEach { (file, _) -> if (file != audio) file.delete() }
         }
-        return segments
-    }
-
-    /** Paragraphs: a new one at a pause, or after a full stop once it's long enough. */
-    private fun format(segments: List<Groq.Segment>, times: Boolean): String {
-        val paragraphs = mutableListOf<Pair<Double, StringBuilder>>()
-        var lastEnd = 0.0
-        for (s in segments) {
-            val current = paragraphs.lastOrNull()
-            val ended = current != null && current.second.trimEnd().lastOrNull()?.let { it in ".?!…" } == true
-            if (current == null || s.start - lastEnd > 2.0 && ended || current.second.length > 500 && ended) {
-                paragraphs += s.start to StringBuilder(s.text)
-            } else current.second.append(' ').append(s.text)
-            lastEnd = s.end
-        }
-        return paragraphs.joinToString("\n\n") { (start, text) ->
-            if (!times) text.toString()
-            else {
-                val t = start.toLong()
-                String.format(Locale.US, "[%02d:%02d:%02d] ", t / 3600, t / 60 % 60, t % 60) + text
-            }
-        } + "\n"
+        return Groq.Transcription(segments, words)
     }
 
     /**

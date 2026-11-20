@@ -97,6 +97,9 @@ object RecorderStore {
 
     fun transcript(audio: File) = File(audio.parentFile, audio.nameWithoutExtension + ".txt")
 
+    /** Where each phrase and word of the transcript is in the audio (see [TranscriptText]). */
+    fun timing(audio: File) = File(audio.parentFile, audio.nameWithoutExtension + ".json")
+
     fun elaboration(audio: File, title: String) = File(audio.parentFile, audio.nameWithoutExtension + " - " + title + ".md")
 
     /** Title of a write-up: its file name without the recording's name. */
@@ -114,7 +117,7 @@ object RecorderStore {
     }
 
     /** The files that go with a recording: transcript and write-ups. */
-    private fun companions(audio: File) = listOf(transcript(audio)).filter { it.isFile } + elaborations(audio)
+    private fun companions(audio: File) = listOf(transcript(audio), timing(audio)).filter { it.isFile } + elaborations(audio)
 
     /** Renames the recording and what goes with it; the new audio file, or null when it can't be done. */
     fun rename(audio: File, name: String): File? {

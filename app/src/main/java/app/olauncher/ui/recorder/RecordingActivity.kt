@@ -61,6 +61,11 @@ class RecordingActivity : AppCompatActivity() {
     private val ticker = Handler(Looper.getMainLooper())
     private var content = ""
 
+    /** The words of the transcript shown and when each is heard; empty when the text can't follow the audio. */
+    private var words: List<TranscriptText.Span> = emptyList()
+    private var spoken = -1
+    private var spokenMark: Any? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val path = intent.getStringExtra(EXTRA_PATH)
@@ -138,6 +143,7 @@ class RecordingActivity : AppCompatActivity() {
                         player?.seekTo(progress)
                     } catch (ignored: Exception) {
                     }
+                    follow(progress, scrollTo = true)
                 }
             })
         }
@@ -181,6 +187,23 @@ class RecordingActivity : AppCompatActivity() {
             setLineSpacing(0f, 1.25f)
             setTextIsSelectable(true)
             setPadding(12.dpToPx(), 12.dpToPx(), 12.dpToPx(), 24.dpToPx())
+        }
+        // A tap on a word plays from there (a long press still selects text)
+        var downX = 0f
+        var downY = 0f
+        text.setOnTouchListener { _, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    downX = event.x
+                    downY = event.y
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
+                    val still = Math.abs(event.x - downX) < slop && Math.abs(event.y - downY) < slop
+                    if (still && event.eventTime - event.downTime < 300 && words.isNotEmpty()) playFrom(text.getOffsetForPosition(event.x, event.y))
+                }
+            }
+            false
         }
         scroll = ScrollView(this).apply {
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -272,11 +295,58 @@ class RecordingActivity : AppCompatActivity() {
             if (!seeking) {
                 seek.progress = p.currentPosition
                 showTime(p.currentPosition)
+                follow(p.currentPosition, scrollTo = true)
             }
         } catch (e: Exception) {
             return
         }
-        ticker.postDelayed({ tick() }, 300)
+        ticker.postDelayed({ tick() }, if (words.isEmpty()) 300 else 100)
+    }
+
+    // ---------------------------------------------------------------- text that follows the audio
+
+    /** Marks the word heard at [position] (ms); [scrollTo] keeps it in sight. */
+    private fun follow(position: Int, scrollTo: Boolean) {
+        if (words.isEmpty()) return
+        val seconds = position / 1000.0
+        // The last word that has started
+        var low = 0
+        var high = words.size - 1
+        var index = -1
+        while (low <= high) {
+            val mid = (low + high) / 2
+            if (words[mid].start <= seconds) {
+                index = mid
+                low = mid + 1
+            } else high = mid - 1
+        }
+        if (index == spoken) return
+        spoken = index
+        val shownText = text.text as? android.text.Spannable ?: return
+        spokenMark?.let { shownText.removeSpan(it) }
+        spokenMark = null
+        val word = words.getOrNull(index) ?: return
+        if (word.to > shownText.length) return
+        val mark = android.text.style.BackgroundColorSpan(androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.primary(this), 0x45))
+        shownText.setSpan(mark, word.from, word.to, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        spokenMark = mark
+        if (!scrollTo) return
+        val layout = text.layout ?: return
+        val y = text.top + layout.getLineTop(layout.getLineForOffset(word.from))
+        val margin = 48.dpToPx()
+        if (y < scroll.scrollY + margin || y > scroll.scrollY + scroll.height - 2 * margin) scroll.smoothScrollTo(0, (y - scroll.height / 3).coerceAtLeast(0))
+    }
+
+    /** Plays from the word at character [offset] of the text. */
+    private fun playFrom(offset: Int) {
+        val p = player ?: return
+        val word = words.lastOrNull { it.from <= offset } ?: return
+        try {
+            p.seekTo((word.start * 1000).toInt())
+            if (!p.isPlaying) togglePlay()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     // ---------------------------------------------------------------- texts
@@ -309,9 +379,17 @@ class RecordingActivity : AppCompatActivity() {
         }
         val file = shown
         lifecycleScope.launch {
+            var timed: List<TranscriptText.Span> = emptyList()
             val read = withContext(Dispatchers.IO) {
                 try {
-                    if (file.isFile) file.readText() else ""
+                    val body = if (file.isFile) file.readText() else ""
+                    // The transcript as it was made (not edited since) can follow the audio
+                    if (file == transcript && body.isNotEmpty()) TranscriptText.load(RecorderStore.timing(audio))?.let { (segments, spokenWords) ->
+                        val starts = body.startsWith("[")
+                        val built = TranscriptText.build(segments, starts)
+                        if (built.text.trimEnd() == body.trimEnd()) timed = TranscriptText.wordSpans(built, spokenWords)
+                    }
+                    body
                 } catch (e: Exception) {
                     ""
                 }
@@ -319,7 +397,14 @@ class RecordingActivity : AppCompatActivity() {
             if (file != shown) return@launch
             val changed = read != content
             content = read
-            text.text = read.ifEmpty { getString(R.string.ml_rec_no_transcript_hint) }
+            words = timed
+            spoken = -1
+            spokenMark = null
+            text.setText(read.ifEmpty { getString(R.string.ml_rec_no_transcript_hint) }, TextView.BufferType.SPANNABLE)
+            try {
+                player?.let { follow(it.currentPosition, scrollTo = false) }
+            } catch (ignored: Exception) {
+            }
             text.alpha = if (read.isEmpty()) 0.6f else 1f
             if (changed) scroll.scrollTo(0, 0)
         }

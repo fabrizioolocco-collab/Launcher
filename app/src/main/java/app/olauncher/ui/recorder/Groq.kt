@@ -14,6 +14,9 @@ object Groq {
 
     class Segment(val start: Double, val end: Double, val text: String)
 
+    /** A transcript: its phrases, and its single words when the model times them too. */
+    class Transcription(val segments: List<Segment>, val words: List<Segment>)
+
     /** [code] is the HTTP status (0: no answer); [retryAfter] the seconds to wait on a 429. */
     class GroqException(message: String, val code: Int = 0, val retryAfter: Long = 0) : Exception(message)
 
@@ -96,10 +99,13 @@ object Groq {
     fun transcribe(
         key: String, file: File, model: String, language: String,
         onWait: (Long) -> Unit = {}, cancelled: () -> Boolean = { false },
-    ): List<Segment> = retrying(onWait, cancelled) {
+    ): Transcription = retrying(onWait, cancelled) {
         val boundary = "----minima" + System.nanoTime()
         val fields = mutableListOf("model" to model, "response_format" to "verbose_json", "temperature" to "0")
         if (language.isNotEmpty()) fields += "language" to language
+        // The time of each word too, to follow the audio on the text
+        fields += "timestamp_granularities[]" to "segment"
+        fields += "timestamp_granularities[]" to "word"
         val head = StringBuilder()
         fields.forEach { (name, value) ->
             head.append("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
@@ -132,8 +138,16 @@ object Groq {
             val o = array.getJSONObject(i)
             Segment(o.optDouble("start", 0.0), o.optDouble("end", 0.0), o.optString("text").trim())
         }.filter { it.text.isNotEmpty() }
-        if (segments.isNotEmpty()) segments
-        else json.optString("text").trim().let { if (it.isEmpty()) emptyList() else listOf(Segment(0.0, 0.0, it)) }
+        val timed = json.optJSONArray("words") ?: JSONArray()
+        val words = (0 until timed.length()).map { i ->
+            val o = timed.getJSONObject(i)
+            Segment(o.optDouble("start", 0.0), o.optDouble("end", 0.0), o.optString("word").trim())
+        }.filter { it.text.isNotEmpty() }
+        Transcription(
+            if (segments.isNotEmpty()) segments
+            else json.optString("text").trim().let { if (it.isEmpty()) emptyList() else listOf(Segment(0.0, 0.0, it)) },
+            words,
+        )
     }
 
     /** One answer of a text model. */
