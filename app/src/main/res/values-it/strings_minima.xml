@@ -1095,4 +1095,18 @@
     <string name="ml_rec_chat_reading">Registrazione lunga: la sto leggendo, parte %1$d di %2$d (solo la prima volta)…</string>
     <string name="ml_rec_chat_system">Rispondi a domande su una registrazione audio, usando solo ciò che c\'è nel suo testo qui sotto (una trascrizione automatica, che può contenere errori di riconoscimento, oppure appunti dettagliati ricavati da essa). Se la risposta non c\'è, dillo invece di tirare a indovinare. Rispondi nella lingua della domanda, in modo breve e diretto, riportando esattamente nomi, numeri e date. Testo della registrazione:</string>
     <string name="ml_rec_error_shown_plain">Non riuscito: %1$s</string>
+    <string name="ml_rec_usage">Residuo del piano gratuito Groq</string>
+    <string name="ml_rec_usage_none">Ancora nessun dato: compare dopo il primo elaborato o la prima chat</string>
+    <string name="ml_rec_usage_ai">AI (elaborati e chat)</string>
+    <string name="ml_rec_usage_requests">Richieste oggi</string>
+    <string name="ml_rec_usage_tokens">Token in questo minuto</string>
+    <string name="ml_rec_usage_left">%1$s di %2$s rimasti</string>
+    <string name="ml_rec_usage_reset">Le richieste si azzerano alle</string>
+    <string name="ml_rec_usage_model">Modello</string>
+    <string name="ml_rec_usage_updated">Aggiornato alle</string>
+    <string name="ml_rec_usage_transcripts">Trascrizioni su Groq (contate qui)</string>
+    <string name="ml_rec_usage_local">Le trascrizioni sono fatte sul telefono: non consumano nulla</string>
+    <string name="ml_rec_usage_hour">Audio in quest\'ora</string>
+    <string name="ml_rec_usage_day">Audio nelle 24 ore</string>
+    <string name="ml_rec_usage_minutes">%1$d di %2$d min rimasti</string>
 </resources>

@@ -56,6 +56,7 @@ class ChatActivity : AppCompatActivity() {
             return
         }
         audio = File(path)
+        GroqUsage.attach(this)
         setContentView(buildLayout())
         load()
     }
@@ -110,6 +111,9 @@ class ChatActivity : AppCompatActivity() {
             maxLines = 5
             textSize = 16f
         }
+        val usage = UsageRing(this)
+        GroqUsage.changes.observe(this) { usage.invalidate() }
+        row.addView(usage, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()))
         row.addView(input, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 4.dpToPx() })
         row.addView(UiKit.iconButton(this, R.drawable.ic_m_send, getString(R.string.ml_rec_chat_send)) { send() })
         layout.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))

@@ -29,10 +29,32 @@ object Groq {
         setRequestProperty("Accept", "application/json")
     }
 
+    /**
+     * Told what Groq says is left of the free plan after each request: [kind] is "chat" or "audio",
+     * the headers are its "x-ratelimit-..." ones without that prefix (see [GroqUsage]).
+     */
+    @Volatile
+    var listener: ((kind: String, model: String?, headers: Map<String, String>) -> Unit)? = null
+
+    private val LIMIT_HEADERS = listOf("limit-requests", "remaining-requests", "reset-requests", "limit-tokens", "remaining-tokens", "reset-tokens")
+
+    private fun report(conn: HttpURLConnection, kind: String, model: String?) {
+        val told = listener ?: return
+        if (kind.isEmpty()) return
+        try {
+            val headers = HashMap<String, String>()
+            LIMIT_HEADERS.forEach { name -> conn.getHeaderField("x-ratelimit-$name")?.let { headers[name] = it } }
+            if (headers.isNotEmpty()) told(kind, model, headers)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     /** The answer as text, or a [GroqException] with Groq's own message. */
-    private fun read(conn: HttpURLConnection): String {
+    private fun read(conn: HttpURLConnection, kind: String = "", model: String? = null): String {
         try {
             val code = conn.responseCode
+            report(conn, kind, model)
             if (code in 200..299) return conn.inputStream.bufferedReader().use { it.readText() }
             val body = try {
                 conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
@@ -104,7 +126,7 @@ object Groq {
                 throw e
             }
         }
-        val json = JSONObject(read(conn))
+        val json = JSONObject(read(conn, "audio", model))
         val array = json.optJSONArray("segments") ?: JSONArray()
         val segments = (0 until array.length()).map { i ->
             val o = array.getJSONObject(i)
@@ -137,7 +159,7 @@ object Groq {
         conn.setRequestProperty("Content-Type", "application/json")
         conn.setFixedLengthStreamingMode(body.size)
         conn.outputStream.use { it.write(body) }
-        val content = JSONObject(read(conn)).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
+        val content = JSONObject(read(conn, "chat", model)).getJSONArray("choices").getJSONObject(0).getJSONObject("message").optString("content")
         // Reasoning models may put their thinking first
         content.replace(Regex("(?s)<think>.*?</think>"), "").trim()
     }

@@ -212,6 +212,11 @@ class RecorderJobService : Service() {
         return START_NOT_STICKY
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        GroqUsage.attach(this)
+    }
+
     override fun onDestroy() {
         executor.shutdownNow()
         super.onDestroy()
@@ -285,6 +290,7 @@ class RecorderJobService : Service() {
                 progress(audio, step)
                 val found = Groq.transcribe(key, file, RecorderStore.whisperModel(this), RecorderStore.language(this), waiting(audio)) { cancelled }
                 progress(audio, step)
+                GroqUsage.addAudio(this, GroqUsage.seconds(file))
                 segments += found.map { Groq.Segment(it.start + offset, it.end + offset, it.text) }
             }
         } finally {

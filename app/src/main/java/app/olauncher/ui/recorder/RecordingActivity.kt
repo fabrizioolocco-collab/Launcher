@@ -69,6 +69,7 @@ class RecordingActivity : AppCompatActivity() {
             return
         }
         audio = File(path)
+        GroqUsage.attach(this)
         shown = RecorderStore.transcript(audio)
         setContentView(buildLayout())
         preparePlayer()
@@ -196,8 +197,17 @@ class RecordingActivity : AppCompatActivity() {
         ).forEach { (icon, label, action) ->
             tools.addView(UiKit.toolButton(this, icon, getString(label)) { action() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
-        layout.addView(tools, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            setMargins(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 0)
+        // Bottom left: what is left of Groq's free plan
+        val bottom = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val usage = UsageRing(this)
+        GroqUsage.changes.observe(this) { usage.invalidate() }
+        bottom.addView(usage, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()))
+        bottom.addView(tools, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 4.dpToPx() })
+        layout.addView(bottom, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(0, 8.dpToPx(), 4.dpToPx(), 0)
         })
         return layout
     }

@@ -64,6 +64,7 @@ class RecorderActivity : AppCompatActivity() {
     private lateinit var list: RecyclerView
     private lateinit var emptyView: View
     private lateinit var panel: LinearLayout
+    private lateinit var usage: UsageRing
     private var timer: TextView? = null
     private var level: ProgressBar? = null
 
@@ -85,6 +86,7 @@ class RecorderActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        GroqUsage.attach(this)
         root = RecorderStore.root(this)
         dir = savedInstanceState?.getString(STATE_DIR)?.let { File(it) }?.takeIf { it.isDirectory } ?: root
         setContentView(buildLayout())
@@ -94,6 +96,7 @@ class RecorderActivity : AppCompatActivity() {
         RecorderService.state.observe(this) { renderPanel(it) }
         RecorderJobs.running.observe(this) { list.adapter?.notifyDataSetChanged() }
         RecorderJobs.errors.observe(this) { list.adapter?.notifyDataSetChanged() }
+        GroqUsage.changes.observe(this) { usage.invalidate() }
         resumePending()
         RecorderJobs.changes.observe(this) { load() }
     }
@@ -106,6 +109,7 @@ class RecorderActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         waitingAccess = false
+        usage.invalidate()
         load()
     }
 
@@ -174,8 +178,16 @@ class RecorderActivity : AppCompatActivity() {
         area.addView(emptyView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         layout.addView(area, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        layout.addView(panel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            setMargins(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 0)
+        // Bottom left: what is left of Groq's free plan
+        val bottom = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM
+        }
+        usage = UsageRing(this)
+        bottom.addView(usage, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()).apply { bottomMargin = 4.dpToPx() })
+        bottom.addView(panel, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 4.dpToPx() })
+        layout.addView(bottom, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(0, 8.dpToPx(), 4.dpToPx(), 0)
         })
         renderPanel(RecorderService.state.value)
         return layout

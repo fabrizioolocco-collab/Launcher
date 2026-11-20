@@ -1098,4 +1098,18 @@
     <string name="ml_rec_chat_reading">Long recording: reading it, part %1$d of %2$d (only the first time)…</string>
     <string name="ml_rec_chat_system">You answer questions about an audio recording, using only what is in its text below (a transcript made automatically, which may contain recognition mistakes, or detailed notes taken from it). If the answer is not there, say so instead of guessing. Answer in the language of the question, briefly and to the point, quoting names, numbers and dates exactly. Text of the recording:</string>
     <string name="ml_rec_error_shown_plain">Not done: %1$s</string>
+    <string name="ml_rec_usage">Groq free plan left</string>
+    <string name="ml_rec_usage_none">Nothing yet: it shows after the first write-up or chat</string>
+    <string name="ml_rec_usage_ai">AI (write-ups and chat)</string>
+    <string name="ml_rec_usage_requests">Requests today</string>
+    <string name="ml_rec_usage_tokens">Tokens this minute</string>
+    <string name="ml_rec_usage_left">%1$s of %2$s left</string>
+    <string name="ml_rec_usage_reset">Requests start again at</string>
+    <string name="ml_rec_usage_model">Model</string>
+    <string name="ml_rec_usage_updated">As of</string>
+    <string name="ml_rec_usage_transcripts">Transcripts on Groq (counted here)</string>
+    <string name="ml_rec_usage_local">Transcripts are made on the phone: they use nothing</string>
+    <string name="ml_rec_usage_hour">Audio this hour</string>
+    <string name="ml_rec_usage_day">Audio in 24 hours</string>
+    <string name="ml_rec_usage_minutes">%1$d of %2$d min left</string>
 </resources>
