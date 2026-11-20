@@ -53,6 +53,7 @@ class RecordingActivity : AppCompatActivity() {
     private lateinit var time: TextView
     private lateinit var chips: LinearLayout
     private lateinit var status: TextView
+    private lateinit var working: WorkingBar
     private lateinit var text: TextView
     private lateinit var scroll: ScrollView
 
@@ -181,6 +182,10 @@ class RecordingActivity : AppCompatActivity() {
             }
         }
         layout.addView(status)
+        working = WorkingBar(this).apply { isVisible = false }
+        layout.addView(working, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 6.dpToPx()).apply {
+            setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 2.dpToPx())
+        })
         text = TextView(this, null, 0, R.style.TextSmall).apply {
             textSize = 16f
             setTextColor(primary)
@@ -425,6 +430,8 @@ class RecordingActivity : AppCompatActivity() {
         status.text = job?.let { "$it…" } ?: error?.let { getString(R.string.ml_rec_error_shown, it) }
         status.setTextColor(if (job == null && error != null) 0xFFD9534F.toInt() else UiKit.primary(this))
         status.isVisible = job != null || error != null
+        working.fraction = WorkingBar.fractionOf(job)
+        working.isVisible = job != null
     }
 
     /** Nothing going on for this recording, and what [forAi] (or a transcript) needs is there. */

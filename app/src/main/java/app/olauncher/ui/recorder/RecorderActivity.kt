@@ -859,6 +859,10 @@ class RecorderActivity : AppCompatActivity() {
                 ellipsize = TextUtils.TruncateAt.END
                 setPadding(0, 2.dpToPx(), 0, 0)
             })
+            // Shown while a transcript or a write-up of the recording is being made
+            texts.addView(WorkingBar(ctx).apply { isVisible = false }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 4.dpToPx()).apply {
+                topMargin = 6.dpToPx()
+            })
             row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             return object : RecyclerView.ViewHolder(row) {}
         }
@@ -906,6 +910,10 @@ class RecorderActivity : AppCompatActivity() {
                 ).joinToString(" · ")
             }
             info.isVisible = info.text.isNotEmpty()
+            (texts.getChildAt(2) as WorkingBar).apply {
+                fraction = WorkingBar.fractionOf(job)
+                isVisible = job != null && !item.isFolder
+            }
             row.setOnClickListener { onTap(item) }
             row.setOnLongClickListener {
                 onLongPress(item)
