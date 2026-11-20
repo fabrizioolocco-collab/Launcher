@@ -1119,4 +1119,10 @@
     <string name="ml_rec_import_failed">%1$d file non sono stati importati</string>
     <string name="ml_rec_preparing">Preparazione dell\'audio</string>
     <string name="ml_rec_halt">Ferma</string>
+
+    <!-- Audio player -->
+    <string name="ml_audio_previous">Precedente</string>
+    <string name="ml_audio_next">Successivo</string>
+    <string name="ml_audio_play">Riproduci</string>
+    <string name="ml_audio_pause">Pausa</string>
 </resources>

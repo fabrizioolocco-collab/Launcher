@@ -208,6 +208,12 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
+        <!-- Music and audio files opened from the explorer or the search -->
+        <activity
+            android:name=".ui.media.AudioPlayerActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="app.minimalauncher.files" />
         <activity
             android:name=".ui.media.MediaViewerActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

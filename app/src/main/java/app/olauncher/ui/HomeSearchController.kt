@@ -751,6 +751,9 @@ class HomeSearchController(
                         if (file != null && MediaThumbnails.isMedia(mime) && prefs.builtInViewer) {
                             app.olauncher.ui.media.MediaViewerActivity.open(activity, file)
                             leave()
+                        } else if (file != null && mime?.startsWith("audio/") == true && prefs.builtInViewer) {
+                            app.olauncher.ui.media.AudioPlayerActivity.open(activity, file)
+                            leave()
                         } else if (file != null && mime == "application/pdf" && prefs.builtInPdf) {
                             app.olauncher.ui.pdf.PdfViewerActivity.open(activity, file)
                             leave()

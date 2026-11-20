@@ -864,6 +864,10 @@ open class FileExplorerActivity : AppCompatActivity() {
             app.olauncher.ui.media.MediaViewerActivity.open(this, file)
             return
         }
+        if (!chooser && app.olauncher.ui.media.AudioPlayerActivity.isAudio(file.name, mime) && app.olauncher.data.Prefs(this).builtInViewer) {
+            app.olauncher.ui.media.AudioPlayerActivity.open(this, file)
+            return
+        }
         if (!chooser && mime == "application/pdf" && app.olauncher.data.Prefs(this).builtInPdf) {
             app.olauncher.ui.pdf.PdfViewerActivity.open(this, file)
             return
