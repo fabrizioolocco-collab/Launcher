@@ -417,7 +417,8 @@ class RecorderActivity : AppCompatActivity() {
 
     private fun pickFolder(start: File = root, picked: (File) -> Unit) {
         onPicked = picked
-        folderPicker.launch(Intent(this, FolderPickerActivity::class.java).putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, start.absolutePath))
+        folderPicker.launch(Intent(this, FolderPickerActivity::class.java).putExtra(FileExplorerActivity.EXTRA_LOCAL_PATH, start.absolutePath)
+            .putExtra(FileExplorerActivity.EXTRA_FOLDERS_ONLY, true))
     }
 
     // ---------------------------------------------------------------- settings

@@ -598,6 +598,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
         showStatus(getString(R.string.ml_explorer_searching), busy = true)
         val showHidden = view.showHidden
+        val foldersOnly = pickMode && intent?.getBooleanExtra(EXTRA_FOLDERS_ONLY, false) == true
         searchJob = lifecycleScope.launch {
             kotlinx.coroutines.delay(250)
             val deeper = withContext(Dispatchers.IO) {
@@ -607,7 +608,7 @@ open class FileExplorerActivity : AppCompatActivity() {
                     val children = dir.listFiles() ?: return
                     for (f in children) {
                         if (!showHidden && f.name.startsWith(".")) continue
-                        if (depth > 0 && fold(f.name).contains(key)) found += f
+                        if (depth > 0 && fold(f.name).contains(key) && (!foldersOnly || f.isDirectory)) found += f
                         if (found.size >= MAX_SEARCH_RESULTS) return
                         if (f.isDirectory) walk(f, depth + 1)
                     }
@@ -687,7 +688,8 @@ open class FileExplorerActivity : AppCompatActivity() {
                 showStatus(getString(R.string.ml_explorer_cannot_read))
                 return@launch
             }
-            setEntries(listed.filter { view.showHidden || !isHidden(it.name) })
+            val foldersOnly = pickMode && intent?.getBooleanExtra(EXTRA_FOLDERS_ONLY, false) == true
+            setEntries(listed.filter { (view.showHidden || !isHidden(it.name)) && (!foldersOnly || it.isFolder) })
             showStatus(null)
             emptyView.isVisible = entries.isEmpty()
         }
@@ -1144,6 +1146,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         private const val MAX_SEARCH_DEPTH = 8
 
         const val EXTRA_LOCAL_PATH = "local_path"
+        /** Folder picker: only the folders are listed (e.g. to move a recording, whose own files would be in the way). */
+        const val EXTRA_FOLDERS_ONLY = "folders_only"
 
         /** Name of the folder a stored path stands for. */
         fun folderName(path: String): String = File(path).name
