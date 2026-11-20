@@ -165,6 +165,34 @@ object RecorderStore {
         }
     }
 
+    /**
+     * Copies an audio file (picked on the phone, or shared by another app) into [target] under its
+     * own name; the copy, or null when it can't be made. The original stays where it is.
+     */
+    fun importAudio(ctx: Context, uri: android.net.Uri, target: File): File? = try {
+        var name = (if (uri.scheme == "file") uri.lastPathSegment else ctx.contentResolver.query(
+            uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null,
+        )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null })?.replace('/', '_')?.takeIf { it.isNotBlank() } ?: "audio"
+        if (File(name).extension.isEmpty()) {
+            name += "." + (android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(ctx.contentResolver.getType(uri)) ?: "m4a")
+        }
+        val base = File(name).nameWithoutExtension
+        val extension = File(name).extension
+        target.mkdirs()
+        var file = File(target, name)
+        var i = 2
+        while (file.exists() || transcript(file).exists()) file = File(target, "$base (${i++}).$extension")
+        val input = ctx.contentResolver.openInputStream(uri)
+        if (input == null) null
+        else {
+            input.use { source -> file.outputStream().use { source.copyTo(it, 256 * 1024) } }
+            file
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
+    }
+
     fun delete(audio: File): Boolean {
         companions(audio).forEach { it.delete() }
         return audio.delete()

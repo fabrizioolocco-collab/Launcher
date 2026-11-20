@@ -24,6 +24,7 @@ class ViewerEntryActivity : Activity() {
             val file = localFile(uri) ?: copyToCache(uri, type)
             runOnUiThread {
                 if (file == null) showToast(getString(R.string.ml_search_cannot_open))
+                else if (AudioPlayerActivity.isAudio(file.name, type)) AudioPlayerActivity.open(this, file)
                 else startActivity(MediaViewerActivity.intent(this, file))
                 finish()
                 overridePendingTransition(0, 0)

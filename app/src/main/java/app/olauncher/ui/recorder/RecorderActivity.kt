@@ -154,7 +154,7 @@ class RecorderActivity : AppCompatActivity() {
         }
     }
 
-    private val importer = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+    private val importer = registerForActivityResult(app.olauncher.ui.PickFiles()) { uris ->
         if (uris.isNotEmpty()) importAudio(uris)
     }
 
@@ -373,7 +373,7 @@ class RecorderActivity : AppCompatActivity() {
         addButton.showDropdown(listOf(
             MenuEntry(getString(R.string.ml_explorer_new_folder), icon = R.drawable.ic_m_folder) { askNewFolder() },
             MenuEntry(getString(R.string.ml_rec_import), icon = R.drawable.ic_m_download) {
-                if (!hasFilesAccess()) askFilesAccess() else importer.launch("audio/*")
+                if (!hasFilesAccess()) askFilesAccess() else importer.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("audio/*"), multiple = true))
             },
         ))
     }
@@ -384,35 +384,12 @@ class RecorderActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val failed = withContext(Dispatchers.IO) {
                 target.mkdirs()
-                uris.count { !copyIn(it, target) }
+                uris.count { RecorderStore.importAudio(this@RecorderActivity, it, target) == null }
             }
             if (failed > 0) showToast(getString(R.string.ml_rec_import_failed, failed))
             showToday()
             load()
         }
-    }
-
-    private fun copyIn(uri: Uri, target: File): Boolean = try {
-        var name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            if (cursor.moveToFirst()) cursor.getString(0) else null
-        }?.replace('/', '_')?.takeIf { it.isNotBlank() } ?: "audio"
-        if (File(name).extension.isEmpty()) {
-            name += "." + (android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(contentResolver.getType(uri)) ?: "m4a")
-        }
-        val base = File(name).nameWithoutExtension
-        val extension = File(name).extension
-        var file = File(target, name)
-        var i = 2
-        while (file.exists() || RecorderStore.transcript(file).exists()) file = File(target, "$base (${i++}).$extension")
-        val input = contentResolver.openInputStream(uri)
-        if (input == null) false
-        else {
-            input.use { source -> file.outputStream().use { source.copyTo(it, 256 * 1024) } }
-            true
-        }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        false
     }
 
     /** The bottom panel: the "Record" button, or the time, level, pause and stop of the recording going on. */

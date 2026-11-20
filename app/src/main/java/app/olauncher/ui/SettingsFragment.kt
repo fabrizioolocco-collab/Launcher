@@ -81,7 +81,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
     private var dialog: OlDialog? = null
 
     private var pendingFontTarget: ((String) -> Unit)? = null
-    private val fontPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    private val fontPicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        val uri = picked.firstOrNull()
         viewModel.keepCurrentScreen = false
         val target = pendingFontTarget
         pendingFontTarget = null
@@ -110,7 +111,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         }
     }
 
-    private val backupPicker = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    private val backupPicker = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        val uri = picked.firstOrNull()
         viewModel.keepCurrentScreen = false
         if (uri == null) return@registerForActivityResult
         requireContext().showConfirmDialog(
@@ -399,7 +401,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             }
             R.id.backupImport -> {
                 viewModel.keepCurrentScreen = true
-                backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*"))
+                backupPicker.launch(app.olauncher.ui.PickFiles.Request(extensions = arrayOf("zip")))
             }
             R.id.widgetLog -> {
                 val ctx = requireContext()
@@ -646,7 +648,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 LOAD_FONT_ID -> {
                     pendingFontTarget = onPick
                     viewModel.keepCurrentScreen = true
-                    fontPicker.launch(arrayOf("font/*", "application/x-font-ttf", "application/x-font-otf", "application/octet-stream", "*/*"))
+                    fontPicker.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("font/*"), extensions = arrayOf("ttf", "otf", "ttc")))
                     return@showPopupMenu
                 }
 

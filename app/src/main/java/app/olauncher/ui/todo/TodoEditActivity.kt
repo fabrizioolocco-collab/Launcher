@@ -105,8 +105,8 @@ class TodoEditActivity : AppCompatActivity() {
     private val addedPhotos = mutableListOf<String>()
     private var saved = false
 
-    private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        uri?.let { attach(it) }
+    private val pickPhoto = registerForActivityResult(app.olauncher.ui.PickFiles()) { picked ->
+        picked.firstOrNull()?.let { attach(it) }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -196,7 +196,7 @@ class TodoEditActivity : AppCompatActivity() {
         form.addView(label(R.string.ml_todo_photo))
         val add = field(R.string.ml_todo_photo_add, R.drawable.ic_m_image) {
             titleInput.hideKeyboard()
-            pickPhoto.launch("image/*")
+            pickPhoto.launch(app.olauncher.ui.PickFiles.Request(types = arrayOf("image/*")))
         }
         add.third.apply {
             isClickable = false

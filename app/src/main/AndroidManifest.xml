@@ -90,6 +90,23 @@
             android:windowSoftInputMode="adjustResize" />
 
 
+        <!-- The explorer as a file picker: for the launcher's own screens, and for other apps asking for a file -->
+        <activity
+            android:name=".ui.FilePickerActivity"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/ml_explorer"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.GET_CONTENT" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.OPENABLE" />
+
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <!-- The explorer as a folder picker (folder shortcuts, swipe actions) -->
         <activity
             android:name=".ui.FolderPickerActivity"
@@ -188,7 +205,7 @@
             android:theme="@style/ViewerTheme" />
 
         <!-- Built-in photo/video viewer and editors -->
-        <!-- The viewer as an app for photos and videos ("Open with", the camera's preview) -->
+        <!-- The viewer as an app for photos, videos and audio ("Open with", the camera's preview) -->
         <activity
             android:name=".ui.media.ViewerEntryActivity"
             android:excludeFromRecents="true"
@@ -208,6 +225,8 @@
                 <data android:scheme="file" />
                 <data android:mimeType="image/*" />
                 <data android:mimeType="video/*" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
             </intent-filter>
         </activity>
         <!-- Music and audio files opened from the explorer or the search -->
@@ -343,6 +362,25 @@
             android:label="@string/ml_rec_app"
             android:taskAffinity="app.minimalauncher.recorder"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- "Share" of audio files to the recorder -->
+        <activity
+            android:name=".ui.recorder.RecorderShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@drawable/ic_recorder_launcher"
+            android:label="@string/ml_rec_app"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
 
         <activity-alias
             android:name=".RecorderAlias"

@@ -65,6 +65,53 @@ open class FileExplorerActivity : AppCompatActivity() {
     /** Folder picker mode (see [FolderPickerActivity]): a bar returns the folder shown. */
     protected open val pickMode = false
 
+    /** File picker mode (see [FilePickerActivity]): only the files asked for are listed, a tap returns one. */
+    protected open val filePick = false
+
+    /** Several files can be picked: a tap marks them, a button returns them. */
+    private val pickMultiple
+        get() = filePick && (intent?.getBooleanExtra(EXTRA_PICK_MULTIPLE, false) == true || intent?.getBooleanExtra(Intent.EXTRA_ALLOW_MULTIPLE, false) == true)
+
+    /** A file of a kind the one who asked wants (its own request, or another app's "get content"). */
+    private fun pickAccepts(name: String, mime: String?): Boolean {
+        val types = (intent?.getStringArrayExtra(EXTRA_PICK_TYPES) ?: emptyArray()).toMutableList()
+        intent?.getStringArrayExtra(Intent.EXTRA_MIME_TYPES)?.let { types += it }
+        if (intent?.action == Intent.ACTION_GET_CONTENT) intent?.type?.let { types += it }
+        val extensions = intent?.getStringArrayExtra(EXTRA_PICK_EXTENSIONS) ?: emptyArray()
+        if (types.isEmpty() && extensions.isEmpty()) return true
+        if (name.substringAfterLast('.', "").lowercase() in extensions) return true
+        return types.any { type ->
+            when {
+                type == "*/*" -> true
+                type == "audio/*" && app.olauncher.ui.media.AudioPlayerActivity.isAudio(name, mime) -> true
+                type.endsWith("/*") -> mime?.startsWith(type.removeSuffix("*")) == true
+                else -> mime == type
+            }
+        }
+    }
+
+    /** Returns the files picked: as paths to this app, as readable addresses to another one that asked. */
+    private fun finishPick(files: List<File>) {
+        if (files.isEmpty()) return
+        val result = Intent().putStringArrayListExtra(EXTRA_PICKED_PATHS, ArrayList(files.map { it.absolutePath }))
+        if (intent?.action == Intent.ACTION_GET_CONTENT) try {
+            val uris = files.map { uriFor(it) }
+            result.setDataAndType(uris[0], mimeOf(files[0].name) ?: "*/*")
+            if (uris.size > 1) {
+                val clip = android.content.ClipData.newUri(contentResolver, files[0].name, uris[0])
+                uris.drop(1).forEach { clip.addItem(android.content.ClipData.Item(it)) }
+                result.clipData = clip
+            }
+            result.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            showToast(getString(R.string.ml_search_cannot_open))
+            return
+        }
+        setResult(RESULT_OK, result)
+        finish()
+    }
+
     private var useButton: View? = null
 
 
@@ -328,6 +375,14 @@ open class FileExplorerActivity : AppCompatActivity() {
         root.addView(pasteBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 0)
         })
+        if (filePick && pickMultiple) useButton = pillButton(this, getString(R.string.ml_explorer_pick_files), filled = true, color = primary) {
+            finishPick(selectedEntries().filter { !it.isFolder }.map { it.file })
+        }.also {
+            it.isVisible = false
+            root.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 48.dpToPx()).apply {
+                setMargins(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 0)
+            })
+        }
         if (pickMode) useButton = pillButton(this, getString(R.string.ml_explorer_use_folder), filled = true, color = primary) {
             setResult(RESULT_OK, Intent().putExtra(EXTRA_LOCAL_PATH, location.absolutePath))
             finish()
@@ -421,7 +476,9 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun updateSelection() {
         backButton.setImageResource(if (selecting) R.drawable.ic_m_close else R.drawable.ic_m_arrow_back)
         backButton.contentDescription = getString(if (selecting) R.string.close else R.string.ml_cal_back)
-        selectionBar.isVisible = selecting
+        // Picking files: the marked ones are returned, not shared or moved
+        selectionBar.isVisible = selecting && !filePick
+        if (filePick) useButton?.isVisible = selecting
         headerButtons.forEach { it.isVisible = !selecting }
         if (selecting) {
             title.text = getString(R.string.ml_explorer_selected, selected.size)
@@ -608,7 +665,9 @@ open class FileExplorerActivity : AppCompatActivity() {
                     val children = dir.listFiles() ?: return
                     for (f in children) {
                         if (!showHidden && f.name.startsWith(".")) continue
-                        if (depth > 0 && fold(f.name).contains(key) && (!foldersOnly || f.isDirectory)) found += f
+                        if (depth > 0 && fold(f.name).contains(key) && (!foldersOnly || f.isDirectory) &&
+                            (!filePick || f.isDirectory || pickAccepts(f.name, mimeOf(f.name)))
+                        ) found += f
                         if (found.size >= MAX_SEARCH_RESULTS) return
                         if (f.isDirectory) walk(f, depth + 1)
                     }
@@ -689,7 +748,9 @@ open class FileExplorerActivity : AppCompatActivity() {
                 return@launch
             }
             val foldersOnly = pickMode && intent?.getBooleanExtra(EXTRA_FOLDERS_ONLY, false) == true
-            setEntries(listed.filter { (view.showHidden || !isHidden(it.name)) && (!foldersOnly || it.isFolder) })
+            setEntries(listed.filter {
+                (view.showHidden || !isHidden(it.name)) && (!foldersOnly || it.isFolder) && (!filePick || it.isFolder || pickAccepts(it.name, it.mime))
+            })
             showStatus(null)
             emptyView.isVisible = entries.isEmpty()
         }
@@ -830,6 +891,11 @@ open class FileExplorerActivity : AppCompatActivity() {
     // ---------------------------------------------------------------- items
 
     private fun onTap(entry: Entry) {
+        if (filePick) return when {
+            entry.isFolder -> open(entry.file)
+            pickMultiple -> toggleSelect(entry)
+            else -> finishPick(listOf(entry.file))
+        }
         if (selecting) return toggleSelect(entry)
         val file = entry.file
         if (!entry.isFolder) return view(file, entry.mime)
@@ -853,6 +919,8 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     /** Long press: starts (or extends) the multiple selection. */
     private fun onLongPress(entry: Entry) {
+        // Picking files: only files, and only when several can be picked
+        if (filePick && (!pickMultiple || entry.isFolder)) return
         toggleSelect(entry)
         dragSelect.start(entries.indexOf(entry))
     }
@@ -1152,6 +1220,11 @@ open class FileExplorerActivity : AppCompatActivity() {
         const val EXTRA_LOCAL_PATH = "local_path"
         /** Folder picker: only the folders are listed (e.g. to move a recording, whose own files would be in the way). */
         const val EXTRA_FOLDERS_ONLY = "folders_only"
+        /** File picker: the MIME types and file endings that can be picked, whether several can, and the paths picked. */
+        const val EXTRA_PICK_TYPES = "pick_types"
+        const val EXTRA_PICK_EXTENSIONS = "pick_extensions"
+        const val EXTRA_PICK_MULTIPLE = "pick_multiple"
+        const val EXTRA_PICKED_PATHS = "picked_paths"
 
         /** Name of the folder a stored path stands for. */
         fun folderName(path: String): String = File(path).name
@@ -1174,4 +1247,12 @@ open class FileExplorerActivity : AppCompatActivity() {
  */
 class FolderPickerActivity : FileExplorerActivity() {
     override val pickMode = true
+}
+
+/**
+ * The explorer as a file picker, for the launcher's own screens (see [PickFiles]) and for other
+ * apps asking for a file ("get content"): browse, tap a file (or mark several and confirm).
+ */
+class FilePickerActivity : FileExplorerActivity() {
+    override val filePick = true
 }

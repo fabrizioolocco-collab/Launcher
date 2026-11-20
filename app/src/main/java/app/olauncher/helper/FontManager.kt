@@ -118,8 +118,9 @@ object FontManager {
 
     /** Copies a .ttf/.otf picked by the user into app storage. Returns the new font id, or null. Blocking. */
     fun importFont(context: Context, uri: Uri): String? {
-        val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+        // A file picked in the launcher's own explorer says its name by itself
+        val name = (if (uri.scheme == "file") uri.lastPathSegment else context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { c -> if (c.moveToFirst()) c.getString(0) else null })
             ?: "font_${System.currentTimeMillis()}.ttf"
         val safeName = name.replace(Regex("[^A-Za-z0-9._ -]"), "_")
         val file = File(fontsDir(context), safeName)
