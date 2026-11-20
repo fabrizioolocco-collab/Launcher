@@ -68,6 +68,16 @@ class RecordingActivity : AppCompatActivity() {
     private var spoken = -1
     private var spokenMark: Any? = null
 
+    /** Search in the text shown: where the words looked for are, and the one in sight. */
+    private lateinit var searchRow: LinearLayout
+    private lateinit var searchInput: android.widget.EditText
+    private lateinit var searchCount: TextView
+    private var folded = ""
+    private var matches: List<Int> = emptyList()
+    private var matchLength = 0
+    private var matchIndex = 0
+    private val matchMarks = mutableListOf<Any>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val path = intent.getStringExtra(EXTRA_PATH)
@@ -110,13 +120,52 @@ class RecordingActivity : AppCompatActivity() {
         }
         ViewCompat.setOnApplyWindowInsetsListener(layout) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.setPadding(v.paddingLeft, bars.top + 4.dpToPx(), v.paddingRight, bars.bottom + 8.dpToPx())
+            val ime = insets.getInsets(WindowInsetsCompat.Type.ime())
+            v.setPadding(v.paddingLeft, bars.top + 4.dpToPx(), v.paddingRight, maxOf(bars.bottom, ime.bottom) + 8.dpToPx())
             insets
         }
-        val bar = UiKit.appBar(this, audio.nameWithoutExtension, onBack = { finish() }, actions = listOf(
+        val bar = UiKit.appBar(this, audio.nameWithoutExtension, onBack = { if (searchRow.isVisible) closeSearch() else finish() }, actions = listOf(
+            UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_rec_find)) { if (searchRow.isVisible) closeSearch() else openSearch() },
             UiKit.iconButton(this, R.drawable.ic_m_more, getString(R.string.ml_explorer_more)) { showMenu() },
         ))
         layout.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        // Search in the text: the words, how many times they are there, previous and next
+        searchRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(4.dpToPx(), 0, 0, 6.dpToPx())
+            isVisible = false
+        }
+        searchInput = android.widget.EditText(this).apply {
+            UiKit.styleInput(this)
+            hint = getString(R.string.ml_rec_find_hint)
+            isSingleLine = true
+            textSize = 15f
+            imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            setOnEditorActionListener { _, _, _ ->
+                moveMatch(1)
+                true
+            }
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+                override fun afterTextChanged(s: android.text.Editable?) {
+                    matchIndex = 0
+                    markMatches(scrollTo = true)
+                }
+            })
+        }
+        searchRow.addView(searchInput, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        searchCount = TextView(this, null, 0, R.style.TextSmall).apply {
+            textSize = 12.5f
+            setTextColor(UiKit.secondary(this@RecordingActivity))
+            setPadding(10.dpToPx(), 0, 2.dpToPx(), 0)
+        }
+        searchRow.addView(searchCount)
+        searchRow.addView(UiKit.iconButton(this, R.drawable.ic_m_up, getString(R.string.ml_audio_previous)) { moveMatch(-1) })
+        searchRow.addView(UiKit.iconButton(this, R.drawable.ic_m_down, getString(R.string.ml_audio_next)) { moveMatch(1) })
+        layout.addView(searchRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         // Player
         val playerRow = LinearLayout(this).apply {
@@ -368,6 +417,75 @@ class RecordingActivity : AppCompatActivity() {
         }
     }
 
+    // ---------------------------------------------------------------- search in the text
+
+    private fun openSearch() {
+        searchRow.isVisible = true
+        searchInput.requestFocus()
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).showSoftInput(searchInput, 0)
+        markMatches(scrollTo = true)
+    }
+
+    private fun closeSearch() {
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager).hideSoftInputFromWindow(searchInput.windowToken, 0)
+        searchRow.isVisible = false
+        markMatches(scrollTo = false)
+    }
+
+    /** Lower case without accents, one character for each one of [text] (so places in one are places in the other). */
+    private fun fold(text: String): String {
+        val out = StringBuilder(text.length)
+        for (c in text) {
+            val plain = if (c.code < 128) c else java.text.Normalizer.normalize(c.toString(), java.text.Normalizer.Form.NFD)[0]
+            out.append(plain.lowercaseChar())
+        }
+        return out.toString()
+    }
+
+    /** Marks every place the words looked for are in the text shown, the current one more strongly. */
+    private fun markMatches(scrollTo: Boolean) {
+        val shownText = text.text as? android.text.Spannable ?: return
+        matchMarks.forEach { shownText.removeSpan(it) }
+        matchMarks.clear()
+        val wanted = if (searchRow.isVisible) fold(searchInput.text.toString().trim()) else ""
+        matchLength = wanted.length
+        val found = mutableListOf<Int>()
+        if (wanted.isNotEmpty() && content.isNotEmpty()) {
+            var at = folded.indexOf(wanted)
+            while (at >= 0 && found.size < 2000) {
+                found += at
+                at = folded.indexOf(wanted, at + wanted.length)
+            }
+        }
+        matches = found
+        matchIndex = if (found.isEmpty()) 0 else matchIndex.coerceIn(0, found.size - 1)
+        searchCount.text = if (wanted.isEmpty()) "" else if (found.isEmpty()) "0" else "${matchIndex + 1}/${found.size}"
+        found.forEachIndexed { i, start ->
+            if (start + matchLength > shownText.length) return@forEachIndexed
+            val mark = android.text.style.BackgroundColorSpan(if (i == matchIndex) 0xFFFFB300.toInt() else 0x66FFD54F)
+            shownText.setSpan(mark, start, start + matchLength, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            matchMarks += mark
+            // Dark letters on the bright mark of the current one
+            if (i == matchIndex) {
+                val ink = android.text.style.ForegroundColorSpan(0xFF000000.toInt())
+                shownText.setSpan(ink, start, start + matchLength, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                matchMarks += ink
+            }
+        }
+        if (!scrollTo || found.isEmpty()) return
+        text.post {
+            val layout = text.layout ?: return@post
+            val y = text.top + layout.getLineTop(layout.getLineForOffset(found[matchIndex].coerceAtMost(text.length())))
+            scroll.smoothScrollTo(0, (y - scroll.height / 3).coerceAtLeast(0))
+        }
+    }
+
+    private fun moveMatch(by: Int) {
+        if (matches.isEmpty()) return
+        matchIndex = (matchIndex + by + matches.size) % matches.size
+        markMatches(scrollTo = true)
+    }
+
     // ---------------------------------------------------------------- texts
 
     private fun reload() {
@@ -428,6 +546,9 @@ class RecordingActivity : AppCompatActivity() {
             spoken = -1
             spokenMark = null
             text.setText(read.ifEmpty { getString(R.string.ml_rec_no_transcript_hint) }, TextView.BufferType.SPANNABLE)
+            folded = fold(read)
+            if (changed) matchIndex = 0
+            markMatches(scrollTo = false)
             try {
                 player?.let { follow(it.currentPosition, scrollTo = false) }
             } catch (ignored: Exception) {

@@ -334,7 +334,8 @@
             android:name=".ui.recorder.RecordingActivity"
             android:exported="false"
             android:label="@string/ml_rec_app"
-            android:taskAffinity="app.minimalauncher.recorder" />
+            android:taskAffinity="app.minimalauncher.recorder"
+            android:windowSoftInputMode="adjustResize" />
 
         <activity
             android:name=".ui.recorder.ChatActivity"

@@ -1121,6 +1121,8 @@
     <string name="ml_rec_halt">Ferma</string>
 
     <!-- Audio player -->
+    <string name="ml_rec_find">Cerca nel testo</string>
+    <string name="ml_rec_find_hint">Parole da trovare</string>
     <string name="ml_audio_channel">Lettore audio</string>
     <string name="ml_audio_previous">Precedente</string>
     <string name="ml_audio_next">Successivo</string>
