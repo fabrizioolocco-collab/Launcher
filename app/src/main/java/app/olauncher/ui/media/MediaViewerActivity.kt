@@ -13,7 +13,9 @@ import android.os.Bundle
 import android.text.TextUtils
 import android.text.format.DateFormat
 import android.text.format.Formatter
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
@@ -50,7 +52,8 @@ import java.io.File
 
 /**
  * Built-in photo and video viewer: swipe between the media of a folder (newest first), pinch and
- * double-tap zoom on photos ([ZoomImageView]), video playback with controls. A tap shows or hides
+ * double-tap zoom on photos ([ZoomImageView]), video playback with controls (double tap on the right /
+ * left half: forward / back 10 s). A tap shows or hides
  * the top bar (share, edit, delete, details). Alternative to the gallery app, see Prefs.builtInViewer.
  */
 class MediaViewerActivity : AppCompatActivity() {
@@ -297,6 +300,18 @@ class MediaViewerActivity : AppCompatActivity() {
                     isFocusable = true
                 }, FrameLayout.LayoutParams(72.dpToPx(), 72.dpToPx(), Gravity.CENTER))
                 page.addView(poster, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                // Feedback of a double-tap seek ("-10 s" / "+10 s")
+                page.addView(TextView(parent.context).apply {
+                    setTextColor(Color.WHITE)
+                    textSize = 18f
+                    val p = 14.dpToPx()
+                    setPadding(p, p / 2, p, p / 2)
+                    background = GradientDrawable().apply {
+                        cornerRadius = 24.dpToPx().toFloat()
+                        setColor(0x99000000.toInt())
+                    }
+                    isVisible = false
+                }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
             } else {
                 page.addView(ZoomImageView(parent.context).apply { onSingleTap = { toggleChrome() } },
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -317,6 +332,36 @@ class MediaViewerActivity : AppCompatActivity() {
                 MediaThumbnails.load(lifecycleScope, image, file, 1024)
                 val controller = MediaController(this@MediaViewerActivity).apply { setAnchorView(video) }
                 video.setMediaController(controller)
+                val seekLabel = page.getChildAt(2) as TextView
+                // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s
+                val gestures = GestureDetector(this@MediaViewerActivity, object : GestureDetector.SimpleOnGestureListener() {
+                    override fun onDown(e: MotionEvent) = true
+                    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                        if (controller.isShowing) controller.hide() else controller.show()
+                        return true
+                    }
+                    override fun onDoubleTap(e: MotionEvent): Boolean {
+                        val duration = video.duration
+                        if (duration <= 0) return false
+                        val forward = e.x >= video.width / 2f
+                        val target = (video.currentPosition + if (forward) SEEK_STEP_MS else -SEEK_STEP_MS).coerceIn(0, duration)
+                        video.seekTo(target)
+                        seekLabel.text = if (forward) "+10 s  \u00BB" else "\u00AB  -10 s"
+                        (seekLabel.layoutParams as FrameLayout.LayoutParams).apply {
+                            gravity = Gravity.CENTER_VERTICAL or (if (forward) Gravity.END else Gravity.START)
+                            marginStart = 32.dpToPx()
+                            marginEnd = 32.dpToPx()
+                        }
+                        seekLabel.requestLayout()
+                        seekLabel.animate().cancel()
+                        seekLabel.alpha = 1f
+                        seekLabel.isVisible = true
+                        seekLabel.animate().alpha(0f).setStartDelay(500).setDuration(300)
+                            .withEndAction { seekLabel.isVisible = false }.start()
+                        return true
+                    }
+                })
+                video.setOnTouchListener { _, ev -> gestures.onTouchEvent(ev); true }
                 video.setOnCompletionListener { poster.isVisible = true }
                 video.setOnErrorListener { _, _, _ ->
                     showToast(getString(R.string.ml_search_cannot_open))
@@ -363,6 +408,8 @@ class MediaViewerActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val SEEK_STEP_MS = 10_000
+
         private const val EXTRA_PATH = "path"
         private const val EXTRA_DIRS = "dirs"
 
