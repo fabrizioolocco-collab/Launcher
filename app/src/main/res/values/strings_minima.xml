@@ -1131,6 +1131,9 @@
     <string name="ml_rec_choice_transcript">Transcript: %1$s</string>
     <string name="ml_rec_choice_ai">AI: %1$s</string>
     <string name="ml_explorer_pick_files">Use the marked files</string>
+    <string name="ml_save_to">Save to…</string>
+    <string name="ml_save_to_done">Saved to «%1$s»</string>
+    <string name="ml_save_to_failed">%1$d files could not be saved</string>
     <string name="ml_audio_channel">Audio player</string>
     <string name="ml_audio_previous">Previous</string>
     <string name="ml_audio_next">Next</string>

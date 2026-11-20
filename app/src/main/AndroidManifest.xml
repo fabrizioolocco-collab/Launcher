@@ -107,6 +107,33 @@
             </intent-filter>
         </activity>
 
+        <!-- "Save to…" in the explorer, for any file another app opens or shares (an attachment, a download) -->
+        <activity
+            android:name=".ui.SaveToActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/ml_save_to"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
         <!-- The explorer as a folder picker (folder shortcuts, swipe actions) -->
         <activity
             android:name=".ui.FolderPickerActivity"
