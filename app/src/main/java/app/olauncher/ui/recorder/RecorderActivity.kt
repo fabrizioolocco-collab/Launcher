@@ -30,6 +30,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
@@ -37,6 +38,7 @@ import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.pillButton
 import app.olauncher.helper.showConfirmDialog
+import app.olauncher.helper.showDropdown
 import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showTextInputDialog
 import app.olauncher.helper.showToast
@@ -56,8 +58,16 @@ import kotlin.math.sqrt
  */
 class RecorderActivity : AppCompatActivity() {
 
-    /** A folder or a recording; [info] replaces the second line (search results). */
-    private class Item(val file: File, val isFolder: Boolean, val transcribed: Boolean = false, val writeUps: Int = 0, val info: String? = null)
+    /**
+     * A folder or a recording; [info] replaces the second line (search results). [count]: the
+     * recordings in a folder. [place]: on the calendar, the folder the recording is in ("" at the root).
+     */
+    private class Item(
+        val file: File, val isFolder: Boolean, val transcribed: Boolean = false, val writeUps: Int = 0,
+        val info: String? = null, val count: Int = 0, val place: String? = null,
+    )
+
+    private class HomeData(val folders: List<Item>, val byDay: Map<String, List<Item>>)
 
     private lateinit var bar: UiKit.AppBar
     private lateinit var status: TextView
@@ -67,6 +77,22 @@ class RecorderActivity : AppCompatActivity() {
     private lateinit var usage: UsageRing
     private var timer: TextView? = null
     private var level: ProgressBar? = null
+
+    /** The first page: the folders as chips, then the calendar of all the recordings and the chosen day's ones. */
+    private lateinit var home: LinearLayout
+    private lateinit var chips: LinearLayout
+    private lateinit var chipsScroll: View
+    private lateinit var monthTitle: TextView
+    private lateinit var monthView: RecorderMonthView
+    private lateinit var dayLabel: TextView
+    private lateinit var addButton: View
+    private var homeData = HomeData(emptyList(), emptyMap())
+    /** The month shown and the day chosen ("yyyy-MM-dd"). */
+    private var shownYear = 0
+    private var shownMonth = 0
+    private var selectedDay = ""
+    /** All the folders as a grid, opened from the chips. */
+    private var foldersPage = false
 
     private lateinit var root: File
     private lateinit var dir: File
@@ -89,6 +115,7 @@ class RecorderActivity : AppCompatActivity() {
         GroqUsage.attach(this)
         root = RecorderStore.root(this)
         dir = savedInstanceState?.getString(STATE_DIR)?.let { File(it) }?.takeIf { it.isDirectory } ?: root
+        showToday()
         setContentView(buildLayout())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = goBack()
@@ -127,10 +154,29 @@ class RecorderActivity : AppCompatActivity() {
         }
     }
 
+    private val importer = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isNotEmpty()) importAudio(uris)
+    }
+
+    private fun dayKey(time: Long): String = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date(time))
+
+    private fun showToday() {
+        val now = java.util.Calendar.getInstance()
+        shownYear = now.get(java.util.Calendar.YEAR)
+        shownMonth = now.get(java.util.Calendar.MONTH)
+        selectedDay = dayKey(now.timeInMillis)
+    }
+
+    private val isHome get() = query == null && !foldersPage && dir.absolutePath == root.absolutePath
+
     private fun goBack() {
         when {
             query != null -> {
                 query = null
+                load()
+            }
+            foldersPage -> {
+                foldersPage = false
                 load()
             }
             dir.absolutePath != root.absolutePath && dir.absolutePath.startsWith(root.absolutePath + "/") -> {
@@ -155,7 +201,7 @@ class RecorderActivity : AppCompatActivity() {
         }
         bar = UiKit.appBar(this, getString(R.string.ml_rec_app), onBack = { goBack() }, actions = listOf(
             UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_explorer_search)) { askSearch() },
-            UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { askNewFolder() },
+            UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_rec_add)) { showAddMenu() }.also { addButton = it },
             UiKit.iconButton(this, R.drawable.ic_m_gear, getString(R.string.ml_rec_settings)) { showSettings() },
         ))
         layout.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -165,6 +211,7 @@ class RecorderActivity : AppCompatActivity() {
             isVisible = false
         }
         layout.addView(status)
+        layout.addView(buildHome(), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         val area = FrameLayout(this)
         list = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@RecorderActivity)
@@ -191,6 +238,181 @@ class RecorderActivity : AppCompatActivity() {
         })
         renderPanel(RecorderService.state.value)
         return layout
+    }
+
+    private fun buildHome(): View {
+        val primary = UiKit.primary(this)
+        home = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isVisible = false
+        }
+        chips = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        chipsScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            clipToPadding = false
+            setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
+            addView(chips)
+        }
+        home.addView(chipsScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = 4.dpToPx()
+            bottomMargin = 10.dpToPx()
+        })
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = UiKit.cardBackground(this@RecorderActivity, 20)
+            setPadding(8.dpToPx(), 2.dpToPx(), 8.dpToPx(), 8.dpToPx())
+        }
+        val nav = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        nav.addView(UiKit.iconButton(this, R.drawable.ic_m_left, getString(R.string.ml_rec_month_previous)) { shiftMonth(-1) })
+        monthTitle = TextView(this).apply {
+            textSize = 15f
+            setTextColor(primary)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            gravity = Gravity.CENTER
+            // Back to today
+            setOnClickListener {
+                showToday()
+                renderHome()
+            }
+        }
+        nav.addView(monthTitle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        nav.addView(UiKit.iconButton(this, R.drawable.ic_m_right, getString(R.string.ml_rec_month_next)) { shiftMonth(1) })
+        card.addView(nav)
+        monthView = RecorderMonthView(this).apply {
+            onPick = { day ->
+                selectedDay = String.format(java.util.Locale.US, "%04d-%02d-%02d", shownYear, shownMonth + 1, day)
+                renderHome()
+            }
+        }
+        card.addView(monthView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        home.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(4.dpToPx(), 0, 4.dpToPx(), 0)
+        })
+        dayLabel = TextView(this, null, 0, R.style.TextSmall).apply {
+            textSize = 12.5f
+            setTextColor(UiKit.secondary(this@RecorderActivity))
+            setPadding(12.dpToPx(), 12.dpToPx(), 12.dpToPx(), 2.dpToPx())
+        }
+        home.addView(dayLabel)
+        return home
+    }
+
+    private fun shiftMonth(by: Int) {
+        val calendar = java.util.Calendar.getInstance().apply {
+            clear()
+            set(shownYear, shownMonth, 1)
+            add(java.util.Calendar.MONTH, by)
+        }
+        shownYear = calendar.get(java.util.Calendar.YEAR)
+        shownMonth = calendar.get(java.util.Calendar.MONTH)
+        renderHome()
+    }
+
+    /** The first page from [homeData]: the folders' chips, the month with its dots, the chosen day's recordings. */
+    private fun renderHome() {
+        val primary = UiKit.primary(this)
+        chips.removeAllViews()
+        chipsScroll.isVisible = homeData.folders.isNotEmpty()
+        fun chip(label: String, onClick: () -> Unit) = pillButton(this, label, filled = false, color = primary) { onClick() }.apply {
+            textSize = 14f
+            setPadding(14.dpToPx(), 0, 14.dpToPx(), 0)
+        }.also { chips.addView(it, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 36.dpToPx()).apply { marginEnd = 8.dpToPx() }) }
+        // With many folders: all of them on a page of their own
+        if (homeData.folders.size > 3) chip(getString(R.string.ml_rec_folders_all, homeData.folders.size)) {
+            foldersPage = true
+            load()
+        }
+        homeData.folders.forEach { folder ->
+            chip(if (folder.count > 0) "${folder.file.name}  ${folder.count}" else folder.file.name) { onTap(folder) }.setOnLongClickListener {
+                onLongPress(folder)
+                true
+            }
+        }
+        val month = java.util.Calendar.getInstance().apply {
+            clear()
+            set(shownYear, shownMonth, 1)
+        }
+        monthTitle.text = java.text.SimpleDateFormat("LLLL yyyy", java.util.Locale.getDefault()).format(month.time).replaceFirstChar { it.uppercase() }
+        val prefix = String.format(java.util.Locale.US, "%04d-%02d-", shownYear, shownMonth + 1)
+        val today = dayKey(System.currentTimeMillis())
+        fun dayIn(key: String) = if (key.startsWith(prefix)) key.substring(prefix.length).toIntOrNull() ?: 0 else 0
+        val counts = HashMap<Int, Int>()
+        homeData.byDay.forEach { (key, recordings) -> dayIn(key).takeIf { it > 0 }?.let { counts[it] = recordings.size } }
+        monthView.show(shownYear, shownMonth, counts, dayIn(selectedDay), dayIn(today))
+        val date = try {
+            java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(selectedDay)
+        } catch (e: Exception) {
+            null
+        }
+        val named = date?.let { java.text.SimpleDateFormat("EEEE d MMMM", java.util.Locale.getDefault()).format(it) }.orEmpty()
+        dayLabel.text = if (selectedDay == today) getString(R.string.ml_rec_today, named) else named.replaceFirstChar { it.uppercase() }
+        show(homeData.byDay[selectedDay].orEmpty())
+    }
+
+    /** Folders with how many recordings each holds, and every recording (in any folder) under the day it was made. */
+    private fun scanHome(): HomeData {
+        root.mkdirs()
+        val folders = root.listFiles().orEmpty().filter { it.isDirectory && !it.name.startsWith(".") }.sortedBy { it.name.lowercase() }
+            .map { folder -> Item(folder, true, count = folder.walkTopDown().count { RecorderStore.isAudio(it) }) }
+        val recordings = root.walkTopDown().onEnter { !it.name.startsWith(".") || it == root }.filter { RecorderStore.isAudio(it) }.map { audio ->
+            Item(
+                audio, false, transcribed = RecorderStore.transcript(audio).isFile, writeUps = RecorderStore.elaborations(audio).size,
+                place = audio.parentFile?.absolutePath.orEmpty().removePrefix(root.absolutePath).trimStart('/'),
+            )
+        }.toList()
+        return HomeData(folders, recordings.sortedByDescending { it.file.lastModified() }.groupBy { dayKey(it.file.lastModified()) })
+    }
+
+    // ---------------------------------------------------------------- adding
+
+    private fun showAddMenu() {
+        addButton.showDropdown(listOf(
+            MenuEntry(getString(R.string.ml_explorer_new_folder), icon = R.drawable.ic_m_folder) { askNewFolder() },
+            MenuEntry(getString(R.string.ml_rec_import), icon = R.drawable.ic_m_download) {
+                if (!hasFilesAccess()) askFilesAccess() else importer.launch("audio/*")
+            },
+        ))
+    }
+
+    /** Copies audio files chosen on the phone into the folder shown (the originals stay): they are of today. */
+    private fun importAudio(uris: List<Uri>) {
+        val target = if (query == null && !foldersPage) dir else root
+        lifecycleScope.launch {
+            val failed = withContext(Dispatchers.IO) {
+                target.mkdirs()
+                uris.count { !copyIn(it, target) }
+            }
+            if (failed > 0) showToast(getString(R.string.ml_rec_import_failed, failed))
+            showToday()
+            load()
+        }
+    }
+
+    private fun copyIn(uri: Uri, target: File): Boolean = try {
+        var name = contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }?.replace('/', '_')?.takeIf { it.isNotBlank() } ?: "audio"
+        if (File(name).extension.isEmpty()) {
+            name += "." + (android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(contentResolver.getType(uri)) ?: "m4a")
+        }
+        val base = File(name).nameWithoutExtension
+        val extension = File(name).extension
+        var file = File(target, name)
+        var i = 2
+        while (file.exists() || RecorderStore.transcript(file).exists()) file = File(target, "$base (${i++}).$extension")
+        val input = contentResolver.openInputStream(uri)
+        if (input == null) false
+        else {
+            input.use { source -> file.outputStream().use { source.copyTo(it, 256 * 1024) } }
+            true
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
     }
 
     /** The bottom panel: the "Record" button, or the time, level, pause and stop of the recording going on. */
@@ -301,8 +523,22 @@ class RecorderActivity : AppCompatActivity() {
 
     private fun load() {
         val q = query
-        bar.title.text = if (q != null) "«$q»" else if (dir.absolutePath == root.absolutePath) getString(R.string.ml_rec_app) else dir.name
-        UiKit.setSubtitle(bar, if (q != null || dir.absolutePath == root.absolutePath) null else "/" + dir.absolutePath.removePrefix(root.absolutePath).trimStart('/'))
+        val page = foldersPage
+        val atHome = isHome
+        bar.title.text = when {
+            q != null -> "«$q»"
+            page -> getString(R.string.ml_rec_folders)
+            dir.absolutePath == root.absolutePath -> getString(R.string.ml_rec_app)
+            else -> dir.name
+        }
+        UiKit.setSubtitle(bar, if (q != null || page || dir.absolutePath == root.absolutePath) null else "/" + dir.absolutePath.removePrefix(root.absolutePath).trimStart('/'))
+        home.isVisible = atHome && hasFilesAccess()
+        // The page of all the folders is a grid, the rest a list
+        val grid = page && q == null
+        if (grid != (list.layoutManager is GridLayoutManager)) {
+            list.layoutManager = if (grid) GridLayoutManager(this, 3) else LinearLayoutManager(this)
+            list.adapter = ItemsAdapter()
+        }
         if (!hasFilesAccess()) {
             show(emptyList())
             emptyView.isVisible = false
@@ -314,8 +550,17 @@ class RecorderActivity : AppCompatActivity() {
         status.isVisible = false
         val shownDir = dir
         lifecycleScope.launch {
-            val found = withContext(Dispatchers.IO) { if (q != null) find(q) else listDir(shownDir) }
-            if (query != q || dir != shownDir) return@launch
+            if (atHome) {
+                val data = withContext(Dispatchers.IO) { scanHome() }
+                if (!isHome) return@launch
+                homeData = data
+                renderHome()
+                return@launch
+            }
+            val found = withContext(Dispatchers.IO) {
+                if (q != null) find(q) else if (page) listDir(root).filter { it.isFolder } else listDir(shownDir)
+            }
+            if (query != q || dir != shownDir || foldersPage != page) return@launch
             show(found)
         }
     }
@@ -331,7 +576,8 @@ class RecorderActivity : AppCompatActivity() {
         d.mkdirs()
         val files = d.listFiles().orEmpty().filter { !it.name.startsWith(".") }
         val names = files.map { it.name }.toSet()
-        val folders = files.filter { it.isDirectory }.sortedBy { it.name.lowercase() }.map { Item(it, true) }
+        val folders = files.filter { it.isDirectory }.sortedBy { it.name.lowercase() }
+            .map { folder -> Item(folder, true, count = folder.walkTopDown().count { RecorderStore.isAudio(it) }) }
         val recordings = files.filter { RecorderStore.isAudio(it) }.sortedByDescending { it.lastModified() }.map { audio ->
             Item(audio, false, transcribed = audio.nameWithoutExtension + ".txt" in names, writeUps = RecorderStore.elaborations(audio).size)
         }
@@ -375,6 +621,7 @@ class RecorderActivity : AppCompatActivity() {
     private fun onTap(item: Item) {
         if (item.isFolder) {
             query = null
+            foldersPage = false
             dir = item.file
             load()
             return
@@ -552,7 +799,42 @@ class RecorderActivity : AppCompatActivity() {
     private inner class ItemsAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         override fun getItemCount() = items.size
 
+        override fun getItemViewType(position: Int) = if (list.layoutManager is GridLayoutManager) 1 else 0
+
+        /** A folder on the page of all the folders: a square tile, its name and how many recordings it holds. */
+        private fun folderCell(parent: ViewGroup): View {
+            val ctx = parent.context
+            val cell = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(4.dpToPx(), 4.dpToPx(), 4.dpToPx(), 10.dpToPx())
+                isClickable = true
+                background = UiKit.ripple(ctx)
+                layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            }
+            val side = ((parent.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels) - parent.paddingLeft - parent.paddingRight) / 3 - 8.dpToPx()
+            cell.addView(FrameLayout(ctx).apply {
+                background = UiKit.border(ctx, 16, UiKit.card(ctx))
+                addView(UiKit.fileTile(ctx, UiKit.FileKind.FOLDER, 44), FrameLayout.LayoutParams(44.dpToPx(), 44.dpToPx(), Gravity.CENTER))
+            }, LinearLayout.LayoutParams(side, side))
+            cell.addView(TextView(ctx, null, 0, R.style.TextSmall).apply {
+                textSize = 13.5f
+                setTextColor(UiKit.primary(ctx))
+                maxLines = 2
+                ellipsize = TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER_HORIZONTAL
+                setPadding(0, 6.dpToPx(), 0, 0)
+            })
+            cell.addView(TextView(ctx, null, 0, R.style.TextSmall).apply {
+                textSize = 12f
+                setTextColor(UiKit.secondary(ctx))
+                gravity = Gravity.CENTER_HORIZONTAL
+            })
+            return cell
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            if (viewType == 1) return object : RecyclerView.ViewHolder(folderCell(parent)) {}
             val ctx = parent.context
             val row = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -585,6 +867,16 @@ class RecorderActivity : AppCompatActivity() {
             val item = items[position]
             val ctx = this@RecorderActivity
             val row = holder.itemView as LinearLayout
+            row.setOnClickListener { onTap(item) }
+            row.setOnLongClickListener {
+                onLongPress(item)
+                true
+            }
+            if (holder.itemViewType == 1) {
+                (row.getChildAt(1) as TextView).text = item.file.name
+                (row.getChildAt(2) as TextView).text = item.count.toString()
+                return
+            }
             val tile = row.getChildAt(0) as FrameLayout
             val kind = if (item.isFolder) UiKit.FileKind.FOLDER else UiKit.FileKind.AUDIO
             if (tile.tag != kind) {
@@ -598,16 +890,19 @@ class RecorderActivity : AppCompatActivity() {
             val job = RecorderJobs.running.value?.get(item.file.absolutePath)
             val recording = RecorderService.state.value?.file?.absolutePath == item.file.absolutePath
             info.text = when {
-                item.isFolder -> ""
+                item.isFolder -> if (item.count > 0) item.count.toString() else ""
                 recording -> getString(R.string.ml_rec_recording)
                 job != null -> job
                 item.info != null -> item.info
                 RecorderJobs.errorOf(item.file) != null -> RecorderJobs.errorOf(item.file)
                 else -> listOfNotNull(
-                    DateFormat.getMediumDateFormat(ctx).format(item.file.lastModified()) + " " + DateFormat.getTimeFormat(ctx).format(item.file.lastModified()),
+                    // On the calendar the day is already said: the time, and the folder the recording is in
+                    if (item.place != null) DateFormat.getTimeFormat(ctx).format(item.file.lastModified())
+                    else DateFormat.getMediumDateFormat(ctx).format(item.file.lastModified()) + " " + DateFormat.getTimeFormat(ctx).format(item.file.lastModified()),
                     Formatter.formatShortFileSize(ctx, item.file.length()),
                     if (item.transcribed) getString(R.string.ml_rec_transcribed) else null,
                     if (item.writeUps > 0) getString(R.string.ml_rec_write_ups, item.writeUps) else null,
+                    item.place?.takeIf { it.isNotEmpty() }?.let { "/$it" },
                 ).joinToString(" · ")
             }
             info.isVisible = info.text.isNotEmpty()

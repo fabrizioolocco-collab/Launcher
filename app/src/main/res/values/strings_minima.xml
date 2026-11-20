@@ -1012,7 +1012,7 @@
     <string name="ml_rec_failed">The recording could not start</string>
     <string name="ml_rec_allow_mic">Allow the microphone to record</string>
     <string name="ml_rec_allow_files">Allow files access to keep the recordings in a folder of the phone: tap here</string>
-    <string name="ml_rec_empty">No recordings here</string>
+    <string name="ml_rec_empty">No recordings</string>
     <string name="ml_rec_cannot">It can\'t be done</string>
     <string name="ml_rec_search_hint">Words in the names or in the texts</string>
     <string name="ml_rec_settings">Settings</string>
@@ -1112,4 +1112,12 @@
     <string name="ml_rec_usage_hour">Audio this hour</string>
     <string name="ml_rec_usage_day">Audio in 24 hours</string>
     <string name="ml_rec_usage_minutes">%1$d of %2$d min left</string>
+    <string name="ml_rec_add">Add</string>
+    <string name="ml_rec_month_previous">Previous month</string>
+    <string name="ml_rec_month_next">Next month</string>
+    <string name="ml_rec_folders">Folders</string>
+    <string name="ml_rec_folders_all">All (%1$d)</string>
+    <string name="ml_rec_today">Today · %1$s</string>
+    <string name="ml_rec_import">Import audio</string>
+    <string name="ml_rec_import_failed">%1$d files could not be imported</string>
 </resources>

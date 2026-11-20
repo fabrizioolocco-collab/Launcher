@@ -1009,7 +1009,7 @@
     <string name="ml_rec_failed">Impossibile avviare la registrazione</string>
     <string name="ml_rec_allow_mic">Consenti il microfono per registrare</string>
     <string name="ml_rec_allow_files">Consenti l\'accesso ai file per tenere le registrazioni in una cartella del telefono: tocca qui</string>
-    <string name="ml_rec_empty">Nessuna registrazione qui</string>
+    <string name="ml_rec_empty">Nessuna registrazione</string>
     <string name="ml_rec_cannot">Operazione non riuscita</string>
     <string name="ml_rec_search_hint">Parole nei nomi o nei testi</string>
     <string name="ml_rec_settings">Impostazioni</string>
@@ -1109,4 +1109,12 @@
     <string name="ml_rec_usage_hour">Audio in quest\'ora</string>
     <string name="ml_rec_usage_day">Audio nelle 24 ore</string>
     <string name="ml_rec_usage_minutes">%1$d di %2$d min rimasti</string>
+    <string name="ml_rec_add">Aggiungi</string>
+    <string name="ml_rec_month_previous">Mese precedente</string>
+    <string name="ml_rec_month_next">Mese successivo</string>
+    <string name="ml_rec_folders">Cartelle</string>
+    <string name="ml_rec_folders_all">Tutte (%1$d)</string>
+    <string name="ml_rec_today">Oggi · %1$s</string>
+    <string name="ml_rec_import">Importa audio</string>
+    <string name="ml_rec_import_failed">%1$d file non sono stati importati</string>
 </resources>

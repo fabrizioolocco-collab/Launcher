@@ -26,7 +26,7 @@ object RecorderStore {
     const val DEFAULT_CHAT = "llama-3.3-70b-versatile"
     val WHISPER_MODELS = listOf("whisper-large-v3", "whisper-large-v3-turbo")
 
-    private val AUDIO = setOf("ogg", "opus", "m4a", "mp3", "wav", "flac", "webm", "mp4", "mpga", "mpeg")
+    private val AUDIO = setOf("ogg", "opus", "m4a", "mp3", "wav", "flac", "webm", "mp4", "mpga", "mpeg", "aac", "amr", "3gp", "m4b", "wma")
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private fun keys(ctx: Context) = ctx.getSharedPreferences(KEYS, Context.MODE_PRIVATE)
@@ -144,7 +144,9 @@ object RecorderStore {
     fun moveFile(from: File, to: File): Boolean {
         if (from.renameTo(to)) return true
         return try {
-            from.copyRecursively(to) && from.deleteRecursively()
+            // The date stays: it is the day the recording shows under
+            val date = from.lastModified()
+            from.copyRecursively(to) && (from.isDirectory || to.setLastModified(date) || true) && from.deleteRecursively()
         } catch (e: Exception) {
             false
         }
