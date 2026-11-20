@@ -53,7 +53,7 @@ import java.io.File
 /**
  * Built-in photo and video viewer: swipe between the media of a folder (newest first), pinch and
  * double-tap zoom on photos ([ZoomImageView]), video playback with [VideoControls] in the middle (double tap
- * on the right / left half: forward / back 10 s, long press: pause / play). A tap shows or hides the top bar (share, edit, delete,
+ * on the right / left half: forward / back 10 s, long press: pause / play, pinch: [VideoZoom]). A tap shows or hides the top bar (share, edit, delete,
  * details) and the video controls, which hide by themselves while the video plays. Alternative to the gallery app, see Prefs.builtInViewer.
  */
 class MediaViewerActivity : AppCompatActivity() {
@@ -270,6 +270,7 @@ class MediaViewerActivity : AppCompatActivity() {
     private fun stopVideo(page: FrameLayout) {
         (page.getChildAt(0) as? VideoView)?.let {
             it.stopPlayback()
+            (it.tag as? VideoZoom)?.reset()
             page.getChildAt(1)?.isVisible = true
             (page.getChildAt(3) as? VideoControls)?.hideNow()
         }
@@ -387,9 +388,11 @@ class MediaViewerActivity : AppCompatActivity() {
                 val controls = page.getChildAt(3) as VideoControls
                 controls.hideNow()
                 video.setOnPreparedListener { controls.player = it }
+                val zoom = VideoZoom(page, video).also { video.tag = it }
+                zoom.reset()
                 val seekLabel = page.getChildAt(2) as TextView
                 // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s;
-                // long press: pause / play
+                // long press: pause / play; two fingers: zoom
                 val gestures = GestureDetector(this@MediaViewerActivity, object : GestureDetector.SimpleOnGestureListener() {
                     override fun onDown(e: MotionEvent) = true
                     override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
@@ -416,9 +419,14 @@ class MediaViewerActivity : AppCompatActivity() {
                     }
                 })
                 // On the page, not the video: the black bands around it (the video keeps its proportions) count too
-                page.setOnTouchListener { _, ev -> gestures.onTouchEvent(ev); true }
+                page.setOnTouchListener { _, ev ->
+                    zoom.onTouch(ev)
+                    gestures.onTouchEvent(ev)
+                    true
+                }
                 video.setOnCompletionListener {
                     poster.isVisible = true
+                    zoom.reset()
                     controls.hideNow()
                     chromeVisible = true
                     updateChrome()
