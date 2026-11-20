@@ -1022,7 +1022,7 @@
     <string name="ml_rec_key_get">Ottieni la chiave gratuita (console.groq.com)</string>
     <string name="ml_rec_key_missing">Prima imposta la chiave Groq: Registratore > Impostazioni</string>
     <string name="ml_rec_key_wrong">Groq ha rifiutato la chiave: controllala nelle impostazioni</string>
-    <string name="ml_rec_model_whisper">Modello di trascrizione</string>
+    <string name="ml_rec_model_whisper">Modello di trascrizione Groq</string>
     <string name="ml_rec_model_chat">Modello AI</string>
     <string name="ml_rec_language">Lingua parlata</string>
     <string name="ml_rec_language_auto">Automatica</string>
@@ -1074,4 +1074,16 @@
     <string name="ml_rec_prompt_notes">Questa è la parte %1$d di %2$d di una trascrizione. Prendine appunti dettagliati e fedeli: fatti, nomi, numeri, date, decisioni, cose da fare, chi ha detto cosa. Non omettere nulla di rilevante e non aggiungere nulla.</string>
     <string name="ml_rec_prompt_condense">Condensa questi appunti mantenendo ogni fatto, nome, numero, data, decisione e cosa da fare:</string>
     <string name="ml_rec_prompt_from_notes">Appunti ricavati dall\'intera trascrizione:</string>
+    <string name="ml_rec_engine">Trascrivi con</string>
+    <string name="ml_rec_engine_groq">Groq (online, veloce)</string>
+    <string name="ml_rec_engine_local">Sul telefono: %1$s</string>
+    <string name="ml_rec_model_ready">scaricato</string>
+    <string name="ml_rec_model_missing">da scaricare</string>
+    <string name="ml_rec_model_download">Il modello (%1$d MB) si scarica una volta sola, meglio in Wi-Fi. Poi le trascrizioni vengono fatte sul telefono, senza inviare nulla: un\'ora di registrazione richiede da un quarto d\'ora a un\'ora, meglio lasciarla andare con il telefono in carica.</string>
+    <string name="ml_rec_download">Scarica</string>
+    <string name="ml_rec_downloading">Scaricamento</string>
+    <string name="ml_rec_models_delete">Elimina un modello scaricato</string>
+    <string name="ml_rec_model_needed">Il modello per il telefono non è ancora scaricato: Registratore > Impostazioni > Trascrivi con</string>
+    <string name="ml_rec_local_unsupported">Questo telefono non può fare le trascrizioni da solo: usa Groq</string>
+    <string name="ml_rec_error_shown">Non riuscito: %1$s (tocca per nascondere)</string>
 </resources>

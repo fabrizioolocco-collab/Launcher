@@ -73,6 +73,7 @@ class RecordingActivity : AppCompatActivity() {
         setContentView(buildLayout())
         preparePlayer()
         RecorderJobs.running.observe(this) { showStatus() }
+        RecorderJobs.errors.observe(this) { showStatus() }
         RecorderJobs.changes.observe(this) { reload() }
     }
 
@@ -165,7 +166,9 @@ class RecordingActivity : AppCompatActivity() {
             setPadding(12.dpToPx(), 10.dpToPx(), 12.dpToPx(), 0)
             isVisible = false
             setOnClickListener {
-                showConfirmDialog(getString(R.string.ml_rec_app), getString(R.string.ml_rec_cancel_jobs), getString(R.string.ml_rec_stop)) {
+                // An error goes away when tapped; something being made can be stopped
+                if (!RecorderJobs.isBusy(audio)) RecorderJobs.setError(audio, null)
+                else showConfirmDialog(getString(R.string.ml_rec_app), getString(R.string.ml_rec_cancel_jobs), getString(R.string.ml_rec_stop)) {
                     RecorderJobs.cancel(this@RecordingActivity)
                 }
             }
@@ -275,6 +278,11 @@ class RecordingActivity : AppCompatActivity() {
         }
         val transcript = RecorderStore.transcript(audio)
         val writeUps = RecorderStore.elaborations(audio)
+        // What was just made comes to the front
+        RecorderJobs.produced?.takeIf { it.first == audio.absolutePath }?.let {
+            RecorderJobs.produced = null
+            shown = File(it.second)
+        }
         if (shown != transcript && !shown.isFile) shown = transcript
         chips.removeAllViews()
         val primary = UiKit.primary(this)
@@ -310,24 +318,25 @@ class RecordingActivity : AppCompatActivity() {
 
     private fun showStatus() {
         val job = RecorderJobs.running.value?.get(audio.absolutePath)
-        status.text = job?.let { "$it…" }
-        status.isVisible = job != null
+        val error = RecorderJobs.errorOf(audio)
+        status.text = job?.let { "$it…" } ?: error?.let { getString(R.string.ml_rec_error_shown, it) }
+        status.setTextColor(if (job == null && error != null) 0xFFD9534F.toInt() else UiKit.primary(this))
+        status.isVisible = job != null || error != null
     }
 
-    private fun ready(): Boolean {
-        if (RecorderJobs.isBusy(audio)) {
-            showToast(getString(R.string.ml_rec_busy))
-            return false
+    /** Nothing going on for this recording, and what [forAi] (or a transcript) needs is there. */
+    private fun ready(forAi: Boolean): Boolean {
+        val blocker = when {
+            RecorderJobs.isBusy(audio) -> getString(R.string.ml_rec_busy)
+            forAi -> if (RecorderStore.apiKey(this).isEmpty()) getString(R.string.ml_rec_key_missing) else null
+            else -> RecorderJobs.transcriptBlocker(this)
         }
-        if (RecorderStore.apiKey(this).isEmpty()) {
-            showToast(getString(R.string.ml_rec_key_missing), android.widget.Toast.LENGTH_LONG)
-            return false
-        }
-        return true
+        if (blocker != null) showToast(blocker, android.widget.Toast.LENGTH_LONG)
+        return blocker == null
     }
 
     private fun transcribe() {
-        if (!ready()) return
+        if (!ready(forAi = false)) return
         if (!RecorderStore.transcript(audio).isFile) return RecorderJobs.transcribe(this, audio)
         showConfirmDialog(getString(R.string.ml_rec_transcribe), getString(R.string.ml_rec_transcribe_again), getString(R.string.ml_rec_transcribe)) {
             RecorderJobs.transcribe(this, audio)
@@ -335,7 +344,7 @@ class RecordingActivity : AppCompatActivity() {
     }
 
     private fun showAiMenu() {
-        if (!ready()) return
+        if (!ready(forAi = true)) return
         if (!RecorderStore.transcript(audio).isFile) return showToast(getString(R.string.ml_rec_no_transcript))
         fun preset(title: Int, prompt: Int, rewrite: Boolean = false) = MenuEntry(getString(title)) {
             RecorderJobs.elaborate(this, audio, getString(title), getString(prompt), rewrite)
@@ -357,7 +366,8 @@ class RecordingActivity : AppCompatActivity() {
             },
         ), header = { dialog ->
             TextView(dialog.context, null, 0, R.style.TextSmall).apply {
-                text = getString(R.string.ml_rec_ai_model, RecorderStore.chatModel(this@RecordingActivity))
+                text = getString(R.string.ml_rec_ai_model,
+                    if (RecorderStore.chatModelChosen(this@RecordingActivity)) RecorderStore.chatModel(this@RecordingActivity) else getString(R.string.ml_rec_language_auto))
                 alpha = 0.6f
                 setTextColor(UiKit.primary(dialog.context))
                 setPadding(0, 8.dpToPx(), 0, 4.dpToPx())

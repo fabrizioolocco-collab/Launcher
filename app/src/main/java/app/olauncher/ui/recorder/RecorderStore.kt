@@ -21,6 +21,7 @@ object RecorderStore {
     /** Apart from the rest: the key is left out of the settings backup. */
     private const val KEYS = "app.minimalauncher.groq"
 
+    const val ENGINE_GROQ = "groq"
     const val DEFAULT_WHISPER = "whisper-large-v3"
     const val DEFAULT_CHAT = "llama-3.3-70b-versatile"
     val WHISPER_MODELS = listOf("whisper-large-v3", "whisper-large-v3-turbo")
@@ -48,6 +49,26 @@ object RecorderStore {
 
     fun chatModel(ctx: Context): String = prefs(ctx).getString("chat", DEFAULT_CHAT) ?: DEFAULT_CHAT
     fun setChatModel(ctx: Context, model: String) = prefs(ctx).edit { putString("chat", model) }
+
+    /** What makes the transcripts: [ENGINE_GROQ], or the id of a [LocalWhisper] model on the phone. */
+    fun engine(ctx: Context): String = prefs(ctx).getString("engine", ENGINE_GROQ) ?: ENGINE_GROQ
+    fun setEngine(ctx: Context, engine: String) = prefs(ctx).edit { putString("engine", engine) }
+
+    /** The model on the phone that makes the transcripts, null when Groq does. */
+    fun localModel(ctx: Context) = LocalWhisper.model(engine(ctx))
+
+    /** The user chose the AI model (otherwise the best one Groq has is used). */
+    fun chatModelChosen(ctx: Context) = prefs(ctx).contains("chat")
+
+    /** Recordings whose transcription was started and hasn't ended: they go on when the recorder is opened again. */
+    fun pending(ctx: Context): Set<String> = prefs(ctx).getStringSet("pending", emptySet()).orEmpty().toSet()
+
+    @Synchronized
+    fun setPending(ctx: Context, audio: File, pending: Boolean) {
+        val all = pending(ctx).toMutableSet()
+        if (pending) all += audio.absolutePath else all -= audio.absolutePath
+        prefs(ctx).edit { putStringSet("pending", all) }
+    }
 
     /** Language spoken in the recordings (ISO code), "" to let the model find it. */
     fun language(ctx: Context): String = prefs(ctx).getString("language", "").orEmpty()

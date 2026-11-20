@@ -54,6 +54,42 @@ object RecorderJobs {
 
     fun isBusy(audio: File) = current.containsKey(audio.absolutePath)
 
+    /** Recording (audio path) -> why the last thing asked for it failed; kept until something else is asked. */
+    val errors = MutableLiveData<Map<String, String>>(emptyMap())
+
+    @Volatile
+    private var currentErrors: Map<String, String> = emptyMap()
+
+    fun errorOf(audio: File) = currentErrors[audio.absolutePath]
+
+    fun setError(audio: File, message: String?) {
+        synchronized(this) {
+            val map = currentErrors.toMutableMap()
+            if (message == null) map.remove(audio.absolutePath) else map[audio.absolutePath] = message
+            currentErrors = map
+            errors.postValue(map)
+        }
+    }
+
+    /** The text just made (recording path, text file): the recording's screen shows it, once. */
+    @Volatile
+    var produced: Pair<String, String>? = null
+
+    /** Why a transcript can't be made right now (no key, no model), or null when it can. */
+    fun transcriptBlocker(context: Context): String? {
+        val local = RecorderStore.localModel(context)
+        return when {
+            local != null && !LocalWhisper.isDownloaded(context, local) -> context.getString(R.string.ml_rec_model_needed)
+            local == null && RecorderStore.apiKey(context).isEmpty() -> context.getString(R.string.ml_rec_key_missing)
+            else -> null
+        }
+    }
+
+    /** Downloads a model for the transcripts made on the phone. */
+    fun download(context: Context, model: LocalWhisper.Model) = start(context, LocalWhisper.file(context, model)) {
+        putExtra(RecorderJobService.EXTRA_MODEL, model.id)
+    }
+
     fun transcribe(context: Context, audio: File) = start(context, audio) {}
 
     /** [rewrite]: the result is as long as the transcript (a clean copy), not a digest of it. */
@@ -65,6 +101,7 @@ object RecorderJobs {
 
     private fun start(context: Context, audio: File, extras: Intent.() -> Unit) {
         if (isBusy(audio)) return
+        setError(audio, null)
         status(audio, context.getString(R.string.ml_rec_queued))
         try {
             ContextCompat.startForegroundService(
@@ -110,7 +147,12 @@ class RecorderJobService : Service() {
         }
         val audio = intent?.getStringExtra(EXTRA_AUDIO)?.let { File(it) }
         try {
-            val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC else 0
+            // "Special use" has no time limit (a transcript made on the phone takes long)
+            val type = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE -> ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                else -> 0
+            }
             ServiceCompat.startForeground(this, NOTIFICATION, notification(getString(R.string.ml_rec_working)), type)
         } catch (e: Exception) {
             // Started from the background (a recording stopped from its notification): it runs all the same
@@ -123,6 +165,9 @@ class RecorderJobService : Service() {
         val title = intent?.getStringExtra(EXTRA_TITLE)
         val instruction = intent?.getStringExtra(EXTRA_INSTRUCTION)
         val rewrite = intent?.getBooleanExtra(EXTRA_REWRITE, false) == true
+        val model = intent?.getStringExtra(EXTRA_MODEL)?.let { LocalWhisper.model(it) }
+        val transcript = model == null && (title == null || instruction == null)
+        if (transcript) RecorderStore.setPending(this, audio, true)
         pending++
         if (wakeLock == null) wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "minimalauncher:recorder-jobs").apply { acquire(MAX_WORK) }
@@ -130,8 +175,13 @@ class RecorderJobService : Service() {
             var error: String? = null
             try {
                 if (cancelled) throw Cancelled()
-                if (title != null && instruction != null) elaborate(audio, title, instruction, rewrite) else transcribe(audio)
+                when {
+                    model != null -> download(audio, model)
+                    title != null && instruction != null -> elaborate(audio, title, instruction, rewrite)
+                    else -> transcribe(audio)
+                }
             } catch (e: Cancelled) {
+            } catch (e: LocalWhisper.Stopped) {
             } catch (e: Groq.GroqException) {
                 error = if (e.code == 401) getString(R.string.ml_rec_key_wrong) else e.message
             } catch (e: java.io.IOException) {
@@ -140,6 +190,8 @@ class RecorderJobService : Service() {
                 e.printStackTrace()
                 error = e.message ?: e.javaClass.simpleName
             }
+            if (transcript) RecorderStore.setPending(this, audio, false)
+            if (error != null && !cancelled) RecorderJobs.setError(audio, error)
             RecorderJobs.status(audio, null)
             RecorderJobs.changed()
             val failure = error
@@ -166,10 +218,10 @@ class RecorderJobService : Service() {
     }
 
     /** What is being done, in the notification and on the recording's row. */
-    private fun progress(audio: File, message: String) {
+    private fun progress(audio: File, message: String, percent: Int = -1) {
         RecorderJobs.status(audio, message)
         try {
-            getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(audio.nameWithoutExtension + ": " + message))
+            getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification(audio.nameWithoutExtension + ": " + message, percent))
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -182,6 +234,45 @@ class RecorderJobService : Service() {
     // ---------------------------------------------------------------- transcript
 
     private fun transcribe(audio: File) {
+        val local = RecorderStore.localModel(this)
+        val segments = if (local != null) transcribeLocal(audio, local) else transcribeGroq(audio)
+        if (cancelled) throw Cancelled()
+        if (segments.isEmpty()) throw Exception(getString(R.string.ml_rec_no_speech))
+        val target = RecorderStore.transcript(audio)
+        target.writeText(format(segments, RecorderStore.timestamps(this)))
+        RecorderJobs.produced = audio.absolutePath to target.absolutePath
+    }
+
+    /** On the phone: slow, so with the percentage done. */
+    private fun transcribeLocal(audio: File, model: LocalWhisper.Model): List<Groq.Segment> {
+        if (!LocalWhisper.supported()) throw Exception(getString(R.string.ml_rec_local_unsupported))
+        if (!LocalWhisper.isDownloaded(this, model)) throw Exception(getString(R.string.ml_rec_model_needed))
+        val label = getString(R.string.ml_rec_transcribing)
+        progress(audio, label)
+        var shown = -1
+        return LocalWhisper.transcribe(this, audio, model, RecorderStore.language(this), { fraction ->
+            val percent = (fraction * 100).toInt()
+            if (percent != shown) {
+                shown = percent
+                progress(audio, "$label $percent%", percent)
+            }
+        }) { cancelled }
+    }
+
+    private fun download(target: File, model: LocalWhisper.Model) {
+        val label = getString(R.string.ml_rec_downloading)
+        progress(target, label)
+        var shown = -1
+        LocalWhisper.download(this, model, { fraction ->
+            val percent = (fraction * 100).toInt()
+            if (percent != shown) {
+                shown = percent
+                progress(target, "$label $percent%", percent)
+            }
+        }) { cancelled }
+    }
+
+    private fun transcribeGroq(audio: File): List<Groq.Segment> {
         val key = key()
         val label = getString(R.string.ml_rec_transcribing)
         progress(audio, label)
@@ -199,9 +290,7 @@ class RecorderJobService : Service() {
         } finally {
             parts.forEach { (file, _) -> if (file != audio) file.delete() }
         }
-        if (cancelled) throw Cancelled()
-        if (segments.isEmpty()) throw Exception(getString(R.string.ml_rec_no_speech))
-        RecorderStore.transcript(audio).writeText(format(segments, RecorderStore.timestamps(this)))
+        return segments
     }
 
     /** Paragraphs: a new one at a pause, or after a full stop once it's long enough. */
@@ -314,7 +403,13 @@ class RecorderJobService : Service() {
      */
     private fun elaborate(audio: File, title: String, instruction: String, rewrite: Boolean) {
         val key = key()
-        val model = RecorderStore.chatModel(this)
+        // No model chosen: the best one Groq has now (they come and go)
+        var model = if (RecorderStore.chatModelChosen(this)) RecorderStore.chatModel(this) else try {
+            Groq.bestChatModel(Groq.chatModels(key))
+        } catch (e: Groq.GroqException) {
+            if (e.code == 401) throw e else null
+        } ?: RecorderStore.DEFAULT_CHAT
+        var replaced = false
         val source = RecorderStore.transcript(audio)
         if (!source.isFile) throw Exception(getString(R.string.ml_rec_no_transcript))
         val text = source.readText().trim()
@@ -325,7 +420,17 @@ class RecorderJobService : Service() {
             if (cancelled) throw Cancelled()
             val step = if (total > 1) "$title ${done + 1}/$total" else title
             progress(audio, step)
-            val answer = Groq.chat(key, model, system, user, waiting(audio)) { cancelled }
+            val answer = try {
+                Groq.chat(key, model, system, user, waiting(audio)) { cancelled }
+            } catch (e: Groq.GroqException) {
+                // The model is gone or isn't for this key: another one, once
+                val other = if (replaced || e.code !in listOf(400, 403, 404) || e.message?.contains("model", ignoreCase = true) != true) null
+                else Groq.bestChatModel(Groq.chatModels(key).filter { it != model })
+                if (other == null) throw e
+                replaced = true
+                model = other
+                Groq.chat(key, model, system, user, waiting(audio)) { cancelled }
+            }
             done++
             return answer
         }
@@ -353,7 +458,9 @@ class RecorderJobService : Service() {
             }
         }
         if (result.isBlank()) throw Exception(getString(R.string.ml_rec_empty_answer))
-        RecorderStore.elaboration(audio, title).writeText(result.trim() + "\n")
+        val target = RecorderStore.elaboration(audio, title)
+        target.writeText(result.trim() + "\n")
+        RecorderJobs.produced = audio.absolutePath to target.absolutePath
     }
 
     /** [paragraphs] put together into pieces of at most [limit] characters (a longer paragraph is cut at a space). */
@@ -376,7 +483,7 @@ class RecorderJobService : Service() {
         return out.map { it.toString() }
     }
 
-    private fun notification(text: String): Notification {
+    private fun notification(text: String, percent: Int = -1): Notification {
         val nm = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) nm.createNotificationChannel(
             NotificationChannel(CHANNEL, getString(R.string.ml_rec_channel_jobs), NotificationManager.IMPORTANCE_LOW)
@@ -391,7 +498,7 @@ class RecorderJobService : Service() {
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setProgress(0, 0, true)
+            .setProgress(100, percent.coerceAtLeast(0), percent < 0)
             .addAction(R.drawable.ic_m_close, getString(R.string.ml_todo_cancel), cancel)
             .build()
     }
@@ -402,12 +509,13 @@ class RecorderJobService : Service() {
         const val EXTRA_TITLE = "title"
         const val EXTRA_INSTRUCTION = "instruction"
         const val EXTRA_REWRITE = "rewrite"
+        const val EXTRA_MODEL = "model"
         private const val CHANNEL = "recorder_jobs"
         private const val NOTIFICATION = 7302
-        private const val MAX_WORK = 3 * 60 * 60 * 1000L
+        private const val MAX_WORK = 10 * 60 * 60 * 1000L
         private const val MAX_UPLOAD = 24L * 1024 * 1024
         private const val PART_SIZE = 18L * 1024 * 1024
-        /** Characters of transcript in one request (about 4,000 tokens). */
-        private const val PIECE = 12_000
+        /** Characters of transcript in one request (about 3,000 tokens: the free plan takes 6,000 a minute on some models). */
+        private const val PIECE = 8_000
     }
 }

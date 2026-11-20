@@ -1025,7 +1025,7 @@
     <string name="ml_rec_key_get">Get the free key (console.groq.com)</string>
     <string name="ml_rec_key_missing">Set the Groq key first: Recorder > Settings</string>
     <string name="ml_rec_key_wrong">Groq refused the key: check it in the settings</string>
-    <string name="ml_rec_model_whisper">Transcription model</string>
+    <string name="ml_rec_model_whisper">Groq transcription model</string>
     <string name="ml_rec_model_chat">AI model</string>
     <string name="ml_rec_language">Language spoken</string>
     <string name="ml_rec_language_auto">Automatic</string>
@@ -1077,4 +1077,16 @@
     <string name="ml_rec_prompt_notes">This is part %1$d of %2$d of a transcript. Take detailed, faithful notes of it: facts, names, numbers, dates, decisions, things to do, who said what. Leave out nothing that matters and add nothing.</string>
     <string name="ml_rec_prompt_condense">Condense these notes, keeping every fact, name, number, date, decision and thing to do:</string>
     <string name="ml_rec_prompt_from_notes">Notes taken from the whole transcript:</string>
+    <string name="ml_rec_engine">Transcribe with</string>
+    <string name="ml_rec_engine_groq">Groq (online, fast)</string>
+    <string name="ml_rec_engine_local">On the phone: %1$s</string>
+    <string name="ml_rec_model_ready">downloaded</string>
+    <string name="ml_rec_model_missing">to download</string>
+    <string name="ml_rec_model_download">The model (%1$d MB) is downloaded once, better on Wi-Fi. Then the transcripts are made on the phone, with nothing sent anywhere: an hour of recording takes from a quarter of an hour to an hour, best left to run while the phone charges.</string>
+    <string name="ml_rec_download">Download</string>
+    <string name="ml_rec_downloading">Downloading</string>
+    <string name="ml_rec_models_delete">Delete a downloaded model</string>
+    <string name="ml_rec_model_needed">The model for the phone isn\'t downloaded yet: Recorder > Settings > Transcribe with</string>
+    <string name="ml_rec_local_unsupported">This phone can\'t make transcripts by itself: use Groq</string>
+    <string name="ml_rec_error_shown">Not done: %1$s (tap to hide)</string>
 </resources>

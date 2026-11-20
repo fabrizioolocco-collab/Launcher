@@ -27,6 +27,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!--Used only for opening alarm app-->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <!-- ToDo alerts: on time (notification or alarm), again after a reboot -->
@@ -344,7 +345,11 @@
         <service
             android:name=".ui.recorder.RecorderJobService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Speech of the user's own recordings transcribed on the device, which takes longer than a data sync may run" />
+        </service>
 
         <!-- ToDo app, also listed as "ToDo" in the app list -->
         <activity

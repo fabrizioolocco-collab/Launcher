@@ -93,6 +93,8 @@ class RecorderActivity : AppCompatActivity() {
         })
         RecorderService.state.observe(this) { renderPanel(it) }
         RecorderJobs.running.observe(this) { list.adapter?.notifyDataSetChanged() }
+        RecorderJobs.errors.observe(this) { list.adapter?.notifyDataSetChanged() }
+        resumePending()
         RecorderJobs.changes.observe(this) { load() }
     }
 
@@ -110,6 +112,15 @@ class RecorderActivity : AppCompatActivity() {
     override fun onDestroy() {
         ticker.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    /** Transcriptions cut short (the phone restarted, the system closed the app) go on by themselves. */
+    private fun resumePending() {
+        RecorderStore.pending(this).map { File(it) }.forEach { audio ->
+            if (RecorderJobs.isBusy(audio)) return@forEach
+            if (audio.isFile && hasFilesAccess() && RecorderJobs.transcriptBlocker(this) == null) RecorderJobs.transcribe(this, audio)
+            else RecorderStore.setPending(this, audio, false)
+        }
     }
 
     private fun goBack() {
@@ -364,7 +375,8 @@ class RecorderActivity : AppCompatActivity() {
         if (RecorderService.state.value?.file?.absolutePath == file.absolutePath) return
         val entries = mutableListOf<MenuEntry>()
         if (!item.isFolder && !RecorderJobs.isBusy(file)) entries += MenuEntry(getString(R.string.ml_rec_transcribe), icon = R.drawable.ic_m_text) {
-            if (RecorderStore.apiKey(this).isEmpty()) showToast(getString(R.string.ml_rec_key_missing)) else RecorderJobs.transcribe(this, file)
+            val blocker = RecorderJobs.transcriptBlocker(this)
+            if (blocker != null) showToast(blocker) else RecorderJobs.transcribe(this, file)
         }
         entries += MenuEntry(getString(R.string.rename), icon = R.drawable.ic_m_rename) {
             val old = if (item.isFolder) file.name else file.nameWithoutExtension
@@ -426,7 +438,8 @@ class RecorderActivity : AppCompatActivity() {
                     showToast(getString(R.string.ml_rec_cannot))
                 }
             },
-            MenuEntry(getString(R.string.ml_rec_model_whisper), section = getString(R.string.ml_rec_section_transcript), value = RecorderStore.whisperModel(this)) {
+            MenuEntry(getString(R.string.ml_rec_engine), section = getString(R.string.ml_rec_section_transcript), value = engineName(RecorderStore.engine(this))) { pickEngine() },
+            MenuEntry(getString(R.string.ml_rec_model_whisper), value = RecorderStore.whisperModel(this)) {
                 showMenuDialog(getString(R.string.ml_rec_model_whisper), RecorderStore.WHISPER_MODELS.map { model ->
                     MenuEntry(model) { RecorderStore.setWhisperModel(this, model) }
                 })
@@ -442,7 +455,7 @@ class RecorderActivity : AppCompatActivity() {
                 RecorderStore.setAutoTranscribe(this, on)
                 true
             }),
-            MenuEntry(getString(R.string.ml_rec_model_chat), section = getString(R.string.ml_rec_section_ai), value = RecorderStore.chatModel(this)) { pickChatModel() },
+            MenuEntry(getString(R.string.ml_rec_model_chat), section = getString(R.string.ml_rec_section_ai), value = if (RecorderStore.chatModelChosen(this)) RecorderStore.chatModel(this) else getString(R.string.ml_rec_language_auto)) { pickChatModel() },
             MenuEntry(getString(R.string.ml_rec_root), section = getString(R.string.ml_rec_section_files), value = root.name) {
                 pickFolder(root.parentFile ?: root) { target ->
                     RecorderStore.setRoot(this, target)
@@ -460,6 +473,41 @@ class RecorderActivity : AppCompatActivity() {
                 }
             },
         ))
+    }
+
+    private fun engineName(engine: String) =
+        LocalWhisper.model(engine)?.let { getString(R.string.ml_rec_engine_local, it.label) } ?: getString(R.string.ml_rec_engine_groq)
+
+    /** Groq, or a model on the phone (downloaded the first time it's chosen); a downloaded one can be deleted from here. */
+    private fun pickEngine() {
+        val entries = mutableListOf(MenuEntry(getString(R.string.ml_rec_engine_groq)) { RecorderStore.setEngine(this, RecorderStore.ENGINE_GROQ) })
+        LocalWhisper.MODELS.forEach { model ->
+            val downloaded = LocalWhisper.isDownloaded(this, model)
+            val busy = RecorderJobs.isBusy(LocalWhisper.file(this, model))
+            val state = getString(if (busy) R.string.ml_rec_downloading else if (downloaded) R.string.ml_rec_model_ready else R.string.ml_rec_model_missing)
+            entries += MenuEntry(getString(R.string.ml_rec_engine_local, model.label), value = "${model.megabytes} MB · $state") {
+                when {
+                    !LocalWhisper.supported() -> showToast(getString(R.string.ml_rec_local_unsupported))
+                    downloaded || busy -> RecorderStore.setEngine(this, model.id)
+                    else -> showConfirmDialog(
+                        getString(R.string.ml_rec_engine_local, model.label), getString(R.string.ml_rec_model_download, model.megabytes), getString(R.string.ml_rec_download),
+                    ) {
+                        RecorderStore.setEngine(this, model.id)
+                        RecorderJobs.download(this, model)
+                    }
+                }
+            }
+        }
+        val kept = LocalWhisper.MODELS.filter { LocalWhisper.isDownloaded(this, it) && !RecorderJobs.isBusy(LocalWhisper.file(this, it)) }
+        if (kept.isNotEmpty()) entries += MenuEntry(getString(R.string.ml_rec_models_delete), destructive = true) {
+            showMenuDialog(getString(R.string.ml_rec_models_delete), kept.map { model ->
+                MenuEntry("${model.label} (${model.megabytes} MB)", destructive = true) {
+                    LocalWhisper.file(this, model).delete()
+                    if (RecorderStore.engine(this) == model.id) RecorderStore.setEngine(this, RecorderStore.ENGINE_GROQ)
+                }
+            })
+        }
+        showMenuDialog(getString(R.string.ml_rec_engine), entries)
     }
 
     private fun languageName(code: String) =
@@ -540,6 +588,7 @@ class RecorderActivity : AppCompatActivity() {
                 recording -> getString(R.string.ml_rec_recording)
                 job != null -> job
                 item.info != null -> item.info
+                RecorderJobs.errorOf(item.file) != null -> RecorderJobs.errorOf(item.file)
                 else -> listOfNotNull(
                     DateFormat.getMediumDateFormat(ctx).format(item.file.lastModified()) + " " + DateFormat.getTimeFormat(ctx).format(item.file.lastModified()),
                     Formatter.formatShortFileSize(ctx, item.file.length()),

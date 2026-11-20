@@ -136,10 +136,17 @@ object Groq {
         content.replace(Regex("(?s)<think>.*?</think>"), "").trim()
     }
 
+    /** The model to use among [models] when the user chose none: the most capable ones first. */
+    fun bestChatModel(models: List<String>): String? {
+        val wanted = listOf("llama-3.3-70b", "gpt-oss-120b", "kimi-k2", "llama-4", "70b", "120b", "qwen", "llama")
+        for (w in wanted) models.firstOrNull { it.contains(w, ignoreCase = true) }?.let { return it }
+        return models.firstOrNull()
+    }
+
     /** The text models the key can use. */
     fun chatModels(key: String): List<String> {
         val data = JSONObject(read(open("/models", key, "GET"))).getJSONArray("data")
-        val skipped = listOf("whisper", "guard", "tts", "orpheus", "playai", "safeguard")
+        val skipped = listOf("whisper", "guard", "tts", "orpheus", "playai", "safeguard", "compound", "allam")
         return (0 until data.length()).map { data.getJSONObject(it).optString("id") }
             .filter { id -> id.isNotEmpty() && skipped.none { id.contains(it, ignoreCase = true) } }
             .sorted()
