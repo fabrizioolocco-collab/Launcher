@@ -25,6 +25,8 @@ import java.util.concurrent.Executors
  * Thumbnails of photos and videos with a shared memory cache. On Android 10+ they come from the
  * system's thumbnail store (the same the gallery uses, so usually already made); a few are made at
  * a time and the work for views recycled meanwhile is cancelled, so the visible ones come first.
+ * Every thumbnail made is also kept on disk ([diskFile]): reopening a folder shows them at once
+ * instead of decoding a frame of each video again (slow on long or 4K videos).
  */
 object MediaThumbnails {
 
@@ -91,7 +93,7 @@ object MediaThumbnails {
         if (cached != null) return
         val context = view.context.applicationContext
         jobs[view] = scope.launch {
-            val bitmap = withContext(workers) { make(context, file, size, uri) } ?: return@launch
+            val bitmap = withContext(workers) { fromDisk(context, file, size) ?: make(context, file, size, uri)?.also { toDisk(context, file, size, it) } } ?: return@launch
             cache.put(key, bitmap)
             if (view.tag == key) view.setImageBitmap(bitmap)
         }
@@ -122,6 +124,49 @@ object MediaThumbnails {
             if (view.tag == cacheKey) view.setImageBitmap(bitmap)
         }
     }
+
+    @Volatile private var writes = 0
+
+    /** Where the thumbnail of [file] at [size] is kept; a changed file (date, length) gets a new name. */
+    private fun diskFile(context: Context, file: File, size: Int): File {
+        val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}|$size"
+        val hash = java.security.MessageDigest.getInstance("SHA-1").digest(key.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return File(File(context.cacheDir, DISK_DIR), "$hash.jpg")
+    }
+
+    private fun fromDisk(context: Context, file: File, size: Int): Bitmap? = try {
+        val f = diskFile(context, file, size)
+        if (f.isFile) BitmapFactory.decodeFile(f.absolutePath) else null
+    } catch (e: Throwable) {
+        null
+    }
+
+    private fun toDisk(context: Context, file: File, size: Int, bitmap: Bitmap) {
+        try {
+            val f = diskFile(context, file, size)
+            f.parentFile?.mkdirs()
+            val tmp = File(f.parentFile, f.name + ".tmp")
+            tmp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            tmp.renameTo(f)
+            if (++writes % 100 == 0) trimDisk(f.parentFile ?: return)
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
+
+    /** Keeps the disk cache under [DISK_MAX_BYTES], dropping the oldest thumbnails first. */
+    private fun trimDisk(dir: File) {
+        val files = dir.listFiles()?.map { it to it.lastModified() }?.sortedByDescending { it.second } ?: return
+        var total = 0L
+        files.forEach { (f, _) ->
+            total += f.length()
+            if (total > DISK_MAX_BYTES) f.delete()
+        }
+    }
+
+    private const val DISK_DIR = "media_thumbs"
+    private const val DISK_MAX_BYTES = 200L * 1024 * 1024
 
     private fun make(context: Context, file: File, size: Int, uri: Uri?): Bitmap? = try {
         val video = isVideo(file)
