@@ -374,6 +374,14 @@ class RecordingActivity : AppCompatActivity() {
             }.apply {
                 textSize = 14f
                 setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
+                // A long press on a write-up offers to delete it
+                if (file != transcript) setOnLongClickListener {
+                    showConfirmDialog(getString(R.string.ml_explorer_delete), getString(R.string.ml_explorer_delete_confirm, label), getString(R.string.ml_explorer_delete)) {
+                        file.delete()
+                        reload()
+                    }
+                    true
+                }
             }
             chips.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 36.dpToPx()).apply { marginEnd = 8.dpToPx() })
         }
