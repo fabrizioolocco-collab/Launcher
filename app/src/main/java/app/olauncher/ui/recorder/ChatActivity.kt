@@ -39,6 +39,7 @@ class ChatActivity : AppCompatActivity() {
     private lateinit var scroll: ScrollView
     private lateinit var input: EditText
     private lateinit var status: TextView
+    private lateinit var aiChoice: TextView
 
     /** (role, text), roles "user" and "assistant". */
     private val history = mutableListOf<Pair<String, String>>()
@@ -66,6 +67,12 @@ class ChatActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun showChoice() {
+        aiChoice.text = getString(R.string.ml_rec_choice_ai, RecorderSettings.aiShort(this))
+        // Another AI knows the recording its own way (whole, or as notes): read again at the next question
+        context = null
+    }
+
     private fun chatFile() = RecorderStore.elaboration(audio, getString(R.string.ml_rec_chat))
 
     private fun buildLayout(): View {
@@ -80,6 +87,7 @@ class ChatActivity : AppCompatActivity() {
             insets
         }
         val bar = UiKit.appBar(this, getString(R.string.ml_rec_chat), onBack = { finish() }, actions = listOf(
+            UiKit.iconButton(this, R.drawable.ic_m_gear, getString(R.string.ml_rec_settings)) { RecorderSettings.show(this) { showChoice() } },
             UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_rec_chat_clear)) { clear() },
         ))
         UiKit.setSubtitle(bar, audio.nameWithoutExtension)
@@ -100,6 +108,18 @@ class ChatActivity : AppCompatActivity() {
             isVisible = false
         }
         layout.addView(status)
+        // What the AI is, changed with a tap
+        aiChoice = app.olauncher.helper.pillButton(this, "", filled = false, color = UiKit.secondary(this)) {
+            RecorderSettings.pickAi(this) { showChoice() }
+        }.apply {
+            textSize = 12.5f
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(12.dpToPx(), 0, 12.dpToPx(), 0)
+        }
+        layout.addView(aiChoice, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 32.dpToPx()).apply {
+            setMargins(4.dpToPx(), 0, 4.dpToPx(), 8.dpToPx())
+        })
+        showChoice()
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.BOTTOM

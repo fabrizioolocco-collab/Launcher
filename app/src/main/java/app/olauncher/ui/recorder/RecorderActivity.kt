@@ -683,146 +683,15 @@ class RecorderActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- settings
 
-    private fun showSettings() {
-        val key = RecorderStore.apiKey(this)
-        val geminiKey = RecorderStore.geminiKey(this)
-        val gemini = RecorderAi.provider(this) == RecorderAi.GEMINI
-        val chosenModel = if (gemini) RecorderStore.geminiModel(this) else if (RecorderStore.chatModelChosen(this)) RecorderStore.chatModel(this) else ""
-        val language = RecorderStore.language(this)
-        showMenuDialog(getString(R.string.ml_rec_settings), listOf(
-            MenuEntry(getString(R.string.ml_rec_key), section = getString(R.string.ml_rec_section_groq),
-                value = if (key.isEmpty()) getString(R.string.ml_rec_key_none) else "…" + key.takeLast(4)) {
-                showTextInputDialog(getString(R.string.ml_rec_key), key, "gsk_…", getString(R.string.ml_save), allowBlank = true,
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) { RecorderStore.setApiKey(this, it) }
-            },
-            MenuEntry(getString(R.string.ml_rec_key_get)) {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://console.groq.com/keys")))
-                } catch (e: Exception) {
-                    showToast(getString(R.string.ml_rec_cannot))
-                }
-            },
-            MenuEntry(getString(R.string.ml_rec_engine), section = getString(R.string.ml_rec_section_transcript), value = engineName(RecorderStore.engine(this))) { pickEngine() },
-            MenuEntry(getString(R.string.ml_rec_model_whisper), value = RecorderStore.whisperModel(this)) {
-                showMenuDialog(getString(R.string.ml_rec_model_whisper), RecorderStore.WHISPER_MODELS.map { model ->
-                    MenuEntry(model) { RecorderStore.setWhisperModel(this, model) }
-                })
-            },
-            MenuEntry(getString(R.string.ml_rec_language), value = languageName(language)) {
-                showMenuDialog(getString(R.string.ml_rec_language), LANGUAGES.map { code -> MenuEntry(languageName(code)) { RecorderStore.setLanguage(this, code) } })
-            },
-            MenuEntry(getString(R.string.ml_rec_timestamps), checked = RecorderStore.timestamps(this), onToggle = { on ->
-                RecorderStore.setTimestamps(this, on)
-                true
-            }),
-            MenuEntry(getString(R.string.ml_rec_auto), checked = RecorderStore.autoTranscribe(this), onToggle = { on ->
-                RecorderStore.setAutoTranscribe(this, on)
-                true
-            }),
-            MenuEntry(getString(R.string.ml_rec_ai_with), section = getString(R.string.ml_rec_section_ai), value = if (gemini) "Gemini" else "Groq") {
-                showMenuDialog(getString(R.string.ml_rec_ai_with), listOf(
-                    MenuEntry(getString(R.string.ml_rec_ai_gemini)) { RecorderStore.setAiProvider(this, RecorderAi.GEMINI) },
-                    MenuEntry(getString(R.string.ml_rec_ai_groq)) { RecorderStore.setAiProvider(this, RecorderAi.GROQ) },
-                ))
-            },
-            MenuEntry(getString(R.string.ml_rec_gemini_key), value = if (geminiKey.isEmpty()) getString(R.string.ml_rec_key_none) else "…" + geminiKey.takeLast(4)) {
-                showTextInputDialog(getString(R.string.ml_rec_gemini_key), geminiKey, "AIza…", getString(R.string.ml_save), allowBlank = true,
-                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) { RecorderStore.setGeminiKey(this, it) }
-            },
-            MenuEntry(getString(R.string.ml_rec_gemini_key_get)) {
-                try {
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/apikey")))
-                } catch (e: Exception) {
-                    showToast(getString(R.string.ml_rec_cannot))
-                }
-            },
-            MenuEntry(getString(R.string.ml_rec_model_chat), value = chosenModel.ifEmpty { getString(R.string.ml_rec_language_auto) }) { pickChatModel() },
-            MenuEntry(getString(R.string.ml_rec_root), section = getString(R.string.ml_rec_section_files), value = root.name) {
-                pickFolder(root.parentFile ?: root) { target ->
-                    RecorderStore.setRoot(this, target)
-                    root = target
-                    dir = target
-                    query = null
-                    load()
-                }
-            },
-            MenuEntry(getString(R.string.ml_rec_battery)) {
-                try {
-                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                } catch (e: Exception) {
-                    showToast(getString(R.string.ml_rec_cannot))
-                }
-            },
-        ))
-    }
-
-    private fun engineName(engine: String) =
-        LocalWhisper.model(engine)?.let { getString(R.string.ml_rec_engine_local, it.label) } ?: getString(R.string.ml_rec_engine_groq)
-
-    /** Groq, or a model on the phone (downloaded the first time it's chosen); a downloaded one can be deleted from here. */
-    private fun pickEngine() {
-        val entries = mutableListOf(MenuEntry(getString(R.string.ml_rec_engine_groq)) { RecorderStore.setEngine(this, RecorderStore.ENGINE_GROQ) })
-        LocalWhisper.MODELS.forEach { model ->
-            val downloaded = LocalWhisper.isDownloaded(this, model)
-            val busy = RecorderJobs.isBusy(LocalWhisper.file(this, model))
-            val state = getString(if (busy) R.string.ml_rec_downloading else if (downloaded) R.string.ml_rec_model_ready else R.string.ml_rec_model_missing)
-            entries += MenuEntry(getString(R.string.ml_rec_engine_local, model.label), value = "${model.megabytes} MB · $state") {
-                when {
-                    !LocalWhisper.supported() -> showToast(getString(R.string.ml_rec_local_unsupported))
-                    downloaded || busy -> RecorderStore.setEngine(this, model.id)
-                    else -> showConfirmDialog(
-                        getString(R.string.ml_rec_engine_local, model.label), getString(R.string.ml_rec_model_download, model.megabytes), getString(R.string.ml_rec_download),
-                    ) {
-                        RecorderStore.setEngine(this, model.id)
-                        RecorderJobs.download(this, model)
-                    }
-                }
-            }
+    private fun showSettings() = RecorderSettings.show(this, onPickRoot = {
+        pickFolder(root.parentFile ?: root) { target ->
+            RecorderStore.setRoot(this, target)
+            root = target
+            dir = target
+            query = null
+            load()
         }
-        val kept = LocalWhisper.MODELS.filter { LocalWhisper.isDownloaded(this, it) && !RecorderJobs.isBusy(LocalWhisper.file(this, it)) }
-        if (kept.isNotEmpty()) entries += MenuEntry(getString(R.string.ml_rec_models_delete), destructive = true) {
-            showMenuDialog(getString(R.string.ml_rec_models_delete), kept.map { model ->
-                MenuEntry("${model.label} (${model.megabytes} MB)", destructive = true) {
-                    LocalWhisper.file(this, model).delete()
-                    if (RecorderStore.engine(this) == model.id) RecorderStore.setEngine(this, RecorderStore.ENGINE_GROQ)
-                }
-            })
-        }
-        showMenuDialog(getString(R.string.ml_rec_engine), entries)
-    }
-
-    private fun languageName(code: String) =
-        if (code.isEmpty()) getString(R.string.ml_rec_language_auto) else java.util.Locale(code).getDisplayLanguage(java.util.Locale.getDefault()).replaceFirstChar { it.uppercase() }
-
-    /** The text models the chosen AI offers right now (they change over time), to choose from; "Automatic" lets the app pick. */
-    private fun pickChatModel() {
-        RecorderAi.blocker(this)?.let { return showToast(it) }
-        val gemini = RecorderAi.provider(this) == RecorderAi.GEMINI
-        lifecycleScope.launch {
-            var failure: String? = null
-            val models = withContext(Dispatchers.IO) {
-                try {
-                    RecorderAi.models(this@RecorderActivity)
-                } catch (e: Groq.GroqException) {
-                    failure = e.message
-                    null
-                } catch (e: Exception) {
-                    null
-                }
-            }
-            if (models.isNullOrEmpty()) return@launch showToast(failure ?: getString(R.string.ml_rec_no_network), android.widget.Toast.LENGTH_LONG)
-            val ctx = this@RecorderActivity
-            val current = if (gemini) RecorderStore.geminiModel(ctx) else if (RecorderStore.chatModelChosen(ctx)) RecorderStore.chatModel(ctx) else ""
-            fun mark(label: String, chosen: Boolean) = if (chosen) "$label ✓" else label
-            val entries = mutableListOf(MenuEntry(mark(getString(R.string.ml_rec_language_auto), current.isEmpty())) {
-                if (gemini) RecorderStore.setGeminiModel(ctx, "") else RecorderStore.clearChatModel(ctx)
-            })
-            entries += models.map { model ->
-                MenuEntry(mark(model, model == current)) { if (gemini) RecorderStore.setGeminiModel(ctx, model) else RecorderStore.setChatModel(ctx, model) }
-            }
-            showMenuDialog(getString(R.string.ml_rec_model_chat), entries)
-        }
-    }
+    })
 
     // ---------------------------------------------------------------- adapter
 
@@ -956,7 +825,5 @@ class RecorderActivity : AppCompatActivity() {
         private const val STATE_DIR = "dir"
         private const val REQUEST_MIC = 1
         private const val REQUEST_FILES = 2
-        /** "" lets the model find the language. */
-        private val LANGUAGES = listOf("", "it", "en", "fr", "de", "es", "pt")
     }
 }

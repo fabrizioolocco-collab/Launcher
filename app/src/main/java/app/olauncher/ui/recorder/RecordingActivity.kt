@@ -55,6 +55,8 @@ class RecordingActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var working: WorkingBar
     private lateinit var workingRow: LinearLayout
+    private lateinit var engineChoice: TextView
+    private lateinit var aiChoice: TextView
     private lateinit var text: TextView
     private lateinit var scroll: ScrollView
 
@@ -126,6 +128,7 @@ class RecordingActivity : AppCompatActivity() {
         }
         val bar = UiKit.appBar(this, audio.nameWithoutExtension, onBack = { if (searchRow.isVisible) closeSearch() else finish() }, actions = listOf(
             UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_rec_find)) { if (searchRow.isVisible) closeSearch() else openSearch() },
+            UiKit.iconButton(this, R.drawable.ic_m_gear, getString(R.string.ml_rec_settings)) { RecorderSettings.show(this) { showChoices() } },
             UiKit.iconButton(this, R.drawable.ic_m_more, getString(R.string.ml_explorer_more)) { showMenu() },
         ))
         layout.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -288,6 +291,22 @@ class RecordingActivity : AppCompatActivity() {
         ).forEach { (icon, label, action) ->
             tools.addView(UiKit.toolButton(this, icon, getString(label)) { action() }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         }
+        // What makes the transcripts and what the AI is, each changed with a tap
+        val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun choice(onClick: () -> Unit) = pillButton(this, "", filled = false, color = UiKit.secondary(this)) { onClick() }.apply {
+            textSize = 12.5f
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(12.dpToPx(), 0, 12.dpToPx(), 0)
+        }
+        engineChoice = choice { RecorderSettings.pickEngine(this) { showChoices() } }
+        aiChoice = choice { RecorderSettings.pickAi(this) { showChoices() } }
+        choices.addView(engineChoice, LinearLayout.LayoutParams(0, 32.dpToPx(), 1f).apply { marginEnd = 8.dpToPx() })
+        choices.addView(aiChoice, LinearLayout.LayoutParams(0, 32.dpToPx(), 1f))
+        layout.addView(choices, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 0)
+        })
+        showChoices()
+
         // Bottom left: what is left of Groq's free plan
         val bottom = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -301,6 +320,16 @@ class RecordingActivity : AppCompatActivity() {
             setMargins(0, 8.dpToPx(), 4.dpToPx(), 0)
         })
         return layout
+    }
+
+    private fun showChoices() {
+        engineChoice.text = getString(R.string.ml_rec_choice_transcript, RecorderSettings.engineShort(this))
+        aiChoice.text = getString(R.string.ml_rec_choice_ai, RecorderSettings.aiShort(this))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::engineChoice.isInitialized) showChoices()
     }
 
     // ---------------------------------------------------------------- player
@@ -395,7 +424,13 @@ class RecordingActivity : AppCompatActivity() {
         spokenMark = null
         val word = words.getOrNull(index) ?: return
         if (word.to > shownText.length) return
-        val mark = android.text.style.BackgroundColorSpan(androidx.core.graphics.ColorUtils.setAlphaComponent(UiKit.primary(this), 0x45))
+        // Yellow, with dark letters to read on it
+        val mark = object : android.text.style.CharacterStyle() {
+            override fun updateDrawState(paint: android.text.TextPaint) {
+                paint.bgColor = 0xFFFFD83B.toInt()
+                paint.color = 0xFF000000.toInt()
+            }
+        }
         shownText.setSpan(mark, word.from, word.to, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         spokenMark = mark
         if (!scrollTo) return
@@ -494,7 +529,10 @@ class RecordingActivity : AppCompatActivity() {
             return
         }
         val transcript = RecorderStore.transcript(audio)
-        val writeUps = RecorderStore.elaborations(audio)
+        // The chat is a screen of its own, always one tap away: not one of the texts
+        val chat = RecorderStore.elaboration(audio, getString(R.string.ml_rec_chat))
+        val writeUps = RecorderStore.elaborations(audio).filter { it != chat }
+        if (shown == chat) shown = transcript
         // What was just made comes to the front
         RecorderJobs.produced?.takeIf { it.first == audio.absolutePath }?.let {
             RecorderJobs.produced = null
@@ -503,16 +541,19 @@ class RecordingActivity : AppCompatActivity() {
         if (shown != transcript && !shown.isFile) shown = transcript
         chips.removeAllViews()
         val primary = UiKit.primary(this)
-        (listOf(transcript) + writeUps).forEach { file ->
+        (listOf(transcript, chat) + writeUps).forEach { file ->
             val label = if (file == transcript) getString(R.string.ml_rec_transcript) else RecorderStore.titleOf(audio, file)
             val chip = pillButton(this, label, filled = file == shown, color = primary) {
-                shown = file
-                reload()
+                if (file == chat) ChatActivity.open(this, audio)
+                else {
+                    shown = file
+                    reload()
+                }
             }.apply {
                 textSize = 14f
                 setPadding(16.dpToPx(), 0, 16.dpToPx(), 0)
                 // A long press on a write-up offers to delete it
-                if (file != transcript) setOnLongClickListener {
+                if (file != transcript && file.isFile) setOnLongClickListener {
                     showConfirmDialog(getString(R.string.ml_explorer_delete), getString(R.string.ml_explorer_delete_confirm, label), getString(R.string.ml_explorer_delete)) {
                         file.delete()
                         reload()
@@ -599,7 +640,6 @@ class RecordingActivity : AppCompatActivity() {
             preset(R.string.ml_rec_ai_minutes, R.string.ml_rec_ai_minutes_prompt),
             preset(R.string.ml_rec_ai_points, R.string.ml_rec_ai_points_prompt),
             preset(R.string.ml_rec_ai_clean, R.string.ml_rec_ai_clean_prompt, rewrite = true),
-            MenuEntry(getString(R.string.ml_rec_chat_open), icon = R.drawable.ic_m_chat) { ChatActivity.open(this, audio) },
         ), header = { dialog ->
             TextView(dialog.context, null, 0, R.style.TextSmall).apply {
                 text = getString(R.string.ml_rec_ai_model, if (RecorderAi.provider(this@RecordingActivity) == RecorderAi.GEMINI) "Gemini" else "Groq")

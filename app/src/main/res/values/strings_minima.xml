@@ -1018,8 +1018,8 @@
     <string name="ml_rec_settings">Settings</string>
     <string name="ml_rec_section_groq">Groq (online transcripts)</string>
     <string name="ml_rec_section_transcript">Transcript</string>
-    <string name="ml_rec_section_ai">AI write-ups</string>
-    <string name="ml_rec_section_files">Files</string>
+    <string name="ml_rec_section_ai">AI (write-ups and chat)</string>
+    <string name="ml_rec_section_files">Files and phone</string>
     <string name="ml_rec_key">Groq API key</string>
     <string name="ml_rec_key_none">missing</string>
     <string name="ml_rec_key_get">Get the free key (console.groq.com)</string>
@@ -1126,6 +1126,10 @@
     <!-- Audio player -->
     <string name="ml_rec_find">Search in the text</string>
     <string name="ml_rec_find_hint">Words to find</string>
+    <string name="ml_rec_engine_phone">Phone · %1$s</string>
+    <string name="ml_rec_section_keys">Keys</string>
+    <string name="ml_rec_choice_transcript">Transcript: %1$s</string>
+    <string name="ml_rec_choice_ai">AI: %1$s</string>
     <string name="ml_audio_channel">Audio player</string>
     <string name="ml_audio_previous">Previous</string>
     <string name="ml_audio_next">Next</string>

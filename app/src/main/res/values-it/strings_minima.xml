@@ -1015,8 +1015,8 @@
     <string name="ml_rec_settings">Impostazioni</string>
     <string name="ml_rec_section_groq">Groq (trascrizione online)</string>
     <string name="ml_rec_section_transcript">Trascrizione</string>
-    <string name="ml_rec_section_ai">Elaborati AI</string>
-    <string name="ml_rec_section_files">File</string>
+    <string name="ml_rec_section_ai">AI (elaborati e chat)</string>
+    <string name="ml_rec_section_files">File e telefono</string>
     <string name="ml_rec_key">Chiave API Groq</string>
     <string name="ml_rec_key_none">manca</string>
     <string name="ml_rec_key_get">Ottieni la chiave gratuita (console.groq.com)</string>
@@ -1123,6 +1123,10 @@
     <!-- Audio player -->
     <string name="ml_rec_find">Cerca nel testo</string>
     <string name="ml_rec_find_hint">Parole da trovare</string>
+    <string name="ml_rec_engine_phone">Telefono · %1$s</string>
+    <string name="ml_rec_section_keys">Chiavi</string>
+    <string name="ml_rec_choice_transcript">Trascrizione: %1$s</string>
+    <string name="ml_rec_choice_ai">AI: %1$s</string>
     <string name="ml_audio_channel">Lettore audio</string>
     <string name="ml_audio_previous">Precedente</string>
     <string name="ml_audio_next">Successivo</string>
