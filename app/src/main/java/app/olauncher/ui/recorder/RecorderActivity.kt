@@ -152,7 +152,7 @@ class RecorderActivity : AppCompatActivity() {
         bar = UiKit.appBar(this, getString(R.string.ml_rec_app), onBack = { goBack() }, actions = listOf(
             UiKit.iconButton(this, R.drawable.ic_m_search, getString(R.string.ml_explorer_search)) { askSearch() },
             UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_explorer_new_folder)) { askNewFolder() },
-            UiKit.iconButton(this, R.drawable.ic_m_settings, getString(R.string.ml_rec_settings)) { showSettings() },
+            UiKit.iconButton(this, R.drawable.ic_m_gear, getString(R.string.ml_rec_settings)) { showSettings() },
         ))
         layout.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         status = TextView(this, null, 0, R.style.TextSmall).apply {
@@ -173,11 +173,7 @@ class RecorderActivity : AppCompatActivity() {
         emptyView = UiKit.emptyState(this, R.drawable.ic_m_mic, getString(R.string.ml_rec_empty)).apply { isVisible = false }
         area.addView(emptyView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         layout.addView(area, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        panel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = UiKit.cardBackground(this@RecorderActivity, 20)
-            setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 12.dpToPx())
-        }
+        panel = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         layout.addView(panel, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             setMargins(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 0)
         })
@@ -193,10 +189,15 @@ class RecorderActivity : AppCompatActivity() {
         timer = null
         level = null
         if (state == null) {
+            // Just the button; the card comes with the recording going on
+            panel.background = null
+            panel.setPadding(0, 0, 0, 0)
             panel.addView(pillButton(this, getString(R.string.ml_rec_record), filled = true, color = primary) { startRecording() },
                 LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 52.dpToPx()))
             return
         }
+        panel.background = UiKit.cardBackground(this, 20)
+        panel.setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 12.dpToPx())
         panel.addView(TextView(this, null, 0, R.style.TextSmall).apply {
             text = getString(if (state.paused) R.string.ml_rec_paused else R.string.ml_rec_recording) + " · " + state.file.nameWithoutExtension
             setTextColor(UiKit.secondary(this@RecorderActivity))
