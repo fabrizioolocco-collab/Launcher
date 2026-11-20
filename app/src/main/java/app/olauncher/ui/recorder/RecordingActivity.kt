@@ -354,16 +354,7 @@ class RecordingActivity : AppCompatActivity() {
             preset(R.string.ml_rec_ai_minutes, R.string.ml_rec_ai_minutes_prompt),
             preset(R.string.ml_rec_ai_points, R.string.ml_rec_ai_points_prompt),
             preset(R.string.ml_rec_ai_clean, R.string.ml_rec_ai_clean_prompt, rewrite = true),
-            MenuEntry(getString(R.string.ml_rec_ai_custom)) {
-                showTextInputDialog(getString(R.string.ml_rec_ai_custom), "", getString(R.string.ml_rec_ai_custom_hint), getString(R.string.ml_rec_ai_run)) { prompt ->
-                    // "Write-up", "Write-up 2"...: a free request never replaces another
-                    val base = getString(R.string.ml_rec_ai_custom_title)
-                    var title = base
-                    var i = 2
-                    while (RecorderStore.elaboration(audio, title).exists()) title = "$base ${i++}"
-                    RecorderJobs.elaborate(this, audio, title, prompt, false)
-                }
-            },
+            MenuEntry(getString(R.string.ml_rec_chat_open), icon = R.drawable.ic_m_chat) { ChatActivity.open(this, audio) },
         ), header = { dialog ->
             TextView(dialog.context, null, 0, R.style.TextSmall).apply {
                 text = getString(R.string.ml_rec_ai_model,

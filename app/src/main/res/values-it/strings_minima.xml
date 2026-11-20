@@ -1056,7 +1056,6 @@
     <string name="ml_rec_delete_confirm">Eliminare «%1$s» con la trascrizione e gli elaborati? Non si può annullare.</string>
     <string name="ml_rec_ai">AI</string>
     <string name="ml_rec_ai_model">Modello: %1$s</string>
-    <string name="ml_rec_ai_run">Avvia</string>
     <string name="ml_rec_ai_summary">Riassunto</string>
     <string name="ml_rec_ai_summary_prompt">Scrivi un riassunto chiaro e completo di questa registrazione: un breve paragrafo iniziale con il succo, poi gli argomenti nell\'ordine in cui sono stati trattati, ciascuno con ciò che è stato detto. Mantieni nomi, numeri e date.</string>
     <string name="ml_rec_ai_minutes">Verbale</string>
@@ -1065,9 +1064,6 @@
     <string name="ml_rec_ai_points_prompt">Elenca i punti chiave di questa registrazione come punti elenco brevi, poi le azioni da fare come lista di cose da fare. Mantieni nomi, numeri e date.</string>
     <string name="ml_rec_ai_clean">Testo ripulito</string>
     <string name="ml_rec_ai_clean_prompt">Riscrivi questa trascrizione come testo pulito e leggibile: correggi gli errori di riconoscimento evidenti, la punteggiatura e i paragrafi; togli intercalari, ripetizioni e false partenze. Non riassumere e non omettere nulla: ogni informazione deve restare.</string>
-    <string name="ml_rec_ai_custom">Richiesta libera…</string>
-    <string name="ml_rec_ai_custom_hint">Cosa fare con la trascrizione</string>
-    <string name="ml_rec_ai_custom_title">Elaborato</string>
     <string name="ml_rec_prompt_system">Lavori su trascrizioni di registrazioni audio. La trascrizione è automatica e può contenere errori di riconoscimento: interpretali con buon senso. Rispondi nella lingua della trascrizione, in Markdown, senza premesse né frasi di chiusura.</string>
     <string name="ml_rec_prompt_transcript">Trascrizione:</string>
     <string name="ml_rec_prompt_part">Questa è la parte %1$d di %2$d della trascrizione: lavora solo su questa parte, senza introduzione né conclusione.</string>
@@ -1086,4 +1082,17 @@
     <string name="ml_rec_model_needed">Il modello per il telefono non è ancora scaricato: Registratore > Impostazioni > Trascrivi con</string>
     <string name="ml_rec_local_unsupported">Questo telefono non può fare le trascrizioni da solo: usa Groq</string>
     <string name="ml_rec_error_shown">Non riuscito: %1$s (tocca per nascondere)</string>
+    <string name="ml_rec_chat">Chat</string>
+    <string name="ml_rec_chat_open">Chat sulla registrazione</string>
+    <string name="ml_rec_chat_clear">Elimina la conversazione</string>
+    <string name="ml_rec_chat_clear_confirm">Tutta la conversazione su questa registrazione viene eliminata.</string>
+    <string name="ml_rec_chat_hint">Chiedi qualcosa sulla registrazione</string>
+    <string name="ml_rec_chat_send">Invia</string>
+    <string name="ml_rec_chat_you">Tu</string>
+    <string name="ml_rec_chat_ai">AI</string>
+    <string name="ml_rec_chat_intro">Chiedimi qualunque cosa su questa registrazione: cosa è stato detto su un argomento, chi deve fare cosa, una data, un numero… Rispondo in base alla trascrizione.</string>
+    <string name="ml_rec_chat_thinking">Sta scrivendo…</string>
+    <string name="ml_rec_chat_reading">Registrazione lunga: la sto leggendo, parte %1$d di %2$d (solo la prima volta)…</string>
+    <string name="ml_rec_chat_system">Rispondi a domande su una registrazione audio, usando solo ciò che c\'è nel suo testo qui sotto (una trascrizione automatica, che può contenere errori di riconoscimento, oppure appunti dettagliati ricavati da essa). Se la risposta non c\'è, dillo invece di tirare a indovinare. Rispondi nella lingua della domanda, in modo breve e diretto, riportando esattamente nomi, numeri e date. Testo della registrazione:</string>
+    <string name="ml_rec_error_shown_plain">Non riuscito: %1$s</string>
 </resources>

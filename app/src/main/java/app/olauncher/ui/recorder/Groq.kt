@@ -118,13 +118,19 @@ object Groq {
     fun chat(
         key: String, model: String, system: String, user: String,
         onWait: (Long) -> Unit = {}, cancelled: () -> Boolean = { false },
+    ): String = chatMessages(key, model, listOf("system" to system, "user" to user), onWait, cancelled)
+
+    /** One answer to a conversation: [messages] are (role, text), roles "system", "user" and "assistant". */
+    fun chatMessages(
+        key: String, model: String, messages: List<Pair<String, String>>,
+        onWait: (Long) -> Unit = {}, cancelled: () -> Boolean = { false },
     ): String = retrying(onWait, cancelled) {
+        val array = JSONArray()
+        messages.forEach { (role, text) -> array.put(JSONObject().put("role", role).put("content", text)) }
         val body = JSONObject()
             .put("model", model)
             .put("temperature", 0.3)
-            .put("messages", JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", user)))
+            .put("messages", array)
             .toString().toByteArray()
         val conn = open("/chat/completions", key, "POST")
         conn.doOutput = true

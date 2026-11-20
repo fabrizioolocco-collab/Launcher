@@ -1059,7 +1059,6 @@
     <string name="ml_rec_delete_confirm">Delete «%1$s» with its transcript and write-ups? This cannot be undone.</string>
     <string name="ml_rec_ai">AI</string>
     <string name="ml_rec_ai_model">Model: %1$s</string>
-    <string name="ml_rec_ai_run">Go</string>
     <string name="ml_rec_ai_summary">Summary</string>
     <string name="ml_rec_ai_summary_prompt">Write a clear, complete summary of this recording: a short opening paragraph with the gist, then the topics in order, each with what was said about it. Keep names, numbers and dates.</string>
     <string name="ml_rec_ai_minutes">Minutes</string>
@@ -1068,9 +1067,6 @@
     <string name="ml_rec_ai_points_prompt">List the key points of this recording as short bullet points, then the actions to do as a to-do list. Keep names, numbers and dates.</string>
     <string name="ml_rec_ai_clean">Clean text</string>
     <string name="ml_rec_ai_clean_prompt">Rewrite this transcript as clean, readable text: fix the recognition mistakes that are obvious, the punctuation and the paragraphs; remove filler words, repetitions and false starts. Do not summarise and do not leave anything out: every piece of information must remain.</string>
-    <string name="ml_rec_ai_custom">Free request…</string>
-    <string name="ml_rec_ai_custom_hint">What to do with the transcript</string>
-    <string name="ml_rec_ai_custom_title">Write-up</string>
     <string name="ml_rec_prompt_system">You work on transcripts of audio recordings. The transcript is automatic and may contain recognition mistakes: read through them with common sense. Answer in the language of the transcript, in Markdown, without any preamble or closing remark.</string>
     <string name="ml_rec_prompt_transcript">Transcript:</string>
     <string name="ml_rec_prompt_part">This is part %1$d of %2$d of the transcript: work on this part only, without introduction or conclusion.</string>
@@ -1089,4 +1085,17 @@
     <string name="ml_rec_model_needed">The model for the phone isn\'t downloaded yet: Recorder > Settings > Transcribe with</string>
     <string name="ml_rec_local_unsupported">This phone can\'t make transcripts by itself: use Groq</string>
     <string name="ml_rec_error_shown">Not done: %1$s (tap to hide)</string>
+    <string name="ml_rec_chat">Chat</string>
+    <string name="ml_rec_chat_open">Chat about the recording</string>
+    <string name="ml_rec_chat_clear">Delete the conversation</string>
+    <string name="ml_rec_chat_clear_confirm">The whole conversation about this recording is deleted.</string>
+    <string name="ml_rec_chat_hint">Ask about the recording</string>
+    <string name="ml_rec_chat_send">Send</string>
+    <string name="ml_rec_chat_you">You</string>
+    <string name="ml_rec_chat_ai">AI</string>
+    <string name="ml_rec_chat_intro">Ask me anything about this recording: what was said about a topic, who has to do what, a date, a number… I answer from its transcript.</string>
+    <string name="ml_rec_chat_thinking">Writing…</string>
+    <string name="ml_rec_chat_reading">Long recording: reading it, part %1$d of %2$d (only the first time)…</string>
+    <string name="ml_rec_chat_system">You answer questions about an audio recording, using only what is in its text below (a transcript made automatically, which may contain recognition mistakes, or detailed notes taken from it). If the answer is not there, say so instead of guessing. Answer in the language of the question, briefly and to the point, quoting names, numbers and dates exactly. Text of the recording:</string>
+    <string name="ml_rec_error_shown_plain">Not done: %1$s</string>
 </resources>

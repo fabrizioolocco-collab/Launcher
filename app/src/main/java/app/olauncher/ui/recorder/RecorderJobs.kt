@@ -434,7 +434,7 @@ class RecorderJobService : Service() {
             done++
             return answer
         }
-        val pieces = chunks(text.split(Regex("\n\\s*\n")), PIECE)
+        val pieces = RecorderAi.chunks(text.split(Regex("\n\\s*\n")), PIECE)
         val result = when {
             pieces.size <= 1 -> ask(instruction + "\n\n" + getString(R.string.ml_rec_prompt_transcript) + "\n" + text)
             rewrite -> {
@@ -449,7 +449,7 @@ class RecorderJobService : Service() {
                 // Too many notes for one request: they are condensed first
                 var rounds = 0
                 while (notes.sumOf { it.length } > PIECE && notes.size > 1 && rounds++ < 4) {
-                    val groups = chunks(notes, PIECE)
+                    val groups = RecorderAi.chunks(notes, PIECE)
                     if (groups.size >= notes.size) break
                     total += groups.size
                     notes = groups.map { ask(getString(R.string.ml_rec_prompt_condense) + "\n\n" + it) }
@@ -461,26 +461,6 @@ class RecorderJobService : Service() {
         val target = RecorderStore.elaboration(audio, title)
         target.writeText(result.trim() + "\n")
         RecorderJobs.produced = audio.absolutePath to target.absolutePath
-    }
-
-    /** [paragraphs] put together into pieces of at most [limit] characters (a longer paragraph is cut at a space). */
-    private fun chunks(paragraphs: List<String>, limit: Int): List<String> {
-        val out = mutableListOf<StringBuilder>()
-        fun add(text: String) {
-            val last = out.lastOrNull()
-            if (last != null && last.length + text.length + 2 <= limit) last.append("\n\n").append(text)
-            else out += StringBuilder(text)
-        }
-        for (p in paragraphs) {
-            var rest = p.trim()
-            while (rest.length > limit) {
-                val cut = rest.lastIndexOf(' ', limit).takeIf { it > limit / 2 } ?: limit
-                add(rest.substring(0, cut))
-                rest = rest.substring(cut).trim()
-            }
-            if (rest.isNotEmpty()) add(rest)
-        }
-        return out.map { it.toString() }
     }
 
     private fun notification(text: String, percent: Int = -1): Notification {
