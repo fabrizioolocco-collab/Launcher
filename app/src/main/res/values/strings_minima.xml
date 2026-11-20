@@ -1124,6 +1124,7 @@
     <string name="ml_rec_halt">Stop</string>
 
     <!-- Audio player -->
+    <string name="ml_audio_channel">Audio player</string>
     <string name="ml_audio_previous">Previous</string>
     <string name="ml_audio_next">Next</string>
     <string name="ml_audio_play">Play</string>

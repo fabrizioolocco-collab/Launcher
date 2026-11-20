@@ -39,18 +39,16 @@ import java.io.File
 import java.util.Locale
 
 /**
- * Plays a music or audio file from the explorer or the search: its cover (when the file has
- * one), title and artist, a bar to move along it, and previous / next among the audio files of
- * the same folder, which play one after the other. It goes on with the screen off, as long as
- * this screen isn't closed.
+ * The screen of the audio player ([AudioPlayerService], which plays in the background): the
+ * cover (when the file has one), title and artist, a bar to move along the track, and previous /
+ * next among the audio files of the same folder, which play one after the other.
  */
 class AudioPlayerActivity : AppCompatActivity() {
 
-    private var tracks: List<File> = emptyList()
-    private var index = 0
-    private var player: MediaPlayer? = null
     private var seeking = false
     private val ticker = Handler(Looper.getMainLooper())
+    /** The track the screen shows, to tell a new one from news of the same. */
+    private var shownPath: String? = null
 
     private lateinit var bar: UiKit.AppBar
     private lateinit var cover: ImageView
@@ -62,15 +60,21 @@ class AudioPlayerActivity : AppCompatActivity() {
     private lateinit var total: TextView
     private lateinit var playButton: ImageView
 
-    /** Something else plays (a call, another app): this stops. */
-    private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
-        if (change == AudioManager.AUDIOFOCUS_LOSS || change == AudioManager.AUDIOFOCUS_LOSS_TRANSIENT) pause()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(buildLayout())
-        open(intent)
+        // The notification with the controls
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1)
+        val asked = open(intent)
+        var seen = false
+        AudioPlayerService.state.observe(this) { state ->
+            if (state != null) {
+                seen = true
+                show(state)
+            } else if (seen || !asked) finish()
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -79,35 +83,30 @@ class AudioPlayerActivity : AppCompatActivity() {
         open(intent)
     }
 
-    private fun open(intent: Intent?) {
-        val file = intent?.getStringExtra(EXTRA_PATH)?.let { File(it) }
-        if (file == null || !file.isFile) {
-            finish()
-            return
-        }
-        // The other audio files of the folder, by name: what previous and next go through
-        val siblings = file.parentFile?.listFiles()?.filter { it.isFile && isAudio(it.name) && !it.name.startsWith(".") }
-            ?.sortedBy { it.name.lowercase() }.orEmpty()
-        tracks = if (siblings.any { it.absolutePath == file.absolutePath }) siblings else listOf(file)
-        index = tracks.indexOfFirst { it.absolutePath == file.absolutePath }.coerceAtLeast(0)
-        bar.title.text = file.parentFile?.name.orEmpty()
-        play(index, start = true)
+    /** Plays the file the screen was opened for; false when it was opened for what is already playing. */
+    private fun open(intent: Intent?): Boolean {
+        val file = intent?.getStringExtra(EXTRA_PATH)?.let { File(it) }?.takeIf { it.isFile } ?: return false
+        // Once: coming back to the screen must not start the file again
+        intent?.removeExtra(EXTRA_PATH)
+        if (AudioPlayerService.state.value?.file?.absolutePath != file.absolutePath) AudioPlayerService.play(this, file)
+        return true
+    }
+
+    override fun onStart() {
+        super.onStart()
+        tick()
+    }
+
+    override fun onStop() {
+        ticker.removeCallbacksAndMessages(null)
+        super.onStop()
     }
 
     override fun onDestroy() {
         ticker.removeCallbacksAndMessages(null)
-        release()
-        @Suppress("DEPRECATION")
-        (getSystemService(Context.AUDIO_SERVICE) as AudioManager).abandonAudioFocus(focusListener)
+        // Closed while paused: nothing left to keep in the background
+        if (isFinishing && AudioPlayerService.state.value?.playing == false) AudioPlayerService.stop()
         super.onDestroy()
-    }
-
-    private fun release() {
-        try {
-            player?.release()
-        } catch (ignored: Exception) {
-        }
-        player = null
     }
 
     // ---------------------------------------------------------------- layout
@@ -180,10 +179,7 @@ class AudioPlayerActivity : AppCompatActivity() {
 
                 override fun onStopTrackingTouch(bar: SeekBar?) {
                     seeking = false
-                    try {
-                        player?.seekTo(progress)
-                    } catch (ignored: Exception) {
-                    }
+                    AudioPlayerService.seekTo(progress)
                 }
             })
         }
@@ -227,16 +223,16 @@ class AudioPlayerActivity : AppCompatActivity() {
                 marginEnd = 10.dpToPx()
             })
         }
-        control(R.drawable.ic_m_left, R.string.ml_audio_previous, 56) { previous() }
-        playButton = control(R.drawable.ic_m_play, R.string.ml_audio_play, 76) { toggle() }
-        control(R.drawable.ic_m_right, R.string.ml_audio_next, 56) { next(byUser = true) }
+        control(R.drawable.ic_m_left, R.string.ml_audio_previous, 56) { AudioPlayerService.previous() }
+        playButton = control(R.drawable.ic_m_play, R.string.ml_audio_play, 76) { AudioPlayerService.toggle() }
+        control(R.drawable.ic_m_right, R.string.ml_audio_next, 56) { AudioPlayerService.next() }
         layout.addView(controls, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 12.dpToPx()
         })
         return layout
     }
 
-    // ---------------------------------------------------------------- playing
+    // ---------------------------------------------------------------- showing
 
     private fun clock(millis: Int): String {
         val s = millis / 1000
@@ -244,162 +240,42 @@ class AudioPlayerActivity : AppCompatActivity() {
         else String.format(Locale.US, "%d:%02d", s / 60, s % 60)
     }
 
-    /** Loads the track at [position] of the folder; [start] plays it at once. */
-    private fun play(position: Int, start: Boolean) {
-        val file = tracks.getOrNull(position) ?: return
-        index = position
-        ticker.removeCallbacksAndMessages(null)
-        release()
-        titleView.text = file.nameWithoutExtension
-        artistView.text = ""
-        cover.isVisible = false
-        coverIcon.isVisible = true
-        seek.progress = 0
-        elapsed.text = clock(0)
-        total.text = ""
-        showDetails(file)
-        try {
-            val created = MediaPlayer()
-            created.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
-            created.setDataSource(file.absolutePath)
-            // Goes on with the screen off
-            created.setWakeMode(applicationContext, PowerManager.PARTIAL_WAKE_LOCK)
-            created.prepare()
-            created.setOnCompletionListener { next(byUser = false) }
-            player = created
-            seek.isEnabled = true
-            seek.max = created.duration.coerceAtLeast(0)
-            total.text = clock(created.duration.coerceAtLeast(0))
-            if (start) resume() else playButton.setImageResource(R.drawable.ic_m_play)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            player = null
-            seek.isEnabled = false
-            playButton.setImageResource(R.drawable.ic_m_play)
-            showToast(getString(R.string.ml_search_cannot_open))
-        }
-    }
-
-    /** Title, artist and cover written in the file, read off the main thread. */
-    private fun showDetails(file: File) {
-        lifecycleScope.launch {
-            var title: String? = null
-            var artist: String? = null
-            val picture: Bitmap? = withContext(Dispatchers.IO) {
-                val retriever = MediaMetadataRetriever()
-                try {
-                    retriever.setDataSource(file.absolutePath)
-                    title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                    artist = listOfNotNull(
-                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST),
-                        retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM),
-                    ).filter { it.isNotBlank() }.joinToString(" · ")
-                    retriever.embeddedPicture?.let { bytes ->
-                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                        var sample = 1
-                        while (bounds.outWidth / (sample * 2) >= 800) sample *= 2
-                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
-                    }
-                } catch (e: Throwable) {
-                    null
-                } finally {
-                    try {
-                        retriever.release()
-                    } catch (ignored: Exception) {
-                    }
-                }
-            }
-            if (tracks.getOrNull(index)?.absolutePath != file.absolutePath) return@launch
-            title?.takeIf { it.isNotBlank() }?.let { titleView.text = it }
-            artistView.text = artist.orEmpty()
-            if (picture != null) {
-                cover.setImageBitmap(picture)
-                cover.isVisible = true
-                coverIcon.isVisible = false
-            }
-        }
-    }
-
-    private fun resume() {
-        val p = player ?: return
-        @Suppress("DEPRECATION")
-        (getSystemService(Context.AUDIO_SERVICE) as AudioManager).requestAudioFocus(focusListener, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN)
-        try {
-            p.start()
-            playButton.setImageResource(R.drawable.ic_m_pause)
-            playButton.contentDescription = getString(R.string.ml_audio_pause)
-            tick()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    private fun pause() {
-        ticker.removeCallbacksAndMessages(null)
-        try {
-            player?.takeIf { it.isPlaying }?.pause()
-        } catch (ignored: Exception) {
-        }
-        playButton.setImageResource(R.drawable.ic_m_play)
-        playButton.contentDescription = getString(R.string.ml_audio_play)
-    }
-
-    private fun toggle() {
-        val p = player ?: return play(index, start = true)
-        val playing = try {
-            p.isPlaying
-        } catch (e: Exception) {
-            false
-        }
-        if (playing) pause() else resume()
-    }
-
-    /** Back to the start of the track, or to the track before when it has just started. */
-    private fun previous() {
-        val position = try {
-            player?.currentPosition ?: 0
-        } catch (e: Exception) {
-            0
-        }
-        if (position > 3000 || index == 0) {
-            try {
-                player?.seekTo(0)
-            } catch (ignored: Exception) {
-            }
+    private fun show(state: AudioPlayerService.State) {
+        bar.title.text = state.file.parentFile?.name.orEmpty()
+        titleView.text = state.title
+        artistView.text = state.artist
+        cover.setImageBitmap(state.cover)
+        cover.isVisible = state.cover != null
+        coverIcon.isVisible = state.cover == null
+        seek.max = state.duration
+        seek.isEnabled = state.duration > 0
+        total.text = clock(state.duration)
+        playButton.setImageResource(if (state.playing) R.drawable.ic_m_pause else R.drawable.ic_m_play)
+        playButton.contentDescription = getString(if (state.playing) R.string.ml_audio_pause else R.string.ml_audio_play)
+        if (shownPath != state.file.absolutePath) {
+            shownPath = state.file.absolutePath
             seek.progress = 0
             elapsed.text = clock(0)
-        } else play(index - 1, start = true)
+        }
+        showPosition()
     }
 
-    /** The next track; at the end of the folder it stops (when a track ended) or stays where it is. */
-    private fun next(byUser: Boolean) {
-        if (index + 1 < tracks.size) return play(index + 1, start = true)
-        if (byUser) return
-        ticker.removeCallbacksAndMessages(null)
-        seek.progress = 0
-        elapsed.text = clock(0)
-        playButton.setImageResource(R.drawable.ic_m_play)
-        playButton.contentDescription = getString(R.string.ml_audio_play)
+    private fun showPosition() {
+        if (seeking || AudioPlayerService.state.value == null) return
+        val position = AudioPlayerService.position()
+        seek.progress = position
+        elapsed.text = clock(position)
     }
 
     private fun tick() {
-        val p = player ?: return
-        try {
-            if (!p.isPlaying) return
-            if (!seeking) {
-                seek.progress = p.currentPosition
-                elapsed.text = clock(p.currentPosition)
-            }
-        } catch (e: Exception) {
-            return
-        }
+        ticker.removeCallbacksAndMessages(null)
+        showPosition()
         ticker.postDelayed({ tick() }, 400)
     }
 
     private fun openWith() {
-        val file = tracks.getOrNull(index) ?: return
-        pause()
+        val file = AudioPlayerService.state.value?.file ?: return
+        if (AudioPlayerService.state.value?.playing == true) AudioPlayerService.toggle()
         try {
             val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
             startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "audio/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), file.name))

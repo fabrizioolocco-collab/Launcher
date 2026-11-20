@@ -1121,6 +1121,7 @@
     <string name="ml_rec_halt">Ferma</string>
 
     <!-- Audio player -->
+    <string name="ml_audio_channel">Lettore audio</string>
     <string name="ml_audio_previous">Precedente</string>
     <string name="ml_audio_next">Successivo</string>
     <string name="ml_audio_play">Riproduci</string>
