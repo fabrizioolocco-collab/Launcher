@@ -1166,4 +1166,15 @@
     <string name="ml_yt_mark_seen">Mark as seen</string>
     <string name="ml_yt_fullscreen">Full screen</string>
     <string name="ml_yt_stop">Stop</string>
+    <string name="ml_yt_favorites">Favourites</string>
+    <string name="ml_yt_fav_add">Add to favourites</string>
+    <string name="ml_yt_fav_remove">Remove from favourites</string>
+    <string name="ml_yt_fav_empty">No favourites: press and hold a video to add it</string>
+    <string name="ml_yt_mark_watched">Mark as watched</string>
+    <string name="ml_yt_mark_unwatched">Mark as not watched</string>
+    <string name="ml_yt_watched">Watched</string>
+    <string name="ml_yt_hide_watched">Hide watched videos</string>
+    <string name="ml_yt_show_watched">Show watched videos</string>
+    <string name="ml_yt_watched_hidden">Watched videos hidden</string>
+    <string name="ml_yt_watched_shown">Watched videos shown</string>
 </resources>

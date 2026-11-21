@@ -89,6 +89,7 @@ class YtPlayerActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
     private lateinit var qualityChip: TextView
     private lateinit var pipChip: TextView
+    private lateinit var favChip: TextView
 
     private var controller: ListenableFuture<MediaController>? = null
     private var player: ExoPlayer? = null
@@ -169,6 +170,7 @@ class YtPlayerActivity : AppCompatActivity() {
                 played = true
                 val streams = YtPlayerService.now?.streams ?: return
                 YtStore.setPath(this@YtPlayerActivity, streams.clientIndex * 10 + usedMode)
+                YtPlayerService.now?.let { YtStore.setWatched(this@YtPlayerActivity, it.videoId, true) }
             }
         }
 
@@ -390,6 +392,7 @@ class YtPlayerActivity : AppCompatActivity() {
 
     private fun showNow() {
         val now = YtPlayerService.now ?: return
+        favChip.text = if (YtStore.isFavorite(this, now.videoId)) "\u2605" else "\u2606"
         titleView.text = now.title
         channelView.text = now.author
         channelView.isVisible = now.author.isNotBlank()
@@ -702,6 +705,13 @@ class YtPlayerActivity : AppCompatActivity() {
         chips.addView(qualityChip)
         chips.addView(pipChip)
         chips.addView(chip(getString(R.string.ml_yt_background)) { playInBackground() })
+        favChip = chip("\u2606") {
+            val now = YtPlayerService.now ?: return@chip
+            val video = YtVideo(now.videoId, now.title, now.author, now.channelId, "", "")
+            YtStore.setFavorite(this, video, !YtStore.isFavorite(this, now.videoId))
+            showNow()
+        }.apply { contentDescription = getString(R.string.ml_yt_favorites) }
+        chips.addView(favChip)
         statusView = TextView(this).apply {
             textSize = 14f
             setTextColor(UiKit.secondary(this@YtPlayerActivity))

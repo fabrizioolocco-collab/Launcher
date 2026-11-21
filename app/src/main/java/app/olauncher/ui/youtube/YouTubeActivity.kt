@@ -35,6 +35,7 @@ import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.pillButton
+import app.olauncher.helper.showToast
 import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -53,6 +54,7 @@ class YouTubeActivity : AppCompatActivity() {
         class Home : Screen()
         class Search(val query: String) : Screen()
         class Channel(var channel: YtChannel) : Screen()
+        class Favorites : Screen()
     }
 
     /** The top of a channel's page: its picture, its name and the button to follow it. */
@@ -66,6 +68,8 @@ class YouTubeActivity : AppCompatActivity() {
     private lateinit var root: LinearLayout
     private lateinit var back: ImageView
     private lateinit var input: EditText
+    private lateinit var star: ImageView
+    private lateinit var eye: ImageView
     private lateinit var list: RecyclerView
     private lateinit var grid: GridLayoutManager
     private lateinit var progress: ProgressBar
@@ -149,8 +153,12 @@ class YouTubeActivity : AppCompatActivity() {
         nowTicker.run()
         // A channel followed or dropped from its page shows in the grid on the way back
         if (stack.isNotEmpty() && screen is Screen.Home && screen.items != null) show()
-        // A video just watched loses its red dot
-        else if (stack.isNotEmpty()) adapter.notifyDataSetChanged()
+        // A video just watched loses its red dot and gets its mark (or goes, when the watched ones are hidden)
+        else if (stack.isNotEmpty()) {
+            val current = screen
+            if (current is Screen.Favorites) current.items = YtStore.favorites(this)
+            if (current.items != null) display(current, keepPlace = true)
+        }
     }
 
     /** Opens the channel an intent names (the player's channel line). */
@@ -183,7 +191,15 @@ class YouTubeActivity : AppCompatActivity() {
         val query = (current as? Screen.Search)?.query.orEmpty()
         if (input.text.toString() != query) input.setText(query)
         input.clearFocus()
+        star.isVisible = current is Screen.Home
+        eye.isVisible = current is Screen.Search || current is Screen.Channel
+        showEye()
 
+        if (current is Screen.Favorites) {
+            current.items = YtStore.favorites(this)
+            display(current)
+            return
+        }
         if (current is Screen.Home) {
             val channels = YtStore.subscriptions(this)
             current.items = channels
@@ -229,17 +245,55 @@ class YouTubeActivity : AppCompatActivity() {
         }
     }
 
-    private fun display(current: Screen) {
+    private fun display(current: Screen, keepPlace: Boolean = false) {
         progress.isVisible = false
-        val items = current.items.orEmpty()
+        // The watched ones can be hidden where videos are looked for, never among the favourites
+        val hide = current !is Screen.Favorites && YtStore.hideWatched(this)
+        val items = current.items.orEmpty().filter { !(hide && it is YtVideo && YtStore.isWatched(this, it.id)) }
         val shown = if (current is Screen.Channel) listOf(Header(current.channel)) + items else items
         adapter.submit(shown, current is Screen.Home)
-        list.scrollToPosition(0)
+        if (!keepPlace) list.scrollToPosition(0)
         when {
             items.isNotEmpty() -> empty.isVisible = false
+            current is Screen.Favorites -> showEmpty(getString(R.string.ml_yt_fav_empty), null, null)
             current is Screen.Home -> showEmpty(getString(R.string.ml_yt_empty), null, null)
             else -> showEmpty(getString(R.string.ml_yt_no_results), null, null)
         }
+    }
+
+    private fun showEye() {
+        val hide = YtStore.hideWatched(this)
+        eye.setImageResource(if (hide) R.drawable.ic_m_hide else R.drawable.ic_m_show)
+        eye.contentDescription = getString(if (hide) R.string.ml_yt_show_watched else R.string.ml_yt_hide_watched)
+    }
+
+    private fun toggleWatchedHidden() {
+        val hide = !YtStore.hideWatched(this)
+        YtStore.setHideWatched(this, hide)
+        showEye()
+        showToast(getString(if (hide) R.string.ml_yt_watched_hidden else R.string.ml_yt_watched_shown))
+        val current = screen
+        if (current.items != null) display(current, keepPlace = true)
+    }
+
+    /** A long press on a video: keep it among the favourites, mark it watched or not. */
+    private fun videoMenu(video: YtVideo) {
+        val favorite = YtStore.isFavorite(this, video.id)
+        val watched = YtStore.isWatched(this, video.id)
+        AlertDialog.Builder(this)
+            .setTitle(video.title)
+            .setItems(
+                arrayOf(
+                    getString(if (favorite) R.string.ml_yt_fav_remove else R.string.ml_yt_fav_add),
+                    getString(if (watched) R.string.ml_yt_mark_unwatched else R.string.ml_yt_mark_watched)
+                )
+            ) { _, which ->
+                if (which == 0) YtStore.setFavorite(this, video, !favorite) else YtStore.setWatched(this, video.id, !watched)
+                val current = screen
+                if (current is Screen.Favorites) current.items = YtStore.favorites(this)
+                if (current.items != null) display(current, keepPlace = true)
+            }
+            .show()
     }
 
     private fun showEmpty(text: String, action: String?, onAction: (() -> Unit)?) {
@@ -350,6 +404,11 @@ class YouTubeActivity : AppCompatActivity() {
             marginStart = 4.dpToPx()
             marginEnd = 4.dpToPx()
         })
+        // On the grid: the favourites. Where videos are listed: show or hide the watched ones
+        star = UiKit.iconButton(this, R.drawable.ic_m_star, getString(R.string.ml_yt_favorites)) { open(Screen.Favorites()) }
+        eye = UiKit.iconButton(this, R.drawable.ic_m_show, getString(R.string.ml_yt_hide_watched)) { toggleWatchedHidden() }
+        bar.addView(star)
+        bar.addView(eye)
         root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val body = FrameLayout(this)
@@ -439,6 +498,7 @@ class YouTubeActivity : AppCompatActivity() {
         var badge: TextView? = null
         var button: FrameLayout? = null
         var dot: View? = null
+        var seen: TextView? = null
     }
 
     private inner class Adapter : RecyclerView.Adapter<Holder>() {
@@ -543,6 +603,21 @@ class YouTubeActivity : AppCompatActivity() {
                             marginStart = 5.dpToPx()
                             topMargin = 5.dpToPx()
                         })
+                        // "Watched", on the corner of a video already played
+                        val seenMark = label(11f, Color.WHITE, 1).apply {
+                            text = "\u2713 " + getString(R.string.ml_yt_watched)
+                            background = GradientDrawable().apply {
+                                cornerRadius = 5.dpToPx().toFloat()
+                                setColor(0xCC000000.toInt())
+                            }
+                            setPadding(5.dpToPx(), 1.dpToPx(), 5.dpToPx(), 1.dpToPx())
+                            isVisible = false
+                        }
+                        seen = seenMark
+                        thumb.addView(seenMark, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.START).apply {
+                            marginStart = 5.dpToPx()
+                            bottomMargin = 5.dpToPx()
+                        })
                         val texts = LinearLayout(ctx).apply {
                             orientation = LinearLayout.VERTICAL
                             setPadding(12.dpToPx(), 0, 0, 0)
@@ -591,7 +666,16 @@ class YouTubeActivity : AppCompatActivity() {
             when (val item = items[position]) {
                 is YtVideo -> {
                     holder.title.text = item.title
-                    holder.sub?.text = listOf(item.channel, item.info).filter { it.isNotBlank() }.joinToString(" · ")
+                    val watched = YtStore.isWatched(ctx, item.id)
+                    val favorite = YtStore.isFavorite(ctx, item.id)
+                    holder.sub?.text = (if (favorite) "\u2605 " else "") + listOf(item.channel, item.info).filter { it.isNotBlank() }.joinToString(" · ")
+                    holder.title.setTextColor(if (watched) UiKit.secondary(ctx) else UiKit.primary(ctx))
+                    holder.image.alpha = if (watched) 0.45f else 1f
+                    holder.seen?.isVisible = watched
+                    holder.itemView.setOnLongClickListener {
+                        videoMenu(item)
+                        true
+                    }
                     holder.badge?.text = item.duration
                     holder.badge?.isVisible = item.duration.isNotBlank()
                     YtImages.load(holder.image, item.thumbnail)

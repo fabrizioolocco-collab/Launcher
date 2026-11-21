@@ -22,6 +22,9 @@ object YtStore {
     private const val KEY_HEIGHT = "max_height"
     private const val KEY_PATH = "path"
     private const val KEY_SEEN = "seen_"
+    private const val KEY_WATCHED = "watched"
+    private const val KEY_HIDE_WATCHED = "hide_watched"
+    private const val KEY_FAVORITES = "favorites"
     private const val KEY_NEW = "new_"
     private const val KEY_CHECKED = "checked_"
     private const val KEY_VISITOR = "visitor"
@@ -66,6 +69,49 @@ object YtStore {
     fun unsubscribe(ctx: Context, id: String) {
         save(ctx, subscriptions(ctx).filter { it.id != id })
         prefs(ctx).edit().remove(KEY_SEEN + id).remove(KEY_NEW + id).remove(KEY_CHECKED + id).apply()
+    }
+
+    // ---- watched videos and favourites ----
+
+    private var watchedCache: LinkedHashSet<String>? = null
+
+    private fun watched(ctx: Context): LinkedHashSet<String> =
+        watchedCache ?: LinkedHashSet(ids(ctx, KEY_WATCHED).orEmpty()).also { watchedCache = it }
+
+    fun isWatched(ctx: Context, videoId: String) = videoId in watched(ctx)
+
+    /** A video played, or marked by hand as watched or not. */
+    fun setWatched(ctx: Context, videoId: String, on: Boolean) {
+        val set = watched(ctx)
+        if (on == (videoId in set)) return
+        if (on) set.add(videoId) else set.remove(videoId)
+        putIds(ctx, KEY_WATCHED, set.toList().takeLast(5000))
+    }
+
+    fun hideWatched(ctx: Context) = prefs(ctx).getBoolean(KEY_HIDE_WATCHED, false)
+    fun setHideWatched(ctx: Context, hide: Boolean) = prefs(ctx).edit().putBoolean(KEY_HIDE_WATCHED, hide).apply()
+
+    /** The videos kept as favourites, the last added first. */
+    fun favorites(ctx: Context): List<YtVideo> {
+        val array = runCatching { JSONArray(prefs(ctx).getString(KEY_FAVORITES, "[]")) }.getOrDefault(JSONArray())
+        return (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+            .map { YtVideo(it.optString("id"), it.optString("title"), it.optString("channel"), it.optString("channelId"), it.optString("info"), it.optString("duration")) }
+            .filter { it.id.isNotBlank() }
+    }
+
+    fun isFavorite(ctx: Context, videoId: String) = favorites(ctx).any { it.id == videoId }
+
+    fun setFavorite(ctx: Context, video: YtVideo, on: Boolean) {
+        val rest = favorites(ctx).filter { it.id != video.id }
+        val list = if (on) listOf(video) + rest else rest
+        val array = JSONArray()
+        list.forEach {
+            array.put(
+                JSONObject().put("id", it.id).put("title", it.title).put("channel", it.channel)
+                    .put("channelId", it.channelId).put("info", it.info).put("duration", it.duration)
+            )
+        }
+        prefs(ctx).edit().putString(KEY_FAVORITES, array.toString()).apply()
     }
 
     // ---- new videos ----

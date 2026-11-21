@@ -1163,4 +1163,15 @@
     <string name="ml_yt_mark_seen">Segna come visti</string>
     <string name="ml_yt_fullscreen">Schermo intero</string>
     <string name="ml_yt_stop">Ferma</string>
+    <string name="ml_yt_favorites">Preferiti</string>
+    <string name="ml_yt_fav_add">Aggiungi ai preferiti</string>
+    <string name="ml_yt_fav_remove">Togli dai preferiti</string>
+    <string name="ml_yt_fav_empty">Nessun preferito: tieni premuto su un video per aggiungerlo</string>
+    <string name="ml_yt_mark_watched">Segna come visto</string>
+    <string name="ml_yt_mark_unwatched">Segna come non visto</string>
+    <string name="ml_yt_watched">Visto</string>
+    <string name="ml_yt_hide_watched">Nascondi i video visti</string>
+    <string name="ml_yt_show_watched">Mostra i video visti</string>
+    <string name="ml_yt_watched_hidden">Video visti nascosti</string>
+    <string name="ml_yt_watched_shown">Video visti mostrati</string>
 </resources>
