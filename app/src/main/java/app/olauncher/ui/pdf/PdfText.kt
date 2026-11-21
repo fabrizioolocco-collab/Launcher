@@ -292,7 +292,9 @@ private object NativePdfText {
             } catch (e: Exception) {
                 break
             }
-            if (text.any { it.isWhitespace() }) break
+            // The text comes with the end of its line (or a space) stuck to it: that is not a second word.
+            // Only a gap with letters on both sides of it means the walk has left the word.
+            if (text.trim { it.isWhitespace() || it.isISOControl() }.any { it.isWhitespace() || it.isISOControl() }) break
             best = x
             d += 2
         }
