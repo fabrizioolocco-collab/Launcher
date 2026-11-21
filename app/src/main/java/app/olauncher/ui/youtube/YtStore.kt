@@ -26,6 +26,7 @@ object YtStore {
     private const val KEY_POSITIONS = "positions"
     private const val KEY_HIDE_WATCHED = "hide_watched"
     private const val KEY_FAVORITES = "favorites"
+    private const val KEY_LATER = "later"
     private const val KEY_NEW = "new_"
     private const val KEY_CHECKED = "checked_"
     private const val KEY_VISITOR = "visitor"
@@ -92,28 +93,38 @@ object YtStore {
     fun hideWatched(ctx: Context) = prefs(ctx).getBoolean(KEY_HIDE_WATCHED, false)
     fun setHideWatched(ctx: Context, hide: Boolean) = prefs(ctx).edit().putBoolean(KEY_HIDE_WATCHED, hide).apply()
 
-    /** The videos kept as favourites, the last added first. */
-    fun favorites(ctx: Context): List<YtVideo> {
-        val array = runCatching { JSONArray(prefs(ctx).getString(KEY_FAVORITES, "[]")) }.getOrDefault(JSONArray())
+    private fun videos(ctx: Context, key: String): List<YtVideo> {
+        val array = runCatching { JSONArray(prefs(ctx).getString(key, "[]")) }.getOrDefault(JSONArray())
         return (0 until array.length()).mapNotNull { array.optJSONObject(it) }
             .map { YtVideo(it.optString("id"), it.optString("title"), it.optString("channel"), it.optString("channelId"), it.optString("info"), it.optString("duration")) }
             .filter { it.id.isNotBlank() }
     }
 
-    fun isFavorite(ctx: Context, videoId: String) = favorites(ctx).any { it.id == videoId }
-
-    fun setFavorite(ctx: Context, video: YtVideo, on: Boolean) {
-        val rest = favorites(ctx).filter { it.id != video.id }
-        val list = if (on) listOf(video) + rest else rest
+    /** Puts a video on top of a list, or takes it out. */
+    private fun setIn(ctx: Context, key: String, video: YtVideo, on: Boolean) {
+        val old = videos(ctx, key)
+        if (!on && old.none { it.id == video.id }) return
+        val rest = old.filter { it.id != video.id }
         val array = JSONArray()
-        list.forEach {
+        (if (on) listOf(video) + rest else rest).forEach {
             array.put(
                 JSONObject().put("id", it.id).put("title", it.title).put("channel", it.channel)
                     .put("channelId", it.channelId).put("info", it.info).put("duration", it.duration)
             )
         }
-        prefs(ctx).edit().putString(KEY_FAVORITES, array.toString()).apply()
+        prefs(ctx).edit().putString(key, array.toString()).apply()
     }
+
+    /** The videos kept as favourites, the last added first. */
+    fun favorites(ctx: Context) = videos(ctx, KEY_FAVORITES)
+    fun isFavorite(ctx: Context, videoId: String) = favorites(ctx).any { it.id == videoId }
+    fun setFavorite(ctx: Context, video: YtVideo, on: Boolean) = setIn(ctx, KEY_FAVORITES, video, on)
+
+    /** The videos put aside to watch, the last added first: one played to the end leaves the list. */
+    fun later(ctx: Context) = videos(ctx, KEY_LATER)
+    fun isLater(ctx: Context, videoId: String) = later(ctx).any { it.id == videoId }
+    fun setLater(ctx: Context, video: YtVideo, on: Boolean) = setIn(ctx, KEY_LATER, video, on)
+    fun dropLater(ctx: Context, videoId: String) = setIn(ctx, KEY_LATER, YtVideo(videoId, "", "", "", "", ""), false)
 
     // ---- where each video was left ----
 

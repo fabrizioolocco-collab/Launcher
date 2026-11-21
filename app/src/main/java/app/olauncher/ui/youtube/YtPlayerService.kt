@@ -22,7 +22,9 @@ import androidx.media3.session.MediaSessionService
 class YtPlayerService : MediaSessionService() {
 
     /** The video in the player, for a screen opened again from the notification. */
-    class Now(val videoId: String, var title: String, var author: String, var channelId: String, var streams: YtStreams? = null)
+    class Now(val videoId: String, var title: String, var author: String, var channelId: String, var streams: YtStreams? = null) {
+        fun asVideo() = YtVideo(videoId, title, author, channelId, "", "")
+    }
 
     private var session: MediaSession? = null
     private val handler = Handler(Looper.getMainLooper())
@@ -42,8 +44,12 @@ class YtPlayerService : MediaSessionService() {
         if (exo.playbackState == Player.STATE_IDLE || duration == C.TIME_UNSET || duration <= 0 || exo.isCurrentMediaItemLive) return
         val position = exo.currentPosition
         // Near the end counts as finished: next time it starts over
-        val left = if (exo.playbackState == Player.STATE_ENDED || position > duration - 15_000) 0L else position
-        if (left == 0L || left > 5_000) YtStore.setPosition(this, video.videoId, left, duration)
+        val finished = exo.playbackState == Player.STATE_ENDED || position > duration - 15_000
+        if (finished) {
+            YtStore.setPosition(this, video.videoId, 0, duration)
+            // Watched to the end: off the list of the videos to watch
+            YtStore.dropLater(this, video.videoId)
+        } else if (position > 5_000) YtStore.setPosition(this, video.videoId, position, duration)
     }
 
     override fun onCreate() {

@@ -1174,4 +1174,8 @@
     <string name="ml_yt_show_watched">Mostra i video visti</string>
     <string name="ml_yt_watched_hidden">Video visti nascosti</string>
     <string name="ml_yt_watched_shown">Video visti mostrati</string>
+    <string name="ml_yt_later">Da guardare</string>
+    <string name="ml_yt_later_add">Aggiungi a Da guardare</string>
+    <string name="ml_yt_later_remove">Togli da Da guardare</string>
+    <string name="ml_yt_later_empty">Nessun video da guardare: tieni premuto su un video per aggiungerlo</string>
 </resources>

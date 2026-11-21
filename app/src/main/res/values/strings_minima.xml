@@ -1177,4 +1177,8 @@
     <string name="ml_yt_show_watched">Show watched videos</string>
     <string name="ml_yt_watched_hidden">Watched videos hidden</string>
     <string name="ml_yt_watched_shown">Watched videos shown</string>
+    <string name="ml_yt_later">To watch</string>
+    <string name="ml_yt_later_add">Add to To watch</string>
+    <string name="ml_yt_later_remove">Remove from To watch</string>
+    <string name="ml_yt_later_empty">Nothing to watch: press and hold a video to add it</string>
 </resources>

@@ -90,6 +90,7 @@ class YtPlayerActivity : AppCompatActivity() {
     private lateinit var qualityChip: TextView
     private lateinit var pipChip: TextView
     private lateinit var favChip: TextView
+    private lateinit var laterChip: TextView
 
     private var controller: ListenableFuture<MediaController>? = null
     private var player: ExoPlayer? = null
@@ -395,7 +396,8 @@ class YtPlayerActivity : AppCompatActivity() {
 
     private fun showNow() {
         val now = YtPlayerService.now ?: return
-        favChip.text = if (YtStore.isFavorite(this, now.videoId)) "\u2605" else "\u2606"
+        favChip.text = (if (YtStore.isFavorite(this, now.videoId)) "\u2605 " else "\u2606 ") + getString(R.string.ml_yt_favorites)
+        laterChip.text = (if (YtStore.isLater(this, now.videoId)) "\u2713 " else "+ ") + getString(R.string.ml_yt_later)
         titleView.text = now.title
         channelView.text = now.author
         channelView.isVisible = now.author.isNotBlank()
@@ -708,13 +710,23 @@ class YtPlayerActivity : AppCompatActivity() {
         chips.addView(qualityChip)
         chips.addView(pipChip)
         chips.addView(chip(getString(R.string.ml_yt_background)) { playInBackground() })
-        favChip = chip("\u2606") {
+        // A second row: keep the video among the favourites, or on the list of the ones to watch
+        val keep = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 8.dpToPx(), 0, 0)
+        }
+        favChip = chip("") {
             val now = YtPlayerService.now ?: return@chip
-            val video = YtVideo(now.videoId, now.title, now.author, now.channelId, "", "")
-            YtStore.setFavorite(this, video, !YtStore.isFavorite(this, now.videoId))
+            YtStore.setFavorite(this, now.asVideo(), !YtStore.isFavorite(this, now.videoId))
             showNow()
-        }.apply { contentDescription = getString(R.string.ml_yt_favorites) }
-        chips.addView(favChip)
+        }
+        laterChip = chip("") {
+            val now = YtPlayerService.now ?: return@chip
+            YtStore.setLater(this, now.asVideo(), !YtStore.isLater(this, now.videoId))
+            showNow()
+        }
+        keep.addView(favChip)
+        keep.addView(laterChip)
         statusView = TextView(this).apply {
             textSize = 14f
             setTextColor(UiKit.secondary(this@YtPlayerActivity))
@@ -729,6 +741,7 @@ class YtPlayerActivity : AppCompatActivity() {
         info.addView(titleView)
         info.addView(channelView)
         info.addView(chips)
+        info.addView(keep)
         info.addView(statusView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 16.dpToPx()
         })

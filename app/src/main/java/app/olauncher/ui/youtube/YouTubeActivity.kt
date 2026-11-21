@@ -55,6 +55,7 @@ class YouTubeActivity : AppCompatActivity() {
         class Search(val query: String) : Screen()
         class Channel(var channel: YtChannel) : Screen()
         class Favorites : Screen()
+        class Later : Screen()
     }
 
     /** The top of a channel's page: its picture, its name and the button to follow it. */
@@ -69,6 +70,7 @@ class YouTubeActivity : AppCompatActivity() {
     private lateinit var back: ImageView
     private lateinit var input: EditText
     private lateinit var star: ImageView
+    private lateinit var later: ImageView
     private lateinit var eye: ImageView
     private lateinit var list: RecyclerView
     private lateinit var grid: GridLayoutManager
@@ -157,7 +159,7 @@ class YouTubeActivity : AppCompatActivity() {
         // A video just watched loses its red dot and gets its mark (or goes, when the watched ones are hidden)
         else if (stack.isNotEmpty()) {
             val current = screen
-            if (current is Screen.Favorites) current.items = YtStore.favorites(this)
+            saved(current)?.let { current.items = it }
             if (current.items != null) display(current, keepPlace = true)
         }
     }
@@ -196,8 +198,9 @@ class YouTubeActivity : AppCompatActivity() {
         eye.isVisible = current is Screen.Search || current is Screen.Channel
         showEye()
 
-        if (current is Screen.Favorites) {
-            current.items = YtStore.favorites(this)
+        later.isVisible = current is Screen.Home
+        saved(current)?.let {
+            current.items = it
             display(current)
             return
         }
@@ -249,7 +252,7 @@ class YouTubeActivity : AppCompatActivity() {
     private fun display(current: Screen, keepPlace: Boolean = false) {
         progress.isVisible = false
         // The watched ones can be hidden where videos are looked for, never among the favourites
-        val hide = current !is Screen.Favorites && YtStore.hideWatched(this)
+        val hide = saved(current) == null && YtStore.hideWatched(this)
         val items = current.items.orEmpty().filter { !(hide && it is YtVideo && YtStore.isWatched(this, it.id)) }
         val shown = if (current is Screen.Channel) listOf(Header(current.channel)) + items else items
         adapter.submit(shown, current is Screen.Home)
@@ -257,9 +260,17 @@ class YouTubeActivity : AppCompatActivity() {
         when {
             items.isNotEmpty() -> empty.isVisible = false
             current is Screen.Favorites -> showEmpty(getString(R.string.ml_yt_fav_empty), null, null)
+            current is Screen.Later -> showEmpty(getString(R.string.ml_yt_later_empty), null, null)
             current is Screen.Home -> showEmpty(getString(R.string.ml_yt_empty), null, null)
             else -> showEmpty(getString(R.string.ml_yt_no_results), null, null)
         }
+    }
+
+    /** The videos of a list kept on the phone (favourites, to watch), as it is now; null on the other screens. */
+    private fun saved(current: Screen): List<YtVideo>? = when (current) {
+        is Screen.Favorites -> YtStore.favorites(this)
+        is Screen.Later -> YtStore.later(this)
+        else -> null
     }
 
     private fun showEye() {
@@ -280,18 +291,28 @@ class YouTubeActivity : AppCompatActivity() {
     /** A long press on a video: keep it among the favourites, mark it watched or not. */
     private fun videoMenu(video: YtVideo) {
         val favorite = YtStore.isFavorite(this, video.id)
+        val toWatch = YtStore.isLater(this, video.id)
         val watched = YtStore.isWatched(this, video.id)
         AlertDialog.Builder(this)
             .setTitle(video.title)
             .setItems(
                 arrayOf(
                     getString(if (favorite) R.string.ml_yt_fav_remove else R.string.ml_yt_fav_add),
+                    getString(if (toWatch) R.string.ml_yt_later_remove else R.string.ml_yt_later_add),
                     getString(if (watched) R.string.ml_yt_mark_unwatched else R.string.ml_yt_mark_watched)
                 )
             ) { _, which ->
-                if (which == 0) YtStore.setFavorite(this, video, !favorite) else YtStore.setWatched(this, video.id, !watched)
+                when (which) {
+                    0 -> YtStore.setFavorite(this, video, !favorite)
+                    1 -> YtStore.setLater(this, video, !toWatch)
+                    else -> {
+                        YtStore.setWatched(this, video.id, !watched)
+                        // Marked as watched by hand: no longer one to watch
+                        if (!watched) YtStore.dropLater(this, video.id)
+                    }
+                }
                 val current = screen
-                if (current is Screen.Favorites) current.items = YtStore.favorites(this)
+                saved(current)?.let { current.items = it }
                 if (current.items != null) display(current, keepPlace = true)
             }
             .show()
@@ -406,6 +427,8 @@ class YouTubeActivity : AppCompatActivity() {
             marginEnd = 4.dpToPx()
         })
         // On the grid: the favourites. Where videos are listed: show or hide the watched ones
+        later = UiKit.iconButton(this, R.drawable.ic_m_timer, getString(R.string.ml_yt_later)) { open(Screen.Later()) }
+        bar.addView(later)
         star = UiKit.iconButton(this, R.drawable.ic_m_star, getString(R.string.ml_yt_favorites)) { open(Screen.Favorites()) }
         eye = UiKit.iconButton(this, R.drawable.ic_m_show, getString(R.string.ml_yt_hide_watched)) { toggleWatchedHidden() }
         bar.addView(star)
