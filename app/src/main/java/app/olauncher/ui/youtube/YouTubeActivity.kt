@@ -503,6 +503,7 @@ class YouTubeActivity : AppCompatActivity() {
 
     /** Asks where to put the file, under the name of the video; the saving starts once a place is chosen. */
     private fun askWhere(item: YtVideo, kind: Int) {
+        TubeExport.askNotifications(this)
         val (name, type) = TubeExport.fileFor(item, kind)
         exporting = item to kind
         runCatching {

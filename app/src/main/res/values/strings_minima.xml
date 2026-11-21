@@ -1207,4 +1207,6 @@
     <string name="ml_yt_search_in">Search in %s</string>
     <string name="ml_search_tube_videos">Tube: videos</string>
     <string name="ml_search_tube_podcasts">Tube: podcasts</string>
+    <string name="ml_yt_save_audio_short">Audio</string>
+    <string name="ml_pod_save_file_short">File</string>
 </resources>

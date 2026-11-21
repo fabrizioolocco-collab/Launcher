@@ -42,6 +42,27 @@ object TubeExport {
     private val main = Handler(Looper.getMainLooper())
     private var count = 0
 
+    /** What is being saved, by video or episode: the words the player shows under it ("42%", "saved", why it failed). */
+    private val states = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /** Told, on the main thread, each time a saving moves on. */
+    var onChange: (() -> Unit)? = null
+
+    fun state(id: String): String? = states[id]
+
+    private fun tell(id: String, text: String) {
+        states[id] = text
+        main.post { onChange?.invoke() }
+    }
+
+    /** The progress shows in a notification: on Android 13 and later the launcher must be let to show them. */
+    fun askNotifications(activity: android.app.Activity) {
+        if (Build.VERSION.SDK_INT < 33) return
+        val permission = android.Manifest.permission.POST_NOTIFICATIONS
+        if (androidx.core.content.ContextCompat.checkSelfPermission(activity, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED)
+            androidx.core.app.ActivityCompat.requestPermissions(activity, arrayOf(permission), 73)
+    }
+
     /** The name and the type offered for the file: an episode keeps the format of its podcast. */
     fun fileFor(item: YtVideo, kind: Int): Pair<String, String> {
         val name = item.title.replace(Regex("[\\\\/:*?\"<>|\\n\\r]"), " ").trim().take(80).ifBlank { "tube" }
@@ -63,18 +84,26 @@ object TubeExport {
                 deleteRecursively()
                 mkdirs()
             }
+            val step: (Int) -> Unit = { percent ->
+                notify(ctx, id, item.title, percent, true, null)
+                tell(item.id, ctx.getString(R.string.ml_yt_saving) + " $percent%")
+            }
             try {
-                notify(ctx, id, item.title, 0, true)
-                if (kind == EPISODE) saveEpisode(ctx, item, target) { notify(ctx, id, item.title, it, true) }
-                else saveVideo(ctx, item, kind == AUDIO, target, work) { notify(ctx, id, item.title, it, true) }
-                notify(ctx, id, item.title, 100, false)
+                step(0)
+                if (kind == EPISODE) saveEpisode(ctx, item, target, step)
+                else saveVideo(ctx, item, kind == AUDIO, target, work, step)
+                notify(ctx, id, item.title, 100, false, null)
+                tell(item.id, ctx.getString(R.string.ml_yt_saved))
                 main.post { ctx.showToast(ctx.getString(R.string.ml_yt_saved)) }
             } catch (e: Throwable) {
                 e.printStackTrace()
                 runCatching { android.provider.DocumentsContract.deleteDocument(ctx.contentResolver, target) }
-                cancel(ctx, id)
-                val why = e.message?.take(120).orEmpty()
-                main.post { ctx.showToast(ctx.getString(R.string.ml_yt_save_failed) + if (why.isNotBlank()) "\n$why" else "") }
+                val why = (e.message ?: e.javaClass.simpleName).take(160)
+                val text = ctx.getString(R.string.ml_yt_save_failed) + ": " + why
+                // The reason stays in the notification and under the video, not only in a toast that goes
+                notify(ctx, id, item.title, 0, false, text)
+                tell(item.id, text)
+                main.post { ctx.showToast(text, android.widget.Toast.LENGTH_LONG) }
             } finally {
                 work.deleteRecursively()
             }
@@ -101,30 +130,64 @@ object TubeExport {
 
     private fun saveVideo(ctx: Context, item: YtVideo, audioOnly: Boolean, target: Uri, work: File, progress: (Int) -> Unit) {
         if (YouTubeApi.visitor == null) YouTubeApi.visitor = YtStore.visitor(ctx)
-        val streams = YouTubeApi.streams(item.id)
+        // The client and the way that play on this phone (the player found them) are the ones to save from too
+        val path = YtStore.path(ctx)
+        val streams = try {
+            YouTubeApi.streams(item.id, path / 10)
+        } catch (e: IOException) {
+            if (path / 10 == 0) throw e
+            YouTubeApi.streams(item.id)
+        }
         if (streams.live) throw IOException("Live")
         val max = YtStore.maxHeight(ctx)
-        val picture = if (audioOnly) null else (streams.mp4Videos.firstOrNull { it.first <= max } ?: streams.mp4Videos.lastOrNull())?.second
+        val picture = (streams.mp4Videos.firstOrNull { it.first <= max } ?: streams.mp4Videos.lastOrNull())?.second
         val sound = streams.audioUrl
+        val whole = streams.muxedUrl
         val result = File(work, "out")
-        when {
-            audioOnly && sound != null -> {
+        val failures = ArrayList<String>()
+
+        // The separate streams give the quality asked for; the one small file with both is what is left
+        // when YouTube refuses them, or serves them at a crawl, to this phone
+        fun separate(): Boolean {
+            if (sound == null || (!audioOnly && picture == null)) return false
+            return try {
                 val a = File(work, "a")
-                fetch(sound, streams.userAgent, a) { progress(it * 9 / 10) }
-                mux(listOf(a), result)
+                if (audioOnly) {
+                    fetch(sound, streams.userAgent, a) { progress(it * 9 / 10) }
+                    mux(listOf(a to "audio/"), result)
+                } else {
+                    val v = File(work, "v")
+                    // The picture is nearly all of the bytes: most of the bar
+                    fetch(picture!!, streams.userAgent, v) { progress(it * 8 / 10) }
+                    fetch(sound, streams.userAgent, a) { progress(80 + it / 10) }
+                    mux(listOf(v to "video/", a to "audio/"), result)
+                }
+                true
+            } catch (e: Exception) {
+                failures.add(streams.client + " " + (e.message ?: e.javaClass.simpleName))
+                result.delete()
+                false
             }
-            picture != null && sound != null -> {
-                val v = File(work, "v")
-                val a = File(work, "a")
-                // The picture is nearly all of the bytes: nine tenths of the bar
-                fetch(picture, streams.userAgent, v) { progress(it * 8 / 10) }
-                fetch(sound, streams.userAgent, a) { progress(80 + it / 10) }
-                mux(listOf(v, a), result)
-            }
-            // No separate streams from this client: the one small file that has both
-            !audioOnly && streams.muxedUrl != null -> fetch(streams.muxedUrl, streams.userAgent, result) { progress(it * 9 / 10) }
-            else -> throw IOException(streams.client)
         }
+
+        fun together(): Boolean {
+            if (whole == null) return false
+            return try {
+                if (audioOnly) {
+                    val m = File(work, "m")
+                    fetch(whole, streams.userAgent, m) { progress(it * 9 / 10) }
+                    mux(listOf(m to "audio/"), result)
+                } else fetch(whole, streams.userAgent, result) { progress(it * 9 / 10) }
+                true
+            } catch (e: Exception) {
+                failures.add(streams.client + " file " + (e.message ?: e.javaClass.simpleName))
+                result.delete()
+                false
+            }
+        }
+
+        val done = if (path % 10 == 1) together() || separate() else separate() || together()
+        if (!done) throw IOException(failures.joinToString("; ").ifBlank { streams.client + ": no stream" })
         progress(95)
         val out = ctx.contentResolver.openOutputStream(target) ?: throw IOException("No file")
         out.use { stream -> result.inputStream().use { it.copyTo(stream, 256 * 1024) } }
@@ -136,6 +199,7 @@ object TubeExport {
         file.outputStream().use { out ->
             var position = 0L
             var last = -1
+            val began = System.currentTimeMillis()
             val buffer = ByteArray(128 * 1024)
             while (total < 0 || position < total) {
                 val end = if (total > 0) minOf(position + CHUNK, total) - 1 else -1L
@@ -157,6 +221,9 @@ object TubeExport {
                                     if (read < 0) break
                                     out.write(buffer, 0, read)
                                     position += read
+                                    // Served a trickle at a time: this stream is being held back, and would take hours
+                                    val seconds = (System.currentTimeMillis() - began) / 1000
+                                    if (seconds >= 20 && position / seconds < 40_000 && (total < 0 || position < total)) throw SlowException()
                                     val percent = if (total > 0) (position * 100 / total).toInt() else 0
                                     if (percent != last) {
                                         last = percent
@@ -168,6 +235,8 @@ object TubeExport {
                             conn.disconnect()
                         }
                         break
+                    } catch (e: SlowException) {
+                        throw e
                     } catch (e: IOException) {
                         // A piece that broke half way is asked again from where it got to, a few times
                         if (++tries > 3 || (total < 0 && position > start)) throw e
@@ -178,16 +247,24 @@ object TubeExport {
         }
     }
 
-    /** Puts the tracks of [inputs] (a picture and a sound, or a sound alone) in one MP4 file, as they are. */
-    private fun mux(inputs: List<File>, out: File) {
+    private class SlowException : IOException("too slow")
+
+    /**
+     * Puts one track of each of [inputs] (the first of the kind named: "video/", "audio/") in one MP4
+     * file, as they are: a picture and a sound, or a sound alone.
+     */
+    private fun mux(inputs: List<Pair<File, String>>, out: File) {
         val muxer = MediaMuxer(out.path, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-        val extractors = inputs.map { MediaExtractor().apply { setDataSource(it.path) } }
+        val extractors = inputs.map { MediaExtractor().apply { setDataSource(it.first.path) } }
         try {
             var size = 2 * 1024 * 1024
-            val tracks = extractors.map { extractor ->
-                if (extractor.trackCount < 1) throw IOException("No track")
-                extractor.selectTrack(0)
-                val format = extractor.getTrackFormat(0)
+            val tracks = extractors.mapIndexed { index, extractor ->
+                val kind = inputs[index].second
+                val track = (0 until extractor.trackCount).firstOrNull {
+                    extractor.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith(kind) == true
+                } ?: throw IOException("No $kind track")
+                extractor.selectTrack(track)
+                val format = extractor.getTrackFormat(track)
                 if (format.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) size = maxOf(size, format.getInteger(MediaFormat.KEY_MAX_INPUT_SIZE))
                 muxer.addTrack(format)
             }
@@ -226,7 +303,7 @@ object TubeExport {
         }
     }
 
-    private fun notify(ctx: Context, id: Int, title: String, percent: Int, going: Boolean) {
+    private fun notify(ctx: Context, id: Int, title: String, percent: Int, going: Boolean, failure: String?) {
         try {
             val manager = ctx.getSystemService(NotificationManager::class.java) ?: return
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) manager.createNotificationChannel(
@@ -235,7 +312,7 @@ object TubeExport {
             val builder = NotificationCompat.Builder(ctx, CHANNEL)
                 .setSmallIcon(R.drawable.ic_m_download)
                 .setContentTitle(title)
-                .setContentText(ctx.getString(if (going) R.string.ml_yt_saving else R.string.ml_yt_saved))
+                .setContentText(failure ?: ctx.getString(if (going) R.string.ml_yt_saving else R.string.ml_yt_saved))
                 .setOngoing(going)
                 .setOnlyAlertOnce(true)
             if (going) builder.setProgress(100, percent, percent == 0)
@@ -243,9 +320,5 @@ object TubeExport {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-    }
-
-    private fun cancel(ctx: Context, id: Int) {
-        runCatching { ctx.getSystemService(NotificationManager::class.java)?.cancel(id) }
     }
 }

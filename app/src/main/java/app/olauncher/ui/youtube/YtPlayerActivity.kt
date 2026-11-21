@@ -31,6 +31,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -93,6 +94,45 @@ class YtPlayerActivity : AppCompatActivity() {
     private lateinit var favChip: TextView
     private lateinit var laterChip: TextView
     private lateinit var audioChip: TextView
+    private lateinit var mp4Chip: TextView
+    private lateinit var soundChip: TextView
+    private lateinit var fileChip: TextView
+    private lateinit var offlineChip: TextView
+    private lateinit var exportView: TextView
+    private var exportKind = 0
+
+    private val wherePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val now = YtPlayerService.now ?: return@registerForActivityResult
+        val target = result.data?.data ?: return@registerForActivityResult
+        TubeExport.save(this, now.asVideo(), exportKind, target)
+        showNow()
+    }
+
+    /** Asks where to put the file, under the name of the video; the saving starts once a place is chosen. */
+    private fun askWhere(kind: Int) {
+        val now = YtPlayerService.now ?: return
+        TubeExport.askNotifications(this)
+        val (name, type) = TubeExport.fileFor(now.asVideo(), kind)
+        exportKind = kind
+        runCatching {
+            wherePicker.launch(
+                Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(type).putExtra(Intent.EXTRA_TITLE, name)
+            )
+        }
+    }
+
+    /** Keeps the episode on the phone for when there is no network, or frees its place. */
+    private fun toggleOffline() {
+        val now = YtPlayerService.now ?: return
+        val episode = now.asVideo()
+        if (PodcastDownloads.isDownloaded(this, episode.id) || PodcastDownloads.isDownloading(this, episode.id)) {
+            PodcastDownloads.remove(this, episode)
+            showNow()
+        } else lifecycleScope.launch {
+            withContext(Dispatchers.IO) { PodcastDownloads.start(this@YtPlayerActivity, episode) }
+            showNow()
+        }
+    }
     private lateinit var artView: ImageView
 
     private var controller: ListenableFuture<MediaController>? = null
@@ -433,6 +473,20 @@ class YtPlayerActivity : AppCompatActivity() {
         val now = YtPlayerService.now ?: return
         favChip.text = (if (YtStore.isFavorite(this, now.videoId)) "\u2605 " else "\u2606 ") + getString(R.string.ml_yt_favorites)
         laterChip.text = (if (YtStore.isLater(this, now.videoId)) "\u2713 " else "+ ") + getString(if (now.isEpisode) R.string.ml_pod_later else R.string.ml_yt_later)
+        mp4Chip.isVisible = !now.isEpisode
+        soundChip.isVisible = !now.isEpisode
+        fileChip.isVisible = now.isEpisode
+        offlineChip.isVisible = now.isEpisode
+        if (now.isEpisode) offlineChip.text = getString(
+            when {
+                PodcastDownloads.isDownloaded(this, now.videoId) -> R.string.ml_pod_download_delete
+                PodcastDownloads.isDownloading(this, now.videoId) -> R.string.ml_pod_download_stop
+                else -> R.string.ml_pod_download
+            }
+        )
+        val saving = TubeExport.state(now.videoId)
+        exportView.text = saving
+        exportView.isVisible = saving != null
         titleView.text = now.title
         // An episode has no picture to float or to play without: its cover takes the place of the video
         pipChip.isVisible = canPip && !now.isEpisode
@@ -558,6 +612,8 @@ class YtPlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         leavingForAudio = false
+        TubeExport.onChange = { showNow() }
+        showNow()
         rotation?.let { if (it.canDetectOrientation()) it.enable() }
         showVideo(true)
         updatePip()
@@ -565,6 +621,7 @@ class YtPlayerActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        TubeExport.onChange = null
         rotation?.disable()
         if (!inPip) showVideo(false)
     }
@@ -790,6 +847,28 @@ class YtPlayerActivity : AppCompatActivity() {
         info.addView(channelView)
         info.addView(chips)
         info.addView(keep)
+
+        // A third row: a copy as a file where the picker says, and for an episode its place on the phone
+        val saves = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 8.dpToPx(), 0, 0)
+        }
+        mp4Chip = chip("\u2193 MP4") { askWhere(TubeExport.VIDEO) }
+        soundChip = chip("\u2193 " + getString(R.string.ml_yt_save_audio_short)) { askWhere(TubeExport.AUDIO) }
+        fileChip = chip("\u2193 " + getString(R.string.ml_pod_save_file_short)) { askWhere(TubeExport.EPISODE) }
+        offlineChip = chip("") { toggleOffline() }
+        saves.addView(mp4Chip)
+        saves.addView(soundChip)
+        saves.addView(fileChip)
+        saves.addView(offlineChip)
+        info.addView(saves)
+        exportView = TextView(this).apply {
+            textSize = 13f
+            setTextColor(UiKit.secondary(this@YtPlayerActivity))
+            setPadding(0, 10.dpToPx(), 0, 0)
+            isVisible = false
+        }
+        info.addView(exportView)
         info.addView(statusView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 16.dpToPx()
         })
