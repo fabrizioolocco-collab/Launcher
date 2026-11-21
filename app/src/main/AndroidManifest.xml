@@ -558,6 +558,39 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+        <!-- YouTube links opened from a browser or another app, or shared to Tube: played in Tube -->
+        <activity
+            android:name=".ui.youtube.YtLinkActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@drawable/ic_tube_launcher"
+            android:label="@string/ml_yt_app"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="youtube.com" />
+                <data android:host="www.youtube.com" />
+                <data android:host="m.youtube.com" />
+                <data android:host="music.youtube.com" />
+                <data android:host="youtu.be" />
+                <data android:host="www.youtube-nocookie.com" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <activity-alias
             android:name=".TubeAlias"
             android:exported="true"

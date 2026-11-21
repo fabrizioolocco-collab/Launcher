@@ -330,9 +330,15 @@ class YtPlayerActivity : AppCompatActivity() {
         val exo = player ?: return
         val id = intent.getStringExtra(EXTRA_ID)
         val now = YtPlayerService.now
+        // A link that names a moment of the video: from there, whatever was remembered
+        val start = intent.getLongExtra(EXTRA_START, -1L)
+        intent.removeExtra(EXTRA_START)
         if (id == null || (now != null && now.videoId == id && exo.playbackState != Player.STATE_IDLE)) {
             // Opened again from the notification, or on the video already playing
-            if (now == null) finish() else showNow()
+            if (now == null) finish() else {
+                if (start >= 0) exo.seekTo(start)
+                showNow()
+            }
             return
         }
         YtPlayerService.savePosition()
@@ -349,7 +355,7 @@ class YtPlayerActivity : AppCompatActivity() {
         setChrome(false)
         showNow()
         // From where it was left the last time
-        load(YtStore.position(this, id))
+        load(if (start >= 0) start else YtStore.position(this, id))
     }
 
     private fun restart() {
@@ -898,6 +904,13 @@ class YtPlayerActivity : AppCompatActivity() {
         private const val EXTRA_ID = "video_id"
         private const val EXTRA_AUDIO = "audio"
         private const val EXTRA_IMAGE = "image"
+        private const val EXTRA_START = "start"
+
+        /** A video named by a link alone (opened from a browser): its title comes with its streams. */
+        fun linkIntent(ctx: Context, videoId: String, startMs: Long): Intent = Intent(ctx, YtPlayerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(EXTRA_ID, videoId)
+            .putExtra(EXTRA_START, startMs)
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_CHANNEL = "channel"
         private const val EXTRA_CHANNEL_ID = "channel_id"

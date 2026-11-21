@@ -1254,4 +1254,5 @@
     <string name="ml_notes_file_share">Condividi</string>
     <string name="ml_notes_file_save">Salva in…</string>
     <string name="ml_notes_file_open_with">Apri con…</string>
+    <string name="ml_yt_link_unknown">Tube non sa aprire questo link</string>
 </resources>
