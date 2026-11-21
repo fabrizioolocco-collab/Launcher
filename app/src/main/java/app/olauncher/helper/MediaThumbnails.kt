@@ -86,6 +86,74 @@ object MediaThumbnails {
         .sortedByDescending { it.second }
         .map { it.first }
 
+    private val mediaNames = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /** Whether a file name is one of a photo or a video; each extension is looked up once. */
+    private fun isMediaName(name: String): Boolean {
+        val ext = name.substringAfterLast('.', "").lowercase()
+        if (ext.isEmpty()) return false
+        return mediaNames.getOrPut(ext) { isMedia(MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)) }
+    }
+
+    /**
+     * Photos and videos directly inside [dirs], newest first, with their MediaStore addresses: what
+     * [mediaIn] and a [mediaUris] per folder give, for a gallery made of many folders. The names come
+     * from each folder (one read per folder), the dates and the addresses from a single question to the
+     * system's index for all the folders together; only a file the index doesn't know is asked to the
+     * disk. Asking the disk for every file, and the index once per folder, took seconds on many folders.
+     * The third value changes whenever the files or their dates do.
+     */
+    fun mediaWithUris(context: Context, dirs: List<File>): Triple<List<File>, Map<String, Uri>, Long> {
+        val wanted = dirs.map { it.absolutePath.trimEnd('/') }.toHashSet()
+        val ids = HashMap<String, Long>()
+        val dates = HashMap<String, Long>()
+        val base = MediaStore.Files.getContentUri("external")
+        try {
+            @Suppress("DEPRECATION")
+            context.contentResolver.query(
+                base,
+                arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DATA, MediaStore.MediaColumns.DATE_MODIFIED),
+                "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (${MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE}, ${MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO})",
+                null, null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val path = c.getString(1) ?: continue
+                    if (path.substringBeforeLast('/', "") !in wanted) continue
+                    ids[path] = c.getLong(0)
+                    dates[path] = c.getLong(2) * 1000
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        val found = ArrayList<Pair<File, Long>>()
+        val seen = HashSet<String>()
+        for (dir in wanted) {
+            val names = File(dir).list() ?: continue
+            for (name in names) {
+                if (name.startsWith(".") || !isMediaName(name)) continue
+                val path = "$dir/$name"
+                if (!seen.add(path)) continue
+                val file = File(path)
+                var date = dates[path] ?: 0L
+                if (date <= 0L) {
+                    // Not in the index (a folder kept out of it, a file just written): the disk says
+                    if (!file.isFile) continue
+                    date = file.lastModified()
+                }
+                found.add(file to date)
+            }
+        }
+        // The index keeps whole seconds: photos of the same second go by name, as a camera numbers them
+        found.sortWith(compareByDescending<Pair<File, Long>> { it.second }.thenByDescending { it.first.name })
+        val uris = HashMap<String, Uri>(found.size * 2)
+        for ((file, _) in found) ids[file.path]?.let { uris[file.path] = ContentUris.withAppendedId(base, it) }
+        // A number that changes when a file comes, goes or is written again: "nothing new" without comparing lists
+        var stamp = found.size.toLong()
+        for ((file, date) in found) stamp = stamp * 31 + file.path.hashCode() * 17L + date
+        return Triple(found.map { it.first }, uris, stamp)
+    }
+
     /** MediaStore addresses of the files directly inside [dir], by absolute path. */
     fun mediaUris(context: Context, dir: File): Map<String, Uri> {
         val base = MediaStore.Files.getContentUri("external")

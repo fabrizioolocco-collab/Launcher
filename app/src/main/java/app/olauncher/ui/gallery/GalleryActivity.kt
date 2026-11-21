@@ -224,15 +224,33 @@ class GalleryActivity : AppCompatActivity() {
         val shownTab = tab
         loading = lifecycleScope.launch {
             if (shownTab == Tab.PHOTOS) {
-                val found = withContext(Dispatchers.IO) {
-                    val folders = listOf(dir) + CameraRoll.included(this@GalleryActivity, dir)
-                    Triple(folders, MediaThumbnails.mediaIn(folders),
-                        folders.fold(emptyMap<String, Uri>()) { all, folder -> all + MediaThumbnails.mediaUris(this@GalleryActivity, folder) })
+                val root = dir
+                // What was there the last time shows at once; the folders are read again behind it
+                if (!loaded) photosKept?.takeIf { it.first == root.absolutePath }?.let { kept ->
+                    allMedia = kept.second
+                    allFolders = emptyList()
+                    uris = kept.third
+                    loaded = true
+                    applySearch()
                 }
+                val found = withContext(Dispatchers.IO) {
+                    val folders = listOf(root) + CameraRoll.included(this@GalleryActivity, root)
+                    val (files, addresses, stamp) = MediaThumbnails.mediaWithUris(this@GalleryActivity, folders)
+                    photosStampNew = stamp
+                    Triple(folders, files, addresses)
+                }
+                val same = loaded && photosStampNew == photosStamp
+                photosStamp = photosStampNew
                 sources = found.first
+                uris = found.third
+                photosKept = Triple(root.absolutePath, found.second, found.third)
+                if (same) {
+                    // Nothing new: the grid stays where it is
+                    then()
+                    return@launch
+                }
                 allMedia = found.second
                 allFolders = emptyList()
-                uris = found.third
             } else {
                 // A folder gone meanwhile (deleted or renamed elsewhere): back to the nearest one still there
                 while (!albumDir.isDirectory && !same(albumDir, albumRoot)) albumDir = albumDir.parentFile ?: albumRoot
@@ -1299,6 +1317,13 @@ class GalleryActivity : AppCompatActivity() {
         private const val EXTRA_SHOW_SOURCES = "show_sources"
         private const val COLUMNS = 3
         private const val SPANS = 12
+
+        /** The Photos tab as it was read the last time (camera folder, files, addresses), for the next opening. */
+        private var photosKept: Triple<String, List<File>, Map<String, Uri>>? = null
+
+        /** The stamp of the listing on screen, and of the one just read: equal means nothing changed. */
+        private var photosStamp = 0L
+        @Volatile private var photosStampNew = 0L
 
         /** How many thumbnails are got ready ahead of the scroll: about three screens. */
         private const val PRELOAD = 60
