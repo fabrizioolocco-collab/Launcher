@@ -99,6 +99,7 @@ class YouTubeActivity : AppCompatActivity() {
     private lateinit var videoTab: TextView
     private lateinit var podcastTab: TextView
     private lateinit var downloadsButton: ImageView
+    private lateinit var linksButton: ImageView
     private var seeding: Job? = null
 
     /** The first start comes right after the grid was shown: showing it again would only make it blink. */
@@ -131,23 +132,42 @@ class YouTubeActivity : AppCompatActivity() {
         offerLinks()
     }
 
+    /** The hosts of YouTube links Tube may open, by what Android says of each (true: allowed). */
+    private fun linkState(): Map<String, Boolean>? {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return null
+        return runCatching {
+            val user = getSystemService(android.content.pm.verify.domain.DomainVerificationManager::class.java)
+                .getDomainVerificationUserState(packageName) ?: return null
+            val selected = android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED
+            val verified = android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_VERIFIED
+            // Off as a whole ("Open supported links" switched off): no link opens here, whatever is ticked
+            val on = user.isLinkHandlingAllowed
+            user.hostToStateMap.filterKeys { it.contains("youtu") }.mapValues { (_, state) -> on && (state == selected || state == verified) }
+        }.getOrNull()
+    }
+
     /**
      * From Android 12 a browser opens a YouTube link in an app only if the user said that app may
-     * open those links: asked once, with the way to the page where it is said.
+     * open those links: asked while they may not (once per version of the question), with the way
+     * to the page where it is said.
      */
     private fun offerLinks() {
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return
+        val state = linkState() ?: return
+        if (state.values.any { it }) return
         val prefs = getSharedPreferences("youtube", MODE_PRIVATE)
-        if (prefs.getBoolean("links_asked", false)) return
-        val allowed = runCatching {
-            val state = getSystemService(android.content.pm.verify.domain.DomainVerificationManager::class.java)
-                .getDomainVerificationUserState(packageName)?.hostToStateMap.orEmpty()
-            state["www.youtube.com"] == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED ||
-                state["youtu.be"] == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED
-        }.getOrDefault(false)
-        if (allowed) return
-        prefs.edit().putBoolean("links_asked", true).apply()
-        showConfirmDialog(getString(R.string.ml_yt_links_title), getString(R.string.ml_yt_links_help), getString(R.string.ml_yt_links_open)) { openLinkSettings() }
+        if (prefs.getBoolean("links_asked_2", false)) return
+        prefs.edit().putBoolean("links_asked_2", true).apply()
+        linksDialog()
+    }
+
+    /** What Android allows now, host by host, and the way to change it. */
+    private fun linksDialog() {
+        val state = linkState()
+        val lines = state?.entries?.sortedBy { it.key }?.joinToString("\n") { (host, ok) ->
+            (if (ok) "\u2713 " else "\u2717 ") + host
+        }
+        val text = getString(R.string.ml_yt_links_help) + if (lines.isNullOrBlank()) "" else "\n\n" + getString(R.string.ml_yt_links_now) + "\n" + lines
+        showConfirmDialog(getString(R.string.ml_yt_links_title), text, getString(R.string.ml_yt_links_open)) { openLinkSettings() }
     }
 
     private fun openLinkSettings() {
@@ -272,6 +292,8 @@ class YouTubeActivity : AppCompatActivity() {
         later.isVisible = current is Screen.Home
         modeRow.isVisible = current is Screen.Home
         downloadsButton.isVisible = podcast && current is Screen.Home
+        // Shown while YouTube links still open in the browser
+        linksButton.isVisible = !podcast && current is Screen.Home && linkState()?.values?.any { it } == false
         val within = (current as? Screen.Channel)?.channel ?: (current as? Screen.Search)?.channel
         input.hint = when {
             within != null -> getString(R.string.ml_yt_search_in, within.name)
@@ -692,6 +714,8 @@ class YouTubeActivity : AppCompatActivity() {
         eye = UiKit.iconButton(this, R.drawable.ic_m_show, getString(R.string.ml_yt_hide_watched)) { toggleWatchedHidden() }
         downloadsButton = UiKit.iconButton(this, R.drawable.ic_m_download, getString(R.string.ml_pod_downloads)) { open(Screen.Downloads()) }
         bar.addView(downloadsButton)
+        linksButton = UiKit.iconButton(this, R.drawable.ic_m_link, getString(R.string.ml_yt_links_title)) { linksDialog() }
+        bar.addView(linksButton)
         bar.addView(star)
         bar.addView(eye)
         root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
