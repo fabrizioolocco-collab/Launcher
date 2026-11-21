@@ -3,7 +3,10 @@ package app.olauncher.ui.youtube
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
@@ -22,6 +25,26 @@ class YtPlayerService : MediaSessionService() {
     class Now(val videoId: String, var title: String, var author: String, var channelId: String, var streams: YtStreams? = null)
 
     private var session: MediaSession? = null
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** The point of the video is written down every few seconds: the screen may be long gone. */
+    private val ticker = object : Runnable {
+        override fun run() {
+            if (player?.isPlaying == true) savePosition()
+            handler.postDelayed(this, SAVE_EVERY_MS)
+        }
+    }
+
+    private fun writePosition() {
+        val exo = player ?: return
+        val video = now ?: return
+        val duration = exo.duration
+        if (exo.playbackState == Player.STATE_IDLE || duration == C.TIME_UNSET || duration <= 0 || exo.isCurrentMediaItemLive) return
+        val position = exo.currentPosition
+        // Near the end counts as finished: next time it starts over
+        val left = if (exo.playbackState == Player.STATE_ENDED || position > duration - 15_000) 0L else position
+        if (left == 0L || left > 5_000) YtStore.setPosition(this, video.videoId, left, duration)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -41,6 +64,11 @@ class YtPlayerService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         player = exo
+        instance = this
+        exo.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) = savePosition()
+        })
+        handler.postDelayed(ticker, SAVE_EVERY_MS)
         val open = PendingIntent.getActivity(
             this, 0,
             Intent(this, YtPlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
@@ -52,6 +80,9 @@ class YtPlayerService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
 
     override fun onDestroy() {
+        writePosition()
+        handler.removeCallbacks(ticker)
+        instance = null
         session?.release()
         session = null
         player?.release()
@@ -65,5 +96,13 @@ class YtPlayerService : MediaSessionService() {
         var player: ExoPlayer? = null
             private set
         var now: Now? = null
+
+        private var instance: YtPlayerService? = null
+        private const val SAVE_EVERY_MS = 5_000L
+
+        /** Writes down where the video is now (before another one takes its place). */
+        fun savePosition() {
+            instance?.writePosition()
+        }
     }
 }

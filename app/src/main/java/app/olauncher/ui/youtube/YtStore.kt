@@ -23,6 +23,7 @@ object YtStore {
     private const val KEY_PATH = "path"
     private const val KEY_SEEN = "seen_"
     private const val KEY_WATCHED = "watched"
+    private const val KEY_POSITIONS = "positions"
     private const val KEY_HIDE_WATCHED = "hide_watched"
     private const val KEY_FAVORITES = "favorites"
     private const val KEY_NEW = "new_"
@@ -112,6 +113,48 @@ object YtStore {
             )
         }
         prefs(ctx).edit().putString(KEY_FAVORITES, array.toString()).apply()
+    }
+
+    // ---- where each video was left ----
+
+    private var positionCache: LinkedHashMap<String, LongArray>? = null
+
+    private fun positions(ctx: Context): LinkedHashMap<String, LongArray> {
+        positionCache?.let { return it }
+        val map = LinkedHashMap<String, LongArray>()
+        runCatching {
+            val json = JSONObject(prefs(ctx).getString(KEY_POSITIONS, "{}") ?: "{}")
+            for (id in json.keys()) {
+                val pair = json.optJSONArray(id) ?: continue
+                map[id] = longArrayOf(pair.optLong(0), pair.optLong(1))
+            }
+        }
+        positionCache = map
+        return map
+    }
+
+    private fun savePositions(ctx: Context, map: LinkedHashMap<String, LongArray>) {
+        val json = JSONObject()
+        map.forEach { (id, pair) -> json.put(id, JSONArray().put(pair[0]).put(pair[1])) }
+        prefs(ctx).edit().putString(KEY_POSITIONS, json.toString()).apply()
+    }
+
+    /** Where a video was left, in milliseconds (0: from the start). */
+    fun position(ctx: Context, videoId: String) = positions(ctx)[videoId]?.get(0) ?: 0L
+
+    /** How much of a video was played, 0 to 1 (0: never left half way). */
+    fun progress(ctx: Context, videoId: String): Float {
+        val pair = positions(ctx)[videoId] ?: return 0f
+        return if (pair[1] > 0) (pair[0].toFloat() / pair[1]).coerceIn(0f, 1f) else 0f
+    }
+
+    /** Remembers the point of the last few hundred videos; a video played to the end starts over. */
+    fun setPosition(ctx: Context, videoId: String, position: Long, duration: Long) {
+        val map = positions(ctx)
+        map.remove(videoId)
+        if (position > 0) map[videoId] = longArrayOf(position, duration)
+        while (map.size > 300) map.remove(map.keys.first())
+        savePositions(ctx, map)
     }
 
     // ---- new videos ----

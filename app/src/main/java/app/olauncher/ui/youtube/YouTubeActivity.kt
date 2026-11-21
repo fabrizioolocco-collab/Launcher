@@ -139,6 +139,7 @@ class YouTubeActivity : AppCompatActivity() {
 
     /** Stops what is playing: the bar and the notification go. */
     private fun stopNow() {
+        YtPlayerService.savePosition()
         YtPlayerService.player?.let {
             it.stop()
             it.clearMediaItems()
@@ -499,6 +500,7 @@ class YouTubeActivity : AppCompatActivity() {
         var button: FrameLayout? = null
         var dot: View? = null
         var seen: TextView? = null
+        var bar: View? = null
     }
 
     private inner class Adapter : RecyclerView.Adapter<Holder>() {
@@ -603,6 +605,13 @@ class YouTubeActivity : AppCompatActivity() {
                             marginStart = 5.dpToPx()
                             topMargin = 5.dpToPx()
                         })
+                        // How far a video left half way was played, along the bottom of its picture
+                        val played = View(ctx).apply {
+                            setBackgroundColor(RED)
+                            isVisible = false
+                        }
+                        bar = played
+                        thumb.addView(played, FrameLayout.LayoutParams(0, 3.dpToPx(), Gravity.BOTTOM or Gravity.START))
                         // "Watched", on the corner of a video already played
                         val seenMark = label(11f, Color.WHITE, 1).apply {
                             text = "\u2713 " + getString(R.string.ml_yt_watched)
@@ -672,6 +681,11 @@ class YouTubeActivity : AppCompatActivity() {
                     holder.title.setTextColor(if (watched) UiKit.secondary(ctx) else UiKit.primary(ctx))
                     holder.image.alpha = if (watched) 0.45f else 1f
                     holder.seen?.isVisible = watched
+                    holder.bar?.let { played ->
+                        val part = YtStore.progress(ctx, item.id)
+                        played.isVisible = part > 0f
+                        played.layoutParams = played.layoutParams.apply { width = (152.dpToPx() * part).toInt() }
+                    }
                     holder.itemView.setOnLongClickListener {
                         videoMenu(item)
                         true

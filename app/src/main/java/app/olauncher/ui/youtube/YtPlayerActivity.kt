@@ -232,6 +232,7 @@ class YtPlayerActivity : AppCompatActivity() {
                     else -> {
                         // Back leaves the video: it stops. The floating window is for home, or its button
                         closing = true
+                        YtPlayerService.savePosition()
                         finish()
                     }
                 }
@@ -281,6 +282,7 @@ class YtPlayerActivity : AppCompatActivity() {
             if (now == null) finish() else showNow()
             return
         }
+        YtPlayerService.savePosition()
         YtPlayerService.now = YtPlayerService.Now(
             id,
             intent.getStringExtra(EXTRA_TITLE).orEmpty(),
@@ -291,7 +293,8 @@ class YtPlayerActivity : AppCompatActivity() {
         zoom.reset()
         setChrome(false)
         showNow()
-        load(0)
+        // From where it was left the last time
+        load(YtStore.position(this, id))
     }
 
     private fun restart() {
