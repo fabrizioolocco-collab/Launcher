@@ -155,7 +155,7 @@ object NotificationsPopup {
         card.addView(divider(ctx, line))
         val footer = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL }
         footer.addView(footerButton(ctx, R.string.ml_notif_clear_all, secondary, bold = false) {
-            items.forEach { listener.dismiss(it.key) }
+            listener.dismissAll(items.map { it.key })
             dialog.dismiss()
         }, LinearLayout.LayoutParams(0, 54.dpToPx(), 1f))
         footer.addView(View(ctx).apply { setBackgroundColor(line) }, LinearLayout.LayoutParams(1.dpToPx(), ViewGroup.LayoutParams.MATCH_PARENT))

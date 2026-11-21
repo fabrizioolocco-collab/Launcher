@@ -95,16 +95,45 @@ class NotificationListener : NotificationListenerService() {
         } catch (e: Exception) {
             null
         } ?: return emptyList()
-        val mine = all.filter { ownerOf(it) == packageName && it.user.toString() == user }
+        val now = System.currentTimeMillis()
+        // One just dismissed can still be listed for a moment: it is not shown again
+        val mine = all.filter { ownerOf(it) == packageName && it.user.toString() == user && now - (dismissed[it.key] ?: 0L) > 10_000 }
         // Summaries only repeat their children: keep them only when alone
         val children = mine.filter { it.notification.flags and Notification.FLAG_GROUP_SUMMARY == 0 }
         return (children.ifEmpty { mine }).sortedByDescending { it.postTime }
     }
 
-    fun dismiss(key: String) = try {
-        cancelNotification(key)
-    } catch (e: Exception) {
-        e.printStackTrace()
+    fun dismiss(key: String) = dismissAll(listOf(key))
+
+    /** The notifications dismissed in the last seconds: the system may still list them for a moment. */
+    private val dismissed = HashMap<String, Long>()
+
+    /**
+     * Dismisses notifications, and with the last one of a group the group's summary too. An app
+     * like WhatsApp posts a summary next to its messages; the lists here show only the messages, so
+     * with the summary left behind the notification seemed to come back, and went at the second swipe.
+     */
+    fun dismissAll(keys: Collection<String>) {
+        try {
+            val now = System.currentTimeMillis()
+            dismissed.entries.removeAll { now - it.value > 10_000 }
+            val all = runCatching { activeNotifications }.getOrNull()?.toList().orEmpty()
+            val groups = all.filter { it.key in keys }.map { it.groupKey }.toSet()
+            keys.forEach {
+                dismissed[it] = now
+                cancelNotification(it)
+            }
+            for (group in groups) {
+                val left = all.filter { it.groupKey == group && it.key !in dismissed }
+                // Only summaries are left of the group: nothing to sum up any more
+                if (left.isNotEmpty() && left.all { it.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0 }) left.forEach {
+                    dismissed[it.key] = now
+                    cancelNotification(it.key)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     /** Re-applies the detox rules now (session started, whitelist changed). */
