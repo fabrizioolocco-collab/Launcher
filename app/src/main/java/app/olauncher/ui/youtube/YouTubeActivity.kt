@@ -51,6 +51,10 @@ class YouTubeActivity : AppCompatActivity() {
     private sealed class Screen {
         var items: List<Any>? = null
 
+        /** The ticket for the page after the ones loaded: older videos, more results. Null at the end. */
+        var next: String? = null
+        var emptyPages = 0
+
         class Home : Screen()
         class Search(val query: String) : Screen()
         class Channel(var channel: YtChannel) : Screen()
@@ -65,6 +69,7 @@ class YouTubeActivity : AppCompatActivity() {
     private val screen get() = stack.last()
     private var job: Job? = null
     private var pictures: Job? = null
+    private var moreJob: Job? = null
 
     private lateinit var root: LinearLayout
     private lateinit var back: ImageView
@@ -188,6 +193,7 @@ class YouTubeActivity : AppCompatActivity() {
 
     private fun show() {
         job?.cancel()
+        moreJob?.cancel()
         pictures?.cancel()
         val current = screen
         back.isVisible = stack.size > 1
@@ -222,9 +228,11 @@ class YouTubeActivity : AppCompatActivity() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     when (current) {
-                        is Screen.Search -> YouTubeApi.search(current.query)
+                        is Screen.Search -> YouTubeApi.search(current.query).also { current.next = it.next }.items
                         is Screen.Channel -> {
-                            val (info, videos) = YouTubeApi.channel(current.channel.id)
+                            val page = YouTubeApi.channel(current.channel.id)
+                            current.next = page.next
+                            val (info, videos) = page
                             if (info != null) {
                                 current.channel = info
                                 YtStore.refresh(this@YouTubeActivity, info)
@@ -262,9 +270,45 @@ class YouTubeActivity : AppCompatActivity() {
             current is Screen.Favorites -> showEmpty(getString(R.string.ml_yt_fav_empty), null, null)
             current is Screen.Later -> showEmpty(getString(R.string.ml_yt_later_empty), null, null)
             current is Screen.Home -> showEmpty(getString(R.string.ml_yt_empty), null, null)
+            current.next != null -> empty.isVisible = false
             else -> showEmpty(getString(R.string.ml_yt_no_results), null, null)
         }
+        // A list that doesn't fill the screen (the watched ones hidden) goes on by itself
+        list.post { checkMore() }
     }
+
+    /** Near the end of the list: the page after it is fetched, until YouTube has no more. */
+    private fun checkMore() {
+        if (stack.isEmpty() || screen.next == null || screen.items == null) return
+        if (grid.findLastVisibleItemPosition() >= adapter.itemCount - 8) loadMore()
+    }
+
+    private fun loadMore() {
+        val current = screen
+        val next = current.next ?: return
+        if (moreJob?.isActive == true) return
+        moreJob = lifecycleScope.launch {
+            val channel = (current as? Screen.Channel)?.channel
+            val page = withContext(Dispatchers.IO) {
+                runCatching { YouTubeApi.more(next, channel?.name.orEmpty(), channel?.id.orEmpty()) }.getOrNull()
+            }
+            if (page == null) {
+                current.next = null
+                return@launch
+            }
+            val old = current.items.orEmpty()
+            val known = old.map { key(it) }.toHashSet()
+            val fresh = page.items.filter { known.add(key(it)) }
+            // A few pages in a row with nothing new: the end, whatever the ticket says
+            current.emptyPages = if (fresh.isEmpty()) current.emptyPages + 1 else 0
+            current.next = page.next.takeIf { current.emptyPages < 3 }
+            current.items = old + fresh
+            moreJob = null
+            if (screen === current) display(current, keepPlace = true)
+        }
+    }
+
+    private fun key(item: Any) = if (item is YtVideo) "v" + item.id else "c" + (item as YtChannel).id
 
     /** The videos of a list kept on the phone (favourites, to watch), as it is now; null on the other screens. */
     private fun saved(current: Screen): List<YtVideo>? = when (current) {
@@ -336,8 +380,8 @@ class YouTubeActivity : AppCompatActivity() {
         pictures = lifecycleScope.launch {
             for (channel in stale) {
                 val read = withContext(Dispatchers.IO) { runCatching { YouTubeApi.channel(channel.id) }.getOrNull() } ?: continue
-                read.first?.let { YtStore.refresh(ctx, it) }
-                YtStore.update(ctx, channel.id, read.second.map { it.id })
+                read.info?.let { YtStore.refresh(ctx, it) }
+                YtStore.update(ctx, channel.id, read.videos.map { it.id })
                 val current = screen
                 if (current is Screen.Home) {
                     current.items = YtStore.subscriptions(ctx)
@@ -443,6 +487,11 @@ class YouTubeActivity : AppCompatActivity() {
             }
         }
         list = RecyclerView(this).apply {
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+                    if (dy > 0) checkMore()
+                }
+            })
             layoutManager = grid
             adapter = this@YouTubeActivity.adapter
             clipToPadding = false

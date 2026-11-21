@@ -34,6 +34,12 @@ class YtStreams(
     val live: Boolean
 )
 
+/** A page of a search: its videos and channels, and the ticket for the page after it (null at the end). */
+class YtPage(val items: List<Any>, val next: String?)
+
+/** The first page of a channel: the channel as YouTube names it now, its latest videos, the ticket for the older ones. */
+data class YtChannelPage(val info: YtChannel?, val videos: List<YtVideo>, val next: String?)
+
 class YtException(message: String) : IOException(message)
 
 /**
@@ -118,15 +124,33 @@ object YouTubeApi {
         post(endpoint, JSONObject().put("clientName", "WEB").put("clientVersion", WEB_VERSION), "1", WEB_AGENT, body)
 
     /** Videos and channels for [query], in the order YouTube gives them. */
-    fun search(query: String): List<Any> {
+    fun search(query: String): YtPage {
         val out = ArrayList<Any>()
-        collect(web("search", JSONObject().put("query", query)), out, "", "")
-        return out
+        val json = web("search", JSONObject().put("query", query))
+        collect(json, out, "", "")
+        return YtPage(out, nextToken(json)?.let { "search|$it" })
     }
 
+    /**
+     * What comes after a page ([next] is the [YtPage.next] of the page before): older videos of a
+     * channel (named here, since its own page doesn't repeat it on every video), more results of a search.
+     */
+    fun more(next: String, channelName: String, channelId: String): YtPage {
+        val endpoint = next.substringBefore('|')
+        val json = web(endpoint, JSONObject().put("continuation", next.substringAfter('|')))
+        val out = ArrayList<Any>()
+        collect(json, out, channelName, channelId)
+        return YtPage(out, nextToken(json)?.let { "$endpoint|$it" })
+    }
+
+    /** The ticket for the next page: it sits where the list ends. */
+    private fun nextToken(node: Any?): String? =
+        find(node, "continuationItemRenderer")?.let { find(it, "continuationCommand") }?.optString("token")?.takeIf { it.isNotBlank() }
+
     /** The channel as YouTube names it now, and its latest videos. */
-    fun channel(id: String): Pair<YtChannel?, List<YtVideo>> {
+    fun channel(id: String): YtChannelPage {
         var info: YtChannel? = null
+        var next: String? = null
         val out = ArrayList<Any>()
         try {
             val json = web("browse", JSONObject().put("browseId", id).put("params", "EgZ2aWRlb3PyBgQKAjoA"))
@@ -134,11 +158,12 @@ object YouTubeApi {
             val name = meta?.optString("title").orEmpty()
             if (meta != null && name.isNotBlank()) info = YtChannel(id, name, thumb(meta.optJSONObject("avatar")))
             collect(json.optJSONObject("contents") ?: JSONObject(), out, name, id)
+            next = nextToken(json.optJSONObject("contents"))?.let { "browse|$it" }
         } catch (e: Exception) {
             if (e is InterruptedException) throw e
         }
         val videos = out.filterIsInstance<YtVideo>()
-        return info to videos.ifEmpty { feed(id) }
+        return if (videos.isNotEmpty()) YtChannelPage(info, videos, next) else YtChannelPage(info, feed(id), null)
     }
 
     /** The public feed of a channel: its last fifteen videos, for when the page can't be read. */
