@@ -1,5 +1,6 @@
 package app.olauncher.ui
 
+import app.olauncher.ui.youtube.YouTubeActivity
 import android.Manifest
 import app.olauncher.helper.CalendarEvents
 import android.app.Activity
@@ -495,6 +496,9 @@ class HomeSearchController(
                 "Google" to { openWeb(q) },
                 "Play Store" to { openPlayStore(q) },
                 "Spotify" to { openSpotify(q) },
+                // The launcher's own Tube: its search of videos, and of podcasts
+                activity.getString(R.string.ml_search_tube_videos) to { open(YouTubeActivity.searchIntent(activity, q, podcast = false)) },
+                activity.getString(R.string.ml_search_tube_podcasts) to { open(YouTubeActivity.searchIntent(activity, q, podcast = true)) },
                 "YouTube" to { openYouTube(q) },
             )
             targets.chunked(2).forEachIndexed { i, pair ->

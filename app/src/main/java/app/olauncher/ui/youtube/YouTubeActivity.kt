@@ -189,6 +189,17 @@ class YouTubeActivity : AppCompatActivity() {
 
     /** Opens the channel an intent names (the player's channel line). */
     private fun openFrom(intent: Intent): Boolean {
+        // From the launcher's search: the same words, looked for among the videos or the podcasts
+        intent.getStringExtra(EXTRA_QUERY)?.takeIf { it.isNotBlank() }?.let { query ->
+            intent.removeExtra(EXTRA_QUERY)
+            podcast = intent.getBooleanExtra(EXTRA_PODCAST, false)
+            YtStore.setPodcastMode(this, podcast)
+            seeding?.cancel()
+            stack.clear()
+            stack.add(Screen.Home())
+            open(Screen.Search(query))
+            return true
+        }
         val id = intent.getStringExtra(EXTRA_CHANNEL_ID) ?: return false
         intent.removeExtra(EXTRA_CHANNEL_ID)
         podcast = PodcastApi.isPodcast(id)
@@ -999,6 +1010,15 @@ class YouTubeActivity : AppCompatActivity() {
         private const val RED = 0xFFE53935.toInt()
         private const val EXTRA_CHANNEL_ID = "channel_id"
         private const val EXTRA_CHANNEL_NAME = "channel_name"
+
+        private const val EXTRA_QUERY = "query"
+        private const val EXTRA_PODCAST = "podcast"
+
+        /** Tube opened on the results of a search, of videos or of podcasts. */
+        fun searchIntent(ctx: Context, query: String, podcast: Boolean): Intent = Intent(ctx, YouTubeActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(EXTRA_QUERY, query)
+            .putExtra(EXTRA_PODCAST, podcast)
 
         fun channelIntent(ctx: Context, channel: YtChannel): Intent = Intent(ctx, YouTubeActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
