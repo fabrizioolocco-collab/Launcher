@@ -274,6 +274,9 @@ object YtImages {
     }
 
     fun load(view: ImageView, url: String) {
+        // Asked again for the picture it already shows (a list drawn again): nothing to do, and no blink
+        if (view.tag == url && view.drawable != null) return
+        val same = view.tag == url
         view.tag = url
         if (url.isBlank()) {
             view.setImageDrawable(null)
@@ -283,7 +286,7 @@ object YtImages {
             view.setImageBitmap(it)
             return
         }
-        view.setImageDrawable(null)
+        if (!same) view.setImageDrawable(null)
         val ctx = view.context.applicationContext
         pool.execute {
             val bitmap = runCatching { fetch(ctx, url) }.getOrNull() ?: return@execute
@@ -292,17 +295,32 @@ object YtImages {
         }
     }
 
+    /**
+     * A picture no larger than the lists show it: covers of podcasts come at 600 or 3000 pixels a
+     * side, and a few of those filled the memory, so that the others had to be loaded again and again.
+     */
+    private fun small(bytes: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (minOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 320) sample *= 2
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        })
+    }
+
     private fun fetch(ctx: Context, url: String): Bitmap? {
         val dir = File(ctx.cacheDir, "youtube").apply { mkdirs() }
         val file = File(dir, url.hashCode().toString(16) + "_" + url.length)
-        if (file.length() > 0) BitmapFactory.decodeFile(file.path)?.let { return it }
+        if (file.length() > 0) small(file.readBytes())?.let { return it }
         val conn = URL(url).openConnection() as HttpURLConnection
         try {
             conn.connectTimeout = 10000
             conn.readTimeout = 15000
             if (conn.responseCode !in 200..299) return null
             val bytes = conn.inputStream.use { it.readBytes() }
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+            val bitmap = small(bytes) ?: return null
             file.writeBytes(bytes)
             return bitmap
         } finally {

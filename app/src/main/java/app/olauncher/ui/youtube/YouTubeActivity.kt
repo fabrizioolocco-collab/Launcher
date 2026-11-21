@@ -100,6 +100,9 @@ class YouTubeActivity : AppCompatActivity() {
     private lateinit var downloadsButton: ImageView
     private var seeding: Job? = null
 
+    /** The first start comes right after the grid was shown: showing it again would only make it blink. */
+    private var started = false
+
     private val nowTicker = object : Runnable {
         override fun run() {
             updateNow()
@@ -178,7 +181,10 @@ class YouTubeActivity : AppCompatActivity() {
         root.removeCallbacks(nowTicker)
         nowTicker.run()
         // A channel followed or dropped from its page shows in the grid on the way back
-        if (stack.isNotEmpty() && screen is Screen.Home && screen.items != null) show()
+        if (stack.isNotEmpty() && screen is Screen.Home && screen.items != null) {
+            if (started) show()
+            started = true
+        }
         // A video just watched loses its red dot and gets its mark (or goes, when the watched ones are hidden)
         else if (stack.isNotEmpty()) {
             val current = screen
@@ -544,15 +550,25 @@ class YouTubeActivity : AppCompatActivity() {
         val ctx = this
         val stale = channels.filter { it.avatar.isBlank() || YtStore.due(ctx, it.id) }
         if (stale.isEmpty()) return
+        val forPodcasts = podcast
         pictures = lifecycleScope.launch {
             for (channel in stale) {
                 val read = withContext(Dispatchers.IO) { runCatching { read(channel.id) }.getOrNull() } ?: continue
                 read.info?.let { YtStore.refresh(ctx, it) }
                 YtStore.update(ctx, channel.id, read.videos.map { it.id })
                 val current = screen
+                // The grid of the other half is on screen by now: nothing of this one is drawn over it
+                if (podcast != forPodcasts) return@launch
                 if (current is Screen.Home) {
-                    current.items = YtStore.subscriptions(ctx)
-                    adapter.submit(current.items.orEmpty(), true)
+                    val fresh = if (forPodcasts) YtStore.podcasts(ctx) else YtStore.subscriptions(ctx)
+                    if (fresh != current.items) {
+                        current.items = fresh
+                        adapter.submit(fresh, true)
+                    } else {
+                        // Only its red count may have changed: that one tile is drawn again, not the whole grid
+                        val index = fresh.indexOfFirst { it.id == channel.id }
+                        if (index >= 0) adapter.notifyItemChanged(index)
+                    }
                 }
             }
         }
@@ -679,6 +695,8 @@ class YouTubeActivity : AppCompatActivity() {
             }
         }
         list = RecyclerView(this).apply {
+            // A tile drawn again changes in place, without the fade that made the grid blink
+            itemAnimator = null
             addOnScrollListener(object : RecyclerView.OnScrollListener() {
                 override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                     if (dy > 0) checkMore()
