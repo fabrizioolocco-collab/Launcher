@@ -22,6 +22,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -445,6 +446,12 @@ class YouTubeActivity : AppCompatActivity() {
                 }
             ) to { if (kept || coming) PodcastDownloads.remove(this, video) else download(video) }
         }
+        // A copy as a file, where the picker says
+        if (episode) choices += getString(R.string.ml_pod_save_file) to { askWhere(video, TubeExport.EPISODE) }
+        else {
+            choices += getString(R.string.ml_yt_save_mp4) to { askWhere(video, TubeExport.VIDEO) }
+            choices += getString(R.string.ml_yt_save_audio) to { askWhere(video, TubeExport.AUDIO) }
+        }
         AlertDialog.Builder(this)
             .setTitle(video.title)
             .setItems(choices.map { it.first }.toTypedArray()) { _, which ->
@@ -452,6 +459,27 @@ class YouTubeActivity : AppCompatActivity() {
                 redraw()
             }
             .show()
+    }
+
+    private var exporting: Pair<YtVideo, Int>? = null
+
+    private val wherePicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val (item, kind) = exporting ?: return@registerForActivityResult
+        exporting = null
+        val target = result.data?.data ?: return@registerForActivityResult
+        showToast(getString(R.string.ml_yt_saving))
+        TubeExport.save(this, item, kind, target)
+    }
+
+    /** Asks where to put the file, under the name of the video; the saving starts once a place is chosen. */
+    private fun askWhere(item: YtVideo, kind: Int) {
+        val (name, type) = TubeExport.fileFor(item, kind)
+        exporting = item to kind
+        runCatching {
+            wherePicker.launch(
+                Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(type).putExtra(Intent.EXTRA_TITLE, name)
+            )
+        }
     }
 
     private fun download(episode: YtVideo) {

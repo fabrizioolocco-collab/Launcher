@@ -56,6 +56,27 @@ object PodcastApi {
         throw IOException("Too many redirects")
     }
 
+    /** Copies what is at an address into [out], telling [progress] the bytes so far and the total (-1 unknown). */
+    fun copy(address: String, out: java.io.OutputStream, progress: (Long, Long) -> Unit) {
+        val conn = open(address)
+        try {
+            val total = conn.contentLengthLong
+            val buffer = ByteArray(64 * 1024)
+            var done = 0L
+            conn.inputStream.use { input ->
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    out.write(buffer, 0, read)
+                    done += read
+                    progress(done, total)
+                }
+            }
+        } finally {
+            conn.disconnect()
+        }
+    }
+
     /** Where an episode's sound really is, past the counters its address goes through. */
     fun resolve(address: String): String {
         val conn = open(address, "bytes=0-0")

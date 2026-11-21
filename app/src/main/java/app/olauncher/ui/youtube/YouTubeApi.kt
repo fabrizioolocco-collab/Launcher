@@ -35,6 +35,8 @@ class YtStreams(
     val clientIndex: Int,
     /** Video-only streams, one per height, best first. */
     val videos: List<Pair<Int, String>>,
+    /** The ones of [videos] that are H.264, which is what can be put in an MP4 file with the sound. */
+    val mp4Videos: List<Pair<Int, String>>,
     val audioUrl: String?,
     val muxedUrl: String?,
     val hlsUrl: String?,
@@ -260,12 +262,15 @@ object YouTubeApi {
                 }
                 val hls = data.optString("hlsManifestUrl").takeIf { it.isNotBlank() }
                 val videos = if (audio != null) byHeight.entries.sortedByDescending { it.key }.map { it.key to it.value.optString("url") } else emptyList()
+                val mp4Videos = if (audio != null) byHeight.entries.filter { it.value.optString("mimeType").contains("avc1") }
+                    .sortedByDescending { it.key }.map { it.key to it.value.optString("url") } else emptyList()
                 if (videos.isEmpty() && muxed == null && hls == null) continue
                 return YtStreams(
                     title = details?.optString("title").orEmpty(),
                     author = details?.optString("author").orEmpty(),
                     channelId = details?.optString("channelId").orEmpty(),
                     userAgent = client.agent,
+                    mp4Videos = mp4Videos,
                     client = client.fields.optString("clientName"),
                     clientIndex = index,
                     videos = videos,

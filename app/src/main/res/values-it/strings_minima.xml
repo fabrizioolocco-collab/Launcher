@@ -1194,4 +1194,11 @@
     <string name="ml_pod_download_failed">Download non riuscito</string>
     <string name="ml_pod_downloads">Scaricati</string>
     <string name="ml_pod_downloads_empty">Nessun episodio scaricato: tieni premuto su un episodio e scegli Scarica</string>
+    <string name="ml_yt_save_mp4">Salva come MP4…</string>
+    <string name="ml_yt_save_audio">Salva solo l\'audio (M4A)…</string>
+    <string name="ml_pod_save_file">Salva come file…</string>
+    <string name="ml_yt_saving">Salvataggio in corso…</string>
+    <string name="ml_yt_saved">File salvato</string>
+    <string name="ml_yt_save_failed">Salvataggio non riuscito</string>
+    <string name="ml_yt_save_channel">Tube: file salvati</string>
 </resources>
