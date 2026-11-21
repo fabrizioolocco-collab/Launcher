@@ -1209,4 +1209,6 @@
     <string name="ml_search_tube_podcasts">Tube: podcasts</string>
     <string name="ml_yt_save_audio_short">Audio</string>
     <string name="ml_pod_save_file_short">File</string>
+    <string name="ml_rec_quick_started">Recording started</string>
+    <string name="ml_rec_quick_stopped">Recording saved</string>
 </resources>

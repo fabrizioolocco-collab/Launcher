@@ -1,5 +1,6 @@
 package app.olauncher.ui.widgets
 
+import app.olauncher.ui.recorder.QuickRecord
 import android.app.Activity
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
@@ -461,6 +462,21 @@ class HomeWidgetsController(
         return ((width - grid.paddingLeft - grid.paddingRight) / prefs.widgetColumns).coerceAtLeast(1)
     }
 
+    /** A recording has started or ended: the recorder's icon, wherever it is on the home, turns green or back. */
+    fun setRecording(on: Boolean) {
+        fun mark(group: android.view.ViewGroup) {
+            for (i in 0 until group.childCount) {
+                val child = group.getChildAt(i)
+                if (child is IconCellView) {
+                    val app = child.getTag(R.id.ml_swipe_app) as? AppModel.App
+                    if (app != null && QuickRecord.isRecorder(app)) child.setRecording(on)
+                } else if (child is android.view.ViewGroup) mark(child)
+            }
+        }
+        mark(grid)
+        mark(free)
+    }
+
     fun render() {
         endEditing()
         grid.removeAllViews()
@@ -646,6 +662,7 @@ class HomeWidgetsController(
         view.onNotifiedTap = { NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) } }
         view.tag = item
         view.setTag(R.id.ml_swipe_app, app)
+        if (QuickRecord.isRecorder(app)) view.setRecording(QuickRecord.isRecording)
         view.layoutParams = WidgetGridLayout.CellParams(item.col, shownRow(item.row), 1, rowDivisions)
         val showLabel = showLabels
         val tile = prefs.iconTiles

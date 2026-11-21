@@ -1,5 +1,6 @@
 package app.olauncher.ui
 
+import app.olauncher.ui.recorder.QuickRecord
 import app.olauncher.helper.Skin
 import android.content.Context
 import android.graphics.drawable.GradientDrawable
@@ -152,12 +153,17 @@ class DockController(
 
     private fun tile(index: Int, dockApp: PinnedApp, app: AppModel.App) = ImageView(context).apply {
         val notified = notificationCount(app) > 0
+        // The recorder while a recording goes on (started with a double tap on it): a green tile
+        val recording = QuickRecord.isRecorder(app) && QuickRecord.isRecording
         background = if (skinned) Skin.panel(
-            context, if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor),
-            if (notified) NotificationBadge.NOTIFICATION_COLOR else 0, 8, 16,
+            context, if (recording) TILE_GREEN else if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor),
+            if (recording) QuickRecord.GREEN else if (notified) NotificationBadge.NOTIFICATION_COLOR else 0, 8, 16,
         ) else GradientDrawable().apply {
             cornerRadius = 16.dpToPx().toFloat()
-            if (notified) {
+            if (recording) {
+                setColor(TILE_GREEN)
+                setStroke(1.dpToPx(), QuickRecord.GREEN)
+            } else if (notified) {
                 setColor(TILE_RED)
                 setStroke(1.dpToPx(), NotificationBadge.NOTIFICATION_COLOR)
             } else setColor(context.getColorFromAttr(R.attr.tileColor))
@@ -220,5 +226,6 @@ class DockController(
         /** The gap [app.olauncher.ui.widgets.WidgetGridLayout] leaves around each cell's content. */
         private const val GRID_GAP_DP = 4
         private const val TILE_RED = 0xFF3A1715.toInt()
+        private const val TILE_GREEN = 0xFF14532D.toInt()
     }
 }

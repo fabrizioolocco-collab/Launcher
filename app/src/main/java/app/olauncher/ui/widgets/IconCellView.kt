@@ -184,9 +184,33 @@ class IconCellView(context: Context, onTap: () -> Unit) : FrameLayout(context) {
         this.count = count
         notified = count > 0
         updateFrame()
+        applyTint()
+    }
+
+    private var recording = false
+
+    /** The recorder's icon while a recording goes on: green, icon and name. */
+    fun setRecording(on: Boolean) {
+        if (recording == on) return
+        recording = on
+        applyTint()
+    }
+
+    private fun applyTint() {
+        val green = app.olauncher.ui.recorder.QuickRecord.GREEN
         // On a card the card turns red and the icon stays as it is
-        icon.colorFilter = if (notified && !cardOn) app.olauncher.ui.NotificationBadge.redFilter else skinFilter
-        label.setTextColor(if (notified && !cardOn) NotificationBadge.NOTIFICATION_COLOR else context.getColorFromAttr(R.attr.primaryColor))
+        icon.colorFilter = when {
+            recording -> android.graphics.PorterDuffColorFilter(green, android.graphics.PorterDuff.Mode.SRC_IN)
+            notified && !cardOn -> app.olauncher.ui.NotificationBadge.redFilter
+            else -> skinFilter
+        }
+        label.setTextColor(
+            when {
+                recording -> green
+                notified && !cardOn -> NotificationBadge.NOTIFICATION_COLOR
+                else -> context.getColorFromAttr(R.attr.primaryColor)
+            }
+        )
     }
 
     override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = touch.intercept(ev)

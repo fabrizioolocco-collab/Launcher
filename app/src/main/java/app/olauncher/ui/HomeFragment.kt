@@ -1,5 +1,7 @@
 package app.olauncher.ui
 
+import app.olauncher.ui.recorder.QuickRecord
+import app.olauncher.ui.recorder.RecorderService
 import app.olauncher.helper.Skin
 import android.app.admin.DevicePolicyManager
 import android.content.Context
@@ -176,6 +178,16 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             onChanged = { news.render() },
         )
         viewModel.homeApps.value?.let { dock.setApps(it) }
+        // A recording started or ended (from here with a double tap, or in the recorder): its icon says so
+        var wasRecording = false
+        RecorderService.state.observe(viewLifecycleOwner) { state ->
+            val on = state != null
+            if (on != wasRecording) {
+                wasRecording = on
+                widgets.setRecording(on)
+                dock.render()
+            }
+        }
 
         news = HomeNewsController(
             context = requireContext(),
@@ -861,7 +873,37 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
         else if (ParkingShortcut.isParking(app.appPackage)) ParkingShortcut.onTap(requireActivity()) { showParkingMenu() }
         else if (TestNotifications.isFake(app.appPackage)) TestNotifications.clearNotifications(requireContext(), app.appPackage)
+        else if (QuickRecord.isRecorder(app)) recorderTap(app)
         else viewModel.launch(app)
+    }
+
+    private var recorderOpening: Runnable? = null
+
+    /**
+     * The recorder on the home: one tap opens it (after the moment a second tap could come), two
+     * start a recording at once, or end the one going on.
+     */
+    private fun recorderTap(app: AppModel.App) {
+        val root = view
+        if (root == null) {
+            viewModel.launch(app)
+            return
+        }
+        val pending = recorderOpening
+        if (pending != null) {
+            root.removeCallbacks(pending)
+            recorderOpening = null
+            root.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            // Never allowed to record yet: the recorder opens, and asks
+            if (!QuickRecord.toggle(requireContext())) viewModel.launch(app)
+        } else {
+            val open = Runnable {
+                recorderOpening = null
+                if (isAdded) viewModel.launch(app)
+            }
+            recorderOpening = open
+            root.postDelayed(open, android.view.ViewConfiguration.getDoubleTapTimeout().toLong())
+        }
     }
 
     private fun showLongPressToast() = requireContext().showToast(getString(R.string.long_press_to_select_app))
