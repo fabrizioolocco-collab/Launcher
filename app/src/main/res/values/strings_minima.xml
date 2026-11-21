@@ -1253,4 +1253,5 @@
         <item quantity="one">The folder is deleted and its note goes to the bin.</item>
         <item quantity="other">The folder is deleted and its %d notes go to the bin.</item>
     </plurals>
+    <string name="ml_notes_cannot_move">It can\'t go there</string>
 </resources>

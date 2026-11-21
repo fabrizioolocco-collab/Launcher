@@ -169,6 +169,16 @@ object NotesStore {
         return target
     }
 
+    /** Moves a whole folder into [dest]; null when it can't go there (into itself, or a name already taken). */
+    fun moveFolder(root: File, dir: File, dest: File): File? {
+        if (dest == dir.parentFile) return dir
+        if (dest == dir || dest.absolutePath.startsWith(dir.absolutePath + File.separator)) return null
+        val target = File(dest, dir.name)
+        if (target.exists() || !dir.renameTo(target)) return null
+        movePins(root, dir, target)
+        return target
+    }
+
     // ---------------------------------------------------------------- the bin
 
     private fun bin(root: File) = File(root, TRASH)

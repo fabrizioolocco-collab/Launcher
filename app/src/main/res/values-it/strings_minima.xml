@@ -1250,4 +1250,5 @@
         <item quantity="one">La cartella viene eliminata e la sua nota va nel cestino.</item>
         <item quantity="other">La cartella viene eliminata e le sue %d note vanno nel cestino.</item>
     </plurals>
+    <string name="ml_notes_cannot_move">Non può andare lì</string>
 </resources>

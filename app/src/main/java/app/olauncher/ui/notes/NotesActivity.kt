@@ -397,6 +397,85 @@ class NotesActivity : AppCompatActivity() {
         )
     }
 
+    // ---------------------------------------------------------------- dragging
+
+    /** The note or the folder held under the finger. */
+    private class Dragged(val file: File, val folder: NotesStore.Folder?, val origin: View) {
+        /** It has been taken away from where it was: letting go is a move, not a long press. */
+        var left = false
+        var over = false
+    }
+
+    private var dragged: Dragged? = null
+
+    /**
+     * A long press: held and moved, the note (or the folder) is dragged to another folder; held and
+     * let go where it is, it opens its menu, as a long press does everywhere else.
+     */
+    private fun hold(view: View, file: File, folder: NotesStore.Folder?): Boolean {
+        val menu = { if (folder != null) folderMenu(folder) else noteMenu(file) }
+        if (inBin || query != null) {
+            menu()
+            return true
+        }
+        dragged = Dragged(file, folder, view)
+        val started = view.startDragAndDrop(android.content.ClipData.newPlainText("note", file.name), View.DragShadowBuilder(view), null, 0)
+        if (!started) {
+            dragged = null
+            menu()
+        }
+        return true
+    }
+
+    /** Makes [view] a place to drop on: what is dropped goes into the folder [into] gives. */
+    private fun dropOn(view: View, into: () -> File?) {
+        view.setOnDragListener { v, e ->
+            val held = dragged ?: return@setOnDragListener false
+            when (e.action) {
+                android.view.DragEvent.ACTION_DRAG_ENTERED -> {
+                    if (v !== held.origin) {
+                        held.left = true
+                        v.alpha = 0.45f
+                    }
+                }
+                android.view.DragEvent.ACTION_DRAG_EXITED -> {
+                    if (v === held.origin) held.left = true
+                    v.alpha = 1f
+                }
+                // Near the top or the bottom of the list, it scrolls under the finger
+                android.view.DragEvent.ACTION_DRAG_LOCATION -> if (v.parent === list) {
+                    val y = v.top + e.y
+                    if (y < 72.dpToPx()) list.scrollBy(0, -24.dpToPx()) else if (y > list.height - 72.dpToPx()) list.scrollBy(0, 24.dpToPx())
+                }
+                android.view.DragEvent.ACTION_DROP -> {
+                    v.alpha = 1f
+                    val dir = into()
+                    if (held.left && dir != null) drop(held, dir)
+                }
+                android.view.DragEvent.ACTION_DRAG_ENDED -> {
+                    v.alpha = 1f
+                    if (!held.over) {
+                        held.over = true
+                        dragged = null
+                        // Never moved from its place: it was a long press
+                        if (!held.left) v.post { if (held.folder != null) folderMenu(held.folder) else noteMenu(held.file) }
+                    }
+                }
+            }
+            true
+        }
+    }
+
+    private fun drop(held: Dragged, dir: File) {
+        val moved = if (held.folder != null) NotesStore.moveFolder(root, held.file, dir) else NotesStore.move(root, held.file, dir)
+        if (moved == null) showToast(getString(R.string.ml_notes_cannot_move))
+        else {
+            open(dir)
+            if (held.folder != null && target == held.file) target = moved
+        }
+        reload()
+    }
+
     // ---------------------------------------------------------------- layout
 
     private fun buildLayout() {
@@ -446,6 +525,8 @@ class NotesActivity : AppCompatActivity() {
         bar.addView(searchButton)
         bar.addView(menuButton)
         column.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        // Dropped on the bar at the top: out of every folder
+        dropOn(bar) { root }
 
         val content = FrameLayout(this)
         list = RecyclerView(this).apply {
@@ -455,6 +536,8 @@ class NotesActivity : AppCompatActivity() {
             clipToPadding = false
             setPadding(8.dpToPx(), 0, 8.dpToPx(), 16.dpToPx())
         }
+        // Dropped on the empty part under the last row: out of every folder too
+        dropOn(list) { root }
         empty = FrameLayout(this).apply { isVisible = false }
         content.addView(list, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         content.addView(empty, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -565,11 +648,10 @@ class NotesActivity : AppCompatActivity() {
                     holder.side.text = if (item.open) "" else item.folder.count.toString()
                     // The folder a new note would go to stands out
                     view.background = if (dir == target && dir != root) UiKit.border(ctx, 12, UiKit.card(ctx)) else UiKit.ripple(ctx)
+                    view.alpha = 1f
                     view.setOnClickListener { toggle(dir) }
-                    view.setOnLongClickListener {
-                        folderMenu(item.folder)
-                        true
-                    }
+                    view.setOnLongClickListener { hold(view, dir, item.folder) }
+                    dropOn(view) { dir }
                 }
                 is Row.NoteRow -> {
                     val note = item.note
@@ -584,11 +666,11 @@ class NotesActivity : AppCompatActivity() {
                     holder.under.text = item.snippet
                     holder.under.isVisible = !item.snippet.isNullOrBlank()
                     holder.side.text = DateUtils.getRelativeTimeSpanString(note.lastModified(), System.currentTimeMillis(), DateUtils.DAY_IN_MILLIS, DateUtils.FORMAT_ABBREV_ALL)
+                    view.alpha = 1f
                     view.setOnClickListener { if (inBin) noteMenu(note) else startActivity(NoteEditorActivity.intent(ctx, note)) }
-                    view.setOnLongClickListener {
-                        noteMenu(note)
-                        true
-                    }
+                    view.setOnLongClickListener { hold(view, note, null) }
+                    // Dropped on a note: beside it, in its folder
+                    dropOn(view) { note.parentFile }
                 }
             }
         }
