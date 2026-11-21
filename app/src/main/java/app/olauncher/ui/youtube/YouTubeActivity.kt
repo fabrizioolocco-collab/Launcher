@@ -60,6 +60,7 @@ class YouTubeActivity : AppCompatActivity() {
         class Channel(var channel: YtChannel) : Screen()
         class Favorites : Screen()
         class Later : Screen()
+        class Downloads : Screen()
     }
 
     /** The top of a channel's page: its picture, its name and the button to follow it. */
@@ -89,9 +90,23 @@ class YouTubeActivity : AppCompatActivity() {
     private lateinit var nowTitle: TextView
     private lateinit var nowAuthor: TextView
     private lateinit var nowPlay: ImageView
+    /** Podcasts instead of videos: the same screens, on the other half of what the app keeps. */
+    private var podcast = false
+    private lateinit var modeRow: LinearLayout
+    private lateinit var videoTab: TextView
+    private lateinit var podcastTab: TextView
+    private lateinit var downloadsButton: ImageView
+    private var seeding: Job? = null
+
     private val nowTicker = object : Runnable {
         override fun run() {
             updateNow()
+            // A download that has just ended (or failed) changes the mark on its episode
+            if (PodcastDownloads.poll(this@YouTubeActivity) && stack.isNotEmpty()) {
+                val current = screen
+                saved(current)?.let { current.items = it }
+                if (current.items != null) display(current, keepPlace = true)
+            }
             root.postDelayed(this, 1000)
         }
     }
@@ -101,6 +116,7 @@ class YouTubeActivity : AppCompatActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         buildLayout()
         setContentView(root)
+        podcast = YtStore.podcastMode(this)
         stack.add(Screen.Home())
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = goBack()
@@ -128,7 +144,7 @@ class YouTubeActivity : AppCompatActivity() {
         nowTitle.text = now.title
         nowAuthor.text = now.author
         nowAuthor.isVisible = now.author.isNotBlank()
-        val thumb = "https://i.ytimg.com/vi/${now.videoId}/mqdefault.jpg"
+        val thumb = now.picture
         if (nowThumb.tag != thumb) YtImages.load(nowThumb, thumb)
         val playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED
         nowPlay.setImageResource(if (playing) R.drawable.ic_m_pause else R.drawable.ic_m_play)
@@ -173,6 +189,7 @@ class YouTubeActivity : AppCompatActivity() {
     private fun openFrom(intent: Intent): Boolean {
         val id = intent.getStringExtra(EXTRA_CHANNEL_ID) ?: return false
         intent.removeExtra(EXTRA_CHANNEL_ID)
+        podcast = PodcastApi.isPodcast(id)
         open(Screen.Channel(YtChannel(id, intent.getStringExtra(EXTRA_CHANNEL_NAME).orEmpty(), "")))
         return true
     }
@@ -205,16 +222,20 @@ class YouTubeActivity : AppCompatActivity() {
         showEye()
 
         later.isVisible = current is Screen.Home
+        modeRow.isVisible = current is Screen.Home
+        downloadsButton.isVisible = podcast && current is Screen.Home
+        input.hint = getString(if (podcast) R.string.ml_pod_search_hint else R.string.ml_yt_search_hint)
+        showMode()
         saved(current)?.let {
             current.items = it
             display(current)
             return
         }
         if (current is Screen.Home) {
-            val channels = YtStore.subscriptions(this)
+            val channels = if (podcast) YtStore.podcasts(this) else YtStore.subscriptions(this)
             current.items = channels
             display(current)
-            refresh(channels)
+            if (podcast && !YtStore.startersDone(this)) addStarters() else refresh(channels)
             return
         }
         current.items?.let {
@@ -228,9 +249,11 @@ class YouTubeActivity : AppCompatActivity() {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     when (current) {
-                        is Screen.Search -> YouTubeApi.search(current.query).also { current.next = it.next }.items
+                        is Screen.Search ->
+                            if (podcast) PodcastApi.search(current.query)
+                            else YouTubeApi.search(current.query).also { current.next = it.next }.items
                         is Screen.Channel -> {
-                            val page = YouTubeApi.channel(current.channel.id)
+                            val page = read(current.channel.id)
                             current.next = page.next
                             val (info, videos) = page
                             if (info != null) {
@@ -268,7 +291,9 @@ class YouTubeActivity : AppCompatActivity() {
         when {
             items.isNotEmpty() -> empty.isVisible = false
             current is Screen.Favorites -> showEmpty(getString(R.string.ml_yt_fav_empty), null, null)
-            current is Screen.Later -> showEmpty(getString(R.string.ml_yt_later_empty), null, null)
+            current is Screen.Later -> showEmpty(getString(if (podcast) R.string.ml_pod_later_empty else R.string.ml_yt_later_empty), null, null)
+            current is Screen.Downloads -> showEmpty(getString(R.string.ml_pod_downloads_empty), null, null)
+            current is Screen.Home && podcast -> showEmpty(getString(R.string.ml_pod_empty), null, null)
             current is Screen.Home -> showEmpty(getString(R.string.ml_yt_empty), null, null)
             current.next != null -> empty.isVisible = false
             else -> showEmpty(getString(R.string.ml_yt_no_results), null, null)
@@ -312,9 +337,58 @@ class YouTubeActivity : AppCompatActivity() {
 
     /** The videos of a list kept on the phone (favourites, to watch), as it is now; null on the other screens. */
     private fun saved(current: Screen): List<YtVideo>? = when (current) {
-        is Screen.Favorites -> YtStore.favorites(this)
-        is Screen.Later -> YtStore.later(this)
+        is Screen.Favorites -> YtStore.favorites(this).filter { it.isEpisode == podcast }
+        is Screen.Later -> YtStore.later(this).filter { it.isEpisode == podcast }
+        is Screen.Downloads -> YtStore.downloads(this)
         else -> null
+    }
+
+    /** A channel's videos or a podcast's episodes: which, the id says. */
+    private fun read(channelId: String): YtChannelPage =
+        if (PodcastApi.isPodcast(channelId)) PodcastApi.feed(channelId) else YouTubeApi.channel(channelId)
+
+    private fun showMode() {
+        for ((tab, on) in listOf(videoTab to !podcast, podcastTab to podcast)) {
+            tab.setTextColor(if (on) Color.BLACK else UiKit.primary(this))
+            tab.background = GradientDrawable().apply {
+                cornerRadius = 18.dpToPx().toFloat()
+                if (on) setColor(UiKit.primary(this@YouTubeActivity)) else setStroke(1.dpToPx(), UiKit.line(this@YouTubeActivity))
+            }
+        }
+    }
+
+    private fun setMode(toPodcast: Boolean) {
+        if (podcast == toPodcast) return
+        podcast = toPodcast
+        YtStore.setPodcastMode(this, toPodcast)
+        seeding?.cancel()
+        stack.clear()
+        stack.add(Screen.Home())
+        show()
+    }
+
+    /** The first time the podcasts are opened: the ones given with the app are looked up and followed. */
+    private fun addStarters() {
+        if (seeding?.isActive == true) return
+        progress.isVisible = true
+        seeding = lifecycleScope.launch {
+            var reached = false
+            for ((term, begins) in PodcastApi.starters) {
+                val found = withContext(Dispatchers.IO) {
+                    runCatching { PodcastApi.starter(term, begins).also { reached = true } }.getOrNull()
+                } ?: continue
+                if (!YtStore.isSubscribed(this@YouTubeActivity, found.id)) YtStore.subscribe(this@YouTubeActivity, found)
+                val current = screen
+                if (podcast && current is Screen.Home) {
+                    current.items = YtStore.podcasts(this@YouTubeActivity)
+                    display(current, keepPlace = true)
+                }
+            }
+            progress.isVisible = false
+            // Without a network nothing was asked: it is tried again the next time
+            if (reached) YtStore.setStartersDone(this@YouTubeActivity)
+            if (podcast && screen is Screen.Home) refresh(YtStore.podcasts(this@YouTubeActivity))
+        }
     }
 
     private fun showEye() {
@@ -332,34 +406,68 @@ class YouTubeActivity : AppCompatActivity() {
         if (current.items != null) display(current, keepPlace = true)
     }
 
-    /** A long press on a video: keep it among the favourites, mark it watched or not. */
+    /** A long press on a video or an episode: favourites, the list to watch, watched or not, and for an episode its download. */
     private fun videoMenu(video: YtVideo) {
         val favorite = YtStore.isFavorite(this, video.id)
         val toWatch = YtStore.isLater(this, video.id)
         val watched = YtStore.isWatched(this, video.id)
+        val episode = video.isEpisode
+        val choices = ArrayList<Pair<String, () -> Unit>>()
+        choices += getString(if (favorite) R.string.ml_yt_fav_remove else R.string.ml_yt_fav_add) to { YtStore.setFavorite(this, video, !favorite) }
+        choices += getString(
+            when {
+                toWatch && episode -> R.string.ml_pod_later_remove
+                toWatch -> R.string.ml_yt_later_remove
+                episode -> R.string.ml_pod_later_add
+                else -> R.string.ml_yt_later_add
+            }
+        ) to { YtStore.setLater(this, video, !toWatch) }
+        choices += getString(
+            when {
+                watched && episode -> R.string.ml_pod_mark_unheard
+                watched -> R.string.ml_yt_mark_unwatched
+                episode -> R.string.ml_pod_mark_heard
+                else -> R.string.ml_yt_mark_watched
+            }
+        ) to {
+            YtStore.setWatched(this, video.id, !watched)
+            // Marked as watched by hand: no longer one to watch
+            if (!watched) YtStore.dropLater(this, video.id)
+        }
+        if (episode) {
+            val kept = PodcastDownloads.isDownloaded(this, video.id)
+            val coming = PodcastDownloads.isDownloading(this, video.id)
+            choices += getString(
+                when {
+                    kept -> R.string.ml_pod_download_delete
+                    coming -> R.string.ml_pod_download_stop
+                    else -> R.string.ml_pod_download
+                }
+            ) to { if (kept || coming) PodcastDownloads.remove(this, video) else download(video) }
+        }
         AlertDialog.Builder(this)
             .setTitle(video.title)
-            .setItems(
-                arrayOf(
-                    getString(if (favorite) R.string.ml_yt_fav_remove else R.string.ml_yt_fav_add),
-                    getString(if (toWatch) R.string.ml_yt_later_remove else R.string.ml_yt_later_add),
-                    getString(if (watched) R.string.ml_yt_mark_unwatched else R.string.ml_yt_mark_watched)
-                )
-            ) { _, which ->
-                when (which) {
-                    0 -> YtStore.setFavorite(this, video, !favorite)
-                    1 -> YtStore.setLater(this, video, !toWatch)
-                    else -> {
-                        YtStore.setWatched(this, video.id, !watched)
-                        // Marked as watched by hand: no longer one to watch
-                        if (!watched) YtStore.dropLater(this, video.id)
-                    }
-                }
-                val current = screen
-                saved(current)?.let { current.items = it }
-                if (current.items != null) display(current, keepPlace = true)
+            .setItems(choices.map { it.first }.toTypedArray()) { _, which ->
+                choices[which].second()
+                redraw()
             }
             .show()
+    }
+
+    private fun download(episode: YtVideo) {
+        lifecycleScope.launch {
+            val started = withContext(Dispatchers.IO) { PodcastDownloads.start(this@YouTubeActivity, episode) }
+            if (!started) showToast(getString(R.string.ml_pod_download_failed))
+            redraw()
+        }
+    }
+
+    /** Draws the list again where it is, after something about its items changed. */
+    private fun redraw() {
+        if (stack.isEmpty()) return
+        val current = screen
+        saved(current)?.let { current.items = it }
+        if (current.items != null) display(current, keepPlace = true)
     }
 
     private fun showEmpty(text: String, action: String?, onAction: (() -> Unit)?) {
@@ -379,7 +487,7 @@ class YouTubeActivity : AppCompatActivity() {
         if (stale.isEmpty()) return
         pictures = lifecycleScope.launch {
             for (channel in stale) {
-                val read = withContext(Dispatchers.IO) { runCatching { YouTubeApi.channel(channel.id) }.getOrNull() } ?: continue
+                val read = withContext(Dispatchers.IO) { runCatching { read(channel.id) }.getOrNull() } ?: continue
                 read.info?.let { YtStore.refresh(ctx, it) }
                 YtStore.update(ctx, channel.id, read.videos.map { it.id })
                 val current = screen
@@ -475,9 +583,31 @@ class YouTubeActivity : AppCompatActivity() {
         bar.addView(later)
         star = UiKit.iconButton(this, R.drawable.ic_m_star, getString(R.string.ml_yt_favorites)) { open(Screen.Favorites()) }
         eye = UiKit.iconButton(this, R.drawable.ic_m_show, getString(R.string.ml_yt_hide_watched)) { toggleWatchedHidden() }
+        downloadsButton = UiKit.iconButton(this, R.drawable.ic_m_download, getString(R.string.ml_pod_downloads)) { open(Screen.Downloads()) }
+        bar.addView(downloadsButton)
         bar.addView(star)
         bar.addView(eye)
         root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        // Video | Podcast, over the grid
+        modeRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(12.dpToPx(), 0, 12.dpToPx(), 8.dpToPx())
+        }
+        fun tab(label: String, toPodcast: Boolean) = TextView(this).apply {
+            text = label
+            textSize = 14f
+            gravity = Gravity.CENTER
+            setTypeface(typeface, Typeface.BOLD)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { setMode(toPodcast) }
+        }
+        videoTab = tab(getString(R.string.ml_yt_videos), false)
+        podcastTab = tab(getString(R.string.ml_pod_podcasts), true)
+        modeRow.addView(videoTab, LinearLayout.LayoutParams(0, 36.dpToPx(), 1f).apply { marginEnd = 4.dpToPx() })
+        modeRow.addView(podcastTab, LinearLayout.LayoutParams(0, 36.dpToPx(), 1f).apply { marginStart = 4.dpToPx() })
+        root.addView(modeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val body = FrameLayout(this)
         val columns = (resources.configuration.screenWidthDp / 116).coerceAtLeast(3)
@@ -749,14 +879,25 @@ class YouTubeActivity : AppCompatActivity() {
                     holder.title.text = item.title
                     val watched = YtStore.isWatched(ctx, item.id)
                     val favorite = YtStore.isFavorite(ctx, item.id)
-                    holder.sub?.text = (if (favorite) "\u2605 " else "") + listOf(item.channel, item.info).filter { it.isNotBlank() }.joinToString(" · ")
+                    // An episode shows its cover, which is square; on the phone or on its way there, an arrow says so
+                    val wide = if (item.isEpisode) 86 else 152
+                    (holder.image.parent as? View)?.let { thumb ->
+                        if (thumb.layoutParams.width != wide.dpToPx()) thumb.layoutParams = thumb.layoutParams.apply { width = wide.dpToPx() }
+                    }
+                    val kept = when {
+                        !item.isEpisode -> ""
+                        PodcastDownloads.isDownloading(ctx, item.id) -> "\u2193\u2026 "
+                        PodcastDownloads.isDownloaded(ctx, item.id) -> "\u2193 "
+                        else -> ""
+                    }
+                    holder.sub?.text = kept + (if (favorite) "\u2605 " else "") + listOf(item.channel, item.info).filter { it.isNotBlank() }.joinToString(" · ")
                     holder.title.setTextColor(if (watched) UiKit.secondary(ctx) else UiKit.primary(ctx))
                     holder.image.alpha = if (watched) 0.45f else 1f
                     holder.seen?.isVisible = watched
                     holder.bar?.let { played ->
                         val part = YtStore.progress(ctx, item.id)
                         played.isVisible = part > 0f
-                        played.layoutParams = played.layoutParams.apply { width = (152.dpToPx() * part).toInt() }
+                        played.layoutParams = played.layoutParams.apply { width = (wide.dpToPx() * part).toInt() }
                     }
                     holder.itemView.setOnLongClickListener {
                         videoMenu(item)

@@ -22,8 +22,14 @@ import androidx.media3.session.MediaSessionService
 class YtPlayerService : MediaSessionService() {
 
     /** The video in the player, for a screen opened again from the notification. */
-    class Now(val videoId: String, var title: String, var author: String, var channelId: String, var streams: YtStreams? = null) {
-        fun asVideo() = YtVideo(videoId, title, author, channelId, "", "")
+    class Now(
+        val videoId: String, var title: String, var author: String, var channelId: String, var streams: YtStreams? = null,
+        /** An episode of a podcast: where its sound is, and its cover. */
+        val audio: String = "", val image: String = ""
+    ) {
+        val isEpisode get() = audio.isNotBlank()
+        val picture get() = if (isEpisode) image else "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+        fun asVideo() = YtVideo(videoId, title, author, channelId, "", "", audio, image)
     }
 
     private var session: MediaSession? = null

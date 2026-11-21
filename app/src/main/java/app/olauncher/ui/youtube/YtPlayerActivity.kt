@@ -50,6 +50,7 @@ import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -91,6 +92,8 @@ class YtPlayerActivity : AppCompatActivity() {
     private lateinit var pipChip: TextView
     private lateinit var favChip: TextView
     private lateinit var laterChip: TextView
+    private lateinit var audioChip: TextView
+    private lateinit var artView: ImageView
 
     private var controller: ListenableFuture<MediaController>? = null
     private var player: ExoPlayer? = null
@@ -176,6 +179,14 @@ class YtPlayerActivity : AppCompatActivity() {
 
         override fun onPlayerError(error: PlaybackException) {
             val position = player?.currentPosition ?: 0
+            if (YtPlayerService.now?.isEpisode == true) {
+                // One more try from the same point (the network dropped), then it says why
+                if (played) {
+                    played = false
+                    load(position)
+                } else showError(reason(error))
+                return
+            }
             val streams = YtPlayerService.now?.streams
             if (played || streams == null) {
                 // The addresses of a video expire after some hours: the same ones are asked again
@@ -229,6 +240,8 @@ class YtPlayerActivity : AppCompatActivity() {
                     resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
                         requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ->
                         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    // An episode goes on playing: the bar at the bottom of the list brings back here
+                    YtPlayerService.now?.isEpisode == true -> finish()
                     else -> {
                         // Back leaves the video: it stops. The floating window is for home, or its button
                         closing = true
@@ -287,7 +300,9 @@ class YtPlayerActivity : AppCompatActivity() {
             id,
             intent.getStringExtra(EXTRA_TITLE).orEmpty(),
             intent.getStringExtra(EXTRA_CHANNEL).orEmpty(),
-            intent.getStringExtra(EXTRA_CHANNEL_ID).orEmpty()
+            intent.getStringExtra(EXTRA_CHANNEL_ID).orEmpty(),
+            audio = intent.getStringExtra(EXTRA_AUDIO).orEmpty(),
+            image = intent.getStringExtra(EXTRA_IMAGE).orEmpty()
         )
         restart()
         zoom.reset()
@@ -333,6 +348,10 @@ class YtPlayerActivity : AppCompatActivity() {
         statusView.isVisible = false
         spinner.isVisible = true
         exo.stop()
+        if (now.isEpisode) {
+            playEpisode(now, position)
+            return
+        }
         if (YouTubeApi.visitor == null) YouTubeApi.visitor = YtStore.visitor(this)
         loading = lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { YouTubeApi.streams(now.videoId, clientFrom) } }
@@ -351,6 +370,23 @@ class YtPlayerActivity : AppCompatActivity() {
             showNow()
             play(position)
         }
+    }
+
+    /** An episode of a podcast: one file of sound, from the phone when it was downloaded, else from its address. */
+    private fun playEpisode(now: YtPlayerService.Now, position: Long) {
+        val exo = player ?: return
+        spinner.isVisible = false
+        statusView.isVisible = false
+        val local = PodcastDownloads.local(this, now.videoId)
+        val uri = if (local != null) Uri.fromFile(local) else Uri.parse(now.audio)
+        val http = DefaultHttpDataSource.Factory().setUserAgent("MinimaLauncher/1.0 (podcast player)").setAllowCrossProtocolRedirects(true)
+        val meta = MediaMetadata.Builder().setTitle(now.title).setArtist(now.author)
+        if (now.image.isNotBlank()) meta.setArtworkUri(Uri.parse(now.image))
+        val item = MediaItem.Builder().setUri(uri).setMediaId(now.videoId).setMediaMetadata(meta.build()).build()
+        val source = ProgressiveMediaSource.Factory(DefaultDataSource.Factory(this, http)).createMediaSource(item)
+        if (position <= 0) exo.setMediaSource(source) else exo.setMediaSource(source, position)
+        exo.prepare()
+        exo.playWhenReady = true
     }
 
     private fun play(position: Long) {
@@ -396,8 +432,13 @@ class YtPlayerActivity : AppCompatActivity() {
     private fun showNow() {
         val now = YtPlayerService.now ?: return
         favChip.text = (if (YtStore.isFavorite(this, now.videoId)) "\u2605 " else "\u2606 ") + getString(R.string.ml_yt_favorites)
-        laterChip.text = (if (YtStore.isLater(this, now.videoId)) "\u2713 " else "+ ") + getString(R.string.ml_yt_later)
+        laterChip.text = (if (YtStore.isLater(this, now.videoId)) "\u2713 " else "+ ") + getString(if (now.isEpisode) R.string.ml_pod_later else R.string.ml_yt_later)
         titleView.text = now.title
+        // An episode has no picture to float or to play without: its cover takes the place of the video
+        pipChip.isVisible = canPip && !now.isEpisode
+        audioChip.isVisible = !now.isEpisode
+        artView.isVisible = now.isEpisode
+        if (now.isEpisode) YtImages.load(artView, now.image)
         channelView.text = now.author
         channelView.isVisible = now.author.isNotBlank()
         val streams = now.streams
@@ -449,7 +490,7 @@ class YtPlayerActivity : AppCompatActivity() {
             )
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            builder.setAutoEnterEnabled(player?.isPlaying == true && !leavingForAudio)
+            builder.setAutoEnterEnabled(player?.isPlaying == true && !leavingForAudio && YtPlayerService.now?.isEpisode != true)
             builder.setSeamlessResizeEnabled(true)
         }
         return builder.build()
@@ -481,6 +522,7 @@ class YtPlayerActivity : AppCompatActivity() {
     }
 
     private fun enterPip(): Boolean {
+        if (YtPlayerService.now?.isEpisode == true) return false
         if (!canPip || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
         return runCatching { enterPictureInPictureMode(pipParams()) }.getOrDefault(false)
     }
@@ -488,7 +530,7 @@ class YtPlayerActivity : AppCompatActivity() {
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
         // From Android 12 the system does it by itself (see pipParams), also with the home gesture
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && player?.isPlaying == true && !leavingForAudio) enterPip()
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S && player?.isPlaying == true && !leavingForAudio && YtPlayerService.now?.isEpisode != true) enterPip()
     }
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
@@ -621,6 +663,12 @@ class YtPlayerActivity : AppCompatActivity() {
             useController = false
         }
         frame.addView(playerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        artView = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            setBackgroundColor(Color.BLACK)
+            isVisible = false
+        }
+        frame.addView(artView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         // Feedback of a double-tap seek ("-10 s" / "+10 s") and of a long press
         seekLabel = TextView(this).apply {
             setTextColor(Color.WHITE)
@@ -708,7 +756,8 @@ class YtPlayerActivity : AppCompatActivity() {
         pipChip = chip(getString(R.string.ml_yt_pip)) { enterPip() }.apply { isVisible = canPip }
         chips.addView(qualityChip)
         chips.addView(pipChip)
-        chips.addView(chip(getString(R.string.ml_yt_background)) { playInBackground() })
+        audioChip = chip(getString(R.string.ml_yt_background)) { playInBackground() }
+        chips.addView(audioChip)
         // A second row: keep the video among the favourites, or on the list of the ones to watch
         val keep = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -768,6 +817,8 @@ class YtPlayerActivity : AppCompatActivity() {
         private const val ACTION_PIP_AUDIO = "app.olauncher.tube.PIP_AUDIO"
         private const val HIDE_DELAY_MS = 3_000L
         private const val EXTRA_ID = "video_id"
+        private const val EXTRA_AUDIO = "audio"
+        private const val EXTRA_IMAGE = "image"
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_CHANNEL = "channel"
         private const val EXTRA_CHANNEL_ID = "channel_id"
@@ -781,5 +832,7 @@ class YtPlayerActivity : AppCompatActivity() {
             .putExtra(EXTRA_TITLE, video.title)
             .putExtra(EXTRA_CHANNEL, video.channel)
             .putExtra(EXTRA_CHANNEL_ID, video.channelId)
+            .putExtra(EXTRA_AUDIO, video.audio)
+            .putExtra(EXTRA_IMAGE, video.image)
     }
 }

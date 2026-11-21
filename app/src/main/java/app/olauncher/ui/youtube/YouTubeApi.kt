@@ -9,9 +9,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
 
-/** A video in a list: what the search and a channel's page give. */
-data class YtVideo(val id: String, val title: String, val channel: String, val channelId: String, val info: String, val duration: String) {
-    val thumbnail get() = "https://i.ytimg.com/vi/$id/mqdefault.jpg"
+/**
+ * A video in a list: what the search and a channel's page give. An episode of a podcast is one too
+ * (see [PodcastApi]): its id starts with "p:", [audio] is the address of its sound, [image] its cover.
+ */
+data class YtVideo(
+    val id: String, val title: String, val channel: String, val channelId: String, val info: String, val duration: String,
+    val audio: String = "", val image: String = ""
+) {
+    val isEpisode get() = id.startsWith("p:")
+    val thumbnail get() = if (isEpisode) image else "https://i.ytimg.com/vi/$id/mqdefault.jpg"
 }
 
 /** A channel: in the search results and in the grid of the subscriptions. */

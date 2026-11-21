@@ -1181,4 +1181,20 @@
     <string name="ml_yt_later_add">Add to To watch</string>
     <string name="ml_yt_later_remove">Remove from To watch</string>
     <string name="ml_yt_later_empty">Nothing to watch: press and hold a video to add it</string>
+    <string name="ml_yt_videos">Videos</string>
+    <string name="ml_pod_podcasts">Podcasts</string>
+    <string name="ml_pod_search_hint">Search podcasts</string>
+    <string name="ml_pod_empty">Search for a podcast and follow it: it will show here.</string>
+    <string name="ml_pod_later">To listen</string>
+    <string name="ml_pod_later_add">Add to To listen</string>
+    <string name="ml_pod_later_remove">Remove from To listen</string>
+    <string name="ml_pod_later_empty">Nothing to listen to: press and hold an episode to add it</string>
+    <string name="ml_pod_mark_heard">Mark as listened</string>
+    <string name="ml_pod_mark_unheard">Mark as not listened</string>
+    <string name="ml_pod_download">Download</string>
+    <string name="ml_pod_download_delete">Delete the download</string>
+    <string name="ml_pod_download_stop">Stop the download</string>
+    <string name="ml_pod_download_failed">Download failed</string>
+    <string name="ml_pod_downloads">Downloaded</string>
+    <string name="ml_pod_downloads_empty">No downloaded episodes: press and hold an episode and choose Download</string>
 </resources>

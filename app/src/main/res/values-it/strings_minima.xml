@@ -1178,4 +1178,20 @@
     <string name="ml_yt_later_add">Aggiungi a Da guardare</string>
     <string name="ml_yt_later_remove">Togli da Da guardare</string>
     <string name="ml_yt_later_empty">Nessun video da guardare: tieni premuto su un video per aggiungerlo</string>
+    <string name="ml_yt_videos">Video</string>
+    <string name="ml_pod_podcasts">Podcast</string>
+    <string name="ml_pod_search_hint">Cerca podcast</string>
+    <string name="ml_pod_empty">Cerca un podcast e seguilo: comparirà qui.</string>
+    <string name="ml_pod_later">Da ascoltare</string>
+    <string name="ml_pod_later_add">Aggiungi a Da ascoltare</string>
+    <string name="ml_pod_later_remove">Togli da Da ascoltare</string>
+    <string name="ml_pod_later_empty">Nessun episodio da ascoltare: tieni premuto su un episodio per aggiungerlo</string>
+    <string name="ml_pod_mark_heard">Segna come ascoltato</string>
+    <string name="ml_pod_mark_unheard">Segna come non ascoltato</string>
+    <string name="ml_pod_download">Scarica</string>
+    <string name="ml_pod_download_delete">Elimina il download</string>
+    <string name="ml_pod_download_stop">Ferma il download</string>
+    <string name="ml_pod_download_failed">Download non riuscito</string>
+    <string name="ml_pod_downloads">Scaricati</string>
+    <string name="ml_pod_downloads_empty">Nessun episodio scaricato: tieni premuto su un episodio e scegli Scarica</string>
 </resources>

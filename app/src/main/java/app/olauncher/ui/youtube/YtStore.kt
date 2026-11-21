@@ -27,6 +27,10 @@ object YtStore {
     private const val KEY_HIDE_WATCHED = "hide_watched"
     private const val KEY_FAVORITES = "favorites"
     private const val KEY_LATER = "later"
+    private const val KEY_DOWNLOADS = "downloads"
+    private const val KEY_PODCASTS = "podcasts"
+    private const val KEY_PODCAST_MODE = "podcast_mode"
+    private const val KEY_STARTERS = "podcast_starters"
     private const val KEY_NEW = "new_"
     private const val KEY_CHECKED = "checked_"
     private const val KEY_VISITOR = "visitor"
@@ -34,9 +38,24 @@ object YtStore {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    fun subscriptions(ctx: Context): List<YtChannel> {
+    fun subscriptions(ctx: Context): List<YtChannel> = channels(ctx, KEY_SUBS)
+
+    /** The podcasts followed: kept like the channels, in a list of their own. */
+    fun podcasts(ctx: Context): List<YtChannel> = channels(ctx, KEY_PODCASTS)
+
+    /** Videos or podcasts: which of the two the app was showing the last time. */
+    fun podcastMode(ctx: Context) = prefs(ctx).getBoolean(KEY_PODCAST_MODE, false)
+    fun setPodcastMode(ctx: Context, on: Boolean) = prefs(ctx).edit().putBoolean(KEY_PODCAST_MODE, on).apply()
+
+    /** Whether the podcasts given with the app have been put in already. */
+    fun startersDone(ctx: Context) = prefs(ctx).getBoolean(KEY_STARTERS, false)
+    fun setStartersDone(ctx: Context) = prefs(ctx).edit().putBoolean(KEY_STARTERS, true).apply()
+
+    private fun keyOf(channelId: String) = if (PodcastApi.isPodcast(channelId)) KEY_PODCASTS else KEY_SUBS
+
+    private fun channels(ctx: Context, key: String): List<YtChannel> {
         val array = try {
-            JSONArray(prefs(ctx).getString(KEY_SUBS, "[]"))
+            JSONArray(prefs(ctx).getString(key, "[]"))
         } catch (_: Exception) {
             JSONArray()
         }
@@ -46,30 +65,35 @@ object YtStore {
             .sortedBy { it.name.lowercase() }
     }
 
-    private fun save(ctx: Context, list: List<YtChannel>) {
+    private fun save(ctx: Context, key: String, list: List<YtChannel>) {
         val array = JSONArray()
         list.forEach { array.put(JSONObject().put("id", it.id).put("name", it.name).put("avatar", it.avatar)) }
-        prefs(ctx).edit().putString(KEY_SUBS, array.toString()).apply()
+        prefs(ctx).edit().putString(key, array.toString()).apply()
     }
 
-    fun isSubscribed(ctx: Context, id: String) = subscriptions(ctx).any { it.id == id }
+    fun isSubscribed(ctx: Context, id: String) = channels(ctx, keyOf(id)).any { it.id == id }
 
-    /** Adds the channel, or brings its name and picture up to date. */
+    /** Adds the channel (or the podcast), or brings its name and picture up to date. */
     fun subscribe(ctx: Context, channel: YtChannel) {
-        val list = subscriptions(ctx).filter { it.id != channel.id }
-        save(ctx, list + channel)
+        val key = keyOf(channel.id)
+        save(ctx, key, channels(ctx, key).filter { it.id != channel.id } + channel)
     }
 
     /** Updates a channel already there (a picture found later), and only that. */
     fun refresh(ctx: Context, channel: YtChannel) {
-        val list = subscriptions(ctx)
+        val key = keyOf(channel.id)
+        val list = channels(ctx, key)
         val old = list.firstOrNull { it.id == channel.id } ?: return
-        if (old.name == channel.name && old.avatar == channel.avatar) return
-        save(ctx, list.map { if (it.id == channel.id) channel.copy(avatar = channel.avatar.ifBlank { old.avatar }) else it })
+        val avatar = channel.avatar.ifBlank { old.avatar }
+        // A podcast keeps the name it was followed under: feeds like to add slogans to theirs
+        val name = if (PodcastApi.isPodcast(channel.id)) old.name else channel.name
+        if (old.name == name && old.avatar == avatar) return
+        save(ctx, key, list.map { if (it.id == channel.id) YtChannel(it.id, name, avatar) else it })
     }
 
     fun unsubscribe(ctx: Context, id: String) {
-        save(ctx, subscriptions(ctx).filter { it.id != id })
+        val key = keyOf(id)
+        save(ctx, key, channels(ctx, key).filter { it.id != id })
         prefs(ctx).edit().remove(KEY_SEEN + id).remove(KEY_NEW + id).remove(KEY_CHECKED + id).apply()
     }
 
@@ -96,7 +120,12 @@ object YtStore {
     private fun videos(ctx: Context, key: String): List<YtVideo> {
         val array = runCatching { JSONArray(prefs(ctx).getString(key, "[]")) }.getOrDefault(JSONArray())
         return (0 until array.length()).mapNotNull { array.optJSONObject(it) }
-            .map { YtVideo(it.optString("id"), it.optString("title"), it.optString("channel"), it.optString("channelId"), it.optString("info"), it.optString("duration")) }
+            .map {
+                YtVideo(
+                    it.optString("id"), it.optString("title"), it.optString("channel"), it.optString("channelId"),
+                    it.optString("info"), it.optString("duration"), it.optString("audio"), it.optString("image")
+                )
+            }
             .filter { it.id.isNotBlank() }
     }
 
@@ -110,6 +139,7 @@ object YtStore {
             array.put(
                 JSONObject().put("id", it.id).put("title", it.title).put("channel", it.channel)
                     .put("channelId", it.channelId).put("info", it.info).put("duration", it.duration)
+                    .put("audio", it.audio).put("image", it.image)
             )
         }
         prefs(ctx).edit().putString(key, array.toString()).apply()
@@ -124,6 +154,10 @@ object YtStore {
     fun later(ctx: Context) = videos(ctx, KEY_LATER)
     fun isLater(ctx: Context, videoId: String) = later(ctx).any { it.id == videoId }
     fun setLater(ctx: Context, video: YtVideo, on: Boolean) = setIn(ctx, KEY_LATER, video, on)
+    /** The episodes downloaded or being downloaded (see [PodcastDownloads]), the last asked first. */
+    fun downloads(ctx: Context) = videos(ctx, KEY_DOWNLOADS)
+    fun setDownload(ctx: Context, episode: YtVideo, on: Boolean) = setIn(ctx, KEY_DOWNLOADS, episode, on)
+
     fun dropLater(ctx: Context, videoId: String) = setIn(ctx, KEY_LATER, YtVideo(videoId, "", "", "", "", ""), false)
 
     // ---- where each video was left ----
