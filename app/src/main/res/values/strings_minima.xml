@@ -1211,4 +1211,7 @@
     <string name="ml_pod_save_file_short">File</string>
     <string name="ml_rec_quick_started">Recording started</string>
     <string name="ml_rec_quick_stopped">Recording saved</string>
+    <string name="ml_pdf_highlight">Highlight</string>
+    <string name="ml_pdf_underline">Underline</string>
+    <string name="ml_pdf_share_text">Share the text</string>
 </resources>

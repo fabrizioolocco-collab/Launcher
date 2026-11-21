@@ -414,6 +414,22 @@ class PdfViewerActivity : AppCompatActivity() {
             ellipsize = TextUtils.TruncateAt.END
         }
         selectionBar.addView(selectionText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        // What can be done with the text at once: highlight it, underline it, send it, copy it
+        selectionBar.addView(UiKit.iconButton(this, R.drawable.ic_m_highlighter, getString(R.string.ml_pdf_highlight)) { markSelection(false) })
+        selectionBar.addView(TextView(this).apply {
+            text = "U"
+            textSize = 18f
+            gravity = Gravity.CENTER
+            setTextColor(UiKit.primary(this@PdfViewerActivity))
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            paintFlags = paintFlags or Paint.UNDERLINE_TEXT_FLAG
+            contentDescription = getString(R.string.ml_pdf_underline)
+            background = UiKit.roundRipple(this@PdfViewerActivity)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { markSelection(true) }
+        }, LinearLayout.LayoutParams(44.dpToPx(), 44.dpToPx()))
+        selectionBar.addView(UiKit.iconButton(this, R.drawable.ic_m_share, getString(R.string.ml_pdf_share_text)) { shareSelection() })
         selectionBar.addView(
             pillButton(this, getString(R.string.ml_pdf_copy), filled = true, color = UiKit.primary(this)) { copySelection() }.apply {
                 setPadding(18.dpToPx(), 0, 18.dpToPx(), 0)
@@ -428,6 +444,8 @@ class PdfViewerActivity : AppCompatActivity() {
         if (!::selectionBar.isInitialized || (textSelection == null && !selectionBar.isVisible)) return
         textSelection = null
         selectStart = null
+        selA = null
+        selB = null
         selectionBar.isVisible = false
         invalidatePages()
     }
@@ -445,7 +463,10 @@ class PdfViewerActivity : AppCompatActivity() {
         val engine = textEngine() ?: return
         val p = toOriginal(page, fx, fy)
         if (action == MotionEvent.ACTION_DOWN) {
-            selectStart = p
+            // Whole words: from the start of the one pressed
+            selectRaw = p
+            selectRawEnd = null
+            selectStart = engine.snap(page, p, false)
             // A scan: read its text first
             if (!engine.isRecognised(page) && !engine.pageHasText(page)) {
                 selectStart = null
@@ -464,13 +485,92 @@ class PdfViewerActivity : AppCompatActivity() {
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) endQuickSelect()
             return
         }
-        val selection = engine.select(page, start, p)
+        val raw = selectRaw ?: start
+        val up = action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL
+        val sameLine = kotlin.math.abs(p.y - raw.y) <= 0.012f
+        val still = sameLine && kotlin.math.abs(p.x - raw.x) < 0.02f
+        // Dragged back towards the top of the page: the word pressed is then the last one
+        val backwards = p.y < raw.y - 0.012f || (sameLine && p.x < raw.x - 0.02f)
+        val a: PointF
+        val b: PointF
+        if (backwards) {
+            a = if (up) engine.snap(page, p, false) else p
+            b = selectRawEnd ?: engine.snap(page, raw, true).also { selectRawEnd = it }
+        } else {
+            a = start
+            // The finger hasn't moved, or has just lifted: to the end of the word it is on
+            b = if (up || still) engine.snap(page, p, true) else p
+        }
+        selA = a
+        selB = b
+        val selection = engine.select(page, a, b)
         textSelection = selection?.let { page to it }
         invalidatePages()
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             selectionBar.isVisible = selection != null
             selectionText.text = selection?.text?.replace('\n', ' ')
             endQuickSelect()
+        }
+    }
+
+    /** Where the finger went down for a selection, and the end of the word there (found when first needed). */
+    private var selectRaw: PointF? = null
+    private var selectRawEnd: PointF? = null
+
+    /** The two ends of the text selected, on the page itself: what its handles move. */
+    private var selA: PointF? = null
+    private var selB: PointF? = null
+
+    /** A handle of the selection is under the finger: the page must not move with it. */
+    private var handleDragging = false
+    private var handleTouched = false
+
+    /** Height over width of each page as shown, noted when it is drawn. */
+    private val pageAspect = HashMap<Int, Float>()
+
+    /**
+     * A handle of the selection dragged to ([fx], [fy]) of [page] as shown: that end of the
+     * selection follows, letter by letter, and settles on a whole word when the finger lifts ([done]).
+     */
+    private fun moveHandle(page: Int, which: Int, fx: Float, fy: Float, done: Boolean) {
+        val engine = textEngine() ?: return
+        val p = toOriginal(page, fx, fy)
+        var a = selA ?: return
+        var b = selB ?: return
+        if (which == 0) a = if (done) engine.snap(page, p, false) else p
+        else b = if (done) engine.snap(page, p, true) else p
+        selA = a
+        selB = b
+        // A handle taken past the other: the text between them still reads from the first to the last
+        val swapped = a.y > b.y + 0.012f || (kotlin.math.abs(a.y - b.y) <= 0.012f && a.x > b.x)
+        val selection = if (swapped) engine.select(page, b, a) else engine.select(page, a, b)
+        if (selection != null) textSelection = page to selection
+        invalidatePages()
+        if (done) selectionText.text = textSelection?.second?.text?.replace('\n', ' ')
+    }
+
+    /** Marks the text selected: a highlighter stroke over each of its lines, or a line under them. */
+    private fun markSelection(underline: Boolean) {
+        val (page, selection) = textSelection ?: return
+        val aspect = pageAspect[page] ?: 1.414f
+        selection.rects.forEach { rect ->
+            val box = hitBox(page, rect)
+            if (underline) annotations += Annotation.Stroke(page, listOf(box.left to box.bottom, box.right to box.bottom), WIDTHS[1], penColor, false)
+            else {
+                // As thick as the line is tall; a highlighter's ends are square and reach half that further
+                val width = box.height() * aspect
+                val inset = (width / 2).coerceAtMost((box.width() / 2 - 0.001f).coerceAtLeast(0f))
+                annotations += Annotation.Stroke(page, listOf(box.left + inset to box.centerY(), box.right - inset to box.centerY()), width, highlightColor, true)
+            }
+        }
+        clearTextSelection()
+        invalidatePages()
+    }
+
+    private fun shareSelection() {
+        val text = textSelection?.second?.text ?: return
+        runCatching {
+            startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), null))
         }
     }
 
@@ -1181,7 +1281,7 @@ class PdfViewerActivity : AppCompatActivity() {
 
             // A tap elsewhere lets go of a text selected with a long press
             override fun onSingleTapUp(e: MotionEvent): Boolean {
-                if (tool == Tool.NONE && textSelection != null) clearTextSelection()
+                if (tool == Tool.NONE && textSelection != null && !handleTouched) clearTextSelection()
                 return false
             }
 
@@ -1208,7 +1308,7 @@ class PdfViewerActivity : AppCompatActivity() {
          * the selection tool on starts a selection.
          */
         private fun startQuickSelect(e: MotionEvent) {
-            if (tool != Tool.NONE || selected != null || dragging || e.pointerCount > 1) return
+            if (tool != Tool.NONE || selected != null || dragging || handleDragging || e.pointerCount > 1) return
             performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
             quickSelect = true
             setTool(Tool.SELECT)
@@ -1265,13 +1365,14 @@ class PdfViewerActivity : AppCompatActivity() {
                     scrollLeft = 0f
                     speed?.recycle()
                     speed = android.view.VelocityTracker.obtain().also { it.addMovement(e) }
-                    zooming?.cancel()
                     stopScroll()
                 }
                 MotionEvent.ACTION_MOVE -> {
                     speed?.addMovement(e)
                     if (!dragging && kotlin.math.hypot(e.x - dragX, e.y - dragY) > touchSlop) {
                         dragging = true
+                        // Only now: at the touch itself it would stop the glide a double tap has just started
+                        zooming?.cancel()
                         // The page under the finger was told of a touch: it is told it is over
                         val cancel = MotionEvent.obtain(e).apply { action = MotionEvent.ACTION_CANCEL }
                         val u = unzoom(cancel)
@@ -1360,7 +1461,8 @@ class PdfViewerActivity : AppCompatActivity() {
                     return true
                 }
             }
-            if (scale > 1.01f && tool == Tool.NONE && selected == null && dragPage(e)) return true
+            if (e.actionMasked == MotionEvent.ACTION_DOWN) handleTouched = false
+            if (scale > 1.01f && tool == Tool.NONE && selected == null && !handleDragging && dragPage(e)) return true
             val u = unzoom(e)
             val handled = super.dispatchTouchEvent(u)
             u.recycle()
@@ -1563,6 +1665,67 @@ class PdfViewerActivity : AppCompatActivity() {
                 textSelection?.takeIf { it.first == original }?.second?.rects?.forEach {
                     canvas.drawRect(toView(r, hitBox(original, it)), selectionPaint)
                 }
+                if (r.width() > 0) pageAspect[original] = r.height() / r.width()
+                // The two handles: a stem beside the first and the last letter, a knob under it
+                handleSpots(r)?.let { (first, last) ->
+                    for (spot in listOf(first, last)) {
+                        canvas.drawLine(spot.left, spot.top, spot.left, spot.bottom + KNOB * density, handlePaint)
+                        canvas.drawCircle(spot.left, spot.bottom + KNOB * density, KNOB * density, handlePaint)
+                    }
+                }
+            }
+
+            private val handlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = 0xFF2979FF.toInt()
+                strokeWidth = 2f * density
+            }
+
+            /**
+             * Where the handles stand: for each, a sliver as tall as its line, at the start of the
+             * first line of the selection and at the end of the last. Null with no selection here.
+             */
+            private fun handleSpots(r: RectF): Pair<RectF, RectF>? {
+                val rects = textSelection?.takeIf { it.first == original }?.second?.rects?.takeIf { it.isNotEmpty() } ?: return null
+                if (selA == null || selB == null) return null
+                val first = toView(r, hitBox(original, rects.first()))
+                val last = toView(r, hitBox(original, rects.last()))
+                return RectF(first.left, first.top, first.left, first.bottom) to RectF(last.right, last.top, last.right, last.bottom)
+            }
+
+            private var grabbed = -1
+            private var grabX = 0f
+            private var grabY = 0f
+
+            /** A handle of the selection taken and dragged; false when the touch is not on one. */
+            private fun dragHandle(e: MotionEvent, r: RectF): Boolean {
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        val spots = handleSpots(r)?.toList() ?: return false
+                        grabbed = spots.indexOfFirst { kotlin.math.hypot(e.x - it.left, e.y - (it.bottom + KNOB * density)) < 26 * density }
+                        if (grabbed < 0) return false
+                        // The finger holds the knob, under the line: what moves is the middle of the line itself
+                        grabX = e.x - spots[grabbed].left
+                        grabY = e.y - spots[grabbed].centerY()
+                        handleDragging = true
+                        handleTouched = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                        return true
+                    }
+                    MotionEvent.ACTION_MOVE, MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (grabbed < 0) return false
+                        val done = e.actionMasked != MotionEvent.ACTION_MOVE
+                        moveHandle(
+                            original, grabbed,
+                            ((e.x - grabX - r.left) / r.width()).coerceIn(0f, 1f), ((e.y - grabY - r.top) / r.height()).coerceIn(0f, 1f), done,
+                        )
+                        if (done) {
+                            grabbed = -1
+                            handleDragging = false
+                        }
+                        return true
+                    }
+                }
+                return false
             }
 
             private fun toView(r: RectF, f: RectF) = RectF(r.left + f.left * r.width(), r.top + f.top * r.height(), r.left + f.right * r.width(), r.top + f.bottom * r.height())
@@ -1708,6 +1871,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 }
                 val fx = ((e.x - r.left) / r.width()).coerceIn(0f, 1f)
                 val fy = ((e.y - r.top) / r.height()).coerceIn(0f, 1f)
+                if (dragHandle(e, r)) return true
                 if (tool == Tool.SELECT) {
                     parent?.requestDisallowInterceptTouchEvent(true)
                     dragSelection(original, e.actionMasked, fx, fy)
@@ -1873,6 +2037,9 @@ class PdfViewerActivity : AppCompatActivity() {
         )
         private val WIDTHS = listOf(0.0015f, 0.003f, 0.006f, 0.011f)
         private const val HIGHLIGHT_FACTOR = 4f
+
+        /** Radius of the knob of a selection handle, in dp. */
+        private const val KNOB = 7f
         private val SIZES = listOf(0.015f, 0.022f, 0.03f, 0.042f)
         private val CHECK_SIZES = listOf(0.025f, 0.035f, 0.05f)
         /** Font size as a fraction of the text box height (matches the saver). */

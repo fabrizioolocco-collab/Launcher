@@ -1208,4 +1208,7 @@
     <string name="ml_pod_save_file_short">File</string>
     <string name="ml_rec_quick_started">Registrazione avviata</string>
     <string name="ml_rec_quick_stopped">Registrazione salvata</string>
+    <string name="ml_pdf_highlight">Evidenzia</string>
+    <string name="ml_pdf_underline">Sottolinea</string>
+    <string name="ml_pdf_share_text">Condividi il testo</string>
 </resources>

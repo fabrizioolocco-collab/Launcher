@@ -122,6 +122,16 @@ class PdfText(private val context: Context, private val file: File, private val 
         return withPage(page) { p -> NativePdfText.select(p, a, b) }
     }
 
+    /**
+     * The point moved to the edge of the word it is on: its start, or its end when [forward]. The
+     * system selects letter by letter from where the finger is, which cut the first word in two;
+     * recognised text is already kept word by word. Blocking.
+     */
+    fun snap(page: Int, point: PointF, forward: Boolean): PointF {
+        if (ocr.containsKey(page) || Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return point
+        return withPage(page) { p -> NativePdfText.wordEdge(p, point, forward) } ?: point
+    }
+
     private fun selectWords(words: List<Word>, a: PointF, b: PointF): Selection? {
         if (words.isEmpty()) return null
         var i = nearest(words, a)
@@ -261,6 +271,32 @@ private object NativePdfText {
         return p.searchText(query.trim()).map { m ->
             PdfSearch.Hit(page, PdfText.mergeLines(m.bounds.map { RectF(it.left / w, it.top / h, it.right / w, it.bottom / h) }))
         }.filter { it.rects.isNotEmpty() }
+    }
+
+    /**
+     * Walks from [point] along its line, a little at a time, for as long as what lies between is one
+     * piece of a word: where a space comes in, the word has ended.
+     */
+    fun wordEdge(p: PdfRenderer.Page, point: PointF, forward: Boolean): PointF {
+        val w = p.width
+        val x0 = (point.x * w).toInt()
+        val y = (point.y * p.height).toInt()
+        var best = x0
+        var d = 2
+        while (d <= 120) {
+            val x = if (forward) x0 + d else x0 - d
+            if (x < 0 || x > w) break
+            val text = try {
+                p.selectContent(SelectionBoundary(Point(minOf(x0, x), y)), SelectionBoundary(Point(maxOf(x0, x), y)))
+                    ?.selectedTextContents?.joinToString("") { it.text }.orEmpty()
+            } catch (e: Exception) {
+                break
+            }
+            if (text.any { it.isWhitespace() }) break
+            best = x
+            d += 2
+        }
+        return PointF(best.toFloat() / w, point.y)
     }
 
     fun select(p: PdfRenderer.Page, a: PointF, b: PointF): PdfText.Selection? {
