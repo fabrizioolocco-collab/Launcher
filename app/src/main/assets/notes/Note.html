@@ -310,12 +310,12 @@ function tableEdit(what) {
 
 body.addEventListener("keydown", (e) => {
   if (e.key !== "Tab") return;
-  const cell = inside("td,th");
-  if (!cell) return;
+  const cell = inside("td,th"), tb = cell && cell.closest("table");
+  if (!tb) return;
   e.preventDefault();
-  const cells = Array.from(cell.closest("table").querySelectorAll("td,th"));
+  const cells = Array.from(tb.querySelectorAll("td,th"));
   let next = cells[cells.indexOf(cell) + (e.shiftKey ? -1 : 1)];
-  if (!next && !e.shiftKey) { tableEdit("row+"); next = Array.from(cell.closest("table").querySelectorAll("td,th"))[cells.length]; }
+  if (!next && !e.shiftKey) { tableEdit("row+"); next = Array.from(tb.querySelectorAll("td,th"))[cells.length]; }
   if (next) { const r = document.createRange(); r.selectNodeContents(next); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); marks(); }
 });
 
@@ -477,13 +477,16 @@ $("veil").addEventListener("click", (e) => { if (e.target === $("veil")) $("veil
 
 // ---------------------------------------------------------------- drawing by hand
 
-const drawing = { color: "#111111", width: 3, strokes: [], now: null };
+const drawing = { color: "#111111", width: 3, strokes: [], now: null, rubber: false };
 const canvas = document.querySelector("#pad canvas");
 
 function openDraw() {
   drawing.strokes = [];
   drawing.color = "#111111";
   drawing.width = 3;
+  drawing.rubber = false;
+  // The keyboard goes: the sheet takes the whole screen
+  if (document.activeElement) document.activeElement.blur();
   const bar = $("drawBar");
   bar.innerHTML = "";
   for (const c of ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f9a825"]) {
@@ -506,6 +509,11 @@ function openDraw() {
   gap.className = "gap";
   bar.appendChild(gap);
   const mk = (label, run, pill) => { const b = document.createElement("button"); b.className = pill ? "pill" : "txt"; b.textContent = label; b.onclick = run; bar.appendChild(b); };
+  const rubber = document.createElement("button");
+  rubber.className = "txt";
+  rubber.textContent = "Gomma";
+  rubber.onclick = () => { drawing.rubber = !drawing.rubber; rubber.classList.toggle("on", drawing.rubber); };
+  bar.insertBefore(rubber, gap);
   mk("Indietro", () => { drawing.strokes.pop(); paint(); });
   mk("Annulla", () => { $("draw").classList.remove("on"); back(); });
   mk("Inserisci", async () => {
@@ -515,31 +523,74 @@ function openDraw() {
     if (path) inserted("image", path, "disegno.png");
   }, true);
   $("draw").classList.add("on");
+  fit();
+}
+
+/**
+ * The sheet's own pixels follow its size on the screen. It changes after it opens (the keyboard
+ * going away gives it more room, the phone is turned): left as it was, the picture would be
+ * stretched and the line would no longer come out under the finger.
+ */
+function fit() {
   const r = canvas.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
-  canvas.width = Math.round(r.width * dpr);
-  canvas.height = Math.round(r.height * dpr);
+  const w = Math.round(r.width * dpr), h = Math.round(r.height * dpr);
+  if (!w || !h || (canvas.width === w && canvas.height === h)) return;
+  canvas.width = w;
+  canvas.height = h;
   paint();
+}
+new ResizeObserver(() => { if ($("draw").classList.contains("on")) fit(); }).observe($("pad"));
+
+function stroke(g, s, dpr, from) {
+  g.strokeStyle = s.color;
+  g.lineWidth = s.width * dpr;
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  const p = s.points;
+  g.beginPath();
+  const start = Math.max(0, from);
+  g.moveTo(p[start][0] * dpr, p[start][1] * dpr);
+  if (p.length === 1) g.lineTo(p[0][0] * dpr + 0.1, p[0][1] * dpr);
+  for (let i = start + 1; i < p.length; i++) g.lineTo(p[i][0] * dpr, p[i][1] * dpr);
+  g.stroke();
 }
 
 function paint() {
-  const g = canvas.getContext("2d"), dpr = canvas.width / canvas.getBoundingClientRect().width;
+  const g = canvas.getContext("2d"), dpr = canvas.width / (canvas.getBoundingClientRect().width || 1);
   g.fillStyle = "#fff";
   g.fillRect(0, 0, canvas.width, canvas.height);
-  g.lineCap = "round";
-  g.lineJoin = "round";
-  for (const s of drawing.strokes) {
-    g.strokeStyle = s.color;
-    g.lineWidth = s.width * dpr;
-    g.beginPath();
-    s.points.forEach((p, i) => { if (i) g.lineTo(p[0] * dpr, p[1] * dpr); else g.moveTo(p[0] * dpr, p[1] * dpr); });
-    if (s.points.length === 1) g.lineTo(s.points[0][0] * dpr + 0.1, s.points[0][1] * dpr);
-    g.stroke();
-  }
+  for (const s of drawing.strokes) stroke(g, s, dpr, 0);
 }
 const at = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-canvas.addEventListener("pointerdown", (e) => { canvas.setPointerCapture(e.pointerId); drawing.now = { color: drawing.color, width: drawing.width, points: [at(e)] }; drawing.strokes.push(drawing.now); paint(); });
-canvas.addEventListener("pointermove", (e) => { if (drawing.now) { drawing.now.points.push(at(e)); paint(); } });
-for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, () => { drawing.now = null; });
+canvas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
+  drawing.now = drawing.rubber ? { color: "#ffffff", width: 26, points: [at(e)] } : { color: drawing.color, width: drawing.width, points: [at(e)] };
+  drawing.strokes.push(drawing.now);
+  stroke(canvas.getContext("2d"), drawing.now, canvas.width / (canvas.getBoundingClientRect().width || 1), 0);
+});
+canvas.addEventListener("pointermove", (e) => {
+  const s = drawing.now;
+  if (!s) return;
+  e.preventDefault();
+  // Every point the finger went through, not only the ones a busy screen had time to tell: a smooth line.
+  // Only the new piece is drawn, so a long drawing stays as quick as a short one.
+  const from = s.points.length - 1;
+  const moves = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+  for (const m of (moves.length ? moves : [e])) s.points.push(at(m));
+  stroke(canvas.getContext("2d"), s, canvas.width / (canvas.getBoundingClientRect().width || 1), from);
+});
+for (const ev of ["pointerup", "pointercancel", "pointerleave"]) canvas.addEventListener(ev, () => { drawing.now = null; });
+// The page itself must not move, nor a long press select, while a finger draws
+for (const ev of ["touchstart", "touchmove"]) canvas.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+/** Back, on the phone: a window open over the note closes first. True when there was one. */
+function goBack() {
+  if ($("draw").classList.contains("on")) { $("draw").classList.remove("on"); return true; }
+  if ($("veil").classList.contains("on")) { $("veil").classList.remove("on"); return true; }
+  return false;
+}
 
 // ---------------------------------------------------------------- inside the launcher
 
@@ -780,7 +831,7 @@ async function pcStart() {
 
 const host = android ? androidHost : pcHost;
 try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* older engines keep their own */ }
-window.Notes = { show, flush, inserted };
+window.Notes = { show, flush, inserted, goBack };
 if (android) NotesHost.ready(); else pcStart();
 </script>
 </body>

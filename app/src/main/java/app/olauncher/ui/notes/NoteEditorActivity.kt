@@ -104,7 +104,10 @@ class NoteEditorActivity : AppCompatActivity() {
 
     /** What is left to write is written, then the screen closes. */
     private fun close() {
-        web.evaluateJavascript("Notes.flush()") { finish() }
+        // A drawing or a small window open over the note: back closes that, not the note
+        web.evaluateJavascript("Notes.goBack()") { handled ->
+            if (handled != "true") web.evaluateJavascript("Notes.flush()") { finish() }
+        }
     }
 
     override fun onPause() {
