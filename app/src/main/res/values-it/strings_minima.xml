@@ -1149,12 +1149,7 @@
     <string name="ml_rec_usage_gemini_note">Gemini non dice quante ne restano: il limite del tuo modello è in Google AI Studio</string>
     <string name="ml_yt_app">Tube</string>
     <string name="ml_yt_search_hint">Cerca video e canali</string>
-    <string name="ml_yt_empty">Cerca un canale e seguilo: comparirà qui.\nOppure porta dentro le tue iscrizioni di YouTube.</string>
-    <string name="ml_yt_import">Importa iscrizioni</string>
-    <string name="ml_yt_import_help">Su takeout.google.com scegli solo \"YouTube\", e al suo interno solo \"iscrizioni\". Scarica l\'archivio, aprilo e scegli qui il file iscrizioni.csv (o subscriptions.csv).</string>
-    <string name="ml_yt_import_pick">Scegli il file</string>
-    <string name="ml_yt_imported">Canali aggiunti: %d</string>
-    <string name="ml_yt_import_none">Nessun canale nuovo in quel file</string>
+    <string name="ml_yt_empty">Cerca un canale e seguilo: comparirà qui.</string>
     <string name="ml_yt_subscribe">Segui</string>
     <string name="ml_yt_subscribed">Segui già</string>
     <string name="ml_yt_remove">Rimuovi</string>

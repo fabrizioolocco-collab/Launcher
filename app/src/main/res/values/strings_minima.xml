@@ -1152,12 +1152,7 @@
     <string name="ml_rec_usage_gemini_note">Gemini doesn\'t say how many are left: the limit of your model is in Google AI Studio</string>
     <string name="ml_yt_app">Tube</string>
     <string name="ml_yt_search_hint">Search videos and channels</string>
-    <string name="ml_yt_empty">Search for a channel and follow it: it will show here.\nOr bring in your YouTube subscriptions.</string>
-    <string name="ml_yt_import">Import subscriptions</string>
-    <string name="ml_yt_import_help">On takeout.google.com choose only \"YouTube\", and in it only \"subscriptions\". Download the archive, open it and pick the file subscriptions.csv here.</string>
-    <string name="ml_yt_import_pick">Choose the file</string>
-    <string name="ml_yt_imported">Channels added: %d</string>
-    <string name="ml_yt_import_none">No new channel in that file</string>
+    <string name="ml_yt_empty">Search for a channel and follow it: it will show here.</string>
     <string name="ml_yt_subscribe">Follow</string>
     <string name="ml_yt_subscribed">Following</string>
     <string name="ml_yt_remove">Remove</string>

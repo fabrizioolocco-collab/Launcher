@@ -10,7 +10,6 @@ import android.widget.ImageView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
@@ -59,46 +58,6 @@ object YtStore {
     }
 
     fun unsubscribe(ctx: Context, id: String) = save(ctx, subscriptions(ctx).filter { it.id != id })
-
-    /**
-     * The subscriptions file of Google Takeout (subscriptions.csv: channel id, address, title).
-     * Returns how many channels were new.
-     */
-    fun importCsv(ctx: Context, input: InputStream): Int {
-        val list = subscriptions(ctx).toMutableList()
-        val known = list.map { it.id }.toHashSet()
-        var added = 0
-        input.bufferedReader().useLines { lines ->
-            lines.forEach { line ->
-                val cells = cells(line)
-                val id = cells.firstOrNull()?.trim().orEmpty()
-                if (!Regex("UC[\\w-]{22}").matches(id) || !known.add(id)) return@forEach
-                list.add(YtChannel(id, cells.getOrNull(2)?.trim().orEmpty().ifBlank { id }, ""))
-                added++
-            }
-        }
-        if (added > 0) save(ctx, list)
-        return added
-    }
-
-    private fun cells(line: String): List<String> {
-        val out = ArrayList<String>()
-        val cell = StringBuilder()
-        var quoted = false
-        var i = 0
-        while (i < line.length) {
-            val c = line[i]
-            when {
-                c == '"' && quoted && i + 1 < line.length && line[i + 1] == '"' -> { cell.append('"'); i++ }
-                c == '"' -> quoted = !quoted
-                c == ',' && !quoted -> { out.add(cell.toString()); cell.setLength(0) }
-                else -> cell.append(c)
-            }
-            i++
-        }
-        out.add(cell.toString())
-        return out
-    }
 
     /** The tallest video asked for: 1080p costs data that a phone screen rarely shows. */
     fun maxHeight(ctx: Context) = prefs(ctx).getInt(KEY_HEIGHT, 720)

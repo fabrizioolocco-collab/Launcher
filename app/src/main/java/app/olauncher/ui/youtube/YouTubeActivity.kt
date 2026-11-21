@@ -22,7 +22,6 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
@@ -35,7 +34,6 @@ import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.pillButton
-import app.olauncher.helper.showToast
 import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,24 +64,12 @@ class YouTubeActivity : AppCompatActivity() {
 
     private lateinit var root: LinearLayout
     private lateinit var back: ImageView
-    private lateinit var more: ImageView
     private lateinit var input: EditText
     private lateinit var list: RecyclerView
     private lateinit var grid: GridLayoutManager
     private lateinit var progress: ProgressBar
     private lateinit var empty: FrameLayout
     private val adapter = Adapter()
-
-    private val pickCsv = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri == null) return@registerForActivityResult
-        lifecycleScope.launch {
-            val added = withContext(Dispatchers.IO) {
-                runCatching { contentResolver.openInputStream(uri)?.use { YtStore.importCsv(this@YouTubeActivity, it) } ?: 0 }.getOrDefault(0)
-            }
-            showToast(if (added > 0) getString(R.string.ml_yt_imported, added) else getString(R.string.ml_yt_import_none))
-            if (screen is Screen.Home) show()
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -136,7 +122,6 @@ class YouTubeActivity : AppCompatActivity() {
         pictures?.cancel()
         val current = screen
         back.isVisible = stack.size > 1
-        more.isVisible = current is Screen.Home
         val query = (current as? Screen.Search)?.query.orEmpty()
         if (input.text.toString() != query) input.setText(query)
         input.clearFocus()
@@ -193,7 +178,7 @@ class YouTubeActivity : AppCompatActivity() {
         list.scrollToPosition(0)
         when {
             items.isNotEmpty() -> empty.isVisible = false
-            current is Screen.Home -> showEmpty(getString(R.string.ml_yt_empty), getString(R.string.ml_yt_import)) { importHelp() }
+            current is Screen.Home -> showEmpty(getString(R.string.ml_yt_empty), null, null)
             else -> showEmpty(getString(R.string.ml_yt_no_results), null, null)
         }
     }
@@ -204,7 +189,7 @@ class YouTubeActivity : AppCompatActivity() {
         empty.isVisible = true
     }
 
-    /** Channels imported from a file come without a picture: a few are fetched each time the grid shows. */
+    /** A channel followed from the player comes without a picture: it is fetched when the grid shows. */
     private fun fillPictures(channels: List<YtChannel>) {
         val missing = channels.filter { it.avatar.isBlank() }.take(20)
         if (missing.isEmpty()) return
@@ -230,15 +215,6 @@ class YouTubeActivity : AppCompatActivity() {
         // A search from a search replaces it, so that back goes to where the first one started
         if (screen is Screen.Search) stack.removeAt(stack.size - 1)
         open(Screen.Search(query))
-    }
-
-    private fun importHelp() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.ml_yt_import)
-            .setMessage(R.string.ml_yt_import_help)
-            .setPositiveButton(R.string.ml_yt_import_pick) { _, _ -> runCatching { pickCsv.launch(arrayOf("*/*")) } }
-            .setNegativeButton(R.string.ml_cancel, null)
-            .show()
     }
 
     private fun toggle(channel: YtChannel) {
@@ -288,13 +264,11 @@ class YouTubeActivity : AppCompatActivity() {
             }
         }
         UiKit.styleInput(input)
-        more = UiKit.iconButton(this, R.drawable.ic_m_download, getString(R.string.ml_yt_import)) { importHelp() }
         bar.addView(back)
         bar.addView(input, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
             marginStart = 4.dpToPx()
             marginEnd = 4.dpToPx()
         })
-        bar.addView(more)
         root.addView(bar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
         val body = FrameLayout(this)
