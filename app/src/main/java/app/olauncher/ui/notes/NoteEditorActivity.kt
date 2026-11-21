@@ -177,8 +177,10 @@ class NoteEditorActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
-        fun saveData(name: String, base64: String): String =
-            NotesStore.attachBytes(note.parentFile ?: return "", Base64.decode(base64, Base64.DEFAULT), name).orEmpty()
+        fun saveData(name: String, base64: String): String {
+            val dir = note.parentFile ?: return ""
+            return NotesStore.attachBytes(dir, Base64.decode(base64, Base64.DEFAULT), name).orEmpty()
+        }
 
         @JavascriptInterface
         fun open(href: String) = runOnUiThread { this@NoteEditorActivity.open(href) }
