@@ -53,8 +53,8 @@ import java.io.File
 
 /**
  * The notes: one tree with every folder and, inside each, the notes it holds by their titles. A
- * folder opens and shuts in place, a note opens in the editor ([NoteEditorActivity]). The folder
- * tapped last is where a new note or a new folder goes.
+ * folder opens and shuts in place, a note opens in the editor ([NoteEditorActivity]). A new note
+ * or folder from the buttons at the bottom goes in the top folder; dragged, it goes anywhere.
  */
 class NotesActivity : AppCompatActivity() {
 
@@ -66,7 +66,7 @@ class NotesActivity : AppCompatActivity() {
     private lateinit var root: File
     private var rows: List<Row> = emptyList()
 
-    /** Where new things go: the folder tapped last (the top one to begin with). */
+    /** The folder touched last (kept up to date through renames and moves). */
     private var target: File? = null
     private var query: String? = null
     private var inBin = false
@@ -80,7 +80,6 @@ class NotesActivity : AppCompatActivity() {
     private lateinit var backButton: ImageView
     private lateinit var list: RecyclerView
     private lateinit var empty: FrameLayout
-    private lateinit var whereView: TextView
     private lateinit var buttons: LinearLayout
     private val adapter = Adapter()
 
@@ -200,14 +199,12 @@ class NotesActivity : AppCompatActivity() {
 
     private fun name(dir: File) = if (dir == root) getString(R.string.ml_notes_app) else dir.relativeTo(root).invariantSeparatorsPath.replace("/", " › ")
 
-    /** The line over the buttons: where a new note will go. */
+    /** The bar and the buttons, for the tree, a search or the bin. */
     private fun showWhere() {
         val dir = target?.takeIf { it.isDirectory } ?: root
         target = dir
         val plain = query == null && !inBin
         buttons.isVisible = plain && hasAccess()
-        whereView.isVisible = buttons.isVisible && dir != root
-        whereView.text = getString(R.string.ml_notes_in, name(dir))
         titleView.text = getString(if (inBin) R.string.ml_notes_bin else R.string.ml_notes_app)
         backButton.isVisible = true
         searchButton.isVisible = !inBin && query == null
@@ -543,29 +540,16 @@ class NotesActivity : AppCompatActivity() {
         content.addView(empty, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         column.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        whereView = TextView(this).apply {
-            textSize = 13f
-            setTextColor(UiKit.secondary(this@NotesActivity))
-            maxLines = 1
-            ellipsize = TextUtils.TruncateAt.START
-            setPadding(20.dpToPx(), 6.dpToPx(), 20.dpToPx(), 2.dpToPx())
-            // A tap brings new notes back to the top folder
-            setOnClickListener {
-                target = root
-                reload()
-            }
-        }
-        column.addView(whereView)
         buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 12.dpToPx())
         }
         buttons.addView(
-            pillButton(this, getString(R.string.ml_notes_new_folder), filled = false, color = primary) { newFolder(target ?: root) },
+            pillButton(this, getString(R.string.ml_notes_new_folder), filled = false, color = primary) { newFolder(root) },
             LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginEnd = 5.dpToPx() }
         )
         buttons.addView(
-            pillButton(this, getString(R.string.ml_notes_new_note), filled = true, color = primary) { newNote(target ?: root) },
+            pillButton(this, getString(R.string.ml_notes_new_note), filled = true, color = primary) { newNote(root) },
             LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginStart = 5.dpToPx() }
         )
         column.addView(buttons)
@@ -647,7 +631,7 @@ class NotesActivity : AppCompatActivity() {
                     // Shut, it says how many notes it keeps
                     holder.side.text = if (item.open) "" else item.folder.count.toString()
                     // The folder a new note would go to stands out
-                    view.background = if (dir == target && dir != root) UiKit.border(ctx, 12, UiKit.card(ctx)) else UiKit.ripple(ctx)
+                    view.background = UiKit.ripple(ctx)
                     view.alpha = 1f
                     view.setOnClickListener { toggle(dir) }
                     view.setOnLongClickListener { hold(view, dir, item.folder) }

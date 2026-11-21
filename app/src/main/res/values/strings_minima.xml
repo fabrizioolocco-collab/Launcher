@@ -1254,4 +1254,7 @@
         <item quantity="other">The folder is deleted and its %d notes go to the bin.</item>
     </plurals>
     <string name="ml_notes_cannot_move">It can\'t go there</string>
+    <string name="ml_notes_file_share">Share</string>
+    <string name="ml_notes_file_save">Save to…</string>
+    <string name="ml_notes_file_open_with">Open with…</string>
 </resources>

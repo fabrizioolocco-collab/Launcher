@@ -21,6 +21,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import app.olauncher.R
+import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.PickFiles
 import app.olauncher.ui.UiKit
@@ -187,6 +189,46 @@ class NoteEditorActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun open(href: String) = runOnUiThread { this@NoteEditorActivity.open(href) }
+
+        @JavascriptInterface
+        fun share(href: String, name: String) = runOnUiThread { fileMenu(href, name) }
+    }
+
+    /** The file a link of the note points to, when it is one beside the note. */
+    private fun fileOf(href: String): File? = when {
+        href.startsWith("file:") -> Uri.parse(href).path?.let { File(it) }
+        !href.contains(":") -> File(note.parentFile, Uri.decode(href))
+        else -> null
+    }?.takeIf { it.isFile }
+
+    /** Share, save elsewhere or open with another app, an image or a file of the note. */
+    private fun fileMenu(href: String, name: String) {
+        val file = fileOf(href) ?: return showToast(getString(R.string.ml_search_cannot_open))
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
+        val uri = try {
+            FileProvider.getUriForFile(this, "$packageName.files", file)
+        } catch (e: Exception) {
+            return showToast(getString(R.string.ml_search_cannot_open))
+        }
+        fun go(intent: Intent) = try {
+            startActivity(intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
+        } catch (e: Exception) {
+            showToast(getString(R.string.ml_search_cannot_open))
+        }
+        showMenuDialog(
+            name.ifBlank { file.name },
+            listOf(
+                MenuEntry(getString(R.string.ml_notes_file_share), icon = R.drawable.ic_m_share) {
+                    go(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
+                },
+                MenuEntry(getString(R.string.ml_notes_file_save), icon = R.drawable.ic_m_download) {
+                    go(Intent(this, app.olauncher.ui.SaveToActivity::class.java).setAction(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri))
+                },
+                MenuEntry(getString(R.string.ml_notes_file_open_with), icon = R.drawable.ic_m_open) {
+                    go(Intent.createChooser(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), null))
+                },
+            )
+        )
     }
 
     companion object {

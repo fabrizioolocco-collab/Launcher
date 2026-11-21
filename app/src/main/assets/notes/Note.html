@@ -53,7 +53,15 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #bar svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 #bar .sep { width: 1px; height: 22px; background: var(--stroke); flex-shrink: 0; margin: 0 4px; }
 #scroll { flex: 1; overflow: auto; min-height: 0; }
-#page { max-width: 760px; padding: 16px 20px 80px; }
+#page { position: relative; max-width: 760px; padding: 16px 20px 80px; }
+/* Over the images and the files of the note: a red x to take it away, and a button to save or share it */
+#over { position: absolute; inset: 0; pointer-events: none; }
+#over button { position: absolute; pointer-events: auto; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+#over .x { background: #d32f2f; color: #fff; font-size: 18px; line-height: 1; }
+#over .s { background: var(--card); border: 1px solid var(--stroke); color: var(--fg); }
+#over svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.row.drop { outline: 2px solid var(--link); background: var(--sel); }
+#tree.drop { background: #0b0e10; }
 .pc #page { padding: 20px 28px 120px; }
 #title { width: 100%; background: none; border: 0; outline: none; color: var(--fg); font: 700 26px/1.25 system-ui, sans-serif; padding: 0; margin: 0 0 10px; }
 #title::placeholder, #body:empty::before { color: #5d666e; }
@@ -71,7 +79,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .note li { margin: 2px 0; }
 .note a { color: var(--link); }
 .note img { max-width: 100%; height: auto; border-radius: 10px; display: block; margin: 6px 0; }
-.note img.on { outline: 2px solid var(--link); }
+.note img { cursor: pointer; }
 .note table { border-collapse: collapse; margin: 6px 0 12px; width: 100%; }
 .note td, .note th { border: 1px solid var(--stroke); padding: 7px 10px; vertical-align: top; min-width: 48px; text-align: left; }
 .note tr:first-child td { font-weight: 600; background: var(--card); }
@@ -80,7 +88,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .note ul.todo > li::before { content: ""; position: absolute; left: 0; top: 2px; width: 20px; height: 20px; border: 2px solid var(--dim); border-radius: 6px; }
 .note ul.todo > li[data-done]::before { border-color: var(--fg); background: var(--fg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/14px no-repeat; }
 .note ul.todo > li[data-done] { color: var(--dim); text-decoration: line-through; }
-.note a.file { display: inline-block; padding: 6px 12px; margin: 2px 0; border: 1px solid var(--stroke); border-radius: 10px; background: var(--card); color: var(--fg); text-decoration: none; }
+.note a.file { display: inline-block; padding: 6px 48px 6px 12px; margin: 6px 0; cursor: pointer; border: 1px solid var(--stroke); border-radius: 10px; background: var(--card); color: var(--fg); text-decoration: none; }
 
 #veil { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 5; }
 #veil.on { display: flex; }
@@ -130,6 +138,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
       <div id="page">
         <input id="title" placeholder="Titolo" autocomplete="off">
         <div id="body" class="note" contenteditable="true" data-hint="Scrivi qui"></div>
+        <div id="over"></div>
       </div>
     </div>
     <div id="empty"><div id="emptyText"></div></div>
@@ -220,7 +229,6 @@ function flush() {
   clearTimeout(timer);
   if (!dirty || shownName == null) return;
   dirty = false;
-  body.querySelectorAll("img.on").forEach((i) => i.classList.remove("on"));
   host.save(pageOf(shownName, body.innerHTML));
 }
 
@@ -320,9 +328,11 @@ body.addEventListener("keydown", (e) => {
 });
 
 body.addEventListener("click", (e) => {
-  body.querySelectorAll("img.on").forEach((i) => i.classList.remove("on"));
   const t = e.target;
-  if (t.tagName === "IMG") { t.classList.add("on"); marks(); return; }
+  // An image or an attached file: a tap opens it
+  if (t.tagName === "IMG") { e.preventDefault(); host.open(t.getAttribute("src")); return; }
+  const file = t.closest ? t.closest("a.file") : null;
+  if (file) { e.preventDefault(); host.open(file.getAttribute("href")); return; }
   const li = t.closest ? t.closest("ul.todo > li") : null;
   // A tap on the box of a thing to do, not on its words
   if (li && e.clientX - li.getBoundingClientRect().left < 30) {
@@ -336,8 +346,24 @@ body.addEventListener("click", (e) => {
   marks();
 });
 body.addEventListener("paste", (e) => {
+  const data = e.clipboardData || window.clipboardData;
+  // A picture (a screenshot just taken): saved beside the note and put where the caret is
+  const item = Array.from((data && data.items) || []).find((i) => i.kind === "file" && i.type.startsWith("image/"));
+  if (item) {
+    e.preventDefault();
+    keep();
+    const file = item.getAsFile();
+    const ext = (item.type.split("/")[1] || "png").replace("jpeg", "jpg").replace(/[^a-z0-9]/g, "");
+    const read = new FileReader();
+    read.onload = async () => {
+      const path = await host.saveData("incollata." + ext, read.result);
+      if (path) inserted("image", path, "incollata." + ext);
+    };
+    read.readAsDataURL(file);
+    return;
+  }
   // Text only: what is copied from a web page brings its own looks with it
-  const text = (e.clipboardData || window.clipboardData).getData("text/plain");
+  const text = data.getData("text/plain");
   if (text == null) return;
   e.preventDefault();
   document.execCommand("insertText", false, text);
@@ -364,10 +390,9 @@ function marks() {
     h: !!inside("h2,h3"), ul: !!inside("ul:not(.todo)"), ol: !!inside("ol"), todo: !!inside("ul.todo") };
   for (const k in on) { const b = $("bar").querySelector("[data-k=" + k + "]"); if (b) b.classList.toggle("on", !!on[k]); }
   const ctx = $("ctx");
-  const img = body.querySelector("img.on"), a = inside("a"), cell = inside("td,th");
+  const a = inside("a:not(.file)"), cell = inside("td,th");
   const acts = [];
-  if (img) acts.push(["Togli l'immagine", () => { img.remove(); changed(); marks(); }]);
-  else if (a) acts.push(["Apri", () => host.open(a.getAttribute("href"))], ["Cambia", link], ["Togli il link", () => { a.replaceWith(...a.childNodes); changed(); marks(); }]);
+  if (a) acts.push(["Apri", () => host.open(a.getAttribute("href"))], ["Togli il link", () => { a.replaceWith(...a.childNodes); changed(); marks(); }]);
   else if (cell) acts.push(["+ riga", () => tableEdit("row+")], ["+ colonna", () => tableEdit("col+")], ["− riga", () => tableEdit("row-")], ["− colonna", () => tableEdit("col-")], ["Elimina tabella", () => tableEdit("del")]);
   ctx.innerHTML = "";
   for (const [label, run] of acts) {
@@ -410,6 +435,46 @@ for (const b of BUTTONS) {
 // A press on a button must not take the caret out of the note
 for (const id of ["bar", "ctx"]) $(id).addEventListener("pointerdown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
 for (const id of ["bar", "ctx"]) $(id).addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
+
+// ---------------------------------------------------------------- the x and the save button of each image and file
+
+const SAVE_ICON = '<svg viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
+let laying = 0;
+
+function lay() {
+  cancelAnimationFrame(laying);
+  laying = requestAnimationFrame(() => {
+    const over = $("over"), page = $("page").getBoundingClientRect();
+    over.innerHTML = "";
+    body.querySelectorAll("img, a.file").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      const href = el.getAttribute(el.tagName === "IMG" ? "src" : "href");
+      const name = el.tagName === "IMG" ? decodeURIComponent((href || "").split("/").pop()) : el.textContent;
+      const put = (cls, html, label, x, y, run) => {
+        const b = document.createElement("button");
+        b.className = cls;
+        b.innerHTML = html;
+        b.title = label;
+        b.setAttribute("aria-label", label);
+        b.style.left = (x - page.left) + "px";
+        b.style.top = (y - page.top) + "px";
+        b.addEventListener("pointerdown", (e) => e.preventDefault());
+        b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); run(); });
+        over.appendChild(b);
+      };
+      // The x on the top corner, out of the way of what it takes away
+      put("x", "×", "Togli", r.right - 18, r.top - 12, () => { el.remove(); changed(); lay(); });
+      // Save or share: on an image its bottom corner, on a file inside it, at its end
+      if (el.tagName === "IMG") put("s", SAVE_ICON, "Salva o condividi", r.right - 40, r.bottom - 40, () => host.share(href, name));
+      else put("s", SAVE_ICON, "Salva o condividi", r.right - 36, r.top + (r.height - 30) / 2, () => host.share(href, name));
+    });
+  });
+}
+new MutationObserver(lay).observe(body, { childList: true, subtree: true, characterData: true, attributes: true });
+new ResizeObserver(lay).observe(body);
+body.addEventListener("load", lay, true);
+window.addEventListener("resize", lay);
 
 /** An image or a file now beside the note, at [path] from it: put where the caret was. */
 function inserted(kind, path, name) {
@@ -600,6 +665,7 @@ const androidHost = {
   pick: (kind) => NotesHost.pick(kind),
   saveData: async (name, data) => NotesHost.saveData(name, data.slice(data.indexOf(",") + 1)),
   open: (href) => NotesHost.open(href),
+  share: (href, name) => NotesHost.share(href, name),
 };
 
 // ---------------------------------------------------------------- on a computer: the folder itself
@@ -683,23 +749,102 @@ function draw() {
     tree.appendChild(r);
     return r;
   };
+  // A note or a folder taken with the mouse, and the folders it can be let go on
+  const drag = (r, what) => {
+    r.draggable = true;
+    r.addEventListener("dragstart", (e) => { pc.drag = what; e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", what.name); });
+    r.addEventListener("dragend", () => { pc.drag = null; document.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop")); });
+  };
+  const target = (r, path) => {
+    r.addEventListener("dragover", (e) => { if (pc.drag) { e.preventDefault(); e.stopPropagation(); r.classList.add("drop"); } });
+    r.addEventListener("dragleave", () => r.classList.remove("drop"));
+    r.addEventListener("drop", (e) => { if (!pc.drag) return; e.preventDefault(); e.stopPropagation(); r.classList.remove("drop"); moveTo(pc.drag, path); });
+  };
   const note = (n, depth, pinned) => {
     const r = row("note", depth, n.name, () => openNote(n), () => noteMenu(n), pinned ? '<span class="pin">★</span>' : '<span class="chev"></span>');
     if (pc.open && keyOf(pc.open) === keyOf(n)) r.classList.add("on");
+    drag(r, { kind: "note", note: n, name: n.name });
+    // Let go on a note: beside it, in its folder
+    target(r, n.path);
   };
   if (q) { all.filter((n) => n.name.toLowerCase().includes(q)).forEach((n) => note(n, 0, false)); return; }
   all.filter((n) => pc.pins.includes(keyOf(n))).forEach((n) => note(n, 0, true));
   (function walk(n, depth) {
     for (const f of n.folders) {
       const key = f.path.join("/"), shut = pc.shut.has(key);
-      row("folder", depth, f.name, () => { if (shut) pc.shut.delete(key); else pc.shut.add(key); localStorage.setItem("shut", JSON.stringify(Array.from(pc.shut))); draw(); },
+      const fr = row("folder", depth, f.name, () => { if (shut) pc.shut.delete(key); else pc.shut.add(key); localStorage.setItem("shut", JSON.stringify(Array.from(pc.shut))); draw(); },
         () => folderMenu(f), '<span class="chev">' + (shut ? "▸" : "▾") + "</span>");
+      drag(fr, { kind: "folder", folder: f, name: f.name });
+      target(fr, f.path);
       if (!shut) walk(f, depth + 1);
     }
     n.notes.filter((x) => !pc.pins.includes(keyOf(x))).forEach((x) => note(x, depth, false));
   })(pc.tree, 0);
 }
 $("filter").addEventListener("input", () => { if (pc.tree) draw(); });
+
+/** The files of the `_allegati` folder a note's page links to. */
+function carried(text) {
+  const out = new Set();
+  for (const m of text.matchAll(/(?:src|href)="_allegati\/([^"]+)"/g)) { try { out.add(decodeURIComponent(m[1])); } catch (e) { out.add(m[1]); } }
+  return Array.from(out);
+}
+
+async function copyDir(src, dst) {
+  for await (const [name, h] of src.entries()) {
+    if (h.kind === "directory") await copyDir(h, await dst.getDirectoryHandle(name, { create: true }));
+    else await writeFile(dst, name, await h.getFile());
+  }
+}
+
+/** Moves a note (with its files) or a whole folder into the folder at [path]. */
+async function moveTo(what, path) {
+  pc.drag = null;
+  try {
+    flush();
+    if (what.kind === "note") {
+      const n = what.note;
+      if (n.path.join("/") === path.join("/")) return;
+      const from = await dirOf(n.path), to = await dirOf(path);
+      const text = await readText(from, n.file);
+      const file = await freeName(to, n.file);
+      await writeFile(to, file, text);
+      const names = carried(text);
+      if (names.length) {
+        const fromFiles = await from.getDirectoryHandle(FILES), toFiles = await to.getDirectoryHandle(FILES, { create: true });
+        for (const name of names) {
+          try {
+            const f = await (await fromFiles.getFileHandle(name)).getFile();
+            try { await toFiles.getFileHandle(name); } catch (e) { await writeFile(toFiles, name, f); await fromFiles.removeEntry(name); }
+          } catch (e) { /* a link to a file no longer there */ }
+        }
+      }
+      await from.removeEntry(n.file);
+      const old = keyOf(n), moved = { name: file.replace(/\.html?$/i, ""), file, path, time: Date.now() };
+      if (pc.pins.includes(old)) { pc.pins = pc.pins.map((p) => (p === old ? keyOf(moved) : p)); await savePins(); }
+      const wasOpen = pc.open && keyOf(pc.open) === old;
+      await reload();
+      if (wasOpen) await openNote(moved);
+    } else {
+      const f = what.folder, own = f.path.join("/"), dest = path.join("/");
+      // Into itself or one of its own folders: nowhere to go
+      if (f.path.slice(0, -1).join("/") === dest || dest === own || dest.startsWith(own + "/")) return;
+      const to = await dirOf(path);
+      try { await to.getDirectoryHandle(f.name); say2("Lì c'è già una cartella \"" + f.name + "\"."); return; } catch (e) { /* free */ }
+      await copyDir(await dirOf(f.path), await to.getDirectoryHandle(f.name, { create: true }));
+      await (await dirOf(f.path.slice(0, -1))).removeEntry(f.name, { recursive: true });
+      const moved = path.concat(f.name).join("/");
+      pc.pins = pc.pins.map((p) => (p.startsWith(own + "/") ? moved + p.slice(own.length) : p));
+      await savePins();
+      const wasOpen = pc.open && pc.open.path.join("/").startsWith(own);
+      if (wasOpen) pc.open.path = path.concat(f.name).concat(pc.open.path.slice(f.path.length));
+      await reload();
+      if (wasOpen) await openNote(pc.open);
+    }
+  } catch (e) { say2("Non è stato possibile spostarla."); }
+}
+
+function say2(text) { choose(text, [["OK", () => {}]]); }
 
 async function openNote(n) {
   flush();
@@ -789,6 +934,22 @@ const pcHost = {
     return FILES + "/" + file;
   },
   open: (href) => window.open(new URL(href, document.baseURI).href, "_blank", "noopener"),
+  // On a computer: a copy where the browser keeps what is downloaded
+  share: async (href, name) => {
+    try {
+      const parts = decodeURIComponent(href).split("/").filter((x) => x && x !== ".");
+      const dir = await dirOf(pc.open.path.concat(parts.slice(0, -1)));
+      const file = await (await dir.getFileHandle(parts[parts.length - 1])).getFile();
+      const url = URL.createObjectURL(file);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name || file.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (e) { pcHost.open(href); }
+  },
 };
 
 async function pcStart() {
@@ -814,8 +975,12 @@ async function pcStart() {
   const pick = async () => { try { await use(await showDirectoryPicker({ mode: "readwrite" })); } catch (e) { /* closed without choosing */ } };
   let saved = null;
   try { saved = await idb("readonly", (s) => s.get("root")); } catch (e) { /* first time */ }
+  // Still allowed (the browser was told to allow it at every visit): straight in, nothing asked
+  if (saved && saved.queryPermission) {
+    try { if (await saved.queryPermission({ mode: "readwrite" }) === "granted") { await use(saved); bindButtons(); return; } } catch (e) { /* asked below */ }
+  }
   if (saved) {
-    say("Apri la cartella delle note \"" + saved.name + "\".", "Apri", async () => {
+    say("Le note sono in \"" + saved.name + "\". Se il browser chiede, scegli \"Consenti a ogni visita\": la prossima volta si aprono da sole.", "Apri le note", async () => {
       if (await saved.requestPermission({ mode: "readwrite" }) === "granted") await use(saved); else await pick();
     });
     const other = document.createElement("button");
@@ -824,9 +989,19 @@ async function pcStart() {
     other.textContent = "Un'altra cartella";
     other.onclick = pick;
     $("emptyText").appendChild(other);
-  } else say("Scegli la cartella delle note: quella dove si trova questo file.", "Scegli la cartella", pick);
+  } else say("Scegli la cartella delle note: quella dove si trova questo file. Viene ricordata.", "Scegli la cartella", pick);
+  bindButtons();
+}
+
+function bindButtons() {
   $("newNote").onclick = () => pc.root && newNote([]);
   $("newFolder").onclick = () => pc.root && newFolder([]);
+  // Dropped on the empty part of the tree, or on its title: out of every folder
+  for (const zone of [$("tree"), $("sideTop")]) {
+    zone.addEventListener("dragover", (e) => { if (pc.drag && (e.target === zone || zone.id === "sideTop")) { e.preventDefault(); $("tree").classList.add("drop"); } });
+    zone.addEventListener("dragleave", () => $("tree").classList.remove("drop"));
+    zone.addEventListener("drop", (e) => { if (!pc.drag || (e.target !== zone && zone.id !== "sideTop")) return; e.preventDefault(); $("tree").classList.remove("drop"); moveTo(pc.drag, []); });
+  }
 }
 
 const host = android ? androidHost : pcHost;
