@@ -171,7 +171,6 @@ class YtPlayerActivity : AppCompatActivity() {
                 played = true
                 val streams = YtPlayerService.now?.streams ?: return
                 YtStore.setPath(this@YtPlayerActivity, streams.clientIndex * 10 + usedMode)
-                YtPlayerService.now?.let { YtStore.setWatched(this@YtPlayerActivity, it.videoId, true) }
             }
         }
 

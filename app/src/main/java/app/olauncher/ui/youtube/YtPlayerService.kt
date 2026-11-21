@@ -47,7 +47,8 @@ class YtPlayerService : MediaSessionService() {
         val finished = exo.playbackState == Player.STATE_ENDED || position > duration - 15_000
         if (finished) {
             YtStore.setPosition(this, video.videoId, 0, duration)
-            // Watched to the end: off the list of the videos to watch
+            // Watched to the end, and only then: it counts as watched, and is off the list of the videos to watch
+            YtStore.setWatched(this, video.videoId, true)
             YtStore.dropLater(this, video.videoId)
         } else if (position > 5_000) YtStore.setPosition(this, video.videoId, position, duration)
     }

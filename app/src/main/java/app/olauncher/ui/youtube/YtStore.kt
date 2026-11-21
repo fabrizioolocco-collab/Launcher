@@ -82,7 +82,7 @@ object YtStore {
 
     fun isWatched(ctx: Context, videoId: String) = videoId in watched(ctx)
 
-    /** A video played, or marked by hand as watched or not. */
+    /** A video played to the end, or marked by hand as watched or not. */
     fun setWatched(ctx: Context, videoId: String, on: Boolean) {
         val set = watched(ctx)
         if (on == (videoId in set)) return
