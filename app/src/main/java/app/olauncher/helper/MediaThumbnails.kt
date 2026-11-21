@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.WeakHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * Thumbnails of photos and videos with a shared memory cache. On Android 10+ they come from the
@@ -54,6 +55,9 @@ object MediaThumbnails {
     /** Gets ready the ones not on screen yet, without taking threads from the visible ones. */
     private val preloaders = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
     private var preloading: Job? = null
+
+    /** The threads the thumbnails are actually made on, as many as needed: see [produce]. */
+    private val makers = Executors.newCachedThreadPool()
     private val jobs = WeakHashMap<ImageView, Job>()
 
     fun mimeOf(name: String): String? =
@@ -116,7 +120,7 @@ object MediaThumbnails {
             var bitmap = withContext(readers) { fromDisk(context, file, size) }
             if (bitmap == null) {
                 // A grid cell of a photo: the camera's own small picture right away, the sharp one after
-                if (size <= PREVIEW_UP_TO && !isVideo(file)) {
+                if (size <= PREVIEW_UP_TO && !isVideo(file) && !withContext(readers) { isBad(context, file, size) }) {
                     val quick = withContext(readers) { preview(file) }
                     if (quick != null && view.tag == key) view.setImageBitmap(quick)
                 }
@@ -148,8 +152,44 @@ object MediaThumbnails {
     }
 
     /** Makes a thumbnail, no larger than it will be shown, and keeps it on disk. */
-    private fun produce(context: Context, file: File, size: Int, uri: Uri?): Bitmap? =
-        make(context, file, size, uri)?.let { fit(it, size) }?.also { toDisk(context, file, size, it) }
+    private fun produce(context: Context, file: File, size: Int, uri: Uri?): Bitmap? {
+        if (isBad(context, file, size)) return null
+        // On a thread that can be given up: a file the system chokes on (a broken video, a huge photo)
+        // would otherwise hold one of the few workers for good, and after some of those nothing loads
+        val task = makers.submit<Bitmap?> { make(context, file, size, uri) }
+        val made = try {
+            task.get(MAKE_TIMEOUT_S, TimeUnit.SECONDS)
+        } catch (e: Throwable) {
+            task.cancel(true)
+            null
+        }
+        if (made == null) {
+            markBad(context, file, size)
+            return null
+        }
+        return fit(made, size).also { toDisk(context, file, size, it) }
+    }
+
+    private fun badFile(context: Context, file: File, size: Int) = File(diskFile(context, file, size).path + ".bad")
+
+    /** A file whose thumbnail couldn't be made is left alone for some days instead of being tried at every look. */
+    private fun isBad(context: Context, file: File, size: Int): Boolean = try {
+        val mark = badFile(context, file, size)
+        mark.isFile && System.currentTimeMillis() - mark.lastModified() < BAD_FOR_MS
+    } catch (e: Throwable) {
+        false
+    }
+
+    private fun markBad(context: Context, file: File, size: Int) {
+        try {
+            val mark = badFile(context, file, size)
+            mark.parentFile?.mkdirs()
+            mark.writeBytes(ByteArray(0))
+            mark.setLastModified(System.currentTimeMillis())
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
+    }
 
     /**
      * Shrinks a thumbnail that came larger than asked (the system gives the nearest size it has) until
@@ -185,7 +225,32 @@ object MediaThumbnails {
         val key = "${file.absolutePath}|${file.lastModified()}|${file.length()}|$size"
         val hash = java.security.MessageDigest.getInstance("SHA-1").digest(key.toByteArray())
             .joinToString("") { "%02x".format(it) }
-        return File(File(context.cacheDir, DISK_DIR), "$hash.jpg")
+        return File(diskDir(context), "$hash.jpg")
+    }
+
+    @Volatile private var dir: File? = null
+
+    /**
+     * Where the thumbnails are kept: with the app's own files, not in its cache, which the system
+     * empties when the phone runs short of space (a phone full of photos does), so that they had
+     * to be made again and again. The ones already in the cache are moved over, once.
+     */
+    private fun diskDir(context: Context): File {
+        dir?.let { return it }
+        synchronized(this) {
+            dir?.let { return it }
+            val kept = File(context.noBackupFilesDir, DISK_DIR)
+            val old = File(context.cacheDir, DISK_DIR)
+            try {
+                if (!kept.exists() && old.isDirectory) old.renameTo(kept)
+                kept.mkdirs()
+                if (old.exists()) old.deleteRecursively()
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+            dir = kept
+            return kept
+        }
     }
 
     private fun fromDisk(context: Context, file: File, size: Int): Bitmap? = try {
@@ -220,7 +285,9 @@ object MediaThumbnails {
     }
 
     private const val DISK_DIR = "media_thumbs"
-    private const val DISK_MAX_BYTES = 400L * 1024 * 1024
+    private const val DISK_MAX_BYTES = 300L * 1024 * 1024
+    private const val MAKE_TIMEOUT_S = 12L
+    private const val BAD_FOR_MS = 7L * 24 * 3600 * 1000
 
     /** Up to this size a photo shows its embedded picture while the thumbnail is made (a full-screen poster doesn't). */
     private const val PREVIEW_UP_TO = 512
