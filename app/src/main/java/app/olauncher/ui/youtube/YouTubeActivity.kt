@@ -36,6 +36,7 @@ import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.pillButton
+import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
@@ -127,6 +128,34 @@ class YouTubeActivity : AppCompatActivity() {
             override fun handleOnBackPressed() = goBack()
         })
         if (!openFrom(intent)) show()
+        offerLinks()
+    }
+
+    /**
+     * From Android 12 a browser opens a YouTube link in an app only if the user said that app may
+     * open those links: asked once, with the way to the page where it is said.
+     */
+    private fun offerLinks() {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S) return
+        val prefs = getSharedPreferences("youtube", MODE_PRIVATE)
+        if (prefs.getBoolean("links_asked", false)) return
+        val allowed = runCatching {
+            val state = getSystemService(android.content.pm.verify.domain.DomainVerificationManager::class.java)
+                .getDomainVerificationUserState(packageName)?.hostToStateMap.orEmpty()
+            state["www.youtube.com"] == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED ||
+                state["youtu.be"] == android.content.pm.verify.domain.DomainVerificationUserState.DOMAIN_STATE_SELECTED
+        }.getOrDefault(false)
+        if (allowed) return
+        prefs.edit().putBoolean("links_asked", true).apply()
+        showConfirmDialog(getString(R.string.ml_yt_links_title), getString(R.string.ml_yt_links_help), getString(R.string.ml_yt_links_open)) { openLinkSettings() }
+    }
+
+    private fun openLinkSettings() {
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_APP_OPEN_BY_DEFAULT_SETTINGS, android.net.Uri.parse("package:$packageName")))
+        } catch (e: Exception) {
+            startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

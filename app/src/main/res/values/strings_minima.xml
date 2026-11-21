@@ -1258,4 +1258,7 @@
     <string name="ml_notes_file_save">Save to…</string>
     <string name="ml_notes_file_open_with">Open with…</string>
     <string name="ml_yt_link_unknown">Tube can\'t open this link</string>
+    <string name="ml_yt_links_title">Open YouTube links in Tube</string>
+    <string name="ml_yt_links_help">Android lets an app open YouTube links only if you allow it. On the page that opens tap \"Add links\" and tick youtube.com and youtu.be.\n\nIf you have the YouTube app, untick them there, or links keep opening in it.\n\nAnyway you can share a link to Tube from the Share menu.</string>
+    <string name="ml_yt_links_open">Open settings</string>
 </resources>
