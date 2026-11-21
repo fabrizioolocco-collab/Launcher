@@ -23,6 +23,7 @@ import android.view.GestureDetector
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
+import android.view.OrientationEventListener
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -144,6 +145,8 @@ class YtPlayerActivity : AppCompatActivity() {
     /** Leaving for the sound only: no floating window this time. */
     private var leavingForAudio = false
 
+    private var rotation: OrientationEventListener? = null
+
     /** Left with back: the video stops, also if it was playing. */
     private var closing = false
 
@@ -200,6 +203,20 @@ class YtPlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Turning the phone turns the video, also with the rotation of the system locked
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        rotation = object : OrientationEventListener(this) {
+            override fun onOrientationChanged(degrees: Int) {
+                if (degrees == ORIENTATION_UNKNOWN) return
+                // A side chosen with the button holds until the phone is held that way: then turning it counts again
+                val upright = degrees <= 30 || degrees >= 330
+                val sideways = degrees in 60..120 || degrees in 240..300
+                when (requestedOrientation) {
+                    ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE -> if (sideways) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                    ActivityInfo.SCREEN_ORIENTATION_PORTRAIT -> if (upright) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR
+                }
+            }
+        }
         buildLayout()
         setContentView(root)
         applyLayout()
@@ -492,12 +509,14 @@ class YtPlayerActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         leavingForAudio = false
+        rotation?.let { if (it.canDetectOrientation()) it.enable() }
         showVideo(true)
         updatePip()
     }
 
     override fun onStop() {
         super.onStop()
+        rotation?.disable()
         if (!inPip) showVideo(false)
     }
 
