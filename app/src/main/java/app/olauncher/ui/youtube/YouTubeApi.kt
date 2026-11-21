@@ -23,6 +23,9 @@ class YtStreams(
     val author: String,
     val channelId: String,
     val userAgent: String,
+    /** Which client gave them, and its place in the list: the next one is asked when these don't play. */
+    val client: String,
+    val clientIndex: Int,
     /** Video-only streams, one per height, best first. */
     val videos: List<Pair<Int, String>>,
     val audioUrl: String?,
@@ -58,8 +61,25 @@ object YouTubeApi {
             "5", "com.google.ios.youtube/20.10.4 (iPhone16,2; U; CPU iOS 18_3_2 like Mac OS X;)",
             JSONObject().put("clientName", "IOS").put("clientVersion", "20.10.4").put("deviceMake", "Apple")
                 .put("deviceModel", "iPhone16,2").put("osName", "iPhone").put("osVersion", "18.3.2.22D82")
+        ),
+        Client(
+            "3", "com.google.android.youtube/20.10.38 (Linux; U; Android 14; en_US; Pixel 8 Build/AP2A.240805.005) gzip",
+            JSONObject().put("clientName", "ANDROID").put("clientVersion", "20.10.38").put("androidSdkVersion", 34)
+                .put("osName", "Android").put("osVersion", "14")
         )
     )
+
+    val clientCount get() = players.size
+
+    /** The visitor YouTube takes us for: streams asked without one are often refused when they are fetched. */
+    @Volatile
+    private var visitor: String? = null
+
+    private fun visitor(): String? {
+        visitor?.let { return it }
+        runCatching { web("visitor_id", JSONObject()) }
+        return visitor
+    }
 
     private fun locale(fields: JSONObject): JSONObject {
         val l = Locale.getDefault()
@@ -67,6 +87,8 @@ object YouTubeApi {
     }
 
     private fun post(endpoint: String, client: JSONObject, clientId: String, agent: String, body: JSONObject): JSONObject {
+        val known = visitor
+        if (known != null) client.put("visitorData", known)
         body.put("context", JSONObject().put("client", locale(client)))
         val conn = URL("$HOST$endpoint?prettyPrint=false").openConnection() as HttpURLConnection
         try {
@@ -80,10 +102,13 @@ object YouTubeApi {
             conn.setRequestProperty("X-YouTube-Client-Version", client.getString("clientVersion"))
             conn.setRequestProperty("Origin", "https://www.youtube.com")
             conn.setRequestProperty("Cookie", "SOCS=CAI")
+            if (known != null) conn.setRequestProperty("X-Goog-Visitor-Id", known)
             conn.outputStream.use { it.write(body.toString().toByteArray()) }
             val code = conn.responseCode
             if (code !in 200..299) throw YtException("HTTP $code")
-            return JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            val json = JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+            if (visitor == null) json.optJSONObject("responseContext")?.optString("visitorData")?.takeIf { it.isNotBlank() }?.let { visitor = it }
+            return json
         } finally {
             conn.disconnect()
         }
@@ -156,10 +181,12 @@ object YouTubeApi {
         }
     }
 
-    /** The streams of a video, from the first client that gives playable ones. */
-    fun streams(videoId: String): YtStreams {
+    /** The streams of a video, from the first client (from the [from]th on) that gives playable ones. */
+    fun streams(videoId: String, from: Int = 0): YtStreams {
         var error: String? = null
-        for (client in players) {
+        visitor()
+        for (index in from until players.size) {
+            val client = players[index]
             try {
                 val json = post(
                     "player", JSONObject(client.fields.toString()), client.id, client.agent,
@@ -167,7 +194,7 @@ object YouTubeApi {
                 )
                 val status = json.optJSONObject("playabilityStatus")
                 if (status?.optString("status") != "OK") {
-                    if (error == null) error = status?.optString("reason")?.takeIf { it.isNotBlank() }
+                    if (error == null) error = status?.optString("reason")?.takeIf { it.isNotBlank() }?.let { client.fields.optString("clientName") + ": " + it }
                     continue
                 }
                 val data = json.optJSONObject("streamingData") ?: continue
@@ -207,6 +234,8 @@ object YouTubeApi {
                     author = details?.optString("author").orEmpty(),
                     channelId = details?.optString("channelId").orEmpty(),
                     userAgent = client.agent,
+                    client = client.fields.optString("clientName"),
+                    clientIndex = index,
                     videos = videos,
                     audioUrl = audio?.optString("url"),
                     muxedUrl = muxed,

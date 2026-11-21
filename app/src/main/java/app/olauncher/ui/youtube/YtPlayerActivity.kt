@@ -38,7 +38,9 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
@@ -77,7 +79,15 @@ class YtPlayerActivity : AppCompatActivity() {
     private var controller: ListenableFuture<MediaController>? = null
     private var player: ExoPlayer? = null
     private var loading: Job? = null
-    private var retries = 0
+
+    /** How the video is being tried: 0 separate picture and sound, 1 the two in one file, 2 a playlist of pieces. */
+    private var mode = 0
+    private var usedMode = 0
+    private var clientFrom = 0
+
+    /** The video has played with these streams: an error now is an expired address, not a refused one. */
+    private var played = false
+    private val tried = ArrayList<String>()
 
     /** Leaving for the sound only: no floating window this time. */
     private var leavingForAudio = false
@@ -92,15 +102,27 @@ class YtPlayerActivity : AppCompatActivity() {
         override fun onVideoSizeChanged(videoSize: VideoSize) = updatePip()
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) retries = 0
+            if (playbackState == Player.STATE_READY) played = true
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            // The addresses of a video expire after some hours, and now and then one is refused: asked again
-            if (retries < 2) {
-                retries++
-                load(player?.currentPosition ?: 0)
-            } else showError(error.message)
+            val position = player?.currentPosition ?: 0
+            val streams = YtPlayerService.now?.streams
+            if (played || streams == null) {
+                // The addresses of a video expire after some hours: the same ones are asked again
+                played = false
+                load(position)
+                return
+            }
+            // Refused before it ever played: the next way of these streams, then the next client
+            tried.add(streams.client + "/" + usedMode + " " + reason(error))
+            mode = usedMode + 1
+            if (modes(streams).any { it >= mode }) play(position)
+            else if (streams.clientIndex + 1 < YouTubeApi.clientCount) {
+                clientFrom = streams.clientIndex + 1
+                mode = 0
+                load(position)
+            } else showError(tried.joinToString("\n"))
         }
     }
 
@@ -163,10 +185,35 @@ class YtPlayerActivity : AppCompatActivity() {
             intent.getStringExtra(EXTRA_CHANNEL).orEmpty(),
             intent.getStringExtra(EXTRA_CHANNEL_ID).orEmpty()
         )
-        retries = 0
+        restart()
         showNow()
         load(0)
     }
+
+    private fun restart() {
+        mode = 0
+        clientFrom = 0
+        played = false
+        tried.clear()
+    }
+
+    /** What the player was refused, in the few words that tell one case from another. */
+    private fun reason(error: Throwable): String {
+        var cause: Throwable? = error
+        var last = error
+        while (cause != null) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) return "HTTP " + cause.responseCode
+            last = cause
+            cause = cause.cause
+        }
+        return last.javaClass.simpleName + (last.message?.let { ": " + it.take(80) } ?: "")
+    }
+
+    private fun modes(streams: YtStreams): List<Int> = listOfNotNull(
+        0.takeIf { streams.videos.isNotEmpty() && streams.audioUrl != null && !streams.live },
+        1.takeIf { streams.muxedUrl != null && !streams.live },
+        2.takeIf { streams.hlsUrl != null }
+    )
 
     // ---- loading and playing ----
 
@@ -178,12 +225,12 @@ class YtPlayerActivity : AppCompatActivity() {
         spinner.isVisible = true
         exo.stop()
         loading = lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) { runCatching { YouTubeApi.streams(now.videoId) } }
+            val result = withContext(Dispatchers.IO) { runCatching { YouTubeApi.streams(now.videoId, clientFrom) } }
             if (YtPlayerService.now !== now) return@launch
             spinner.isVisible = false
             val streams = result.getOrNull()
             if (streams == null) {
-                showError(result.exceptionOrNull()?.message)
+                showError((tried + listOfNotNull(result.exceptionOrNull()?.message?.takeIf { it.isNotBlank() })).joinToString("\n"))
                 return@launch
             }
             now.streams = streams
@@ -199,7 +246,9 @@ class YtPlayerActivity : AppCompatActivity() {
         val now = YtPlayerService.now ?: return
         val streams = now.streams ?: return
         val exo = player ?: return
-        val http = DefaultHttpDataSource.Factory().setUserAgent(streams.userAgent).setAllowCrossProtocolRedirects(true)
+        val plain = DefaultHttpDataSource.Factory().setUserAgent(streams.userAgent).setAllowCrossProtocolRedirects(true)
+        // Whole files are asked a piece at a time: asked in one go they are slowed down or refused
+        val http = DataSource.Factory { YtChunkedDataSource(plain.createDataSource()) }
         val meta = MediaMetadata.Builder()
             .setTitle(now.title)
             .setArtist(now.author)
@@ -210,16 +259,17 @@ class YtPlayerActivity : AppCompatActivity() {
 
         val video = chosen(streams)
         val audio = streams.audioUrl
+        val use = modes(streams).firstOrNull { it >= mode }
         val source: MediaSource = when {
-            streams.live && streams.hlsUrl != null -> HlsMediaSource.Factory(http).createMediaSource(item(streams.hlsUrl))
-            video != null && audio != null -> MergingMediaSource(progressive(video.second), progressive(audio))
-            streams.muxedUrl != null -> progressive(streams.muxedUrl)
-            streams.hlsUrl != null -> HlsMediaSource.Factory(http).createMediaSource(item(streams.hlsUrl))
+            use == 0 && video != null && audio != null -> MergingMediaSource(progressive(video.second), progressive(audio))
+            use == 1 && streams.muxedUrl != null -> progressive(streams.muxedUrl)
+            use == 2 && streams.hlsUrl != null -> HlsMediaSource.Factory(plain).createMediaSource(item(streams.hlsUrl))
             else -> {
-                showError(null)
+                showError(tried.joinToString("\n"))
                 return
             }
         }
+        usedMode = use ?: 0
         statusView.isVisible = false
         if (streams.live || position <= 0) exo.setMediaSource(source) else exo.setMediaSource(source, position)
         exo.prepare()
@@ -255,6 +305,7 @@ class YtPlayerActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setItems(heights.map { "${it}p" }.toTypedArray()) { _, which ->
                 YtStore.setMaxHeight(this, heights[which])
+                restart()
                 showNow()
                 play(player?.currentPosition ?: 0)
             }
@@ -428,7 +479,7 @@ class YtPlayerActivity : AppCompatActivity() {
             setPadding(14.dpToPx(), 12.dpToPx(), 14.dpToPx(), 12.dpToPx())
             isVisible = false
             setOnClickListener {
-                retries = 0
+                restart()
                 load(0)
             }
         }
