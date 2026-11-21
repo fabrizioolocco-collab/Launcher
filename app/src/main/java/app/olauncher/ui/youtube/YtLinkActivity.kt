@@ -4,8 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import app.olauncher.R
-import app.olauncher.helper.showToast
 
 /**
  * A link of YouTube opened from a browser, a chat or another app (or shared to Tube): the video in
@@ -25,7 +23,8 @@ class YtLinkActivity : Activity() {
             is Target.Video -> startActivity(YtPlayerActivity.linkIntent(this, target.id, target.startMs))
             is Target.Channel -> startActivity(YouTubeActivity.channelIntent(this, YtChannel(target.id, "", "")))
             is Target.Search -> startActivity(YouTubeActivity.searchIntent(this, target.query, podcast = false))
-            null -> showToast(getString(R.string.ml_yt_link_unknown))
+            // youtube.com itself, a page Tube has nothing like (feeds, playlists, settings): Tube's own first page
+            null -> startActivity(Intent(this, YouTubeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
         finish()
     }
@@ -48,6 +47,8 @@ class YtLinkActivity : Activity() {
                 "watch" -> uri.getQueryParameter("v")
                 "shorts", "live", "embed", "v" -> parts.getOrNull(1)
                 "channel" -> return parts.getOrNull(1)?.let { Target.Channel(it) }
+                // The old addresses of a channel by its name
+                "c", "user" -> return parts.getOrNull(1)?.let { Target.Search(it) }
                 // A channel by its name, a playlist, a search: looked for in Tube
                 "results" -> return uri.getQueryParameter("search_query")?.let { Target.Search(it) }
                 else -> {
