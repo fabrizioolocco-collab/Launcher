@@ -528,6 +528,49 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Tube: YouTube with only the search and the channels followed, also listed as "Tube" in the app list -->
+        <activity
+            android:name=".ui.youtube.YouTubeActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:label="@string/ml_yt_app"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.tube"
+            android:theme="@style/ViewerTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+        <!-- Its player, a task of its own so that it can float over the list while another video is looked for -->
+        <activity
+            android:name=".ui.youtube.YtPlayerActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:label="@string/ml_yt_app"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:taskAffinity="app.minimalauncher.tubeplayer"
+            android:theme="@style/ViewerTheme"
+            tools:targetApi="n" />
+        <service
+            android:name=".ui.youtube.YtPlayerService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+        <activity-alias
+            android:name=".TubeAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_tube_launcher"
+            android:label="@string/ml_yt_app"
+            android:targetActivity=".ui.youtube.YouTubeActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <activity-alias
             android:name=".TodoAlias"
             android:exported="true"

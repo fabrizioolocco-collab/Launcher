@@ -108,6 +108,13 @@ dependencies {
     //Material dependency
     implementation libs.material
 
+    // Tube (ui/youtube): the player, its notification and the lock screen controls
+    implementation libs.media3.exoplayer
+    implementation libs.media3.exoplayer.hls
+    implementation libs.media3.datasource
+    implementation libs.media3.session
+    implementation libs.media3.ui
+
 
     testImplementation libs.junit
 }
