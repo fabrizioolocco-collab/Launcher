@@ -362,7 +362,7 @@ class PdfViewerActivity : AppCompatActivity() {
             Triple(Tool.CHECK, R.string.ml_pdf_check, R.drawable.ic_m_check),
             Triple(Tool.DRAW, R.string.ml_pdf_draw, R.drawable.ic_m_draw),
             Triple(Tool.SIGN, R.string.ml_pdf_sign, R.drawable.ic_m_signature),
-            Triple(Tool.SELECT, R.string.ml_pdf_select_text, R.drawable.ic_m_select),
+            // No "Select" tool: a long press on the text selects it
         ).forEach { (t, label, icon) ->
             toolbar.addView(UiKit.toolButton(this, icon, getString(label)) { onToolTapped(t) }.apply {
                 tag = t
