@@ -104,7 +104,6 @@ class YtPlayerActivity : AppCompatActivity() {
 
     /** Started from the way that played last time instead of from the first: if it fails, the list is run from the top. */
     private var fromSaved = false
-    private lateinit var pathView: TextView
 
     // The same controls and gestures as the launcher's video viewer
     private lateinit var controls: VideoControls
@@ -145,6 +144,9 @@ class YtPlayerActivity : AppCompatActivity() {
     /** Leaving for the sound only: no floating window this time. */
     private var leavingForAudio = false
 
+    /** Left with back: the video stops, also if it was playing. */
+    private var closing = false
+
     private val canPip by lazy {
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
     }
@@ -164,7 +166,6 @@ class YtPlayerActivity : AppCompatActivity() {
                 played = true
                 val streams = YtPlayerService.now?.streams ?: return
                 YtStore.setPath(this@YtPlayerActivity, streams.clientIndex * 10 + usedMode)
-                showPath(streams)
             }
         }
 
@@ -209,8 +210,11 @@ class YtPlayerActivity : AppCompatActivity() {
                     resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE &&
                         requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ->
                         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    player?.isPlaying == true && enterPip() -> Unit
-                    else -> finish()
+                    else -> {
+                        // Back leaves the video: it stops. The floating window is for home, or its button
+                        closing = true
+                        finish()
+                    }
                 }
             }
         })
@@ -278,18 +282,6 @@ class YtPlayerActivity : AppCompatActivity() {
         fromSaved = saved != 0
         played = false
         tried.clear()
-        pathView.isVisible = false
-    }
-
-    /** Which client and which way are playing, and what was refused before: small, for when something is slow. */
-    private fun showPath(streams: YtStreams) {
-        val way = when (usedMode) {
-            0 -> "video+audio"
-            1 -> "file"
-            else -> "HLS"
-        }
-        pathView.text = (listOf(streams.client + " · " + way) + tried).joinToString("\n")
-        pathView.isVisible = true
     }
 
     /** What the player was refused, in the few words that tell one case from another. */
@@ -515,8 +507,8 @@ class YtPlayerActivity : AppCompatActivity() {
         playerView.player = null
         player?.let { exo ->
             exo.removeListener(listener)
-            // Closed while paused: nothing is left to listen to, so the notification goes too
-            if (isFinishing && !exo.isPlaying && !leavingForAudio) {
+            // Closed with back, or while paused: nothing is left to listen to, so the notification goes too
+            if (isFinishing && (closing || !exo.isPlaying) && !leavingForAudio) {
                 exo.stop()
                 exo.clearMediaItems()
                 YtPlayerService.now = null
@@ -705,14 +697,6 @@ class YtPlayerActivity : AppCompatActivity() {
         info.addView(titleView)
         info.addView(channelView)
         info.addView(chips)
-        pathView = TextView(this).apply {
-            textSize = 11f
-            setTextColor(UiKit.secondary(this@YtPlayerActivity))
-            alpha = 0.7f
-            setPadding(0, 12.dpToPx(), 0, 0)
-            isVisible = false
-        }
-        info.addView(pathView)
         info.addView(statusView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 16.dpToPx()
         })
