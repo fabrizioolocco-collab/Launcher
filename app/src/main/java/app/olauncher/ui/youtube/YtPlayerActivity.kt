@@ -747,6 +747,9 @@ class YtPlayerActivity : AppCompatActivity() {
         private const val EXTRA_CHANNEL = "channel"
         private const val EXTRA_CHANNEL_ID = "channel_id"
 
+        /** Back to the video the service is playing (the "now playing" bar of the list). */
+        fun resumeIntent(ctx: Context): Intent = Intent(ctx, YtPlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
         fun intent(ctx: Context, video: YtVideo): Intent = Intent(ctx, YtPlayerActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(EXTRA_ID, video.id)

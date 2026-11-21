@@ -29,6 +29,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.lifecycle.lifecycleScope
+import androidx.media3.common.Player
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import app.olauncher.R
@@ -71,6 +72,19 @@ class YouTubeActivity : AppCompatActivity() {
     private lateinit var empty: FrameLayout
     private val adapter = Adapter()
 
+    // What is playing, at the bottom: the way back to a video left in the background
+    private lateinit var nowBar: LinearLayout
+    private lateinit var nowThumb: ImageView
+    private lateinit var nowTitle: TextView
+    private lateinit var nowAuthor: TextView
+    private lateinit var nowPlay: ImageView
+    private val nowTicker = object : Runnable {
+        override fun run() {
+            updateNow()
+            root.postDelayed(this, 1000)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -89,8 +103,50 @@ class YouTubeActivity : AppCompatActivity() {
         openFrom(intent)
     }
 
+    override fun onStop() {
+        super.onStop()
+        root.removeCallbacks(nowTicker)
+    }
+
+    private fun updateNow() {
+        val now = YtPlayerService.now
+        val exo = YtPlayerService.player
+        val loaded = now != null && exo != null && exo.playbackState != Player.STATE_IDLE
+        nowBar.isVisible = loaded
+        if (now == null || exo == null || !loaded) return
+        nowTitle.text = now.title
+        nowAuthor.text = now.author
+        nowAuthor.isVisible = now.author.isNotBlank()
+        val thumb = "https://i.ytimg.com/vi/${now.videoId}/mqdefault.jpg"
+        if (nowThumb.tag != thumb) YtImages.load(nowThumb, thumb)
+        val playing = exo.playWhenReady && exo.playbackState != Player.STATE_ENDED
+        nowPlay.setImageResource(if (playing) R.drawable.ic_m_pause else R.drawable.ic_m_play)
+    }
+
+    private fun toggleNow() {
+        val exo = YtPlayerService.player ?: return
+        if (exo.playWhenReady && exo.playbackState != Player.STATE_ENDED) exo.pause()
+        else {
+            if (exo.playbackState == Player.STATE_ENDED) exo.seekTo(0)
+            exo.play()
+        }
+        updateNow()
+    }
+
+    /** Stops what is playing: the bar and the notification go. */
+    private fun stopNow() {
+        YtPlayerService.player?.let {
+            it.stop()
+            it.clearMediaItems()
+        }
+        YtPlayerService.now = null
+        updateNow()
+    }
+
     override fun onStart() {
         super.onStart()
+        root.removeCallbacks(nowTicker)
+        nowTicker.run()
         // A channel followed or dropped from its page shows in the grid on the way back
         if (stack.isNotEmpty() && screen is Screen.Home && screen.items != null) show()
         // A video just watched loses its red dot
@@ -315,6 +371,42 @@ class YouTubeActivity : AppCompatActivity() {
         body.addView(empty, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         body.addView(progress, FrameLayout.LayoutParams(48.dpToPx(), 48.dpToPx(), Gravity.CENTER))
         root.addView(body, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        nowBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = UiKit.cardBackground(this@YouTubeActivity, 16)
+            setPadding(8.dpToPx(), 8.dpToPx(), 4.dpToPx(), 8.dpToPx())
+            isVisible = false
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { startActivity(YtPlayerActivity.resumeIntent(this@YouTubeActivity)) }
+        }
+        nowThumb = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            background = GradientDrawable().apply {
+                cornerRadius = 8.dpToPx().toFloat()
+                setColor(Color.BLACK)
+            }
+            outlineProvider = ViewOutlineProvider.BACKGROUND
+            clipToOutline = true
+        }
+        val nowTexts = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(12.dpToPx(), 0, 6.dpToPx(), 0)
+        }
+        nowTitle = label(14f, UiKit.primary(this), 1, bold = true)
+        nowAuthor = label(12f, UiKit.secondary(this), 1)
+        nowTexts.addView(nowTitle)
+        nowTexts.addView(nowAuthor)
+        nowPlay = UiKit.iconButton(this, R.drawable.ic_m_pause, getString(R.string.ml_player_play_pause)) { toggleNow() }
+        nowBar.addView(nowThumb, LinearLayout.LayoutParams(80.dpToPx(), 45.dpToPx()))
+        nowBar.addView(nowTexts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        nowBar.addView(nowPlay)
+        nowBar.addView(UiKit.iconButton(this, R.drawable.ic_m_close, getString(R.string.ml_yt_stop)) { stopNow() })
+        root.addView(nowBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(8.dpToPx(), 0, 8.dpToPx(), 8.dpToPx())
+        })
     }
 
     /** A round picture of a channel, on a disc of the card color until it is loaded. */

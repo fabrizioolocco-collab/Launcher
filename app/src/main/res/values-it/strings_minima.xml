@@ -1162,4 +1162,5 @@
     <string name="ml_yt_background">Solo audio</string>
     <string name="ml_yt_mark_seen">Segna come visti</string>
     <string name="ml_yt_fullscreen">Schermo intero</string>
+    <string name="ml_yt_stop">Ferma</string>
 </resources>
