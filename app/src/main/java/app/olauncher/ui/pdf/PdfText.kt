@@ -317,36 +317,83 @@ private object NativePdfText {
         val stepY = 10f / p.height
         fun over(s: PdfText.Selection, end: PointF) = s.rects.any { it.top > end.y + tol }
         fun under(s: PdfText.Selection, start: PointF) = s.rects.any { it.bottom < start.y - tol }
+        // The selection has a piece on the line the point is on
+        fun reaches(s: PdfText.Selection, y: Float) = s.rects.any { it.top - tol / 2 <= y && y <= it.bottom + tol / 2 }
 
         var selection: PdfText.Selection = first
         var end = b
-        if (over(selection, end)) {
-            search@ for (row in 0..4) {
-                val y = b.y - row * stepY
-                var x = if (row == 0) b.x else 1f
-                while (x >= 0f) {
-                    val point = PointF(x, y)
-                    val s = raw(p, a, point)
-                    if (s != null && !over(s, PointF(x, b.y))) {
-                        selection = s
-                        end = point
-                        break@search
+        // The end on the blank of a line: the system gives either the text after it (too much) or
+        // stops at the line before (too little). What is wanted is that line, up to its last word.
+        if (over(first, b) || !reaches(first, b.y)) {
+            fun good(x: Float): PdfText.Selection? = raw(p, a, PointF(x, b.y))?.takeIf { !over(it, b) && reaches(it, b.y) }
+            var x = b.x
+            var found: PdfText.Selection? = null
+            while (x >= 0f) {
+                found = good(x)
+                if (found != null) break
+                x -= stepX
+            }
+            if (found != null) {
+                // Found a step inside the line: as far back towards its end as still holds
+                for (k in 3 downTo 1) {
+                    val finer = good(x + stepX * k / 4)
+                    if (finer != null) {
+                        found = finer
+                        x += stepX * k / 4
+                        break
                     }
-                    x -= stepX
+                }
+                selection = found!!
+                end = PointF(x, b.y)
+            } else if (over(first, b)) {
+                // No text on that line at all (between two paragraphs): the last text above it
+                search@ for (row in 1..4) {
+                    val y = b.y - row * stepY
+                    var back = 1f
+                    while (back >= 0f) {
+                        val point = PointF(back, y)
+                        val s = raw(p, a, point)
+                        if (s != null && !over(s, b)) {
+                            selection = s
+                            end = point
+                            break@search
+                        }
+                        back -= stepX
+                    }
                 }
             }
         }
-        if (under(selection, a)) {
-            search@ for (row in 0..4) {
-                val y = a.y + row * stepY
-                var x = if (row == 0) a.x else 0f
-                while (x <= 1f) {
-                    val s = raw(p, PointF(x, y), end)
-                    if (s != null && !under(s, PointF(x, a.y))) {
-                        selection = s
-                        break@search
+        // The same, mirrored, for a start left on the blank before a line
+        if (under(selection, a) || !reaches(selection, a.y)) {
+            fun good(x: Float): PdfText.Selection? = raw(p, PointF(x, a.y), end)?.takeIf { !under(it, a) && reaches(it, a.y) }
+            var x = a.x
+            var found: PdfText.Selection? = null
+            while (x <= 1f) {
+                found = good(x)
+                if (found != null) break
+                x += stepX
+            }
+            if (found != null) {
+                for (k in 3 downTo 1) {
+                    val finer = good(x - stepX * k / 4)
+                    if (finer != null) {
+                        found = finer
+                        break
                     }
-                    x += stepX
+                }
+                selection = found!!
+            } else if (under(selection, a)) {
+                search@ for (row in 1..4) {
+                    val y = a.y + row * stepY
+                    var forth = 0f
+                    while (forth <= 1f) {
+                        val s = raw(p, PointF(forth, y), end)
+                        if (s != null && !under(s, a)) {
+                            selection = s
+                            break@search
+                        }
+                        forth += stepX
+                    }
                 }
             }
         }
