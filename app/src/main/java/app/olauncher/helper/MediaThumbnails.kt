@@ -4,6 +4,7 @@ import android.content.ContentUris
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.media.ThumbnailUtils
 import android.net.Uri
 import android.os.Build
@@ -12,9 +13,11 @@ import android.util.LruCache
 import android.util.Size
 import android.webkit.MimeTypeMap
 import android.widget.ImageView
+import androidx.exifinterface.media.ExifInterface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -25,15 +28,32 @@ import java.util.concurrent.Executors
  * Thumbnails of photos and videos with a shared memory cache. On Android 10+ they come from the
  * system's thumbnail store (the same the gallery uses, so usually already made); a few are made at
  * a time and the work for views recycled meanwhile is cancelled, so the visible ones come first.
- * Every thumbnail made is also kept on disk ([diskFile]): reopening a folder shows them at once
- * instead of decoding a frame of each video again (slow on long or 4K videos).
+ * Every thumbnail made is also kept on disk ([diskFile]), no larger than asked: reopening a folder
+ * shows them at once instead of decoding a frame of each video again (slow on long or 4K videos).
+ *
+ * Three things keep a grid quick: the thumbnails already on disk are read on threads of their own,
+ * never queued behind the ones being made; a photo being made shows meanwhile the small picture the
+ * camera put inside the file; and [preload] gets ready the ones the scroll is about to reach.
  */
 object MediaThumbnails {
 
-    private val cache = object : LruCache<String, Bitmap>(48 * 1024 * 1024) {
+    // A quarter of the app's memory, between 48 and 128 MB: some screens of a grid, both ways
+    private val cache = object : LruCache<String, Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 4).coerceIn(48L * 1024 * 1024, 128L * 1024 * 1024).toInt()
+    ) {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount
     }
-    private val workers = Executors.newFixedThreadPool(3).asCoroutineDispatcher()
+    private val cores = Runtime.getRuntime().availableProcessors()
+
+    /** Reads the thumbnails already on disk (a few milliseconds each). */
+    private val readers = Executors.newFixedThreadPool(4).asCoroutineDispatcher()
+
+    /** Makes the missing ones (a photo decoded, a frame of a video found: tens to hundreds of milliseconds). */
+    private val workers = Executors.newFixedThreadPool((cores - 2).coerceIn(3, 6)).asCoroutineDispatcher()
+
+    /** Gets ready the ones not on screen yet, without taking threads from the visible ones. */
+    private val preloaders = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+    private var preloading: Job? = null
     private val jobs = WeakHashMap<ImageView, Job>()
 
     fun mimeOf(name: String): String? =
@@ -93,10 +113,69 @@ object MediaThumbnails {
         if (cached != null) return
         val context = view.context.applicationContext
         jobs[view] = scope.launch {
-            val bitmap = withContext(workers) { fromDisk(context, file, size) ?: make(context, file, size, uri)?.also { toDisk(context, file, size, it) } } ?: return@launch
+            var bitmap = withContext(readers) { fromDisk(context, file, size) }
+            if (bitmap == null) {
+                // A grid cell of a photo: the camera's own small picture right away, the sharp one after
+                if (size <= PREVIEW_UP_TO && !isVideo(file)) {
+                    val quick = withContext(readers) { preview(file) }
+                    if (quick != null && view.tag == key) view.setImageBitmap(quick)
+                }
+                bitmap = withContext(workers) { produce(context, file, size, uri) }
+            }
+            if (bitmap == null) return@launch
             cache.put(key, bitmap)
             if (view.tag == key) view.setImageBitmap(bitmap)
         }
+    }
+
+    /**
+     * Gets the thumbnails of [files] ready in memory, in that order (the nearest to the screen first):
+     * the cells a scroll is about to show. A new call replaces the one before.
+     */
+    fun preload(scope: CoroutineScope, context: Context, files: List<File>, size: Int, uris: Map<String, Uri> = emptyMap()) {
+        preloading?.cancel()
+        if (files.isEmpty()) return
+        val app = context.applicationContext
+        preloading = scope.launch(preloaders) {
+            for (file in files) {
+                if (!isActive) return@launch
+                val key = file.absolutePath + "@" + size
+                if (cache.get(key) != null) continue
+                val bitmap = fromDisk(app, file, size) ?: produce(app, file, size, uris[file.absolutePath]) ?: continue
+                cache.put(key, bitmap)
+            }
+        }
+    }
+
+    /** Makes a thumbnail, no larger than it will be shown, and keeps it on disk. */
+    private fun produce(context: Context, file: File, size: Int, uri: Uri?): Bitmap? =
+        make(context, file, size, uri)?.let { fit(it, size) }?.also { toDisk(context, file, size, it) }
+
+    /**
+     * Shrinks a thumbnail that came larger than asked (the system gives the nearest size it has) until
+     * its short side is [size]: a cell crops to its centre, so nothing shown is lost, and it takes a
+     * fraction of the memory and of the time to read back.
+     */
+    private fun fit(bitmap: Bitmap, size: Int): Bitmap = try {
+        val short = minOf(bitmap.width, bitmap.height)
+        if (short <= size * 1.15f) bitmap
+        else {
+            val scale = size.toFloat() / short
+            Bitmap.createScaledBitmap(bitmap, (bitmap.width * scale).toInt().coerceAtLeast(1), (bitmap.height * scale).toInt().coerceAtLeast(1), true)
+        }
+    } catch (e: Throwable) {
+        bitmap
+    }
+
+    /** The small picture a camera stores inside a photo, turned upright; null when there is none. */
+    private fun preview(file: File): Bitmap? = try {
+        val exif = ExifInterface(file.absolutePath)
+        val thumb = exif.thumbnailBitmap
+        val degrees = exif.rotationDegrees
+        if (thumb == null || degrees == 0) thumb
+        else Bitmap.createBitmap(thumb, 0, 0, thumb.width, thumb.height, Matrix().apply { postRotate(degrees.toFloat()) }, true)
+    } catch (e: Throwable) {
+        null
     }
 
     @Volatile private var writes = 0
@@ -111,7 +190,8 @@ object MediaThumbnails {
 
     private fun fromDisk(context: Context, file: File, size: Int): Bitmap? = try {
         val f = diskFile(context, file, size)
-        if (f.isFile) BitmapFactory.decodeFile(f.absolutePath) else null
+        // Thumbnails have no transparency: two bytes a pixel instead of four
+        if (f.isFile) BitmapFactory.decodeFile(f.absolutePath, BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.RGB_565 }) else null
     } catch (e: Throwable) {
         null
     }
@@ -121,7 +201,7 @@ object MediaThumbnails {
             val f = diskFile(context, file, size)
             f.parentFile?.mkdirs()
             val tmp = File(f.parentFile, f.name + ".tmp")
-            tmp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 85, it) }
+            tmp.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 82, it) }
             tmp.renameTo(f)
             if (++writes % 100 == 0) trimDisk(f.parentFile ?: return)
         } catch (e: Throwable) {
@@ -140,7 +220,10 @@ object MediaThumbnails {
     }
 
     private const val DISK_DIR = "media_thumbs"
-    private const val DISK_MAX_BYTES = 200L * 1024 * 1024
+    private const val DISK_MAX_BYTES = 400L * 1024 * 1024
+
+    /** Up to this size a photo shows its embedded picture while the thumbnail is made (a full-screen poster doesn't). */
+    private const val PREVIEW_UP_TO = 512
 
     private fun make(context: Context, file: File, size: Int, uri: Uri?): Bitmap? = try {
         val video = isVideo(file)

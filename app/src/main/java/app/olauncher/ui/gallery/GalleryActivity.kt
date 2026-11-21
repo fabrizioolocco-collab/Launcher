@@ -511,6 +511,11 @@ class GalleryActivity : AppCompatActivity() {
                 }
             }
             adapter = GridAdapter()
+            // More cells kept ready: coming back a row or two doesn't bind them again
+            setItemViewCacheSize(COLUMNS * 4)
+            addOnScrollListener(object : RecyclerView.OnScrollListener() {
+                override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) = preloadAround(dy)
+            })
             overScrollMode = View.OVER_SCROLL_NEVER
             clipToPadding = false
             setPadding(8.dpToPx(), 0, 8.dpToPx(), 24.dpToPx())
@@ -1080,6 +1085,28 @@ class GalleryActivity : AppCompatActivity() {
         reload()
     }
 
+    private var preloadedFrom = -1
+
+    /**
+     * Gets ready the thumbnails of the rows the scroll is going to, a few screens ahead, so that
+     * they are there when the cells arrive.
+     */
+    private fun preloadAround(dy: Int) {
+        if (showingFolders || media.isEmpty()) return
+        val manager = grid.layoutManager as? GridLayoutManager ?: return
+        val first = manager.findFirstVisibleItemPosition()
+        val last = manager.findLastVisibleItemPosition()
+        if (first < 0 || last < 0) return
+        val anchor = if (dy >= 0) last else first
+        // Once a row, not at every pixel
+        if (kotlin.math.abs(anchor - preloadedFrom) < COLUMNS) return
+        preloadedFrom = anchor
+        val side = grid.getChildAt(0)?.layoutParams?.width?.takeIf { it > 0 } ?: return
+        val ahead = if (dy >= 0) media.subList((last + 1).coerceAtMost(media.size), (last + 1 + PRELOAD).coerceAtMost(media.size))
+        else media.subList((first - PRELOAD).coerceAtLeast(0), first.coerceAtLeast(0)).asReversed()
+        MediaThumbnails.preload(lifecycleScope, this, ahead.toList(), side.coerceAtLeast(64), uris)
+    }
+
     private inner class GridAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
         override fun getItemCount() = if (showingFolders) folders.size else media.size
 
@@ -1272,6 +1299,9 @@ class GalleryActivity : AppCompatActivity() {
         private const val EXTRA_SHOW_SOURCES = "show_sources"
         private const val COLUMNS = 3
         private const val SPANS = 12
+
+        /** How many thumbnails are got ready ahead of the scroll: about three screens. */
+        private const val PRELOAD = 60
         private const val MAX_SEARCH_DEPTH = 8
         private const val MAX_SEARCH_RESULTS = 200
         private const val TYPE_PHOTO = 0
