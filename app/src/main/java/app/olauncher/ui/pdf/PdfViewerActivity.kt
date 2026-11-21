@@ -458,14 +458,44 @@ class PdfViewerActivity : AppCompatActivity() {
             }
             return
         }
-        val start = selectStart ?: return
+        val start = selectStart
+        if (start == null) {
+            // Nothing to select from (a scan still being read): a long press doesn't leave the tool on
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) endQuickSelect()
+            return
+        }
         val selection = engine.select(page, start, p)
         textSelection = selection?.let { page to it }
         invalidatePages()
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             selectionBar.isVisible = selection != null
             selectionText.text = selection?.text?.replace('\n', ' ')
+            endQuickSelect()
         }
+    }
+
+    /** The selection was started with a long press, without choosing the tool: it ends with the finger. */
+    private var quickSelect = false
+
+    /**
+     * After a selection made with a long press: back to reading (one finger scrolls again), with
+     * the text chosen still marked and its bar still there to copy it.
+     */
+    private fun endQuickSelect() {
+        if (!quickSelect) return
+        quickSelect = false
+        if (textSelection == null) {
+            setTool(Tool.NONE)
+            return
+        }
+        tool = Tool.NONE
+        for (i in 0 until toolbar.childCount) {
+            val v = toolbar.getChildAt(i)
+            UiKit.setToolActive(v, v.tag == Tool.NONE)
+        }
+        updateHint()
+        buildPalette()
+        invalidatePages()
     }
 
     /** From the page as shown (turned in "Pages") back to the page itself. */
@@ -1147,6 +1177,14 @@ class PdfViewerActivity : AppCompatActivity() {
             }
         })
         private val taps = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onLongPress(e: MotionEvent) = startQuickSelect(e)
+
+            // A tap elsewhere lets go of a text selected with a long press
+            override fun onSingleTapUp(e: MotionEvent): Boolean {
+                if (tool == Tool.NONE && textSelection != null) clearTextSelection()
+                return false
+            }
+
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 if (tool != Tool.NONE || selected != null) return false
                 if (scale > 1.05f) zoomTo(1f, 0f, 0f) else {
@@ -1163,6 +1201,25 @@ class PdfViewerActivity : AppCompatActivity() {
                 return true
             }
         })
+
+        /**
+         * A long press on the text, with no tool chosen: the word under the finger is selected, and
+         * dragging on selects more, as in any reader. The pages are told of a new touch, which with
+         * the selection tool on starts a selection.
+         */
+        private fun startQuickSelect(e: MotionEvent) {
+            if (tool != Tool.NONE || selected != null || dragging || e.pointerCount > 1) return
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            quickSelect = true
+            setTool(Tool.SELECT)
+            for (action in intArrayOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE)) {
+                val copy = MotionEvent.obtain(e).apply { this.action = action }
+                val u = unzoom(copy)
+                super.dispatchTouchEvent(u)
+                u.recycle()
+                copy.recycle()
+            }
+        }
 
         private var zooming: android.animation.ValueAnimator? = null
 
