@@ -57,7 +57,8 @@ class YouTubeActivity : AppCompatActivity() {
         var emptyPages = 0
 
         class Home : Screen()
-        class Search(val query: String) : Screen()
+        /** A search: everywhere, or inside [channel] when it was started from its page. */
+        class Search(val query: String, val channel: YtChannel? = null) : Screen()
         class Channel(var channel: YtChannel) : Screen()
         class Favorites : Screen()
         class Later : Screen()
@@ -225,7 +226,12 @@ class YouTubeActivity : AppCompatActivity() {
         later.isVisible = current is Screen.Home
         modeRow.isVisible = current is Screen.Home
         downloadsButton.isVisible = podcast && current is Screen.Home
-        input.hint = getString(if (podcast) R.string.ml_pod_search_hint else R.string.ml_yt_search_hint)
+        val within = (current as? Screen.Channel)?.channel ?: (current as? Screen.Search)?.channel
+        input.hint = when {
+            within != null -> getString(R.string.ml_yt_search_in, within.name)
+            podcast -> getString(R.string.ml_pod_search_hint)
+            else -> getString(R.string.ml_yt_search_hint)
+        }
         showMode()
         saved(current)?.let {
             current.items = it
@@ -246,13 +252,26 @@ class YouTubeActivity : AppCompatActivity() {
         adapter.submit(if (current is Screen.Channel) listOf(Header(current.channel)) else emptyList(), false)
         empty.isVisible = false
         progress.isVisible = true
+        // The episodes of the podcast searched in, when its page under this one has them already
+        val under = stack.getOrNull(stack.size - 2) as? Screen.Channel
+        val episodes = under?.takeIf { it.channel.id == (current as? Screen.Search)?.channel?.id }?.items?.filterIsInstance<YtVideo>()
         job = lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     when (current) {
-                        is Screen.Search ->
-                            if (podcast) PodcastApi.search(current.query)
-                            else YouTubeApi.search(current.query).also { current.next = it.next }.items
+                        is Screen.Search -> {
+                            val inside = current.channel
+                            when {
+                                inside == null && podcast -> PodcastApi.search(current.query)
+                                inside == null -> YouTubeApi.search(current.query).also { current.next = it.next }.items
+                                // A podcast's feed holds all its episodes: the ones whose title has every word
+                                PodcastApi.isPodcast(inside.id) -> {
+                                    val words = current.query.lowercase().split(' ').filter { it.isNotBlank() }
+                                    (episodes ?: PodcastApi.feed(inside.id).videos).filter { e -> words.all { e.title.lowercase().contains(it) } }
+                                }
+                                else -> YouTubeApi.channelSearch(inside.id, inside.name, current.query).also { current.next = it.next }.items
+                            }
+                        }
                         is Screen.Channel -> {
                             val page = read(current.channel.id)
                             current.next = page.next
@@ -314,7 +333,7 @@ class YouTubeActivity : AppCompatActivity() {
         val next = current.next ?: return
         if (moreJob?.isActive == true) return
         moreJob = lifecycleScope.launch {
-            val channel = (current as? Screen.Channel)?.channel
+            val channel = (current as? Screen.Channel)?.channel ?: (current as? Screen.Search)?.channel
             val page = withContext(Dispatchers.IO) {
                 runCatching { YouTubeApi.more(next, channel?.name.orEmpty(), channel?.id.orEmpty()) }.getOrNull()
             }
@@ -531,9 +550,12 @@ class YouTubeActivity : AppCompatActivity() {
         val query = input.text.toString().trim()
         if (query.isEmpty()) return
         (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager).hideSoftInputFromWindow(input.windowToken, 0)
+        // From a channel's page (or a search inside it) the search stays inside that channel
+        val current = screen
+        val inside = (current as? Screen.Channel)?.channel ?: (current as? Screen.Search)?.channel
         // A search from a search replaces it, so that back goes to where the first one started
-        if (screen is Screen.Search) stack.removeAt(stack.size - 1)
-        open(Screen.Search(query))
+        if (current is Screen.Search) stack.removeAt(stack.size - 1)
+        open(Screen.Search(query, inside))
     }
 
     private fun toggle(channel: YtChannel) {

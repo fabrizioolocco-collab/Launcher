@@ -1201,4 +1201,5 @@
     <string name="ml_yt_saved">File salvato</string>
     <string name="ml_yt_save_failed">Salvataggio non riuscito</string>
     <string name="ml_yt_save_channel">Tube: file salvati</string>
+    <string name="ml_yt_search_in">Cerca in %s</string>
 </resources>

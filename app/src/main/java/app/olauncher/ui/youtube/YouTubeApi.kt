@@ -140,6 +140,14 @@ object YouTubeApi {
         return YtPage(out, nextToken(json)?.let { "search|$it" })
     }
 
+    /** The videos of one channel that match [query]: the search box of the channel's own page. */
+    fun channelSearch(channelId: String, channelName: String, query: String): YtPage {
+        val json = web("browse", JSONObject().put("browseId", channelId).put("params", "EgZzZWFyY2jyBgQKAloA").put("query", query))
+        val out = ArrayList<Any>()
+        collect(json.optJSONObject("contents") ?: JSONObject(), out, channelName, channelId)
+        return YtPage(out.filterIsInstance<YtVideo>(), nextToken(json.optJSONObject("contents"))?.let { "browse|$it" })
+    }
+
     /**
      * What comes after a page ([next] is the [YtPage.next] of the page before): older videos of a
      * channel (named here, since its own page doesn't repeat it on every video), more results of a search.
