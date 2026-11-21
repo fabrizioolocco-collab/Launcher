@@ -295,13 +295,65 @@ private object NativePdfText {
             // The text comes with the end of its line (or a space) stuck to it: that is not a second word.
             // Only a gap with letters on both sides of it means the walk has left the word.
             if (text.trim { it.isWhitespace() || it.isISOControl() }.any { it.isWhitespace() || it.isISOControl() }) break
+            // Nothing there after a good stretch: the point is on the blank of the page, and stays where it is
+            if (text.isBlank() && d >= 12) break
             best = x
             d += 2
         }
         return PointF(best.toFloat() / w, point.y)
     }
 
+    /**
+     * The text from [a] to [b]. An end left on the blank of the page (after the last word of a short
+     * line, between two paragraphs) is taken by the system as the text that comes next, so that the
+     * selection ran on into the following paragraph, and the page number with it: such an end is
+     * walked back, along its line and then up, to the last text that really lies before it. The same,
+     * mirrored, for a start left on the blank.
+     */
     fun select(p: PdfRenderer.Page, a: PointF, b: PointF): PdfText.Selection? {
+        val first = raw(p, a, b) ?: return null
+        val tol = 6f / p.height
+        val stepX = 12f / p.width
+        val stepY = 10f / p.height
+        fun over(s: PdfText.Selection, end: PointF) = s.rects.any { it.top > end.y + tol }
+        fun under(s: PdfText.Selection, start: PointF) = s.rects.any { it.bottom < start.y - tol }
+
+        var selection: PdfText.Selection = first
+        var end = b
+        if (over(selection, end)) {
+            search@ for (row in 0..4) {
+                val y = b.y - row * stepY
+                var x = if (row == 0) b.x else 1f
+                while (x >= 0f) {
+                    val point = PointF(x, y)
+                    val s = raw(p, a, point)
+                    if (s != null && !over(s, PointF(x, b.y))) {
+                        selection = s
+                        end = point
+                        break@search
+                    }
+                    x -= stepX
+                }
+            }
+        }
+        if (under(selection, a)) {
+            search@ for (row in 0..4) {
+                val y = a.y + row * stepY
+                var x = if (row == 0) a.x else 0f
+                while (x <= 1f) {
+                    val s = raw(p, PointF(x, y), end)
+                    if (s != null && !under(s, PointF(x, a.y))) {
+                        selection = s
+                        break@search
+                    }
+                    x += stepX
+                }
+            }
+        }
+        return selection
+    }
+
+    private fun raw(p: PdfRenderer.Page, a: PointF, b: PointF): PdfText.Selection? {
         val w = p.width.toFloat()
         val h = p.height.toFloat()
         val start = SelectionBoundary(Point((a.x * w).toInt(), (a.y * h).toInt()))

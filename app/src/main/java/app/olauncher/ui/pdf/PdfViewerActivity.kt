@@ -1667,11 +1667,11 @@ class PdfViewerActivity : AppCompatActivity() {
                 }
                 if (r.width() > 0) pageAspect[original] = r.height() / r.width()
                 // The two handles: a stem beside the first and the last letter, a knob under it
-                handleSpots(r)?.let { (first, last) ->
-                    for (spot in listOf(first, last)) {
-                        canvas.drawLine(spot.left, spot.top, spot.left, spot.bottom + KNOB * density, handlePaint)
-                        canvas.drawCircle(spot.left, spot.bottom + KNOB * density, KNOB * density, handlePaint)
-                    }
+                // (the first has its knob over the line and the last under it, so that neither covers the text selected)
+                handleSpots(r)?.toList()?.forEachIndexed { i, spot ->
+                    val knob = knobY(i, spot)
+                    canvas.drawLine(spot.left, minOf(spot.top, knob), spot.left, maxOf(spot.bottom, knob), handlePaint)
+                    canvas.drawCircle(spot.left, knob, KNOB * density, handlePaint)
                 }
             }
 
@@ -1692,6 +1692,9 @@ class PdfViewerActivity : AppCompatActivity() {
                 return RectF(first.left, first.top, first.left, first.bottom) to RectF(last.right, last.top, last.right, last.bottom)
             }
 
+            /** The middle of the knob of handle [i] (0 the first, over its line; 1 the last, under it). */
+            private fun knobY(i: Int, spot: RectF) = if (i == 0) spot.top - KNOB * density else spot.bottom + KNOB * density
+
             private var grabbed = -1
             private var grabX = 0f
             private var grabY = 0f
@@ -1701,7 +1704,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         val spots = handleSpots(r)?.toList() ?: return false
-                        grabbed = spots.indexOfFirst { kotlin.math.hypot(e.x - it.left, e.y - (it.bottom + KNOB * density)) < 26 * density }
+                        grabbed = spots.indices.firstOrNull { kotlin.math.hypot(e.x - spots[it].left, e.y - knobY(it, spots[it])) < 26 * density } ?: -1
                         if (grabbed < 0) return false
                         // The finger holds the knob, under the line: what moves is the middle of the line itself
                         grabX = e.x - spots[grabbed].left
