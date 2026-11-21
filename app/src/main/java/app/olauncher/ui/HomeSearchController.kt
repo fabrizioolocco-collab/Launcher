@@ -1,5 +1,6 @@
 package app.olauncher.ui
 
+import app.olauncher.ui.notes.NotesActivity
 import app.olauncher.ui.youtube.YouTubeActivity
 import android.Manifest
 import app.olauncher.helper.CalendarEvents
@@ -500,6 +501,8 @@ class HomeSearchController(
                 activity.getString(R.string.ml_search_tube_videos) to { open(YouTubeActivity.searchIntent(activity, q, podcast = false)) },
                 activity.getString(R.string.ml_search_tube_podcasts) to { open(YouTubeActivity.searchIntent(activity, q, podcast = true)) },
                 "YouTube" to { openYouTube(q) },
+                // The launcher's own notes: the same words looked for in their text
+                activity.getString(R.string.ml_search_notes) to { open(NotesActivity.searchIntent(activity, q)) },
             )
             targets.chunked(2).forEachIndexed { i, pair ->
                 val line = LinearLayout(activity).apply { orientation = LinearLayout.HORIZONTAL }

@@ -6,4 +6,5 @@
     <color name="ic_compass_launcher_background">#E53935</color>
     <color name="ic_gallery_launcher_background">#F4511E</color>
     <color name="ic_tube_launcher_background">#1B1F23</color>
+    <color name="ic_notes_launcher_background">#F9A825</color>
 </resources>

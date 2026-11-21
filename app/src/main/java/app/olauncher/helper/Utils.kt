@@ -128,7 +128,8 @@ suspend fun getAppsList(
                         app.componentName.className == "app.olauncher.GalleryAlias" ||
                         app.componentName.className == "app.olauncher.ShoppingAlias" ||
                         app.componentName.className == "app.olauncher.RecorderAlias" ||
-                        app.componentName.className == "app.olauncher.TubeAlias"
+                        app.componentName.className == "app.olauncher.TubeAlias" ||
+                        app.componentName.className == "app.olauncher.NotesAlias"
                     ) {
                         // is this a hidden app?
                         if (hiddenApps.contains(DrawerTabsRepository.key(appModel))) {

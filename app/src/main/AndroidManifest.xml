@@ -571,6 +571,36 @@
             </intent-filter>
         </activity-alias>
 
+        <!-- Notes: pages kept in a folder the user chooses, also listed as "Note" in the app list -->
+        <activity
+            android:name=".ui.notes.NotesActivity"
+            android:exported="false"
+            android:label="@string/ml_notes_app"
+            android:launchMode="singleTask"
+            android:taskAffinity="app.minimalauncher.notes"
+            android:theme="@style/ViewerTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity
+            android:name=".ui.notes.NoteEditorActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:label="@string/ml_notes_app"
+            android:taskAffinity="app.minimalauncher.notes"
+            android:theme="@style/ViewerTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
+        <activity-alias
+            android:name=".NotesAlias"
+            android:exported="true"
+            android:icon="@drawable/ic_notes_launcher"
+            android:label="@string/ml_notes_app"
+            android:targetActivity=".ui.notes.NotesActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
         <activity-alias
             android:name=".TodoAlias"
             android:exported="true"
