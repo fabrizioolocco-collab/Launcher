@@ -1164,4 +1164,5 @@
     <string name="ml_yt_pip">Floating window</string>
     <string name="ml_yt_background">Sound only</string>
     <string name="ml_yt_mark_seen">Mark as seen</string>
+    <string name="ml_yt_fullscreen">Full screen</string>
 </resources>

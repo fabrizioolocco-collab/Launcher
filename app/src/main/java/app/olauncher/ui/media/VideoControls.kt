@@ -20,6 +20,47 @@ import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import java.text.DecimalFormat
 
+/** What [VideoControls] drive: the viewer's [VideoView], or the player of Tube. Times in milliseconds. */
+interface VideoTransport {
+    val isPlaying: Boolean
+    val duration: Int
+    val position: Int
+    fun seekTo(ms: Int)
+    fun start()
+    fun pause()
+    fun setSpeed(speed: Float)
+    fun setVolume(volume: Float)
+}
+
+/** A [VideoView] and the player it prepared, which is where the speed and the volume are set. */
+class VideoViewTransport(private val video: VideoView) : VideoTransport {
+    var player: MediaPlayer? = null
+
+    override val isPlaying get() = video.isPlaying
+    override val duration get() = video.duration
+    override val position get() = video.currentPosition
+    override fun seekTo(ms: Int) = video.seekTo(ms)
+    override fun start() = video.start()
+    override fun pause() = video.pause()
+
+    override fun setSpeed(speed: Float) {
+        val p = player ?: return
+        try {
+            p.playbackParams = p.playbackParams.setSpeed(speed)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    override fun setVolume(volume: Float) {
+        try {
+            player?.setVolume(volume, volume)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+}
+
 /**
  * Controls drawn over a video of [MediaViewerActivity]: one card in the middle of the screen with the
  * elapsed and total time, the bar, then speed, back 10 s, play-pause, forward 10 s and audio. Touches outside the buttons and the bar go through to the video (tap, double tap).
@@ -28,18 +69,22 @@ import java.text.DecimalFormat
  */
 class VideoControls(
     context: Context,
-    private val video: VideoView,
+    private val video: VideoTransport,
     private val onActivity: () -> Unit,
     private val onPlay: () -> Unit,
 ) : FrameLayout(context) {
 
+    constructor(context: Context, view: VideoView, onActivity: () -> Unit, onPlay: () -> Unit) :
+        this(context, VideoViewTransport(view), onActivity, onPlay)
+
     /** The player of the open video (set when prepared): speed and volume. */
-    var player: MediaPlayer? = null
+    var player: MediaPlayer?
+        get() = (video as? VideoViewTransport)?.player
         set(value) {
-            field = value
+            (video as? VideoViewTransport)?.player = value
             applyVolume()
             // VideoView starts it right after the prepared listener: then the speed can be set
-            if (speed != 1f) video.postDelayed({ if (video.isPlaying) applySpeed() }, 100)
+            if (speed != 1f) postDelayed({ if (video.isPlaying) applySpeed() }, 100)
         }
 
     private var speed = 1f
@@ -199,8 +244,8 @@ class VideoControls(
         }
         seek.max = duration
         if (!dragging) {
-            seek.progress = video.currentPosition
-            showTimes(video.currentPosition, duration)
+            seek.progress = video.position
+            showTimes(video.position, duration)
         }
     }
 
@@ -220,7 +265,7 @@ class VideoControls(
     private fun jump(ms: Int) {
         val duration = video.duration
         if (duration <= 0) return
-        video.seekTo((video.currentPosition + ms).coerceIn(0, duration))
+        video.seekTo((video.position + ms).coerceIn(0, duration))
         refresh()
         onActivity()
     }
@@ -232,14 +277,7 @@ class VideoControls(
         onActivity()
     }
 
-    private fun applySpeed() {
-        val p = player ?: return
-        try {
-            p.playbackParams = p.playbackParams.setSpeed(speed)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    private fun applySpeed() = video.setSpeed(speed)
 
     private fun toggleMute() {
         muted = !muted
@@ -248,14 +286,7 @@ class VideoControls(
         onActivity()
     }
 
-    private fun applyVolume() {
-        try {
-            val v = if (muted) 0f else 1f
-            player?.setVolume(v, v)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
+    private fun applyVolume() = video.setVolume(if (muted) 0f else 1f)
 
     private fun showTimes(position: Int, duration: Int) {
         elapsed.text = MediaViewerActivity.formatDuration(position.toLong())

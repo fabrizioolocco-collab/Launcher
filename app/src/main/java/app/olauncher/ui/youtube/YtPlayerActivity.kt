@@ -13,9 +13,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.graphics.drawable.GradientDrawable
+import android.view.GestureDetector
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -52,6 +57,9 @@ import androidx.media3.ui.PlayerView
 import app.olauncher.R
 import app.olauncher.helper.dpToPx
 import app.olauncher.ui.UiKit
+import app.olauncher.ui.media.VideoControls
+import app.olauncher.ui.media.VideoTransport
+import app.olauncher.ui.media.VideoZoom
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -93,6 +101,42 @@ class YtPlayerActivity : AppCompatActivity() {
     private var fromSaved = false
     private lateinit var pathView: TextView
 
+    // The same controls and gestures as the launcher's video viewer
+    private lateinit var controls: VideoControls
+    private lateinit var zoom: VideoZoom
+    private lateinit var seekLabel: TextView
+    private lateinit var fullButton: ImageView
+    private var chromeVisible = false
+    private val hideChrome = Runnable { if (chromeVisible && transport.isPlaying) setChrome(false) }
+
+    private val transport = object : VideoTransport {
+        // "Playing" also while it buffers: the button shows what a press will do
+        override val isPlaying get() = player?.let { it.playWhenReady && it.playbackState != Player.STATE_IDLE && it.playbackState != Player.STATE_ENDED } == true
+        override val duration get() = player?.duration?.takeIf { it != C.TIME_UNSET && it > 0 }?.toInt() ?: 0
+        override val position get() = player?.currentPosition?.toInt() ?: 0
+        override fun seekTo(ms: Int) {
+            player?.seekTo(ms.toLong())
+        }
+
+        override fun start() {
+            val exo = player ?: return
+            if (exo.playbackState == Player.STATE_ENDED) exo.seekTo(0)
+            exo.play()
+        }
+
+        override fun pause() {
+            player?.pause()
+        }
+
+        override fun setSpeed(speed: Float) {
+            player?.setPlaybackSpeed(speed)
+        }
+
+        override fun setVolume(volume: Float) {
+            player?.volume = volume
+        }
+    }
+
     /** Leaving for the sound only: no floating window this time. */
     private var leavingForAudio = false
 
@@ -102,10 +146,15 @@ class YtPlayerActivity : AppCompatActivity() {
     private val inPip get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode
 
     private val listener = object : Player.Listener {
-        override fun onIsPlayingChanged(isPlaying: Boolean) = updatePip()
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            updatePip()
+            controls.refresh()
+        }
         override fun onVideoSizeChanged(videoSize: VideoSize) = updatePip()
 
         override fun onPlaybackStateChanged(playbackState: Int) {
+            // Over: the controls come back, as on a video of the gallery
+            if (playbackState == Player.STATE_ENDED && !inPip) setChrome(true)
             if (playbackState == Player.STATE_READY && !played) {
                 played = true
                 val streams = YtPlayerService.now?.streams ?: return
@@ -202,6 +251,8 @@ class YtPlayerActivity : AppCompatActivity() {
             intent.getStringExtra(EXTRA_CHANNEL_ID).orEmpty()
         )
         restart()
+        zoom.reset()
+        setChrome(false)
         showNow()
         load(0)
     }
@@ -384,7 +435,12 @@ class YtPlayerActivity : AppCompatActivity() {
 
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
-        playerView.useController = !isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            chromeVisible = false
+            controls.hideNow()
+            fullButton.isVisible = false
+        }
+        zoom.reset()
         applyLayout()
         // Out of the floating window without coming back to the screen: it was closed
         if (!isInPictureInPictureMode && lifecycle.currentState == Lifecycle.State.CREATED) {
@@ -433,7 +489,44 @@ class YtPlayerActivity : AppCompatActivity() {
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        zoom.reset()
         applyLayout()
+    }
+
+    // ---- controls: a tap shows or hides them, and they hide by themselves while the video plays ----
+
+    private fun setChrome(show: Boolean) {
+        frame.removeCallbacks(hideChrome)
+        chromeVisible = show
+        controls.setShown(show)
+        fullButton.isVisible = show
+        if (show) scheduleHide()
+    }
+
+    private fun scheduleHide() {
+        frame.removeCallbacks(hideChrome)
+        frame.postDelayed(hideChrome, HIDE_DELAY_MS)
+    }
+
+    /** Shows [text] for a moment over the video, at the side given by [horizontal] (double tap, long press). */
+    private fun flash(text: String, horizontal: Int) {
+        seekLabel.text = text
+        (seekLabel.layoutParams as FrameLayout.LayoutParams).apply {
+            gravity = Gravity.CENTER_VERTICAL or horizontal
+            marginStart = 32.dpToPx()
+            marginEnd = 32.dpToPx()
+        }
+        seekLabel.requestLayout()
+        seekLabel.animate().cancel()
+        seekLabel.alpha = 1f
+        seekLabel.isVisible = true
+        seekLabel.animate().alpha(0f).setStartDelay(500).setDuration(300)
+            .withEndAction { seekLabel.isVisible = false }.start()
+    }
+
+    private fun toggleFullScreen() {
+        requestedOrientation = if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 
     /** Upright: the video 16:9 on top and the title under it. On its side or floating: the video alone. */
@@ -464,11 +557,62 @@ class YtPlayerActivity : AppCompatActivity() {
         playerView = PlayerView(this).apply {
             setBackgroundColor(Color.BLACK)
             setShowBuffering(PlayerView.SHOW_BUFFERING_ALWAYS)
-            setFullscreenButtonClickListener { fullScreen ->
-                requestedOrientation = if (fullScreen) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            }
+            useController = false
         }
         frame.addView(playerView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        // Feedback of a double-tap seek ("-10 s" / "+10 s") and of a long press
+        seekLabel = TextView(this).apply {
+            setTextColor(Color.WHITE)
+            textSize = 18f
+            val p = 14.dpToPx()
+            setPadding(p, p / 2, p, p / 2)
+            background = GradientDrawable().apply {
+                cornerRadius = 24.dpToPx().toFloat()
+                setColor(0x99000000.toInt())
+            }
+            isVisible = false
+        }
+        frame.addView(seekLabel, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
+        controls = VideoControls(this, transport, onActivity = { scheduleHide() }, onPlay = { setChrome(false) })
+        frame.addView(controls, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        fullButton = UiKit.iconButton(this, R.drawable.ic_m_resize, getString(R.string.ml_yt_fullscreen), Color.WHITE) {
+            toggleFullScreen()
+            scheduleHide()
+        }.apply { isVisible = false }
+        frame.addView(fullButton, FrameLayout.LayoutParams(44.dpToPx(), 44.dpToPx(), Gravity.TOP or Gravity.END))
+        zoom = VideoZoom(frame, playerView)
+        // Tap: show / hide the controls; double tap on the right / left half: forward / back 10 s;
+        // long press: pause / play; two fingers: zoom
+        val gestures = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: MotionEvent) = true
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                if (player != null && !inPip) setChrome(!chromeVisible)
+                return true
+            }
+
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                val duration = transport.duration
+                if (duration <= 0) return false
+                val forward = e.x >= frame.width / 2f
+                transport.seekTo((transport.position + if (forward) SEEK_STEP_MS else -SEEK_STEP_MS).coerceIn(0, duration))
+                controls.refresh()
+                flash(if (forward) "+10 s  \u00BB" else "\u00AB  -10 s", if (forward) Gravity.END else Gravity.START)
+                return true
+            }
+
+            override fun onLongPress(e: MotionEvent) {
+                if (transport.duration <= 0) return
+                frame.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                val pausing = transport.isPlaying
+                controls.togglePlay()
+                flash(if (pausing) "\u275A\u275A" else "\u25B6", Gravity.CENTER_HORIZONTAL)
+            }
+        })
+        frame.setOnTouchListener { _, ev ->
+            zoom.onTouch(ev)
+            gestures.onTouchEvent(ev)
+            true
+        }
         spinner = ProgressBar(this).apply { isVisible = false }
         frame.addView(spinner, FrameLayout.LayoutParams(48.dpToPx(), 48.dpToPx(), Gravity.CENTER))
         root.addView(frame)
@@ -548,6 +692,8 @@ class YtPlayerActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val SEEK_STEP_MS = 10_000
+        private const val HIDE_DELAY_MS = 3_000L
         private const val EXTRA_ID = "video_id"
         private const val EXTRA_TITLE = "title"
         private const val EXTRA_CHANNEL = "channel"
