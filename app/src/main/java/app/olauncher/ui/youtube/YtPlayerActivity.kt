@@ -1,6 +1,11 @@
 package app.olauncher.ui.youtube
 
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -210,6 +215,15 @@ class YtPlayerActivity : AppCompatActivity() {
             }
         })
 
+        ContextCompat.registerReceiver(
+            this, pipReceiver,
+            IntentFilter().apply {
+                addAction(ACTION_PIP_TOGGLE)
+                addAction(ACTION_PIP_AUDIO)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+
         val token = SessionToken(this, ComponentName(this, YtPlayerService::class.java))
         val future = MediaController.Builder(this, token).buildAsync()
         controller = future
@@ -410,11 +424,39 @@ class YtPlayerActivity : AppCompatActivity() {
         // The system refuses anything outside these proportions
         val safe = ratio.coerceIn(0.42f, 2.38f)
         val builder = PictureInPictureParams.Builder().setAspectRatio(Rational((safe * 1000).toInt(), 1000))
+        // The buttons of the floating window: pause / play, and close it keeping the sound
+        val playing = transport.isPlaying
+        builder.setActions(
+            listOf(
+                pipAction(if (playing) R.drawable.ic_m_pause else R.drawable.ic_m_play, getString(R.string.ml_player_play_pause), ACTION_PIP_TOGGLE, 1),
+                pipAction(R.drawable.ic_m_audio, getString(R.string.ml_yt_background), ACTION_PIP_AUDIO, 2)
+            )
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             builder.setAutoEnterEnabled(player?.isPlaying == true && !leavingForAudio)
             builder.setSeamlessResizeEnabled(true)
         }
         return builder.build()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun pipAction(icon: Int, label: String, action: String, code: Int) = RemoteAction(
+        Icon.createWithResource(this, icon), label, label,
+        PendingIntent.getBroadcast(this, code, Intent(action).setPackage(packageName), PendingIntent.FLAG_IMMUTABLE)
+    )
+
+    private val pipReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                ACTION_PIP_TOGGLE -> if (transport.isPlaying) transport.pause() else transport.start()
+                ACTION_PIP_AUDIO -> {
+                    // The window goes, the service keeps playing: the notification brings the video back
+                    leavingForAudio = true
+                    showVideo(false)
+                    finish()
+                }
+            }
+        }
     }
 
     private fun updatePip() {
@@ -443,7 +485,7 @@ class YtPlayerActivity : AppCompatActivity() {
         zoom.reset()
         applyLayout()
         // Out of the floating window without coming back to the screen: it was closed
-        if (!isInPictureInPictureMode && lifecycle.currentState == Lifecycle.State.CREATED) {
+        if (!isInPictureInPictureMode && lifecycle.currentState == Lifecycle.State.CREATED && !leavingForAudio && !isFinishing) {
             player?.pause()
             finish()
         }
@@ -468,12 +510,13 @@ class YtPlayerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        runCatching { unregisterReceiver(pipReceiver) }
         loading?.cancel()
         playerView.player = null
         player?.let { exo ->
             exo.removeListener(listener)
             // Closed while paused: nothing is left to listen to, so the notification goes too
-            if (isFinishing && !exo.isPlaying) {
+            if (isFinishing && !exo.isPlaying && !leavingForAudio) {
                 exo.stop()
                 exo.clearMediaItems()
                 YtPlayerService.now = null
@@ -693,6 +736,8 @@ class YtPlayerActivity : AppCompatActivity() {
 
     companion object {
         private const val SEEK_STEP_MS = 10_000
+        private const val ACTION_PIP_TOGGLE = "app.olauncher.tube.PIP_TOGGLE"
+        private const val ACTION_PIP_AUDIO = "app.olauncher.tube.PIP_AUDIO"
         private const val HIDE_DELAY_MS = 3_000L
         private const val EXTRA_ID = "video_id"
         private const val EXTRA_TITLE = "title"
