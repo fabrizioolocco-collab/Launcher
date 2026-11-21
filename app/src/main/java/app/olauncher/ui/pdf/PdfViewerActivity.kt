@@ -1123,7 +1123,8 @@ class PdfViewerActivity : AppCompatActivity() {
     /**
      * The page list with pinch zoom: the whole content (pages and annotations alike) is scaled
      * around the fingers, so the tools stay precise when zoomed. One finger scrolls the list
-     * vertically as usual and pans sideways when zoomed. Double tap resets.
+     * vertically as usual and, when zoomed with no tool chosen, moves the page in every direction.
+     * A double tap zooms in on the point tapped, or back out, with a short animation.
      */
     private inner class ZoomRecyclerView(context: Context) : RecyclerView(context) {
         private var scale = 1f
@@ -1148,16 +1149,114 @@ class PdfViewerActivity : AppCompatActivity() {
         private val taps = android.view.GestureDetector(context, object : android.view.GestureDetector.SimpleOnGestureListener() {
             override fun onDoubleTap(e: MotionEvent): Boolean {
                 if (tool != Tool.NONE || selected != null) return false
-                if (scale > 1.05f) { scale = 1f; panX = 0f; panY = 0f } else {
-                    scale = 2.5f
-                    panX = e.x - e.x * scale
-                    panY = e.y - e.y * scale
-                    clampPan()
+                if (scale > 1.05f) zoomTo(1f, 0f, 0f) else {
+                    // The point tapped ends in the middle of the screen, as far as the edges of the page allow
+                    val to = 2.5f
+                    val x = (e.x - panX) / scale
+                    val y = (e.y - panY) / scale
+                    zoomTo(
+                        to,
+                        (width / 2f - x * to).coerceIn(width - width * to, 0f),
+                        (height / 2f - y * to).coerceIn(height - height * to, 0f),
+                    )
                 }
-                invalidate()
                 return true
             }
         })
+
+        private var zooming: android.animation.ValueAnimator? = null
+
+        /** Glides, quickly, from the zoom and the place of now to the ones given. */
+        private fun zoomTo(toScale: Float, toX: Float, toY: Float) {
+            zooming?.cancel()
+            val fromScale = scale
+            val fromX = panX
+            val fromY = panY
+            zooming = android.animation.ValueAnimator.ofFloat(0f, 1f).apply {
+                duration = 220
+                interpolator = android.view.animation.DecelerateInterpolator(1.6f)
+                addUpdateListener {
+                    val t = it.animatedValue as Float
+                    scale = fromScale + (toScale - fromScale) * t
+                    panX = fromX + (toX - fromX) * t
+                    panY = fromY + (toY - fromY) * t
+                    invalidate()
+                }
+                start()
+            }
+        }
+
+        // One finger on a zoomed page, with no tool chosen: it moves the page
+        private val touchSlop = android.view.ViewConfiguration.get(context).scaledTouchSlop
+        private var dragging = false
+        private var dragX = 0f
+        private var dragY = 0f
+        private var scrollLeft = 0f
+        private var speed: android.view.VelocityTracker? = null
+
+        /**
+         * The finger's drag: sideways it moves the zoomed page, up and down it scrolls the list of
+         * the pages (and, at the very start or end of the document, shows the strip the zoom hides).
+         * True when the touch was taken, and must not reach the pages.
+         */
+        private fun dragPage(e: MotionEvent): Boolean {
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    dragging = false
+                    dragX = e.x
+                    dragY = e.y
+                    scrollLeft = 0f
+                    speed?.recycle()
+                    speed = android.view.VelocityTracker.obtain().also { it.addMovement(e) }
+                    zooming?.cancel()
+                    stopScroll()
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    speed?.addMovement(e)
+                    if (!dragging && kotlin.math.hypot(e.x - dragX, e.y - dragY) > touchSlop) {
+                        dragging = true
+                        // The page under the finger was told of a touch: it is told it is over
+                        val cancel = MotionEvent.obtain(e).apply { action = MotionEvent.ACTION_CANCEL }
+                        val u = unzoom(cancel)
+                        super.dispatchTouchEvent(u)
+                        u.recycle()
+                        cancel.recycle()
+                        dragX = e.x
+                        dragY = e.y
+                    }
+                    if (dragging) {
+                        val dx = e.x - dragX
+                        val dy = e.y - dragY
+                        dragX = e.x
+                        dragY = e.y
+                        panX += dx
+                        if (canScrollVertically(if (dy > 0) -1 else 1)) {
+                            // The list moves in its own measure: whole pixels, the rest kept for the next move
+                            scrollLeft += -dy / scale
+                            val whole = scrollLeft.toInt()
+                            scrollLeft -= whole
+                            if (whole != 0) scrollBy(0, whole)
+                        } else panY += dy
+                        clampPan()
+                        invalidate()
+                        return true
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (dragging) {
+                    dragging = false
+                    if (e.actionMasked == MotionEvent.ACTION_UP) {
+                        speed?.addMovement(e)
+                        speed?.computeCurrentVelocity(1000)
+                        // Let go while moving: the pages go on by themselves for a while, as in any list
+                        fling(0, (-(speed?.yVelocity ?: 0f) / scale).toInt())
+                    }
+                    speed?.recycle()
+                    speed = null
+                    return true
+                }
+            }
+            return false
+        }
 
         private fun clampPan() {
             panX = panX.coerceIn(width - width * scale, 0f)
@@ -1204,6 +1303,7 @@ class PdfViewerActivity : AppCompatActivity() {
                     return true
                 }
             }
+            if (scale > 1.01f && tool == Tool.NONE && selected == null && dragPage(e)) return true
             val u = unzoom(e)
             val handled = super.dispatchTouchEvent(u)
             u.recycle()
