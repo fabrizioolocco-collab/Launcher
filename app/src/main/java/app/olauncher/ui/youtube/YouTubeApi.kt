@@ -73,7 +73,7 @@ object YouTubeApi {
 
     /** The visitor YouTube takes us for: streams asked without one are often refused when they are fetched. */
     @Volatile
-    private var visitor: String? = null
+    var visitor: String? = null
 
     private fun visitor(): String? {
         visitor?.let { return it }

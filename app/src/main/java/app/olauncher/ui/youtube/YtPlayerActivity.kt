@@ -89,6 +89,10 @@ class YtPlayerActivity : AppCompatActivity() {
     private var played = false
     private val tried = ArrayList<String>()
 
+    /** Started from the way that played last time instead of from the first: if it fails, the list is run from the top. */
+    private var fromSaved = false
+    private lateinit var pathView: TextView
+
     /** Leaving for the sound only: no floating window this time. */
     private var leavingForAudio = false
 
@@ -102,7 +106,12 @@ class YtPlayerActivity : AppCompatActivity() {
         override fun onVideoSizeChanged(videoSize: VideoSize) = updatePip()
 
         override fun onPlaybackStateChanged(playbackState: Int) {
-            if (playbackState == Player.STATE_READY) played = true
+            if (playbackState == Player.STATE_READY && !played) {
+                played = true
+                val streams = YtPlayerService.now?.streams ?: return
+                YtStore.setPath(this@YtPlayerActivity, streams.clientIndex * 10 + usedMode)
+                showPath(streams)
+            }
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -121,6 +130,13 @@ class YtPlayerActivity : AppCompatActivity() {
             else if (streams.clientIndex + 1 < YouTubeApi.clientCount) {
                 clientFrom = streams.clientIndex + 1
                 mode = 0
+                load(position)
+            } else if (fromSaved) {
+                // The way remembered no longer works: all of them again, from the first
+                YtStore.setPath(this@YtPlayerActivity, 0)
+                fromSaved = false
+                mode = 0
+                clientFrom = 0
                 load(position)
             } else showError(tried.joinToString("\n"))
         }
@@ -191,10 +207,24 @@ class YtPlayerActivity : AppCompatActivity() {
     }
 
     private fun restart() {
-        mode = 0
-        clientFrom = 0
+        val saved = YtStore.path(this)
+        mode = saved % 10
+        clientFrom = saved / 10
+        fromSaved = saved != 0
         played = false
         tried.clear()
+        pathView.isVisible = false
+    }
+
+    /** Which client and which way are playing, and what was refused before: small, for when something is slow. */
+    private fun showPath(streams: YtStreams) {
+        val way = when (usedMode) {
+            0 -> "video+audio"
+            1 -> "file"
+            else -> "HLS"
+        }
+        pathView.text = (listOf(streams.client + " · " + way) + tried).joinToString("\n")
+        pathView.isVisible = true
     }
 
     /** What the player was refused, in the few words that tell one case from another. */
@@ -224,8 +254,10 @@ class YtPlayerActivity : AppCompatActivity() {
         statusView.isVisible = false
         spinner.isVisible = true
         exo.stop()
+        if (YouTubeApi.visitor == null) YouTubeApi.visitor = YtStore.visitor(this)
         loading = lifecycleScope.launch {
             val result = withContext(Dispatchers.IO) { runCatching { YouTubeApi.streams(now.videoId, clientFrom) } }
+            YouTubeApi.visitor?.let { YtStore.setVisitor(this@YtPlayerActivity, it) }
             if (YtPlayerService.now !== now) return@launch
             spinner.isVisible = false
             val streams = result.getOrNull()
@@ -486,6 +518,14 @@ class YtPlayerActivity : AppCompatActivity() {
         info.addView(titleView)
         info.addView(channelView)
         info.addView(chips)
+        pathView = TextView(this).apply {
+            textSize = 11f
+            setTextColor(UiKit.secondary(this@YtPlayerActivity))
+            alpha = 0.7f
+            setPadding(0, 12.dpToPx(), 0, 0)
+            isVisible = false
+        }
+        info.addView(pathView)
         info.addView(statusView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 16.dpToPx()
         })

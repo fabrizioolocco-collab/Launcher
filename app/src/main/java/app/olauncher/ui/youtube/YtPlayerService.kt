@@ -5,6 +5,7 @@ import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -30,6 +31,13 @@ class YtPlayerService : MediaSessionService() {
                 true
             )
             .setHandleAudioBecomingNoisy(true)
+            // Starts as soon as one second is there (the default waits for two and a half)
+            .setLoadControl(
+                DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(15000, 50000, 1000, 2000)
+                    .setPrioritizeTimeOverSizeThresholds(true)
+                    .build()
+            )
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
         player = exo

@@ -20,6 +20,9 @@ object YtStore {
     private const val PREFS = "youtube"
     private const val KEY_SUBS = "subscriptions"
     private const val KEY_HEIGHT = "max_height"
+    private const val KEY_PATH = "path"
+    private const val KEY_VISITOR = "visitor"
+    private const val KEY_VISITOR_TIME = "visitor_time"
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -58,6 +61,21 @@ object YtStore {
     }
 
     fun unsubscribe(ctx: Context, id: String) = save(ctx, subscriptions(ctx).filter { it.id != id })
+
+    /** The client and the way that played last time (client * 10 + way): the next video starts from there. */
+    fun path(ctx: Context) = prefs(ctx).getInt(KEY_PATH, 0)
+    fun setPath(ctx: Context, path: Int) {
+        if (path != path(ctx)) prefs(ctx).edit().putInt(KEY_PATH, path).apply()
+    }
+
+    /** The visitor id YouTube gave, good for half a day: one request less before every first video. */
+    fun visitor(ctx: Context): String? =
+        prefs(ctx).getString(KEY_VISITOR, null)?.takeIf { System.currentTimeMillis() - prefs(ctx).getLong(KEY_VISITOR_TIME, 0) < 12 * 3600_000L }
+
+    fun setVisitor(ctx: Context, visitor: String) {
+        if (visitor == visitor(ctx)) return
+        prefs(ctx).edit().putString(KEY_VISITOR, visitor).putLong(KEY_VISITOR_TIME, System.currentTimeMillis()).apply()
+    }
 
     /** The tallest video asked for: 1080p costs data that a phone screen rarely shows. */
     fun maxHeight(ctx: Context) = prefs(ctx).getInt(KEY_HEIGHT, 720)
