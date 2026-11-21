@@ -281,7 +281,7 @@ object YouTubeApi {
 
     private fun video(v: JSONObject, channelName: String, channelId: String): YtVideo? {
         val id = v.optString("videoId")
-        if (id.isBlank()) return null
+        if (id.isBlank() || membersOnly(v)) return null
         val owner = v.optJSONObject("ownerText") ?: v.optJSONObject("longBylineText") ?: v.optJSONObject("shortBylineText")
         val ownerRun = owner?.optJSONArray("runs")?.optJSONObject(0)
         val ownerId = ownerRun?.optJSONObject("navigationEndpoint")?.optJSONObject("browseEndpoint")?.optString("browseId").orEmpty()
@@ -306,7 +306,7 @@ object YouTubeApi {
     private fun lockup(l: JSONObject, channelName: String, channelId: String): YtVideo? {
         if (l.optString("contentType") != "LOCKUP_CONTENT_TYPE_VIDEO") return null
         val id = l.optString("contentId")
-        if (id.isBlank()) return null
+        if (id.isBlank() || membersOnly(l)) return null
         val meta = l.optJSONObject("metadata")?.optJSONObject("lockupMetadataViewModel")
         val parts = ArrayList<String>()
         val rows = meta?.optJSONObject("metadata")?.optJSONObject("contentMetadataViewModel")?.optJSONArray("metadataRows")
@@ -323,6 +323,12 @@ object YouTubeApi {
             id, meta?.optJSONObject("title")?.optString("content").orEmpty(), owner, channelId,
             parts.joinToString(" · "), find(l.optJSONObject("contentImage"), "thumbnailBadgeViewModel")?.optString("text").orEmpty()
         )
+    }
+
+    /** A video only the paying members of its channel can watch: it carries a badge that says so. */
+    private fun membersOnly(item: JSONObject): Boolean {
+        val json = item.toString()
+        return json.contains("MEMBERS_ONLY") || json.contains("\"Members only\"") || json.contains("\"Solo per gli abbonati\"")
     }
 
     private fun find(node: Any?, name: String): JSONObject? {

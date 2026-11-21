@@ -21,6 +21,9 @@ object YtStore {
     private const val KEY_SUBS = "subscriptions"
     private const val KEY_HEIGHT = "max_height"
     private const val KEY_PATH = "path"
+    private const val KEY_SEEN = "seen_"
+    private const val KEY_NEW = "new_"
+    private const val KEY_CHECKED = "checked_"
     private const val KEY_VISITOR = "visitor"
     private const val KEY_VISITOR_TIME = "visitor_time"
 
@@ -60,7 +63,52 @@ object YtStore {
         save(ctx, list.map { if (it.id == channel.id) channel.copy(avatar = channel.avatar.ifBlank { old.avatar }) else it })
     }
 
-    fun unsubscribe(ctx: Context, id: String) = save(ctx, subscriptions(ctx).filter { it.id != id })
+    fun unsubscribe(ctx: Context, id: String) {
+        save(ctx, subscriptions(ctx).filter { it.id != id })
+        prefs(ctx).edit().remove(KEY_SEEN + id).remove(KEY_NEW + id).remove(KEY_CHECKED + id).apply()
+    }
+
+    // ---- new videos ----
+
+    private fun ids(ctx: Context, key: String): List<String>? {
+        val text = prefs(ctx).getString(key, null) ?: return null
+        return runCatching { JSONArray(text).let { a -> (0 until a.length()).map { a.optString(it) } } }.getOrNull()
+    }
+
+    private fun putIds(ctx: Context, key: String, ids: Collection<String>) =
+        prefs(ctx).edit().putString(key, JSONArray(ids).toString()).apply()
+
+    /** The videos of a channel that came out after it was first looked at and haven't been opened yet. */
+    fun newVideos(ctx: Context, channelId: String): List<String> = ids(ctx, KEY_NEW + channelId).orEmpty()
+
+    /** Whether a channel's videos were read too long ago to trust the count. */
+    fun due(ctx: Context, channelId: String) =
+        System.currentTimeMillis() - prefs(ctx).getLong(KEY_CHECKED + channelId, 0) > 10 * 60_000L
+
+    /**
+     * The latest videos of a channel, just read. The first time they are all taken as known, so
+     * that the count starts from that day; from then on, the ones never met before are new.
+     */
+    fun update(ctx: Context, channelId: String, latest: List<String>) {
+        if (latest.isEmpty()) return
+        val seen = ids(ctx, KEY_SEEN + channelId)
+        if (seen == null) {
+            putIds(ctx, KEY_SEEN + channelId, latest)
+            putIds(ctx, KEY_NEW + channelId, emptyList())
+        } else {
+            val known = seen.toHashSet()
+            putIds(ctx, KEY_NEW + channelId, latest.filter { it !in known })
+        }
+        prefs(ctx).edit().putLong(KEY_CHECKED + channelId, System.currentTimeMillis()).apply()
+    }
+
+    /** Videos opened, or dismissed all together: no longer counted. */
+    fun markSeen(ctx: Context, channelId: String, videos: Collection<String>) {
+        if (channelId.isBlank() || videos.isEmpty()) return
+        val seen = ids(ctx, KEY_SEEN + channelId) ?: return
+        putIds(ctx, KEY_SEEN + channelId, (seen + videos).distinct().takeLast(400))
+        putIds(ctx, KEY_NEW + channelId, newVideos(ctx, channelId).filter { it !in videos })
+    }
 
     /** The client and the way that played last time (client * 10 + way): the next video starts from there. */
     fun path(ctx: Context) = prefs(ctx).getInt(KEY_PATH, 0)

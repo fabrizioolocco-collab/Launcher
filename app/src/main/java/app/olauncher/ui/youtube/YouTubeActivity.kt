@@ -93,6 +93,8 @@ class YouTubeActivity : AppCompatActivity() {
         super.onStart()
         // A channel followed or dropped from its page shows in the grid on the way back
         if (stack.isNotEmpty() && screen is Screen.Home && screen.items != null) show()
+        // A video just watched loses its red dot
+        else if (stack.isNotEmpty()) adapter.notifyDataSetChanged()
     }
 
     /** Opens the channel an intent names (the player's channel line). */
@@ -130,7 +132,7 @@ class YouTubeActivity : AppCompatActivity() {
             val channels = YtStore.subscriptions(this)
             current.items = channels
             display(current)
-            fillPictures(channels)
+            refresh(channels)
             return
         }
         current.items?.let {
@@ -151,6 +153,7 @@ class YouTubeActivity : AppCompatActivity() {
                                 current.channel = info
                                 YtStore.refresh(this@YouTubeActivity, info)
                             }
+                            YtStore.update(this@YouTubeActivity, current.channel.id, videos.map { it.id })
                             videos
                         }
                         else -> emptyList()
@@ -189,21 +192,25 @@ class YouTubeActivity : AppCompatActivity() {
         empty.isVisible = true
     }
 
-    /** A channel followed from the player comes without a picture: it is fetched when the grid shows. */
-    private fun fillPictures(channels: List<YtChannel>) {
-        val missing = channels.filter { it.avatar.isBlank() }.take(20)
-        if (missing.isEmpty()) return
+    /**
+     * Reads the latest videos of the channels in the grid, one after the other, for the red count
+     * of the new ones (and for the picture of a channel that came without). Each channel is read
+     * again only after some minutes.
+     */
+    private fun refresh(channels: List<YtChannel>) {
+        val ctx = this
+        val stale = channels.filter { it.avatar.isBlank() || YtStore.due(ctx, it.id) }
+        if (stale.isEmpty()) return
         pictures = lifecycleScope.launch {
-            var found = false
-            for (channel in missing) {
-                val info = withContext(Dispatchers.IO) { runCatching { YouTubeApi.channel(channel.id).first }.getOrNull() } ?: continue
-                YtStore.refresh(this@YouTubeActivity, info)
-                found = true
-            }
-            val current = screen
-            if (found && current is Screen.Home) {
-                current.items = YtStore.subscriptions(this@YouTubeActivity)
-                adapter.submit(current.items.orEmpty(), true)
+            for (channel in stale) {
+                val read = withContext(Dispatchers.IO) { runCatching { YouTubeApi.channel(channel.id) }.getOrNull() } ?: continue
+                read.first?.let { YtStore.refresh(ctx, it) }
+                YtStore.update(ctx, channel.id, read.second.map { it.id })
+                val current = screen
+                if (current is Screen.Home) {
+                    current.items = YtStore.subscriptions(ctx)
+                    adapter.submit(current.items.orEmpty(), true)
+                }
             }
         }
     }
@@ -220,6 +227,24 @@ class YouTubeActivity : AppCompatActivity() {
     private fun toggle(channel: YtChannel) {
         if (YtStore.isSubscribed(this, channel.id)) YtStore.unsubscribe(this, channel.id) else YtStore.subscribe(this, channel)
         adapter.notifyDataSetChanged()
+    }
+
+    /** A long press on a channel of the grid: forget its new videos, or stop following it. */
+    private fun channelMenu(channel: YtChannel) {
+        val fresh = YtStore.newVideos(this, channel.id)
+        if (fresh.isEmpty()) {
+            confirmRemove(channel)
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(channel.name)
+            .setItems(arrayOf(getString(R.string.ml_yt_mark_seen), getString(R.string.ml_yt_remove))) { _, which ->
+                if (which == 0) {
+                    YtStore.markSeen(this, channel.id, fresh)
+                    adapter.notifyDataSetChanged()
+                } else confirmRemove(channel)
+            }
+            .show()
     }
 
     private fun confirmRemove(channel: YtChannel) {
@@ -321,6 +346,7 @@ class YouTubeActivity : AppCompatActivity() {
         var sub: TextView? = null
         var badge: TextView? = null
         var button: FrameLayout? = null
+        var dot: View? = null
     }
 
     private inner class Adapter : RecyclerView.Adapter<Holder>() {
@@ -362,7 +388,22 @@ class YouTubeActivity : AppCompatActivity() {
                             setPadding(0, 8.dpToPx(), 0, 0)
                             minLines = 2
                         }
-                        box.addView(image)
+                        // The red count of the new videos sits on the corner of the picture
+                        val count = label(11f, Color.WHITE, 1, bold = true).apply {
+                            gravity = Gravity.CENTER
+                            minWidth = 20.dpToPx()
+                            setPadding(5.dpToPx(), 0, 5.dpToPx(), 0)
+                            background = GradientDrawable().apply {
+                                cornerRadius = 10.dpToPx().toFloat()
+                                setColor(RED)
+                            }
+                            isVisible = false
+                        }
+                        badge = count
+                        val picture = FrameLayout(ctx)
+                        picture.addView(image, FrameLayout.LayoutParams(76.dpToPx(), 76.dpToPx()))
+                        picture.addView(count, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 20.dpToPx(), Gravity.TOP or Gravity.END))
+                        box.addView(picture, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                         box.addView(title)
                     }
                 }
@@ -396,6 +437,19 @@ class YouTubeActivity : AppCompatActivity() {
                         thumb.addView(time, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.END).apply {
                             marginEnd = 5.dpToPx()
                             bottomMargin = 5.dpToPx()
+                        })
+                        val mark = View(ctx).apply {
+                            background = GradientDrawable().apply {
+                                shape = GradientDrawable.OVAL
+                                setColor(RED)
+                                setStroke(1.dpToPx(), Color.BLACK)
+                            }
+                            isVisible = false
+                        }
+                        dot = mark
+                        thumb.addView(mark, FrameLayout.LayoutParams(12.dpToPx(), 12.dpToPx(), Gravity.TOP or Gravity.START).apply {
+                            marginStart = 5.dpToPx()
+                            topMargin = 5.dpToPx()
                         })
                         val texts = LinearLayout(ctx).apply {
                             orientation = LinearLayout.VERTICAL
@@ -449,7 +503,11 @@ class YouTubeActivity : AppCompatActivity() {
                     holder.badge?.text = item.duration
                     holder.badge?.isVisible = item.duration.isNotBlank()
                     YtImages.load(holder.image, item.thumbnail)
-                    holder.itemView.setOnClickListener { startActivity(YtPlayerActivity.intent(ctx, item)) }
+                    holder.dot?.isVisible = item.channelId.isNotBlank() && item.id in YtStore.newVideos(ctx, item.channelId)
+                    holder.itemView.setOnClickListener {
+                        YtStore.markSeen(ctx, item.channelId, listOf(item.id))
+                        startActivity(YtPlayerActivity.intent(ctx, item))
+                    }
                 }
                 is YtChannel, is Header -> {
                     val channel = if (item is Header) item.channel else item as YtChannel
@@ -466,8 +524,13 @@ class YouTubeActivity : AppCompatActivity() {
                     }
                     if (item is Header) return
                     holder.itemView.setOnClickListener { open(Screen.Channel(channel)) }
+                    holder.badge?.let { count ->
+                        val fresh = YtStore.newVideos(ctx, channel.id).size
+                        count.text = if (fresh > 99) "99+" else fresh.toString()
+                        count.isVisible = fresh > 0
+                    }
                     holder.itemView.setOnLongClickListener {
-                        if (tiles) confirmRemove(channel)
+                        if (tiles) channelMenu(channel)
                         tiles
                     }
                 }
@@ -480,6 +543,7 @@ class YouTubeActivity : AppCompatActivity() {
         private const val CHANNEL = 1
         private const val VIDEO = 2
         private const val HEADER = 3
+        private const val RED = 0xFFE53935.toInt()
         private const val EXTRA_CHANNEL_ID = "channel_id"
         private const val EXTRA_CHANNEL_NAME = "channel_name"
 

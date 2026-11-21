@@ -1160,4 +1160,5 @@
     <string name="ml_yt_quality">%dp</string>
     <string name="ml_yt_pip">Finestra mobile</string>
     <string name="ml_yt_background">Solo audio</string>
+    <string name="ml_yt_mark_seen">Segna come visti</string>
 </resources>
