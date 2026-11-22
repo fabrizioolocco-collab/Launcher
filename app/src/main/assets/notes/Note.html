@@ -88,9 +88,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .note ul.todo > li::before { content: ""; position: absolute; left: 0; top: 2px; width: 20px; height: 20px; border: 2px solid var(--dim); border-radius: 6px; }
 .note ul.todo > li[data-done]::before { border-color: var(--fg); background: var(--fg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/14px no-repeat; }
 .note ul.todo > li[data-done] { color: var(--dim); text-decoration: line-through; }
+.note .notebook svg, .notebook svg { display: block; width: 100%; height: auto; margin: 0 0 16px; border-radius: 4px; }
 .note a.file { display: inline-block; padding: 6px 48px 6px 12px; margin: 6px 0; cursor: pointer; border: 1px solid var(--stroke); border-radius: 10px; background: var(--card); color: var(--fg); text-decoration: none; }
 
-#veil { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 5; }
+#veil { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 10; }
 #veil.on { display: flex; }
 #box { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--stroke); border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
 #box h2 { margin: 0; font-size: 17px; }
@@ -103,18 +104,54 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
 #draw { position: fixed; inset: 0; background: var(--bg); display: none; flex-direction: column; z-index: 6; }
 #draw.on { display: flex; }
-#drawBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
-#drawBar .dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; flex-shrink: 0; }
-#drawBar .dot.on { border-color: var(--fg); outline: 2px solid var(--bg); outline-offset: -4px; }
-#drawBar .txt { height: 40px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 600; flex-shrink: 0; }
-#drawBar .txt.on { background: var(--sel); }
-#drawBar .gap { flex: 1; }
+/* The tools of the board: what is in hand on top, what it can be set to under it */
+#drawBar { flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--stroke); box-shadow: 0 2px 10px rgba(0,0,0,.35); z-index: 1; }
+#drawBar .tb { display: flex; align-items: center; gap: 8px; padding: 7px 10px; overflow-x: auto; scrollbar-width: none; }
+#drawBar .tb::-webkit-scrollbar { display: none; }
+#drawBar .tb.opts { border-top: 1px solid var(--line); padding-top: 6px; flex-wrap: wrap; overflow: visible; }
+#drawBar .grp { display: flex; align-items: center; gap: 2px; padding: 3px; background: #07090a; border: 1px solid var(--stroke); border-radius: 13px; flex-shrink: 0; }
+#drawBar .ib { position: relative; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #c4ccd3; flex-shrink: 0; transition: background .12s, color .12s; }
+#drawBar .ib:hover { background: #171c20; color: var(--fg); }
+#drawBar .ib.on { background: var(--fg); color: #000; }
+#drawBar .ib:disabled { opacity: .3; pointer-events: none; }
+#drawBar .ib svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+#drawBar .ib .tip { position: absolute; left: 11px; right: 11px; bottom: 4px; height: 3px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
+#drawBar .ib.wide { width: auto; padding: 0 14px 0 10px; font-size: 14px; font-weight: 600; }
+#drawBar .sw { width: 28px; height: 28px; margin: 3px; border-radius: 50%; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); transition: transform .12s; }
+#drawBar .sw:hover { transform: scale(1.1); }
+#drawBar .sw.on { box-shadow: 0 0 0 2px #07090a, 0 0 0 4px var(--fg); }
+.sw.any { background: conic-gradient(#f44336, #ffeb3b, #4caf50, #00bcd4, #2196f3, #9c27b0, #f44336) !important; position: relative; }
+.sw.any::after { content: "+"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 18px; text-shadow: 0 0 3px #000; }
+#drawBar .wd { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+#drawBar .wd:hover { background: #171c20; }
+#drawBar .wd.on { background: #22292e; box-shadow: inset 0 0 0 1px #3a444b; }
+#drawBar .wd i { display: block; border-radius: 50%; background: #fff; }
+#drawBar .wd i.ring { background: none; border: 1.5px solid #c4ccd3; }
+#drawBar .gap { flex: 1; min-width: 4px; }
+#drawBar .pill { flex-shrink: 0; position: sticky; right: 0; box-shadow: -14px 0 10px var(--card); }
+#drawBar #title { width: 220px; flex-shrink: 0; margin: 0; font-size: 18px; padding: 0 6px; }
+#draw.book #pad { background: #1c2023; }
+#app.pc ~ #draw.book { left: 301px; }
+#box.picker { max-width: 360px; }
+#box .palette { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+#box .palette .sw { width: 100%; aspect-ratio: 1; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,.22); }
+#box .pickTop { display: flex; gap: 10px; align-items: center; }
+#box .preview { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
+#box .pickTop input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; }
+#box input.slide { -webkit-appearance: none; appearance: none; height: 22px; padding: 0; border: 0; border-radius: 11px; background: var(--track, #333); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+#box input.slide::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 3px solid #000; box-shadow: 0 0 0 1px #fff; }
+#box input.slide::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; border: 3px solid #000; }
+#side .where { margin: 0 14px 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
+#side .where span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#side .where button { color: var(--link); font-size: 13px; font-weight: 600; padding: 4px 6px; border-radius: 6px; }
+#side .where button:hover { background: var(--sel); }
 #pad { flex: 1; min-height: 0; background: #fff; touch-action: none; }
 #pad canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 @media (max-width: 700px) {
   .pc #side { width: 100%; border-right: 0; }
   .pc.reading #side { display: none; }
   .pc:not(.reading) #main { display: none; }
+  #app.pc ~ #draw.book { left: 0; }
 }
 </style>
 </head>
@@ -126,6 +163,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
       <button class="pill ghost" id="newFolder">Cartella</button>
       <button class="pill" id="newNote">Nuova nota</button>
     </div>
+    <div class="where"><span id="whereName"></span><button id="changeDir" title="Scegli un'altra cartella di note">Cambia cartella</button></div>
     <input id="filter" placeholder="Cerca per titolo" autocomplete="off">
     <div id="tree"></div>
   </aside>
@@ -169,7 +207,8 @@ const NOTE_CSS = "body{margin:0 auto;max-width:760px;padding:24px 20px 60px;back
   + "table{border-collapse:collapse;margin:6px 0 12px;width:100%}td{border:1px solid #2a3135;padding:7px 10px;vertical-align:top;text-align:left}tr:first-child td{font-weight:600;background:#0f1214}"
   + "ul.todo{list-style:none;padding-left:0}ul.todo>li{position:relative;padding-left:32px;min-height:26px}ul.todo>li::before{content:'';position:absolute;left:0;top:2px;width:20px;height:20px;border:2px solid #9aa4ad;border-radius:6px;box-sizing:border-box}"
   + "ul.todo>li[data-done]::before{background:#fff;border-color:#fff}ul.todo>li[data-done]{color:#9aa4ad;text-decoration:line-through}"
-  + "a.file{display:inline-block;padding:6px 12px;border:1px solid #2a3135;border-radius:10px;background:#0f1214;color:#fff;text-decoration:none}";
+  + "a.file{display:inline-block;padding:6px 12px;border:1px solid #2a3135;border-radius:10px;background:#0f1214;color:#fff;text-decoration:none}"
+  + ".notebook svg{display:block;width:100%;height:auto;margin:0 0 16px;border-radius:4px}";
 
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -211,12 +250,48 @@ function show(name, html, base) {
   tag.href = base;
   shownName = name;
   title.value = name;
-  body.innerHTML = clean(html);
   dirty = false;
   app.classList.remove("none");
   app.classList.add("reading");
+  if (isBook(html)) { body.innerHTML = ""; openBook(clean(html)); return; }
+  closeBook();
+  body.innerHTML = clean(html);
   $("scroll").scrollTop = 0;
+  resolve();
   marks();
+}
+
+/** Where an image or a file of the note is, as the note writes it. */
+const srcOf = (el) => el.dataset.path || el.getAttribute(el.tagName === "IMG" ? "src" : "href") || "";
+
+/** An image of the note now at [path]. */
+function setSrc(img, path) {
+  img.removeAttribute("data-path");
+  img.setAttribute("src", encodeURI(path));
+  resolve();
+}
+
+/**
+ * On a computer the images are read from the chosen folder itself, not from where this page was
+ * opened: the two need not be the same place. What is shown is a copy in memory; what is written
+ * in the note stays the path beside it.
+ */
+async function resolve() {
+  if (android) return;
+  for (const img of Array.from(body.querySelectorAll("img[src]:not([data-path])"))) {
+    const src = img.getAttribute("src");
+    if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(src)) continue;
+    const url = await pcHost.blob(src);
+    if (url && img.getAttribute("src") === src) { img.dataset.path = src; img.src = url; }
+  }
+}
+
+/** The note as it is written to its file. */
+function noteHtml() {
+  if (!body.querySelector("[data-path]")) return body.innerHTML;
+  const c = body.cloneNode(true);
+  c.querySelectorAll("[data-path]").forEach((n) => { n.setAttribute("src", n.dataset.path); n.removeAttribute("data-path"); });
+  return c.innerHTML;
 }
 
 function changed() {
@@ -229,14 +304,15 @@ function flush() {
   clearTimeout(timer);
   if (!dirty || shownName == null) return;
   dirty = false;
-  host.save(pageOf(shownName, body.innerHTML));
+  if (board.book) { bookDirty = false; host.save(pageOf(shownName, bookHtml())); return; }
+  host.save(pageOf(shownName, noteHtml()));
 }
 
 body.addEventListener("input", changed);
 document.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
 window.addEventListener("beforeunload", flush);
 
-title.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); body.focus(); } });
+title.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); if (board.book) title.blur(); else body.focus(); } });
 title.addEventListener("change", async () => {
   const wanted = title.value.replace(/[\\/:*?"<>|\n\r]/g, " ").trim();
   if (!wanted || wanted === shownName) { title.value = shownName; return; }
@@ -330,7 +406,7 @@ body.addEventListener("keydown", (e) => {
 body.addEventListener("click", (e) => {
   const t = e.target;
   // An image or an attached file: a tap opens it
-  if (t.tagName === "IMG") { e.preventDefault(); if (/\.svg$/i.test(t.getAttribute("src") || "")) editDrawing(t); else host.open(t.getAttribute("src")); return; }
+  if (t.tagName === "IMG") { e.preventDefault(); if (/\.svg$/i.test(srcOf(t))) editDrawing(t); else host.open(srcOf(t)); return; }
   const file = t.closest ? t.closest("a.file") : null;
   if (file) { e.preventDefault(); host.open(file.getAttribute("href")); return; }
   const li = t.closest ? t.closest("ul.todo > li") : null;
@@ -449,7 +525,7 @@ function lay() {
     body.querySelectorAll("img, a.file").forEach((el) => {
       const r = el.getBoundingClientRect();
       if (!r.width || !r.height) return;
-      const href = el.getAttribute(el.tagName === "IMG" ? "src" : "href");
+      const href = srcOf(el);
       const name = el.tagName === "IMG" ? decodeURIComponent((href || "").split("/").pop()) : el.textContent;
       const put = (cls, html, label, x, y, run) => {
         const b = document.createElement("button");
@@ -478,7 +554,7 @@ window.addEventListener("resize", lay);
 
 /** An image or a file now beside the note, at [path] from it: put where the caret was. */
 function inserted(kind, path, name) {
-  if (kind === "image" || kind === "draw") insert("<img" + (kind === "draw" ? " class=\"draw\"" : "") + " src=\"" + esc(encodeURI(path)) + "\" alt=\"\"><p><br></p>");
+  if (kind === "image" || kind === "draw") { insert("<img" + (kind === "draw" ? " class=\"draw\"" : "") + " src=\"" + esc(encodeURI(path)) + "\" alt=\"\"><p><br></p>"); resolve(); }
   else insert("<a class=\"file\" href=\"" + esc(encodeURI(path)) + "\">" + esc(name) + "</a>&nbsp;");
 }
 
@@ -540,71 +616,253 @@ function choose(heading, items) {
 }
 $("veil").addEventListener("click", (e) => { if (e.target === $("veil")) $("veil").classList.remove("on"); });
 
-// ---------------------------------------------------------------- drawing by hand: a board without edges
+// ---------------------------------------------------------------- drawing by hand: a board without edges, or a notebook
 
 /*
  * A drawing is kept as an SVG file beside the note: what is seen, and inside it (in its <desc>)
  * every stroke as drawn, so that a tap on it opens it again to go on drawing. The board has no
  * edges: two fingers (or the mouse wheel, or the mouse with its middle or right button) move it
  * and zoom it in and out, as far as one likes; what is saved is only the part that has ink on it.
+ *
+ * A notebook is the same board with pages on it, one under the other, of squared, ruled, dotted
+ * or plain paper: the note itself is those pages, each an SVG with its strokes in it.
+ *
+ * Once a pen has touched the screen, a finger no longer writes: it moves the pages, and a palm
+ * resting on the screen while the pen writes is not taken for anything. The back of a pen that
+ * has one (the Surface Pen, turned over) rubs out.
  */
 const board = {
-  strokes: [], now: null, tool: "pen", color: "#111111", width: 3,
-  view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null,
-  pointers: new Map(), pinch: null, pan: null, erased: false,
+  strokes: [], now: null, drawId: null, tool: "pen", color: "#111111", width: 3,
+  eraser: "area", esize: 18, recent: [],
+  view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null, book: null,
+  touches: new Map(), pinch: null, pan: null, erased: false, penSeen: false, space: false,
 };
 const canvas = document.querySelector("#pad canvas");
-const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f9a825", "#8e24aa"];
-const WIDTHS = [["Fine", 2], ["Media", 4], ["Spessa", 9]];
+const COLORS = ["#111111", "#5f6368", "#d32f2f", "#f57c00", "#f9a825", "#388e3c", "#1976d2", "#8e24aa"];
+const WIDTHS = [1.5, 3, 5, 8, 14];
+const ESIZES = [8, 18, 36];
+const PW = 794, PH = 1123, PGAP = 28;
+const PAPERS = [["grid", "Quadretti"], ["lines", "Righe"], ["dots", "Puntini"], ["blank", "Bianca"]];
+
+try { Object.assign(board, JSON.parse(localStorage.getItem("pen") || "{}")); } catch (e) { /* defaults */ }
+const keepPen = () => { try { localStorage.setItem("pen", JSON.stringify({ color: board.color, width: board.width, eraser: board.eraser, esize: board.esize, recent: board.recent })); } catch (e) { /* not kept */ } };
+
+const DI = {
+  pen: '<svg viewBox="0 0 24 24"><path d="M4 20l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.6 18.8z"/><path d="M14 6.6l3.4 3.4"/></svg>',
+  marker: '<svg viewBox="0 0 24 24"><path d="M10 14l-4.5 4.5L4 20h5l1.5-1.5"/><path d="M10 14l7.5-9.5a1.5 1.5 0 0 1 2.1-.1l.1.1a1.5 1.5 0 0 1-.1 2.1L10.5 18.5z"/><path d="M9 13l2.5 2.5"/></svg>',
+  eraser: '<svg viewBox="0 0 24 24"><path d="M9 20h11"/><path d="M4.6 13.6l8.8-8.8a2 2 0 0 1 2.8 0l3 3a2 2 0 0 1 0 2.8L11 19H8.4l-3.8-3.8a1.1 1.1 0 0 1 0-1.6z"/><path d="M8.5 9.7l5.8 5.8"/></svg>',
+  undo: '<svg viewBox="0 0 24 24"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  redo: '<svg viewBox="0 0 24 24"><path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>',
+  fit: '<svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  close: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  page: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 9v6M9 12h6"/></svg>',
+  more: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="12" r="1.2" fill="currentColor"/></svg>',
+  stroke: '<svg viewBox="0 0 24 24"><path d="M4 16c3-6 6-8 8-5s5 1 8-4"/><path d="M15 18l5-5M15 13l5 5" stroke-width="1.6"/></svg>',
+  area: '<svg viewBox="0 0 24 24"><path d="M3 15c3-6 5-8 7-5"/><path d="M15 9.5c1.5.5 3.5-.5 6-4"/><circle cx="12.5" cy="11" r="3.2" stroke-dasharray="2 2"/></svg>',
+};
 
 function openDraw(strokes, editing) {
-  board.strokes = strokes || [];
+  board.book = null;
   board.editing = editing || null;
+  startBoard(strokes);
+  $("draw").classList.remove("book");
+  $("draw").classList.add("on");
+  fit();
+  if (board.strokes.length) whole(); else { board.view = { s: 1, x: 0, y: 0 }; paint(); }
+}
+
+function startBoard(strokes) {
+  board.strokes = strokes || [];
   board.undo = [];
   board.redo = [];
   board.now = null;
-  board.pointers.clear();
+  board.drawId = null;
+  board.touches.clear();
   board.pinch = null;
   board.pan = null;
-  if (board.tool === "eraser") board.tool = "pen";
   // The keyboard goes: the board takes the whole screen
-  if (document.activeElement) document.activeElement.blur();
+  if (document.activeElement && document.activeElement !== title) document.activeElement.blur();
   barOfBoard();
-  $("draw").classList.add("on");
-  board.view = { s: 1, x: 0, y: 0 };
-  fit();
-  if (board.strokes.length) whole();
 }
 
 function barOfBoard() {
   const bar = $("drawBar");
   bar.innerHTML = "";
-  const mk = (cls, html, label, run) => {
+  const row = (cls) => { const r = document.createElement("div"); r.className = "tb " + (cls || ""); bar.appendChild(r); return r; };
+  const group = (r) => { const g = document.createElement("div"); g.className = "grp"; r.appendChild(g); return g; };
+  const mk = (into, cls, html, label, run) => {
     const b = document.createElement("button");
     b.className = cls;
     b.innerHTML = html;
     b.title = label;
     b.setAttribute("aria-label", label);
     b.onclick = run;
-    bar.appendChild(b);
+    into.appendChild(b);
     return b;
   };
-  const tools = [["pen", "Penna"], ["marker", "Evidenziatore"], ["eraser", "Gomma"]];
-  for (const [t, label] of tools) mk("txt" + (board.tool === t ? " on" : ""), label, label, () => { board.tool = t; barOfBoard(); }).dataset.t = t;
-  for (const c of COLORS) {
-    const d = mk("dot" + (c === board.color ? " on" : ""), "", "Colore", () => { board.color = c; if (board.tool === "eraser") board.tool = "pen"; barOfBoard(); });
-    d.style.background = c;
+  const top = row("main");
+  if (!board.book) mk(top, "ib", DI.close, "Chiudi senza salvare", () => { $("draw").classList.remove("on"); back(); });
+  else if (!android) { top.appendChild(title); }
+  const tools = group(top);
+  for (const [t, label] of [["pen", "Penna"], ["marker", "Evidenziatore"], ["eraser", "Gomma"]]) {
+    const b = mk(tools, "ib" + (board.tool === t ? " on" : ""), DI[t], label, () => { board.tool = t; barOfBoard(); });
+    if (t !== "eraser") {
+      const tip = document.createElement("span");
+      tip.className = "tip";
+      tip.style.background = board.color;
+      b.appendChild(tip);
+    }
   }
-  for (const [label, w] of WIDTHS) mk("txt" + (w === board.width ? " on" : ""), label, label, () => { board.width = w; barOfBoard(); });
-  mk("txt", "↶", "Annulla", () => { if (!board.undo.length) return; board.redo.push(board.strokes); board.strokes = board.undo.pop(); paint(); });
-  mk("txt", "↷", "Ripeti", () => { if (!board.redo.length) return; board.undo.push(board.strokes); board.strokes = board.redo.pop(); paint(); });
-  mk("txt", "Tutto", "Mostra tutto il disegno", whole);
-  const gap = document.createElement("div");
-  gap.className = "gap";
-  bar.appendChild(gap);
-  mk("txt", "Chiudi", "Chiudi senza salvare", () => { $("draw").classList.remove("on"); back(); });
-  mk("pill", board.editing ? "Salva" : "Inserisci", "Salva il disegno", finishDraw);
+  const hist = group(top);
+  mk(hist, "ib", DI.undo, "Annulla", undo).disabled = !board.undo.length;
+  mk(hist, "ib", DI.redo, "Ripeti", redo).disabled = !board.redo.length;
+  const view = group(top);
+  mk(view, "ib", DI.fit, board.book ? "Adatta alla larghezza" : "Mostra tutto il disegno", whole);
+  if (board.book) {
+    mk(view, "ib", DI.page, "Aggiungi una pagina", addPage);
+    mk(view, "ib", DI.more, "Carta e pagine", bookMenu);
+  }
+  if (!board.book) {
+    const gap = document.createElement("div");
+    gap.className = "gap";
+    top.appendChild(gap);
+    mk(top, "pill", board.editing ? "Salva" : "Inserisci", "Salva il disegno", finishDraw);
+  }
+
+  // The second row: what the tool in hand can be set to
+  const opts = row("opts");
+  if (board.tool === "eraser") {
+    const seg = group(opts);
+    seg.classList.add("seg");
+    mk(seg, "ib wide" + (board.eraser === "stroke" ? " on" : ""), DI.stroke + "<span>Tratto intero</span>", "Gomma che toglie i tratti interi", () => { board.eraser = "stroke"; keepPen(); barOfBoard(); });
+    mk(seg, "ib wide" + (board.eraser === "area" ? " on" : ""), DI.area + "<span>Gomma normale</span>", "Gomma che cancella solo dove passa", () => { board.eraser = "area"; keepPen(); barOfBoard(); });
+    if (board.eraser === "area") {
+      const sizes = group(opts);
+      for (const z of ESIZES) {
+        const b = mk(sizes, "wd" + (z === board.esize ? " on" : ""), "<i class=\"ring\"></i>", "Grandezza " + z, () => { board.esize = z; keepPen(); barOfBoard(); });
+        const d = Math.round(6 + z * 0.55);
+        b.firstChild.style.width = b.firstChild.style.height = d + "px";
+      }
+    }
+    return;
+  }
+  const colors = group(opts);
+  const swatch = (c, label) => {
+    const d = mk(colors, "sw" + (c.toLowerCase() === board.color.toLowerCase() ? " on" : ""), "", label || c, () => { board.color = c; keepPen(); barOfBoard(); });
+    d.style.background = c;
+  };
+  for (const c of COLORS) swatch(c, "Colore");
+  for (const c of board.recent) if (!COLORS.includes(c)) swatch(c, "Colore scelto");
+  const custom = !COLORS.includes(board.color) && !board.recent.includes(board.color);
+  if (custom) swatch(board.color, "Colore scelto");
+  mk(colors, "sw any", "", "Qualsiasi colore", pickColor);
+  const widths = group(opts);
+  for (const w of WIDTHS) {
+    const b = mk(widths, "wd" + (w === board.width ? " on" : ""), "<i></i>", "Spessore " + w, () => { board.width = w; keepPen(); barOfBoard(); });
+    const d = Math.max(3, Math.round(w * 1.4));
+    b.firstChild.style.width = b.firstChild.style.height = d + "px";
+  }
 }
+
+// ---------------------------------------------------------------- any colour
+
+function hexOf(h, s, l) {
+  s /= 100; l /= 100;
+  const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = (n) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1))))).toString(16).padStart(2, "0");
+  return "#" + f(0) + f(8) + f(4);
+}
+function hslOf(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex || "");
+  if (!m) return [0, 0, 7];
+  const n = parseInt(m[1], 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  let h = 0, s = 0;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  return [Math.round(h), Math.round(s * 100), Math.round(l * 100)];
+}
+
+function pickColor() {
+  const box = $("box");
+  box.innerHTML = "";
+  box.classList.add("picker");
+  let [h, s, l] = hslOf(board.color);
+  const head = document.createElement("h2");
+  head.textContent = "Colore";
+  const show = document.createElement("div");
+  show.className = "preview";
+  const hex = document.createElement("input");
+  hex.autocomplete = "off";
+  hex.spellcheck = false;
+  const grid = document.createElement("div");
+  grid.className = "palette";
+  const sliders = {};
+  const update = (fromHex) => {
+    const c = hexOf(h, s, l);
+    show.style.background = c;
+    if (!fromHex) hex.value = c;
+    sliders.h.style.setProperty("--track", "linear-gradient(90deg," + [0, 60, 120, 180, 240, 300, 360].map((x) => hexOf(x, s, l)).join(",") + ")");
+    sliders.s.style.setProperty("--track", "linear-gradient(90deg," + hexOf(h, 0, l) + "," + hexOf(h, 100, l) + ")");
+    sliders.l.style.setProperty("--track", "linear-gradient(90deg,#000," + hexOf(h, s, 50) + ",#fff)");
+    for (const k of ["h", "s", "l"]) sliders[k].value = { h, s, l }[k];
+  };
+  const line = (key, max, label) => {
+    const r = document.createElement("input");
+    r.type = "range";
+    r.min = 0;
+    r.max = max;
+    r.className = "slide";
+    r.setAttribute("aria-label", label);
+    r.oninput = () => { if (key === "h") h = +r.value; else if (key === "s") s = +r.value; else l = +r.value; update(); };
+    sliders[key] = r;
+    return r;
+  };
+  const PRESETS = ["#000000", "#424242", "#757575", "#bdbdbd", "#ffffff", "#795548",
+    "#b71c1c", "#e53935", "#ff7043", "#ff9800", "#fdd835", "#c0ca33",
+    "#43a047", "#00897b", "#00acc1", "#1e88e5", "#3949ab", "#5e35b1",
+    "#8e24aa", "#d81b60", "#f06292", "#ffab91", "#a5d6a7", "#90caf9"];
+  for (const c of PRESETS) {
+    const b = document.createElement("button");
+    b.className = "sw";
+    b.style.background = c;
+    b.title = c;
+    b.onclick = () => { [h, s, l] = hslOf(c); update(); };
+    grid.appendChild(b);
+  }
+  hex.oninput = () => { const v = hex.value.trim(); if (/^#?[0-9a-f]{6}$/i.test(v)) { [h, s, l] = hslOf(v.startsWith("#") ? v : "#" + v); update(true); } };
+  const acts = document.createElement("div");
+  acts.className = "acts";
+  const no = document.createElement("button");
+  no.className = "pill ghost";
+  no.textContent = "Annulla";
+  const yes = document.createElement("button");
+  yes.className = "pill";
+  yes.textContent = "Usa";
+  acts.append(no, yes);
+  const close = () => { $("veil").classList.remove("on"); box.classList.remove("picker"); };
+  no.onclick = close;
+  yes.onclick = () => {
+    const c = hexOf(h, s, l);
+    board.color = c;
+    if (!COLORS.includes(c)) board.recent = [c].concat(board.recent.filter((x) => x !== c)).slice(0, 4);
+    if (board.tool === "eraser") board.tool = "pen";
+    keepPen();
+    close();
+    barOfBoard();
+  };
+  const top = document.createElement("div");
+  top.className = "pickTop";
+  top.append(show, hex);
+  box.append(head, grid, top, line("h", 359, "Tinta"), line("s", 100, "Saturazione"), line("l", 100, "Luminosità"), acts);
+  update();
+  $("veil").classList.add("on");
+}
+
+// ---------------------------------------------------------------- the board
 
 /** Before a change, so that it can be undone. */
 function remember() {
@@ -612,6 +870,8 @@ function remember() {
   if (board.undo.length > 100) board.undo.shift();
   board.redo = [];
 }
+function undo() { if (!board.undo.length) return; board.redo.push(board.strokes); board.strokes = board.undo.pop(); paint(); barOfBoard(); bookChanged(); }
+function redo() { if (!board.redo.length) return; board.undo.push(board.strokes); board.strokes = board.redo.pop(); paint(); barOfBoard(); bookChanged(); }
 
 /**
  * The board's own pixels follow its size on the screen. It changes after it opens (the keyboard
@@ -645,9 +905,18 @@ function bounds(strokes) {
   return a === Infinity ? null : { x: a, y: b, w: c - a, h: d - b };
 }
 
-/** The whole drawing in view, with a margin. */
+/** The whole drawing in view, with a margin; in a notebook, the page as wide as the screen. */
 function whole() {
-  const box = bounds(board.strokes), r = canvas.getBoundingClientRect();
+  const r = canvas.getBoundingClientRect();
+  if (board.book) {
+    const s = Math.min(1.25, Math.max(0.2, (r.width - 24) / PW));
+    // The page in the middle of the screen stays the one in view
+    const mid = (r.height / 2 - board.view.y) / board.view.s;
+    board.view = { s, x: (r.width - PW * s) / 2, y: board.view.s === 0 ? 12 : r.height / 2 - mid * s };
+    paint();
+    return;
+  }
+  const box = bounds(board.strokes);
   if (!box || !r.width) { board.view = { s: 1, x: 0, y: 0 }; paint(); return; }
   const s = Math.min(4, Math.max(0.02, Math.min((r.width - 40) / Math.max(box.w, 1), (r.height - 40) / Math.max(box.h, 1))));
   board.view = { s, x: r.width / 2 - (box.x + box.w / 2) * s, y: r.height / 2 - (box.y + box.h / 2) * s };
@@ -670,15 +939,65 @@ function line(g, s, from) {
   g.globalAlpha = 1;
 }
 
+const pageTop = (i) => i * (PH + PGAP);
+
+/** The lines of a sheet of [paper], in the page's own units, as [x1, y1, x2, y2] or dots as [x, y]. */
+function paperOf(paper) {
+  const out = { lines: [], dots: [], margin: null };
+  if (paper === "grid") {
+    for (let x = 19; x < PW; x += 19) out.lines.push([x, 0, x, PH]);
+    for (let y = 19; y < PH; y += 19) out.lines.push([0, y, PW, y]);
+  } else if (paper === "lines") {
+    for (let y = 120; y < PH - 30; y += 30) out.lines.push([0, y, PW, y]);
+    out.margin = [90, 0, 90, PH];
+  } else if (paper === "dots") {
+    for (let x = 19; x < PW; x += 19) for (let y = 19; y < PH; y += 19) out.dots.push([x, y]);
+  }
+  return out;
+}
+
 function paint() {
   const g = canvas.getContext("2d"), dpr = dprOf(), v = board.view;
+  const r = canvas.getBoundingClientRect();
   g.setTransform(1, 0, 0, 1, 0, 0);
+  if (board.book) {
+    g.fillStyle = "#1c2023";
+    g.fillRect(0, 0, canvas.width, canvas.height);
+    g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
+    const paper = paperOf(board.book.paper), px = 1 / v.s;
+    const first = Math.max(0, Math.floor((-v.y / v.s) / (PH + PGAP))), last = Math.min(board.book.pages - 1, Math.floor(((r.height - v.y) / v.s) / (PH + PGAP)));
+    for (let i = first; i <= last; i++) {
+      const t = pageTop(i);
+      g.fillStyle = "#fff";
+      g.shadowColor = "rgba(0,0,0,.45)";
+      g.shadowBlur = 10 * dpr;
+      g.fillRect(0, t, PW, PH);
+      g.shadowBlur = 0;
+      g.shadowColor = "transparent";
+      g.lineWidth = Math.max(px, 0.6);
+      g.strokeStyle = board.book.paper === "lines" ? "#b9cde4" : "#d5dee8";
+      g.beginPath();
+      for (const [a, b, c, d] of paper.lines) { g.moveTo(a, t + b); g.lineTo(c, t + d); }
+      g.stroke();
+      if (paper.margin) { g.strokeStyle = "#f2a7a7"; g.beginPath(); g.moveTo(paper.margin[0], t); g.lineTo(paper.margin[2], t + PH); g.stroke(); }
+      g.fillStyle = "#b8c2cc";
+      const dot = Math.max(1.6, 1.6 * px);
+      for (const [a, b] of paper.dots) g.fillRect(a - dot / 2, t + b - dot / 2, dot, dot);
+    }
+    // Ink only on the pages
+    g.save();
+    g.beginPath();
+    for (let i = 0; i < board.book.pages; i++) g.rect(0, pageTop(i), PW, PH);
+    g.clip();
+    for (const s of board.strokes) line(g, s, 0);
+    g.restore();
+    return;
+  }
   g.fillStyle = "#fff";
   g.fillRect(0, 0, canvas.width, canvas.height);
   // A grid of dots, a sheet without edges: drawn only while its dots are far enough apart
   let step = 40;
   while (step * v.s < 18) step *= 4;
-  const r = canvas.getBoundingClientRect();
   g.fillStyle = "#d4d8dc";
   const x0 = Math.floor(-v.x / v.s / step) * step, y0 = Math.floor(-v.y / v.s / step) * step;
   for (let x = x0; x * v.s + v.x < r.width; x += step)
@@ -693,76 +1012,149 @@ function boardContext() {
   return g;
 }
 
-/** The strokes the rubber touches at [p] go, whole. */
+/** The ring of the rubber, where it is. */
+function ring(e) {
+  const g = canvas.getContext("2d"), dpr = dprOf(), [x, y] = local(e);
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.lineWidth = 1.5;
+  g.strokeStyle = "rgba(0,0,0,.55)";
+  g.fillStyle = "rgba(255,255,255,.35)";
+  g.beginPath();
+  g.arc(x, y, board.esize, 0, Math.PI * 2);
+  g.fill();
+  g.stroke();
+}
+
+/** How close [p] comes to the line of stroke [s]. */
+function distance(s, p) {
+  const q = s.points;
+  let best = Infinity;
+  for (let i = 0; i < q.length; i++) {
+    const a = q[i], b = q[i + 1] || a;
+    const dx = b[0] - a[0], dy = b[1] - a[1], len = dx * dx + dy * dy;
+    const t = len ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len)) : 0;
+    best = Math.min(best, Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]));
+  }
+  return best;
+}
+
+/**
+ * The rubber at [p]. Whole strokes: every stroke it touches goes. Normal: only the ink under it
+ * goes, and what is left of a stroke on either side stays as strokes of their own.
+ */
 function erase(p) {
-  const r = 10 / board.view.s;
-  const near = (s) => {
-    const q = s.points, lim = r + s.width / 2;
+  const whole = board.eraser === "stroke";
+  const r = (whole ? 10 : board.esize) / board.view.s;
+  let touched = false;
+  const out = [];
+  for (const s of board.strokes) {
+    const lim = r + s.width / 2;
+    if (distance(s, p) > lim) { out.push(s); continue; }
+    touched = true;
+    if (whole) continue;
+    // The line in small steps, so that the rubber can't pass between two of its points
+    const q = s.points, step = Math.max(Math.min(r, s.width) / 2, 0.4), fine = [];
     for (let i = 0; i < q.length; i++) {
-      const a = q[i], b = q[i + 1] || a;
-      const dx = b[0] - a[0], dy = b[1] - a[1], len = dx * dx + dy * dy;
-      const t = len ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len)) : 0;
-      if (Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]) <= lim) return true;
+      const a = q[i], b = q[i + 1];
+      fine.push(a);
+      if (!b) continue;
+      const n = Math.floor(Math.hypot(b[0] - a[0], b[1] - a[1]) / step);
+      for (let k = 1; k < n; k++) fine.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
     }
-    return false;
-  };
-  const kept = board.strokes.filter((s) => !near(s));
-  if (kept.length === board.strokes.length) return;
+    let run = [];
+    const end = () => { if (run.length) out.push({ tool: s.tool, color: s.color, width: s.width, points: run }); run = []; };
+    for (const pt of fine) { if (Math.hypot(pt[0] - p[0], pt[1] - p[1]) <= lim) end(); else run.push(pt); }
+    end();
+  }
+  if (!touched) return;
   if (!board.erased) { remember(); board.erased = true; }
-  board.strokes = kept;
+  board.strokes = out;
   paint();
 }
 
 function zoomAt(cx, cy, factor) {
-  const v = board.view, s = Math.min(80, Math.max(0.002, v.s * factor)), k = s / v.s;
+  const v = board.view, s = Math.min(80, Math.max(board.book ? 0.15 : 0.002, v.s * factor)), k = s / v.s;
   board.view = { s, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
   paint();
 }
 
 const local = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
 
-canvas.addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
-  board.pointers.set(e.pointerId, local(e));
-  // The mouse's middle or right button, or the space bar held: the board moves
-  if (e.pointerType === "mouse" && (e.button === 1 || e.button === 2 || board.space)) {
-    board.pan = { at: local(e), view: { ...board.view } };
-    return;
-  }
-  if (board.pointers.size === 2) {
-    // A second finger: what the first one began was the start of a move, not a line
-    if (board.now) { board.strokes.pop(); board.undo.pop(); board.now = null; paint(); }
-    const [a, b] = Array.from(board.pointers.values());
-    board.pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], view: { ...board.view } };
-    return;
-  }
-  if (board.pointers.size > 2 || board.pinch) return;
+/** The back of a pen, turned over to rub out. */
+const flipped = (e) => e.pointerType === "pen" && ((e.buttons & 32) === 32 || e.button === 5);
+
+function begin(e) {
+  board.drawId = e.pointerId;
   const p = toBoard(e);
-  if (board.tool === "eraser") { board.erased = false; erase(p); board.now = { erasing: true }; return; }
+  if (board.tool === "eraser" || flipped(e)) {
+    board.erased = false;
+    board.now = { erasing: true };
+    erase(p);
+    if (board.eraser === "area") ring(e);
+    return;
+  }
   remember();
   const marker = board.tool === "marker";
   board.now = { tool: board.tool, color: board.color, width: marker ? board.width * 4 : board.width, points: [p] };
   board.strokes.push(board.now);
   line(boardContext(), board.now, 0);
+}
+
+canvas.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  // A title being written is done with: written now, before the bar is drawn again under it
+  if (document.activeElement === title) title.blur();
+  try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
+  if (e.pointerType === "pen") {
+    board.penSeen = true;
+    if (board.drawId != null) return;
+    board.pan = null;
+    board.pinch = null;
+    begin(e);
+    return;
+  }
+  if (e.pointerType === "mouse") {
+    // The middle or right button, or the space bar held: the board moves
+    if (e.button === 1 || e.button === 2 || board.space) { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view } }; return; }
+    if (board.drawId == null) begin(e);
+    return;
+  }
+  // A finger. With a pen about, a palm resting while it writes is nothing
+  if (board.penSeen && board.drawId != null && !board.touches.size) return;
+  board.touches.set(e.pointerId, local(e));
+  if (board.touches.size === 2) {
+    // A second finger: what the first one began was the start of a move, not a line
+    if (board.now && board.drawId !== null && !board.now.erasing) { board.strokes.pop(); board.undo.pop(); paint(); }
+    board.now = null;
+    board.drawId = null;
+    board.pan = null;
+    const [a, b] = Array.from(board.touches.values());
+    board.pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], view: { ...board.view } };
+    return;
+  }
+  if (board.touches.size > 2 || board.pinch) return;
+  // Once a pen has written, one finger moves the pages; before, it draws
+  if (board.penSeen) { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view } }; return; }
+  begin(e);
 });
 
 canvas.addEventListener("pointermove", (e) => {
-  if (!board.pointers.has(e.pointerId)) return;
-  e.preventDefault();
-  board.pointers.set(e.pointerId, local(e));
-  if (board.pan) {
+  if (board.pan && board.pan.id === e.pointerId) {
+    e.preventDefault();
     const [x, y] = local(e), o = board.pan;
     board.view = { s: o.view.s, x: o.view.x + x - o.at[0], y: o.view.y + y - o.at[1] };
     paint();
     return;
   }
+  if (board.touches.has(e.pointerId)) board.touches.set(e.pointerId, local(e));
   if (board.pinch) {
-    const pts = Array.from(board.pointers.values());
+    if (!board.touches.has(e.pointerId)) return;
+    e.preventDefault();
+    const pts = Array.from(board.touches.values());
     if (pts.length < 2) return;
     const [a, b] = pts, o = board.pinch;
     const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    const s = Math.min(80, Math.max(0.002, o.view.s * d / o.d));
+    const s = Math.min(80, Math.max(board.book ? 0.15 : 0.002, o.view.s * d / o.d));
     // The point between the fingers stays under them while they move apart, together or around
     const wx = (o.m[0] - o.view.x) / o.view.s, wy = (o.m[1] - o.view.y) / o.view.s;
     board.view = { s, x: m[0] - wx * s, y: m[1] - wy * s };
@@ -770,10 +1162,15 @@ canvas.addEventListener("pointermove", (e) => {
     return;
   }
   const s = board.now;
-  if (!s) return;
+  if (!s || board.drawId !== e.pointerId) return;
+  e.preventDefault();
   const moves = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-  if (s.erasing) { for (const m of (moves.length ? moves : [e])) erase(toBoard(m)); return; }
-  // Every point the finger went through, not only the ones a busy screen had time to tell: a smooth line
+  if (s.erasing) {
+    for (const m of (moves.length ? moves : [e])) erase(toBoard(m));
+    if (board.eraser === "area") { paint(); ring(e); }
+    return;
+  }
+  // Every point the pen went through, not only the ones a busy screen had time to tell: a smooth line
   const from = s.points.length - 1;
   for (const m of (moves.length ? moves : [e])) s.points.push(toBoard(m));
   // A highlighter is drawn again whole, or its see-through ink would darken where its pieces meet
@@ -781,20 +1178,32 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 function lift(e) {
-  board.pointers.delete(e.pointerId);
-  if (board.pan && e.pointerType === "mouse") board.pan = null;
-  if (board.pointers.size < 2) board.pinch = null;
-  if (!board.pointers.size) board.now = null;
+  board.touches.delete(e.pointerId);
+  if (board.pan && board.pan.id === e.pointerId) board.pan = null;
+  if (board.touches.size < 2) board.pinch = null;
+  if (board.drawId === e.pointerId) {
+    const was = board.now;
+    board.drawId = null;
+    board.now = null;
+    if (was && (!was.erasing || board.erased)) { paint(); barOfBoard(); bookChanged(); }
+    else if (was) paint();
+  }
 }
 for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, lift);
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
   const [x, y] = local(e);
-  // A wheel zooms around the pointer; a touchpad's sideways roll moves the board
+  // In a notebook the wheel turns the pages, and with Ctrl zooms; on the board it zooms around the pointer
+  if (board.book && !e.ctrlKey) { board.view.y -= e.deltaY; board.view.x -= e.deltaX; paint(); return; }
   if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(x, y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
   else { board.view.x -= e.deltaX; paint(); }
 }, { passive: false });
-document.addEventListener("keydown", (e) => { if (e.code === "Space" && $("draw").classList.contains("on")) { board.space = true; e.preventDefault(); } });
+document.addEventListener("keydown", (e) => {
+  if (!$("draw").classList.contains("on") || document.activeElement === title || $("veil").classList.contains("on")) return;
+  if (e.code === "Space") { board.space = true; e.preventDefault(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
+});
 document.addEventListener("keyup", (e) => { if (e.code === "Space") board.space = false; });
 // The page itself must not move, nor a long press select, while a finger draws
 for (const ev of ["touchstart", "touchmove"]) canvas.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
@@ -803,27 +1212,31 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 // ---------------------------------------------------------------- a drawing as a file
 
 const r1 = (n) => Math.round(n * 10) / 10;
+const inkOf = (strokes, dy) => strokes.map((s) => ({ t: s.tool, c: s.color, w: s.width, p: s.points.map(([a, b]) => [r1(a), r1(b - (dy || 0))]) }));
+const strokesFrom = (data, dy) => data.map((s) => ({ tool: s.t || "pen", color: s.c, width: s.w, points: s.p.map(([a, b]) => [a, b + (dy || 0)]) }));
+
+function pathsOf(strokes, dy) {
+  return strokes.map((s) => {
+    const d = s.points.map(([a, b], i) => (i ? "L" : "M") + r1(a) + " " + r1(b - (dy || 0))).join("") + (s.points.length === 1 ? "l0.01 0" : "");
+    const marker = s.tool === "marker";
+    return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="' + s.width + '" stroke-linecap="' + (marker ? "butt" : "round") + '" stroke-linejoin="round"' + (marker ? ' stroke-opacity="0.35"' : "") + "/>";
+  }).join("\n");
+}
 
 function svgOf(strokes) {
   const box = bounds(strokes), m = 16;
   const x = Math.floor(box.x - m), y = Math.floor(box.y - m), w = Math.ceil(box.w + 2 * m), h = Math.ceil(box.h + 2 * m);
-  const data = strokes.map((s) => ({ t: s.tool, c: s.color, w: s.width, p: s.points.map(([a, b]) => [r1(a), r1(b)]) }));
   // The strokes as drawn, for the next time it is opened: written so that no character can close the tag
-  const json = JSON.stringify(data).replace(/&/g, "\\u0026").replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
-  const paths = strokes.map((s) => {
-    const d = s.points.map(([a, b], i) => (i ? "L" : "M") + r1(a) + " " + r1(b)).join("") + (s.points.length === 1 ? "l0.01 0" : "");
-    const marker = s.tool === "marker";
-    return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="' + s.width + '" stroke-linecap="' + (marker ? "butt" : "round") + '" stroke-linejoin="round"' + (marker ? ' stroke-opacity="0.35"' : "") + "/>";
-  }).join("\n");
+  const json = JSON.stringify(inkOf(strokes)).replace(/&/g, "\\u0026").replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
   return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="' + x + " " + y + " " + w + " " + h + '">\n'
     + '<desc id="minima-strokes">' + json + "</desc>\n"
-    + '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#ffffff"/>\n' + paths + "\n</svg>\n";
+    + '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#ffffff"/>\n' + pathsOf(strokes) + "\n</svg>\n";
 }
 
 function strokesOf(svg) {
   const m = /<desc id="minima-strokes">([\s\S]*?)<\/desc>/.exec(svg || "");
   if (!m) return null;
-  try { return JSON.parse(m[1]).map((s) => ({ tool: s.t || "pen", color: s.c, width: s.w, points: s.p })); } catch (e) { return null; }
+  try { return strokesFrom(JSON.parse(m[1])); } catch (e) { return null; }
 }
 
 async function finishDraw() {
@@ -839,7 +1252,7 @@ async function finishDraw() {
   if (!path) return;
   if (editing) {
     // A new file each time: the old picture can't come back from a cache
-    editing.img.setAttribute("src", encodeURI(path));
+    setSrc(editing.img, path);
     host.remove(editing.path);
     changed();
   } else inserted("draw", path, "disegno.svg");
@@ -847,17 +1260,123 @@ async function finishDraw() {
 
 /** A tap on a drawing: opened again on the board, when it was made here. */
 async function editDrawing(img) {
-  const src = decodeURIComponent(img.getAttribute("src") || "");
+  const src = decodeURIComponent(srcOf(img));
   const strokes = strokesOf(await host.readText(src));
-  if (!strokes) { host.open(img.getAttribute("src")); return; }
+  if (!strokes) { host.open(srcOf(img)); return; }
   keep();
   openDraw(strokes, { img, path: src });
 }
 
+// ---------------------------------------------------------------- a notebook: pages to write on by hand
+
+let bookTimer = 0, bookDirty = false;
+
+const isBook = (html) => /<div[^>]*class="notebook"/.test(html);
+
+function openBook(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  const nb = t.content.querySelector(".notebook");
+  const pages = Array.from(nb.querySelectorAll("svg.page"));
+  let strokes = [];
+  pages.forEach((p, i) => {
+    try { strokes = strokes.concat(strokesFrom(JSON.parse(p.getAttribute("data-ink") || "[]"), pageTop(i))); } catch (e) { /* a page without ink */ }
+  });
+  board.book = { paper: nb.getAttribute("data-paper") || "grid", pages: Math.max(1, pages.length) };
+  board.editing = null;
+  if (board.tool === "eraser") board.tool = "pen";
+  startBoard(strokes);
+  bookDirty = false;
+  $("draw").classList.add("on", "book");
+  board.view = { s: 0, x: 0, y: 0 };
+  fit();
+  whole();
+}
+
+/** Leaves the notebook, for a note of words. */
+function closeBook() {
+  if (!board.book) return;
+  board.book = null;
+  $("draw").classList.remove("on", "book");
+  $("page").prepend(title);
+}
+
+function bookChanged() {
+  if (!board.book) return;
+  bookDirty = true;
+  dirty = true;
+  clearTimeout(timer);
+  timer = setTimeout(flush, 800);
+}
+
+/** The notebook as the note keeps it: each page an SVG with its paper, its ink and its strokes. */
+function bookHtml() {
+  const b = board.book, per = [];
+  for (let i = 0; i < b.pages; i++) per.push([]);
+  // A stroke belongs to the page where it begins
+  for (const s of board.strokes) {
+    const i = Math.max(0, Math.min(b.pages - 1, Math.floor(s.points[0][1] / (PH + PGAP))));
+    per[i].push(s);
+  }
+  const paper = paperOf(b.paper);
+  const back = paper.lines.map(([a, c, d, e]) => "M" + a + " " + c + "L" + d + " " + e).join("");
+  const sheet = (back ? '<path d="' + back + '" stroke="' + (b.paper === "lines" ? "#b9cde4" : "#d5dee8") + '" stroke-width="0.8" fill="none"/>' : "")
+    + (paper.margin ? '<path d="M' + paper.margin[0] + " 0V" + PH + '" stroke="#f2a7a7" stroke-width="0.8"/>' : "")
+    + (paper.dots.length ? '<path d="' + paper.dots.map(([x, y]) => "M" + x + " " + y + "h0.01").join("") + '" stroke="#b8c2cc" stroke-width="1.8" stroke-linecap="round"/>' : "");
+  const out = per.map((list, i) => '<svg class="page" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + PW + " " + PH + '" width="' + PW + '" height="' + PH + '"'
+    + ' data-ink="' + esc(JSON.stringify(inkOf(list, pageTop(i)))) + '">'
+    + '<rect width="' + PW + '" height="' + PH + '" fill="#fff"/>' + sheet + "\n" + pathsOf(list, pageTop(i)) + "</svg>");
+  return '<div class="notebook" data-paper="' + b.paper + '">\n' + out.join("\n") + "\n</div>";
+}
+
+/** The page in the middle of the screen. */
+function pageInView() {
+  const r = canvas.getBoundingClientRect();
+  return Math.max(0, Math.min(board.book.pages - 1, Math.floor(((r.height / 2 - board.view.y) / board.view.s) / (PH + PGAP))));
+}
+
+function goToPage(i) {
+  board.view.y = 12 - pageTop(i) * board.view.s;
+  paint();
+}
+
+function addPage() {
+  board.book.pages++;
+  goToPage(board.book.pages - 1);
+  bookChanged();
+}
+
+function bookMenu() {
+  const b = board.book, here = pageInView();
+  const items = PAPERS.map(([k, label]) => [(k === b.paper ? "✓ " : "    ") + "Carta: " + label, () => { b.paper = k; paint(); bookChanged(); }]);
+  items.push(["Aggiungi una pagina in fondo", addPage]);
+  items.push(["Aggiungi una pagina dopo questa (" + (here + 1) + ")", () => {
+    // What comes after moves one page down
+    const t = pageTop(here + 1), d = PH + PGAP;
+    remember();
+    board.strokes = board.strokes.map((s) => (s.points[0][1] >= t ? { ...s, points: s.points.map(([x, y]) => [x, y + d]) } : s));
+    b.pages++;
+    goToPage(here + 1);
+    barOfBoard();
+    bookChanged();
+  }]);
+  if (b.pages > 1) items.push(["Elimina la pagina " + (here + 1), () => {
+    const t = pageTop(here), d = PH + PGAP;
+    remember();
+    board.strokes = board.strokes.filter((s) => { const y = s.points[0][1]; return y < t || y >= t + d; })
+      .map((s) => (s.points[0][1] >= t + d ? { ...s, points: s.points.map(([x, y]) => [x, y - d]) } : s));
+    b.pages--;
+    goToPage(Math.min(here, b.pages - 1));
+    barOfBoard();
+    bookChanged();
+  }, true]);
+  choose("Quaderno · pagina " + (here + 1) + " di " + b.pages, items);
+}
+
 /** Back, on the phone: a window open over the note closes first. True when there was one. */
 function goBack() {
-  if ($("draw").classList.contains("on")) { $("draw").classList.remove("on"); return true; }
-  if ($("veil").classList.contains("on")) { $("veil").classList.remove("on"); return true; }
+  if ($("veil").classList.contains("on")) { $("veil").classList.remove("on"); $("box").classList.remove("picker"); return true; }
+  if ($("draw").classList.contains("on") && !board.book) { $("draw").classList.remove("on"); return true; }
   return false;
 }
 
@@ -877,7 +1396,7 @@ const androidHost = {
 
 // ---------------------------------------------------------------- on a computer: the folder itself
 
-const pc = { root: null, tree: null, pins: [], open: null, shut: new Set(JSON.parse(localStorage.getItem("shut") || "[]")) };
+const pc = { root: null, tree: null, pins: [], open: null, blobs: new Map(), shut: new Set(JSON.parse(localStorage.getItem("shut") || "[]")) };
 
 const idb = (mode, run) => new Promise((ok, no) => {
   const r = indexedDB.open("note", 1);
@@ -1064,13 +1583,16 @@ async function openNote(n) {
   draw();
 }
 
-async function newNote(path) {
-  const dir = await dirOf(path), file = await freeName(dir, "Nuova nota.html");
-  await writeFile(dir, file, pageOf(file.replace(/\.html$/, ""), ""));
+async function newNote(path, book) {
+  const dir = await dirOf(path), file = await freeName(dir, book ? "Quaderno.html" : "Nuova nota.html");
+  await writeFile(dir, file, pageOf(file.replace(/\.html$/, ""), book ? '<div class="notebook" data-paper="grid"></div>' : ""));
   await reload();
   await openNote({ name: file.replace(/\.html$/, ""), file, path, time: Date.now() });
   title.focus();
   title.select();
+}
+function newWhat(path) {
+  choose("Nuova", [["Nota di testo", () => newNote(path)], ["Quaderno da scrivere a mano", () => newNote(path, true)]]);
 }
 function newFolder(path) {
   ask("Nuova cartella", [{ key: "name", hint: "Nome" }], "Crea", async (v) => {
@@ -1102,6 +1624,7 @@ function noteMenu(n) {
 function folderMenu(f) {
   choose(f.name, [
     ["Nuova nota qui", () => newNote(f.path)],
+    ["Nuovo quaderno qui", () => newNote(f.path, true)],
     ["Nuova sottocartella", () => newFolder(f.path)],
     ["Elimina (solo se vuota)", async () => {
       try { await (await dirOf(f.path.slice(0, -1))).removeEntry(f.name); await reload(); }
@@ -1143,7 +1666,23 @@ const pcHost = {
     await writeFile(dir, file, await (await fetch(data)).blob());
     return FILES + "/" + file;
   },
-  open: (href) => window.open(new URL(href, document.baseURI).href, "_blank", "noopener"),
+  /** A file beside the open note, from the folder itself. */
+  file: async (href) => {
+    let path = href;
+    try { path = decodeURIComponent(href); } catch (e) { /* written plain */ }
+    const parts = path.split("/").filter((x) => x && x !== ".");
+    const dir = await dirOf(pc.open.path.concat(parts.slice(0, -1)));
+    return (await dir.getFileHandle(parts[parts.length - 1])).getFile();
+  },
+  blob: async (href) => {
+    const key = (pc.open ? keyOf(pc.open) : "") + "|" + href;
+    if (pc.blobs.has(key)) return pc.blobs.get(key);
+    try { const url = URL.createObjectURL(await pcHost.file(href)); pc.blobs.set(key, url); return url; } catch (e) { return null; }
+  },
+  open: async (href) => {
+    if (!/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) { const url = await pcHost.blob(href); if (url) { window.open(url, "_blank", "noopener"); return; } }
+    window.open(new URL(href, document.baseURI).href, "_blank", "noopener");
+  },
   readText: async (path) => {
     try {
       const parts = path.split("/").filter((x) => x && x !== ".");
@@ -1166,9 +1705,7 @@ const pcHost = {
   // On a computer: a copy where the browser keeps what is downloaded
   share: async (href, name) => {
     try {
-      const parts = decodeURIComponent(href).split("/").filter((x) => x && x !== ".");
-      const dir = await dirOf(pc.open.path.concat(parts.slice(0, -1)));
-      const file = await (await dir.getFileHandle(parts[parts.length - 1])).getFile();
+      const file = await pcHost.file(href);
       const url = URL.createObjectURL(file);
       const a = document.createElement("a");
       a.href = url;
@@ -1195,13 +1732,23 @@ async function pcStart() {
     return;
   }
   const use = async (handle) => {
+    if (pc.root && pc.root !== handle) {
+      // Another folder: what was open belongs to the old one
+      flush();
+      closeBook();
+      pc.open = null; shownName = null; dirty = false;
+      app.classList.add("none"); app.classList.remove("reading");
+    }
     pc.root = handle;
+    pc.blobs.clear();
+    $("whereName").textContent = "Cartella: " + handle.name;
     // Remembered for the next time; a browser that won't keep it just asks again
     try { await idb("readwrite", (s) => s.put(handle, "root")); } catch (e) { /* asked again next time */ }
     say("Scegli una nota a sinistra, o creane una.");
     await reload();
   };
-  const pick = async () => { try { await use(await showDirectoryPicker({ mode: "readwrite" })); } catch (e) { /* closed without choosing */ } };
+  const pick = async () => { try { await use(await showDirectoryPicker({ mode: "readwrite", id: "note" })); } catch (e) { /* closed without choosing */ } };
+  $("changeDir").onclick = async () => { await pick(); if (pc.root && pc.release) pc.release(); };
   let saved = null;
   try { saved = await idb("readonly", (s) => s.get("root")); } catch (e) { /* first time */ }
   // Still allowed (the browser was told to allow it at every visit): straight in, nothing asked
@@ -1214,18 +1761,25 @@ async function pcStart() {
     let cache = null;
     try { cache = JSON.parse(localStorage.getItem("tree") || "null"); } catch (e) { cache = null; }
     if (cache && cache.root === saved.name) { pc.tree = cache.tree; pc.pins = cache.pins || []; draw(); }
+    $("whereName").textContent = "Cartella: " + saved.name;
     say("Scegli una nota a sinistra. Se il browser chiede l'accesso alla cartella, scegli \"Consenti a ogni visita\": poi non lo chiede più.");
     let open = null;
     pc.gate = new Promise((ok) => { open = ok; });
     const unlock = async (e) => {
-      if (e && e.target && e.target.closest && e.target.closest("#veil, #box")) return;
-      document.removeEventListener("pointerdown", unlock, true);
-      document.removeEventListener("keydown", unlock, true);
+      if (e && e.target && e.target.closest && e.target.closest("#veil, #box, #changeDir")) return;
+      pc.release();
       let granted = false;
       try { granted = await saved.requestPermission({ mode: "readwrite" }) === "granted"; } catch (x) { granted = false; }
       if (granted) await use(saved); else await pick();
       pc.gate = null;
       open();
+    };
+    // Given back, or another folder chosen instead: nothing more waits for a touch
+    pc.release = () => {
+      document.removeEventListener("pointerdown", unlock, true);
+      document.removeEventListener("keydown", unlock, true);
+      if (pc.root) { pc.gate = null; open(); }
+      pc.release = null;
     };
     document.addEventListener("pointerdown", unlock, true);
     document.addEventListener("keydown", unlock, true);
@@ -1234,7 +1788,7 @@ async function pcStart() {
 }
 
 function bindButtons() {
-  $("newNote").onclick = async () => { if (pc.gate) await pc.gate; if (pc.root) newNote([]); };
+  $("newNote").onclick = async () => { if (pc.gate) await pc.gate; if (pc.root) newWhat([]); };
   $("newFolder").onclick = async () => { if (pc.gate) await pc.gate; if (pc.root) newFolder([]); };
   // Dropped on the empty part of the tree, or on its title: out of every folder
   for (const zone of [$("tree"), $("sideTop")]) {

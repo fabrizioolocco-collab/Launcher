@@ -241,6 +241,23 @@ class NotesActivity : AppCompatActivity() {
         startActivity(NoteEditorActivity.intent(this, note))
     }
 
+    /** A note to type in, or a notebook to write in by hand. */
+    private fun newWhat(dir: File) {
+        showMenuDialog(
+            getString(R.string.ml_notes_new_note),
+            listOf(
+                MenuEntry(getString(R.string.ml_notes_kind_text)) { newNote(dir) },
+                MenuEntry(getString(R.string.ml_notes_kind_notebook)) { newNotebook(dir) },
+            )
+        )
+    }
+
+    private fun newNotebook(dir: File) {
+        val note = NotesStore.newNotebook(dir, getString(R.string.ml_notes_new_notebook_title))
+        open(dir)
+        startActivity(NoteEditorActivity.intent(this, note))
+    }
+
     private fun newFolder(dir: File) {
         showTextInputDialog(getString(R.string.ml_notes_new_folder), "", getString(R.string.ml_notes_folder_name), getString(R.string.ml_notes_create)) { name ->
             val made = NotesStore.newFolder(dir, name)
@@ -342,6 +359,7 @@ class NotesActivity : AppCompatActivity() {
             dir.name,
             listOf(
                 MenuEntry(getString(R.string.ml_notes_new_note_here)) { newNote(dir) },
+                MenuEntry(getString(R.string.ml_notes_new_notebook_here)) { newNotebook(dir) },
                 MenuEntry(getString(R.string.ml_notes_new_subfolder)) { newFolder(dir) },
                 MenuEntry(getString(R.string.ml_notes_rename)) {
                     showTextInputDialog(getString(R.string.ml_notes_rename), dir.name, getString(R.string.ml_notes_folder_name), getString(R.string.ml_notes_save)) {
@@ -549,7 +567,7 @@ class NotesActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginEnd = 5.dpToPx() }
         )
         buttons.addView(
-            pillButton(this, getString(R.string.ml_notes_new_note), filled = true, color = primary) { newNote(root) },
+            pillButton(this, getString(R.string.ml_notes_new_note), filled = true, color = primary) { newWhat(root) },
             LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginStart = 5.dpToPx() }
         )
         column.addView(buttons)

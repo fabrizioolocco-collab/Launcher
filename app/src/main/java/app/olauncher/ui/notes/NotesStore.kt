@@ -115,6 +115,14 @@ object NotesStore {
         return free(dir, clean(title).ifBlank { "Nota" } + ".html").apply { writeText("") }
     }
 
+    /** A notebook to write in by hand: pages of squared paper, filled in by the editor. */
+    fun newNotebook(dir: File, title: String): File {
+        dir.mkdirs()
+        return free(dir, clean(title).ifBlank { "Quaderno" } + ".html").apply {
+            writeText("<!doctype html>\n<html><head><meta charset=\"utf-8\"></head>\n<body>\n$START\n<div class=\"notebook\" data-paper=\"grid\"></div>\n$END\n</body></html>\n")
+        }
+    }
+
     fun newFolder(dir: File, name: String): File? {
         val safe = clean(name)
         if (safe.isBlank() || hidden(safe)) return null
