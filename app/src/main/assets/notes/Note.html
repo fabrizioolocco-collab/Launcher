@@ -178,6 +178,17 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #sheet .card .sect { max-width: 150px; font-size: 12.5px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #nav .nb.marked { color: #ff6b66; }
 #nav .nb.marked svg { fill: currentColor; }
+#find { display: none; align-items: center; gap: 4px; padding: 6px 10px; background: var(--card); border: 1px solid var(--stroke); border-width: 1px 0 0; }
+#find.on { display: flex; }
+.pc #bars #find { margin: 12px 20px 0; border-width: 1px; border-radius: 14px; }
+#find input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--stroke); background: var(--bg); color: var(--fg); font: inherit; font-size: 15px; outline: none; }
+#find input:focus { border-color: #5b6770; }
+#findCount { min-width: 64px; text-align: center; color: var(--dim); font-size: 13px; white-space: nowrap; }
+#find button { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #c4ccd3; flex-shrink: 0; }
+#find button:hover { background: var(--sel); color: #fff; }
+#find svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+::highlight(find) { background: #6b5d00; color: #fff; }
+::highlight(findNow) { background: #ffd54f; color: #000; }
 #drawBar .hint { color: var(--dim); font-size: 13px; line-height: 1.35; padding: 0 4px; flex: 1 0 240px; }
 #draw { position: fixed; }
 #sheet { display: none; position: absolute; left: 0; right: 0; bottom: 0; top: var(--sheetTop, 0); background: rgba(10,12,14,.97); z-index: 2; flex-direction: column; }
@@ -259,7 +270,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
       <button class="pill" id="newBook" title="Nuovo quaderno da scrivere a mano">Quaderno</button>
     </div>
     <div class="where"><span id="whereName"></span><button id="changeDir" title="Scegli un'altra cartella di note">Cambia cartella</button></div>
-    <input id="filter" placeholder="Cerca per titolo" autocomplete="off">
+    <input id="filter" placeholder="Cerca nelle note" autocomplete="off">
     <div id="tree"></div>
   </aside>
   <div id="main">
@@ -277,6 +288,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
     <div id="empty"><div id="emptyText"></div></div>
   </div>
 </div>
+<div id="find"><input id="findText" placeholder="Cerca" autocomplete="off" spellcheck="false"><span id="findCount"></span><button id="findPrev" title="Precedente" aria-label="Precedente"><svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button><button id="findNext" title="Successivo" aria-label="Successivo"><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><button id="findClose" title="Chiudi la ricerca" aria-label="Chiudi la ricerca"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
 <div id="veil"><div id="box"></div></div>
 <div id="draw">
   <div id="drawBar"></div>
@@ -344,6 +356,7 @@ function show(name, html, base) {
   let tag = document.querySelector("base");
   if (!tag) { tag = document.createElement("base"); document.head.appendChild(tag); }
   tag.href = base;
+  if (finder.on) closeFind();
   shownName = name;
   title.value = name;
   dirty = false;
@@ -616,7 +629,8 @@ const BUTTONS = [
   ["ul", ICON.ul, "Elenco puntato", () => list("ul")], ["ol", "1.", "Elenco numerato", () => list("ol")], ["todo", ICON.todo, "Cose da fare", () => list("todo")], null,
   ["table", ICON.table, "Tabella", table], ["image", ICON.image, "Immagine", () => { keep(); host.pick("image"); }], ["draw", ICON.draw, "Disegno", () => { keep(); openDraw(); }],
   ["file", ICON.file, "Allegato", () => { keep(); host.pick("file"); }], ["link", ICON.link, "Link", link], null,
-  ["undo", ICON.undo, "Annulla", () => cmd("undo")], ["redo", ICON.redo, "Ripeti", () => cmd("redo")],
+  ["undo", ICON.undo, "Annulla", () => cmd("undo")], ["redo", ICON.redo, "Ripeti", () => cmd("redo")], null,
+  ["find", '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg>', "Cerca nella nota", () => openFind()],
 ];
 for (const b of BUTTONS) {
   if (!b) { const s = document.createElement("div"); s.className = "sep"; $("bar").appendChild(s); continue; }
@@ -631,6 +645,107 @@ for (const b of BUTTONS) {
 // A press on a button must not take the caret out of the note
 for (const id of ["bar", "ctx"]) $(id).addEventListener("pointerdown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
 for (const id of ["bar", "ctx"]) $(id).addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });
+
+// ---------------------------------------------------------------- looking for words in the open note or notebook
+
+/*
+ * In a note of words every place the words are is marked, and the one in turn brought into view.
+ * In a notebook what can be looked through is what was typed: the text boxes and the titles of
+ * the sections (what is written by hand is ink, not words).
+ */
+const finder = { on: false, list: [], at: -1, item: null };
+// Held here: the bar of the board is emptied and made again around it
+const findBar = $("find"), findText = $("findText"), findCount = $("findCount");
+
+function openFind() {
+  const bar = findBar;
+  finder.on = true;
+  bar.classList.add("on");
+  if (board.book) barOfBoard(); else $("bars").prepend(bar);
+  const input = findText;
+  input.focus();
+  input.select();
+  runFind();
+}
+
+function closeFind() {
+  finder.on = false;
+  finder.list = [];
+  finder.at = -1;
+  finder.item = null;
+  findBar.classList.remove("on");
+  if (window.CSS && CSS.highlights) { CSS.highlights.delete("find"); CSS.highlights.delete("findNow"); }
+  if (board.book) { paint(); barOfBoard(); }
+}
+
+function runFind() {
+  const q = findText.value.trim().toLowerCase();
+  finder.list = [];
+  finder.item = null;
+  if (q && board.book) {
+    board.book.pages.forEach((pg, i) => { if (pg.title && pg.title.toLowerCase().includes(q)) finder.list.push({ page: i, top: -1 }); });
+    for (const o of board.items) if (o.kind === "text" && o.text.toLowerCase().includes(q)) finder.list.push({ page: pageAt(o.cy), top: o.cy, item: o });
+    finder.list.sort((a, b) => a.page - b.page || a.top - b.top);
+  } else if (q) {
+    const walk = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      const text = n.nodeValue.toLowerCase();
+      for (let k = text.indexOf(q); k >= 0; k = text.indexOf(q, k + q.length)) {
+        const r = document.createRange();
+        r.setStart(n, k);
+        r.setEnd(n, k + q.length);
+        finder.list.push(r);
+      }
+    }
+  }
+  finder.at = finder.list.length ? 0 : -1;
+  showFound();
+}
+
+function showFound() {
+  const n = finder.list.length, cur = finder.list[finder.at];
+  findCount.textContent = !findText.value.trim() ? "" : n ? (finder.at + 1) + " di " + n : "Niente";
+  if (board.book) {
+    finder.item = cur ? cur.item || null : null;
+    if (cur) {
+      goToPage(cur.page);
+      // The words found in the middle of the screen, where the pages go under one another
+      if (!paged() && cur.item) { const r = canvas.getBoundingClientRect(); board.view.y = r.height * 0.4 - cur.item.cy * board.view.s; }
+    }
+    paint();
+    return;
+  }
+  if (window.CSS && CSS.highlights && window.Highlight) {
+    if (n) CSS.highlights.set("find", new Highlight(...finder.list)); else CSS.highlights.delete("find");
+    if (cur) CSS.highlights.set("findNow", new Highlight(cur)); else CSS.highlights.delete("findNow");
+  } else if (cur) { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(cur); }
+  if (cur) {
+    const box = cur.getBoundingClientRect(), sc = $("scroll"), view = sc.getBoundingClientRect();
+    if (box.top < view.top + 40 || box.bottom > view.bottom - 40) sc.scrollTop += box.top - view.top - view.height * 0.35;
+  }
+}
+
+function stepFind(d) {
+  const n = finder.list.length;
+  if (!n) return;
+  finder.at = (finder.at + d + n) % n;
+  showFound();
+}
+
+findText.addEventListener("input", runFind);
+findText.addEventListener("keydown", (e) => {
+  e.stopPropagation();
+  if (e.key === "Enter") { e.preventDefault(); stepFind(e.shiftKey ? -1 : 1); }
+  if (e.key === "Escape") closeFind();
+});
+$("findPrev").onclick = () => stepFind(-1);
+$("findNext").onclick = () => stepFind(1);
+$("findClose").onclick = closeFind;
+// What is typed in the note while looking moves the places found: looked for again
+body.addEventListener("input", () => { if (finder.on && !board.book) runFind(); });
+document.addEventListener("keydown", (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f" && shownName != null) { e.preventDefault(); openFind(); }
+});
 
 // ---------------------------------------------------------------- the x and the save button of each image and file
 
@@ -809,6 +924,7 @@ const DI = {
   lasso: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="9.5" rx="8.5" ry="5.5" stroke-dasharray="3 2.6"/><path d="M7 13.800c-1.500 1-1.800 2.600-.400 3.300 1.500.700 3-.600 2.100-1.800-.700-.900-2.300-.400-2.300 1 0 1.700 1.300 3.200 3.600 3.700"/></svg>',
   text: '<svg viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></svg>',
   mark: '<svg viewBox="0 0 24 24"><path d="M7 3.500h10a1 1 0 0 1 1 1V21l-6-4.500L6 21V4.500a1 1 0 0 1 1-1z"/></svg>',
+  find: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.500L21 21"/></svg>',
   wzoom: '<svg viewBox="0 0 24 24"><circle cx="10.500" cy="10.500" r="6.500"/><path d="M15.500 15.500L21 21M8 10.500h5M10.500 8v5"/></svg>',
   shape: '<svg viewBox="0 0 24 24"><rect x="3.5" y="10.5" width="10" height="10" rx="1.5"/><circle cx="15.5" cy="8.5" r="5"/></svg>',
   sLine: '<svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg>',
@@ -858,6 +974,7 @@ function barOfBoard() {
   const was = Array.from(bar.querySelectorAll(".tb")).map((r) => r.scrollLeft);
   bar.innerHTML = "";
   barRows();
+  if (finder.on && board.book) bar.appendChild(findBar);
   // Each row where it was slid to; faded at its end while there is more to its right
   bar.querySelectorAll(".tb").forEach((r, i) => {
     r.scrollLeft = was[i] || 0;
@@ -909,7 +1026,11 @@ function barRows() {
   const hist = group(top);
   mk(hist, "ib", DI.undo, "Annulla", undo).disabled = !board.undo.length;
   mk(hist, "ib", DI.redo, "Ripeti", redo).disabled = !board.redo.length;
-  if (board.book) mk(group(top), "ib", DI.more, "Carta, vista e pagina", bookMenu);
+  if (board.book) {
+    const last = group(top);
+    mk(last, "ib" + (finder.on ? " on" : ""), DI.find, "Cerca nei testi del quaderno", () => (finder.on ? closeFind() : openFind()));
+    mk(last, "ib", DI.more, "Carta, vista e pagina", bookMenu);
+  }
   else mk(group(top), "ib", DI.fit, "Mostra tutto il disegno", whole);
   if (!board.book) {
     const gap = document.createElement("div");
@@ -1433,7 +1554,23 @@ function fitOf() {
  * moved only once made bigger, and then no further than their own edges.
  */
 function clampView() {
-  if (!paged()) return;
+  if (!paged()) {
+    // The pages one under the other only go up and down: as wide as the screen takes, never smaller,
+    // never to a side; made bigger, they move sideways too, as far as their own edges
+    const r = canvas.getBoundingClientRect(), v = board.view, b = board.book;
+    if (!r.width || !v.s) return;
+    const fs = Math.min(1.25, Math.max(0.2, (r.width - 24) / PW));
+    if (v.s < fs) {
+      // Smaller than it may be: back to its size around the middle of the screen
+      const mid = (r.height / 2 - v.y) / v.s;
+      v.s = fs;
+      v.y = r.height / 2 - mid * fs;
+    }
+    const W = PW * v.s, z = addZone(), end = (z.y + z.h + 40) * v.s, top = b.pages[0].title ? 34 : 12;
+    v.x = W <= r.width ? (r.width - W) / 2 : Math.min(12, Math.max(r.width - W - 12, v.x));
+    v.y = Math.min(top, Math.max(Math.min(top, r.height - 70 - end), v.y));
+    return;
+  }
   const r = canvas.getBoundingClientRect(), f = fitOf(), v = board.view;
   if (!r.width || !(v.s > f.s * 1.001)) { v.s = f.s; v.x = f.x; v.y = f.y; board.fitted = { ...v }; return; }
   const W = f.w * v.s, H = f.h * v.s, m = 12, room = r.height - 64;
@@ -1654,7 +1791,11 @@ function paint() {
       g.beginPath();
       g.rect(0, t, PW, pg.h);
       g.clip();
-      for (const o of on.get(i).items) drawItem(g, o);
+      for (const o of on.get(i).items) {
+        drawItem(g, o);
+        // What a search is on: framed
+        if (o === finder.item) { g.save(); g.translate(o.cx, o.cy); g.rotate(o.rot); g.fillStyle = "rgba(255,213,79,.35)"; g.strokeStyle = "#f9a825"; g.lineWidth = 2 * px; g.fillRect(-o.w / 2 - 4, -o.h / 2 - 4, o.w + 8, o.h + 8); g.strokeRect(-o.w / 2 - 4, -o.h / 2 - 4, o.w + 8, o.h + 8); g.restore(); }
+      }
       for (const s of on.get(i).strokes) line(g, s, 0);
       g.restore();
     }
@@ -1954,6 +2095,28 @@ function snapped(e) {
   return boardOf(rulerPoint(onRulerAt(local(e)).along, board.now.snap));
 }
 
+/** Let go while moving, the pages go on by themselves, slower and slower. */
+function fling(vx, vy) {
+  if (Math.hypot(vx, vy) < 0.25) return;
+  let last = performance.now();
+  const id = board.flingId = (board.flingId || 0) + 1;
+  const step = (now) => {
+    if (board.flingId !== id || board.pan || board.pinch || board.drawId != null) return;
+    const dt = Math.min(40, now - last), bx = board.view.x, by = board.view.y;
+    last = now;
+    board.view.x += vx * dt;
+    board.view.y += vy * dt;
+    const k = Math.exp(-dt / 320);
+    vx *= k;
+    vy *= k;
+    paint();
+    // Stopped by its own slowing, or by an edge
+    if (Math.hypot(vx, vy) < 0.03 || (Math.abs(board.view.x - bx) < 0.05 && Math.abs(board.view.y - by) < 0.05)) return;
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 const panFrom = (e) => { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view }, fit: paged() && isFitted() }; };
 
 /** A pointer that would write: with the hand it moves the pages, with the select tool it takes an image. */
@@ -1979,6 +2142,7 @@ canvas.addEventListener("pointerdown", (e) => {
   // A title being written is done with: written now, before the bar is drawn again under it
   if (document.activeElement === title) title.blur();
   try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
+  board.flingId = (board.flingId || 0) + 1;
   // Words being typed: a touch outside them ends the typing, and does nothing else
   if (commitText()) return;
   // The ruler: a finger or the mouse on it moves it; a second finger, anywhere, turns it
@@ -2025,6 +2189,10 @@ canvas.addEventListener("pointermove", (e) => {
     e.preventDefault();
     const [x, y] = local(e), o = board.pan;
     board.view = { s: o.view.s, x: o.view.x + x - o.at[0], y: o.view.y + y - o.at[1] };
+    // How fast it goes, from the last moments: what it keeps of it when let go
+    const now = performance.now();
+    o.track = (o.track || []).filter((t) => now - t[0] < 120);
+    o.track.push([now, x, y]);
     paint();
     return;
   }
@@ -2087,8 +2255,12 @@ function lift(e) {
   }
   if (board.pan && board.pan.id === e.pointerId) {
     // One or two pages at a time: a quick slide sideways turns the page
-    const q = local(e), dx = q[0] - board.pan.at[0], dy = q[1] - board.pan.at[1], fit = board.pan.fit;
+    const q = local(e), dx = q[0] - board.pan.at[0], dy = q[1] - board.pan.at[1], fit = board.pan.fit, track = board.pan.track || [];
     board.pan = null;
+    if (e.type === "pointerup" && e.pointerType !== "mouse" && track.length > 1 && !(fit && paged())) {
+      const a = track[0], z = track[track.length - 1], dt = z[0] - a[0];
+      if (dt > 8 && performance.now() - z[0] < 60) fling((z[1] - a[1]) / dt, (z[2] - a[2]) / dt);
+    }
     // Only a page whole on the screen: made bigger, the slide moves over it
     if (fit && paged() && e.type === "pointerup" && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) turn(dx < 0 ? 1 : -1, true);
   }
@@ -3382,6 +3554,7 @@ async function pdfChosen(source, name) {
 
 /** Back, on the phone: a window open over the note closes first. True when there was one. */
 function goBack() {
+  if (finder.on) { closeFind(); return true; }
   if ($("veil").classList.contains("on")) { $("veil").classList.remove("on"); $("box").classList.remove("picker"); return true; }
   if ($("sheet").classList.contains("on")) { closeSheet(); return true; }
   if (commitText()) return true;
@@ -3531,7 +3704,14 @@ function draw() {
     // Let go on a note: beside it, in its folder
     target(r, n.path);
   };
-  if (q) { all.filter((n) => n.name.toLowerCase().includes(q)).forEach((n) => note(n, 0, false)); return; }
+  if (q) {
+    // By title at once; by what is written inside as the notes are read (once, the first time)
+    const hits = all.filter((n) => n.name.toLowerCase().includes(q) || (n.text || "").includes(q));
+    hits.forEach((n) => note(n, 0, false));
+    if (!hits.length) { const none = document.createElement("div"); none.className = "row"; none.style.cssText = "padding-left:14px;color:var(--dim);cursor:default"; none.textContent = pc.reading ? "Leggo le note…" : "Niente"; tree.appendChild(none); }
+    readTexts(all);
+    return;
+  }
   all.filter((n) => pc.pins.includes(keyOf(n))).forEach((n) => note(n, 0, true));
   (function walk(n, depth) {
     for (const f of n.folders) {
@@ -3546,6 +3726,23 @@ function draw() {
   })(pc.tree, 0);
 }
 $("filter").addEventListener("input", () => { if (pc.tree) draw(); });
+
+/** The words of every note, read once to be looked through: what is typed, not its markup. */
+async function readTexts(all) {
+  const todo = all.filter((n) => n.text == null);
+  if (!todo.length || pc.reading || !pc.root) return;
+  pc.reading = true;
+  for (const n of todo) {
+    try {
+      const html = bodyOf(await readText(await dirOf(n.path), n.file)).replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/td|\/tspan)[^>]*>/gi, " ").replace(/<[^>]+>/g, "");
+      const t = document.createElement("textarea");
+      t.innerHTML = html;
+      n.text = t.value.replace(/\s+/g, " ").toLowerCase();
+    } catch (e) { n.text = ""; }
+  }
+  pc.reading = false;
+  if ($("filter").value.trim()) draw();
+}
 
 /** The files of the `_allegati` folder a note's page links to. */
 function carried(text) {
