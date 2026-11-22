@@ -158,6 +158,11 @@ class CalendarWidgetView(
     private val tick = object : Runnable {
         override fun run() {
             if (rangeStart() != loadedDay) reload() else showEvents()
+            // Home left on screen: the row moves on with the hours, and an old forecast is asked again
+            if (config.showWeather && windowVisibility == VISIBLE) {
+                if (WeatherRepository.shouldRetry(activity)) refreshWeather()
+                else if (System.currentTimeMillis() / 3_600_000L != weatherHour) showWeather()
+            }
             scheduleTick()
         }
     }
@@ -383,7 +388,11 @@ class CalendarWidgetView(
         }
     }
 
+    /** The hour the row was last drawn in. */
+    private var weatherHour = 0L
+
     private fun showWeather() {
+        weatherHour = System.currentTimeMillis() / 3_600_000L
         weatherRow.removeAllViews()
         val battery = config.showBattery && batteryLevel >= 0
         weatherRow.isVisible = config.showWeather || battery

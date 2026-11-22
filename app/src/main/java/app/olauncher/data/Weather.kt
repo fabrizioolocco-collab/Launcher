@@ -71,8 +71,23 @@ object WeatherRepository {
     private const val MAX_AGE = 60 * 60_000L
     private const val PREFS = "app.minimalauncher.weather"
 
+    /** After a download that failed, the next one by itself waits this long. */
+    private const val RETRY = 5 * 60_000L
+
     @Volatile
     private var memory: Forecast? = null
+
+    /** Why the last download failed (null when it went well): shown in the Weather app. */
+    @Volatile
+    var lastError: String? = null
+        private set
+
+    @Volatile
+    private var lastAttempt = 0L
+
+    /** A lookup of the place's name still going on: some phones never answer, and it must not be waited for. */
+    @Volatile
+    private var placeTask: java.util.concurrent.FutureTask<String?>? = null
 
     fun hasPermission(context: Context) =
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -91,11 +106,18 @@ object WeatherRepository {
 
     fun isStale(context: Context): Boolean = (cached(context)?.fetched ?: 0L) < System.currentTimeMillis() - MAX_AGE
 
+    /** Old, and not just tried: time for a download that nobody asked for (the widget, while it stays on screen). */
+    fun shouldRetry(context: Context): Boolean = isStale(context) && System.currentTimeMillis() - lastAttempt > RETRY
+
     /** A fresh forecast (downloaded when the saved one is older than an hour, or [force]); null if it can't be had. */
     suspend fun refresh(context: Context, force: Boolean = false): Forecast? {
         val ctx = context.applicationContext
         if (!force && !isStale(ctx)) return cached(ctx)
-        val position = position(ctx) ?: return cached(ctx)
+        lastAttempt = System.currentTimeMillis()
+        val position = position(ctx) ?: run {
+            lastError = "no position"
+            return cached(ctx)
+        }
         return withContext(Dispatchers.IO) {
             try {
                 val url = "https://api.open-meteo.com/v1/forecast?latitude=${position.first}&longitude=${position.second}" +
@@ -108,15 +130,24 @@ object WeatherRepository {
                     connectTimeout = 15_000
                     readTimeout = 20_000
                 }
+                val status = conn.responseCode
+                if (status != 200) {
+                    conn.disconnect()
+                    throw java.io.IOException("HTTP $status")
+                }
                 val body = conn.inputStream.bufferedReader().use { it.readText() }
                 conn.disconnect()
                 val json = JSONObject(body)
                 json.put("fetched", System.currentTimeMillis())
                 json.put("place", placeName(ctx, position) ?: "")
                 File(ctx.filesDir, FILE).writeText(json.toString())
-                parse(json).also { memory = it }
+                parse(json).also {
+                    memory = it
+                    lastError = null
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
+                lastError = e.message?.takeIf { it.startsWith("HTTP ") } ?: e.javaClass.simpleName
                 cached(ctx)
             }
         }
@@ -177,12 +208,32 @@ object WeatherRepository {
         c.invokeOnCancellation { manager.removeUpdates(listener) }
     }
 
+    /**
+     * The name of the place, waited for a few seconds at most: the lookup can stay without an answer
+     * for ever, and the forecast must not wait with it. Without an answer, the name found last time
+     * for the same position.
+     */
     @Suppress("DEPRECATION")
-    private fun placeName(ctx: Context, position: Pair<Double, Double>): String? = try {
-        android.location.Geocoder(ctx, Locale.getDefault()).getFromLocation(position.first, position.second, 1)
-            ?.firstOrNull()?.let { it.locality ?: it.subAdminArea ?: it.adminArea }
-    } catch (e: Exception) {
-        null
+    private fun placeName(ctx: Context, position: Pair<Double, Double>): String? {
+        val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val key = "${position.first},${position.second}"
+        val saved = prefs.getString("place", null)?.takeIf { prefs.getString("placePos", null) == key }
+        // One still without an answer: not another thread left waiting
+        if (placeTask?.isDone == false) return saved
+        val task = java.util.concurrent.FutureTask<String?> {
+            android.location.Geocoder(ctx, Locale.getDefault()).getFromLocation(position.first, position.second, 1)
+                ?.firstOrNull()?.let { it.locality ?: it.subAdminArea ?: it.adminArea }
+        }
+        placeTask = task
+        Thread(task, "weather-place").apply { isDaemon = true }.start()
+        val found = try {
+            task.get(8, java.util.concurrent.TimeUnit.SECONDS)
+        } catch (e: Exception) {
+            null
+        }
+        if (found.isNullOrBlank()) return saved
+        prefs.edit { putString("place", found).putString("placePos", key) }
+        return found
     }
 
     // ---------------------------------------------------------------- parsing

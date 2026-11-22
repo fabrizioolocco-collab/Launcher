@@ -201,8 +201,10 @@ class WeatherActivity : AppCompatActivity() {
         val f = forecast
         bar.title.text = f?.place?.takeIf { it.isNotBlank() } ?: getString(R.string.ml_w_app)
         UiKit.setSubtitle(bar, f?.let {
-            getString(R.string.ml_w_updated, updatedLabel(it.fetched)) + " · " + getString(R.string.ml_w_source)
-        })
+            getString(R.string.ml_w_updated, updatedLabel(it.fetched)) + " · " + getString(R.string.ml_w_source) +
+                    // Why it is old, when the last download failed
+                    (WeatherRepository.lastError?.let { e -> " · $e" } ?: "")
+        } ?: WeatherRepository.lastError)
         content.removeAllViews()
         val view: View = when {
             f != null && f.upcoming().isNotEmpty() -> if (showDays) daysView(f) else hoursView(f)
