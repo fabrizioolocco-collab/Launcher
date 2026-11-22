@@ -98,6 +98,8 @@ class PdfViewerActivity : AppCompatActivity() {
     private var checkSize = CHECK_SIZES[1]
     private var cross = false
     private var pendingSaveName = ""
+    /** Opened from a note: saving writes over the same file, without asking, and back saves first. */
+    private val inPlace get() = intent.getBooleanExtra(EXTRA_IN_PLACE, false) && !fromCache
 
     // Text search: the bar, the document's text (read the first time) and the matches
     private lateinit var searchBar: LinearLayout
@@ -251,6 +253,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 if (editing != null) stopEdit()
                 else if (selected != null) select(null)
                 else if (tool != Tool.NONE) setTool(Tool.NONE)
+                else if (inPlace && (annotations.isNotEmpty() || !layout.isIdentity(total))) writeTo(sourceFile) { finish() }
                 else if (annotations.isNotEmpty() || !layout.isIdentity(total)) showConfirmDialog(
                     getString(R.string.ml_edit_discard_title), getString(R.string.ml_pdf_discard), getString(R.string.ml_edit_discard_action),
                 ) { finish() }
@@ -1086,6 +1089,7 @@ class PdfViewerActivity : AppCompatActivity() {
         }
         select(null)
         setTool(Tool.NONE)
+        if (inPlace) return writeTo(sourceFile)
         val startDir = if (fromCache) android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).also { it.mkdirs() }
         else sourceFile.parentFile!!
         val suggested = if (fromCache) uniqueName(startDir, sourceFile.nameWithoutExtension) else uniqueName(startDir, sourceFile.nameWithoutExtension + " (1)")
@@ -1096,7 +1100,7 @@ class PdfViewerActivity : AppCompatActivity() {
         }
     }
 
-    private fun writeTo(target: File) {
+    private fun writeTo(target: File, then: (() -> Unit)? = null) {
         showToast(getString(R.string.ml_pdf_saving))
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
@@ -1129,6 +1133,7 @@ class PdfViewerActivity : AppCompatActivity() {
                 pager.adapter?.notifyDataSetChanged()
                 updateTitle()
                 showToast(getString(R.string.ml_pdf_saved, target.name))
+                then?.invoke()
                 return@launch
             }
             showMenuDialog(getString(R.string.ml_pdf_saved, target.name), listOf(
@@ -2034,6 +2039,11 @@ class PdfViewerActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_PATH = "path"
+        private const val EXTRA_IN_PLACE = "inPlace"
+
+        /** A PDF to write on and save where it is (one beside a note). */
+        fun editIntent(context: Context, file: File): Intent =
+            Intent(context, PdfViewerActivity::class.java).putExtra(EXTRA_PATH, file.absolutePath).putExtra(EXTRA_IN_PLACE, true)
         private val COLORS = listOf(
             0xFF1A1A99.toInt(), Color.BLACK, 0xFF616161.toInt(), 0xFFE53935.toInt(), 0xFFFB8C00.toInt(), 0xFFFDD835.toInt(),
             0xFF43A047.toInt(), 0xFF00897B.toInt(), 0xFF1E88E5.toInt(), 0xFF8E24AA.toInt(), 0xFFD81B60.toInt(), 0xFF6D4C41.toInt(),

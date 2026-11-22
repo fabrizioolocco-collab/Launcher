@@ -241,17 +241,6 @@ class NotesActivity : AppCompatActivity() {
         startActivity(NoteEditorActivity.intent(this, note))
     }
 
-    /** A note to type in, or a notebook to write in by hand. */
-    private fun newWhat(dir: File) {
-        showMenuDialog(
-            getString(R.string.ml_notes_new_note),
-            listOf(
-                MenuEntry(getString(R.string.ml_notes_kind_text)) { newNote(dir) },
-                MenuEntry(getString(R.string.ml_notes_kind_notebook)) { newNotebook(dir) },
-            )
-        )
-    }
-
     private fun newNotebook(dir: File) {
         val note = NotesStore.newNotebook(dir, getString(R.string.ml_notes_new_notebook_title))
         open(dir)
@@ -563,12 +552,16 @@ class NotesActivity : AppCompatActivity() {
             setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 12.dpToPx())
         }
         buttons.addView(
-            pillButton(this, getString(R.string.ml_notes_new_folder), filled = false, color = primary) { newFolder(root) },
-            LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginEnd = 5.dpToPx() }
+            pillButton(this, getString(R.string.ml_notes_btn_folder), filled = false, color = primary) { newFolder(root) },
+            LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginEnd = 4.dpToPx() }
         )
         buttons.addView(
-            pillButton(this, getString(R.string.ml_notes_new_note), filled = true, color = primary) { newWhat(root) },
-            LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginStart = 5.dpToPx() }
+            pillButton(this, getString(R.string.ml_notes_btn_note), filled = true, color = primary) { newNote(root) },
+            LinearLayout.LayoutParams(0, 52.dpToPx(), 1f).apply { marginStart = 4.dpToPx(); marginEnd = 4.dpToPx() }
+        )
+        buttons.addView(
+            pillButton(this, getString(R.string.ml_notes_btn_notebook), filled = true, color = primary) { newNotebook(root) },
+            LinearLayout.LayoutParams(0, 52.dpToPx(), 1.25f).apply { marginStart = 4.dpToPx() }
         )
         column.addView(buttons)
     }
@@ -576,6 +569,8 @@ class NotesActivity : AppCompatActivity() {
     private class Holder(view: View) : RecyclerView.ViewHolder(view) {
         lateinit var chevron: ImageView
         lateinit var icon: ImageView
+        /** On the right of a note: whether it is a note of words or a notebook written by hand. */
+        lateinit var kind: ImageView
         lateinit var title: TextView
         lateinit var under: TextView
         lateinit var side: TextView
@@ -629,6 +624,8 @@ class NotesActivity : AppCompatActivity() {
                 row.addView(icon, LinearLayout.LayoutParams(20.dpToPx(), 20.dpToPx()).apply { marginStart = 6.dpToPx() })
                 row.addView(texts, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 row.addView(side)
+                kind = UiKit.icon(ctx, R.drawable.ic_m_doc, UiKit.secondary(ctx), 18)
+                row.addView(kind, LinearLayout.LayoutParams(18.dpToPx(), 18.dpToPx()).apply { marginEnd = 14.dpToPx() })
             }
         }
 
@@ -648,6 +645,7 @@ class NotesActivity : AppCompatActivity() {
                     holder.under.isVisible = false
                     // Shut, it says how many notes it keeps
                     holder.side.text = if (item.open) "" else item.folder.count.toString()
+                    holder.kind.visibility = View.INVISIBLE
                     // The folder a new note would go to stands out
                     view.background = UiKit.ripple(ctx)
                     view.alpha = 1f
@@ -663,6 +661,10 @@ class NotesActivity : AppCompatActivity() {
                     holder.chevron.visibility = if (item.pinned) View.VISIBLE else View.INVISIBLE
                     holder.chevron.setImageResource(R.drawable.ic_m_star)
                     holder.icon.isVisible = false
+                    holder.kind.visibility = View.VISIBLE
+                    val book = NotesStore.isNotebook(note)
+                    holder.kind.setImageResource(if (book) R.drawable.ic_m_draw else R.drawable.ic_m_doc)
+                    holder.kind.contentDescription = getString(if (book) R.string.ml_notes_btn_notebook else R.string.ml_notes_btn_note)
                     holder.title.text = NotesStore.titleOf(note)
                     holder.title.setTypeface(null, Typeface.NORMAL)
                     holder.under.text = item.snippet

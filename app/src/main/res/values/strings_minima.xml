@@ -1239,8 +1239,9 @@
     <string name="ml_notes_share">Share the text</string>
     <string name="ml_notes_delete">Delete</string>
     <string name="ml_notes_new_note_here">New note here</string>
-    <string name="ml_notes_kind_text">Text note</string>
-    <string name="ml_notes_kind_notebook">Handwritten notebook</string>
+    <string name="ml_notes_btn_folder">Folder</string>
+    <string name="ml_notes_btn_note">Note</string>
+    <string name="ml_notes_btn_notebook">Notebook</string>
     <string name="ml_notes_new_notebook_title">Notebook</string>
     <string name="ml_notes_new_notebook_here">New notebook here</string>
     <string name="ml_notes_new_subfolder">New subfolder</string>

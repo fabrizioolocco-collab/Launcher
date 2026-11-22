@@ -1236,8 +1236,9 @@
     <string name="ml_notes_share">Condividi il testo</string>
     <string name="ml_notes_delete">Elimina</string>
     <string name="ml_notes_new_note_here">Nuova nota qui</string>
-    <string name="ml_notes_kind_text">Nota di testo</string>
-    <string name="ml_notes_kind_notebook">Quaderno da scrivere a mano</string>
+    <string name="ml_notes_btn_folder">Cartella</string>
+    <string name="ml_notes_btn_note">Nota</string>
+    <string name="ml_notes_btn_notebook">Quaderno</string>
     <string name="ml_notes_new_notebook_title">Quaderno</string>
     <string name="ml_notes_new_notebook_here">Nuovo quaderno qui</string>
     <string name="ml_notes_new_subfolder">Nuova sottocartella</string>

@@ -115,6 +115,22 @@ object NotesStore {
         return free(dir, clean(title).ifBlank { "Nota" } + ".html").apply { writeText("") }
     }
 
+    private val books = HashMap<String, Pair<Long, Boolean>>()
+
+    /** Whether [note] is a notebook written by hand (it says so near its start). */
+    fun isNotebook(note: File): Boolean {
+        val time = note.lastModified()
+        books[note.absolutePath]?.takeIf { it.first == time }?.let { return it.second }
+        val head = try {
+            note.inputStream().use { s -> val b = ByteArray(6000); val n = s.read(b); if (n > 0) String(b, 0, n) else "" }
+        } catch (e: Exception) {
+            ""
+        }
+        val book = Regex("<div[^>]*class=\"notebook\"").containsMatchIn(head)
+        books[note.absolutePath] = time to book
+        return book
+    }
+
     /** A notebook to write in by hand: pages of squared paper, filled in by the editor. */
     fun newNotebook(dir: File, title: String): File {
         dir.mkdirs()

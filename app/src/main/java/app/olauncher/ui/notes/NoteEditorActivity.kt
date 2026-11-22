@@ -3,9 +3,12 @@ package app.olauncher.ui.notes
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
+import android.os.ParcelFileDescriptor
 import android.util.Base64
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -26,7 +29,9 @@ import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.PickFiles
 import app.olauncher.ui.UiKit
+import app.olauncher.ui.pdf.PdfViewerActivity
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
 
 /**
@@ -40,9 +45,17 @@ class NoteEditorActivity : AppCompatActivity() {
     private lateinit var note: File
     private lateinit var web: WebView
     private var pickKind = "image"
+    /** The PDF chosen to take pages from, and its pages being read. */
+    private var pdfFile: File? = null
+    private var pdf: PdfRenderer? = null
 
     private val picker = registerForActivityResult(PickFiles()) { uris ->
         val source = uris.firstOrNull()?.path?.let { File(it) } ?: return@registerForActivityResult
+        if (pickKind == "pdf") {
+            pdfFile = source
+            call("Notes.pdfPicked(${JSONObject.quote(source.absolutePath)}, ${JSONObject.quote(source.nameWithoutExtension)})")
+            return@registerForActivityResult
+        }
         val path = NotesStore.attach(note.parentFile ?: return@registerForActivityResult, source)
         if (path == null) showToast(getString(R.string.ml_notes_failed))
         else call("Notes.inserted(${JSONObject.quote(pickKind)}, ${JSONObject.quote(path)}, ${JSONObject.quote(source.name)})")
@@ -118,6 +131,7 @@ class NoteEditorActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        runCatching { pdf?.close() }
         if (::web.isInitialized) {
             (web.parent as? ViewGroup)?.removeView(web)
             web.destroy()
@@ -135,6 +149,8 @@ class NoteEditorActivity : AppCompatActivity() {
             }
             if (file != null) {
                 if (!file.isFile) return showToast(getString(R.string.ml_search_cannot_open))
+                // A PDF of the note opens in the launcher's own reader, to write on it and save it in place
+                if (file.extension.equals("pdf", true)) return startActivity(PdfViewerActivity.editIntent(this, file))
                 val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
                 val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
                 startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
@@ -178,7 +194,13 @@ class NoteEditorActivity : AppCompatActivity() {
         @JavascriptInterface
         fun pick(kind: String) = runOnUiThread {
             pickKind = kind
-            picker.launch(if (kind == "image") PickFiles.Request(types = arrayOf("image/*")) else PickFiles.Request())
+            picker.launch(
+                when (kind) {
+                    "image" -> PickFiles.Request(types = arrayOf("image/*"))
+                    "pdf" -> PickFiles.Request(types = arrayOf("application/pdf"), extensions = arrayOf("pdf"))
+                    else -> PickFiles.Request()
+                }
+            )
         }
 
         @JavascriptInterface
@@ -203,12 +225,68 @@ class NoteEditorActivity : AppCompatActivity() {
             return NotesStore.attachBytes(dir, text.toByteArray(), name).orEmpty()
         }
 
+        /** The PDF just chosen, opened to take pages from: how many it has, -1 when it can't be read. */
+        @JavascriptInterface
+        fun pdfOpen(path: String): Int {
+            val file = pdfFile?.takeIf { it.absolutePath == path } ?: return -1
+            return try {
+                pdf?.close()
+                pdf = PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY))
+                pdf!!.pageCount
+            } catch (e: Exception) {
+                pdf = null
+                -1
+            }
+        }
+
+        /** A small picture of page [index], as a data URL. */
+        @JavascriptInterface
+        fun pdfThumb(index: Int): String {
+            val bmp = renderPdf(index, 200) ?: return ""
+            val out = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, 70, out)
+            bmp.recycle()
+            return "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
+        }
+
+        /** Page [index] as a picture beside the note, to write over: its path and its size. */
+        @JavascriptInterface
+        fun pdfPage(index: Int): String {
+            val dir = note.parentFile ?: return ""
+            val page = pdfSize(index) ?: return ""
+            val bmp = renderPdf(index, 1600) ?: return ""
+            val out = ByteArrayOutputStream()
+            bmp.compress(Bitmap.CompressFormat.JPEG, 88, out)
+            bmp.recycle()
+            val path = NotesStore.attachBytes(dir, out.toByteArray(), "pagina pdf.jpg") ?: return ""
+            return JSONObject().put("src", path).put("w", page.first).put("h", page.second).toString()
+        }
+
         /** A file of the note's own `_allegati` folder no longer used (a drawing saved anew). */
         @JavascriptInterface
         fun remove(path: String) {
             val file = inside(path) ?: return
             if (file.parentFile?.name == NotesStore.FILES) file.delete()
         }
+    }
+
+    private fun pdfSize(index: Int): Pair<Int, Int>? = try {
+        pdf?.openPage(index)?.use { it.width to it.height }
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Page [index] of the PDF chosen, [width] pixels wide, on white. */
+    private fun renderPdf(index: Int, width: Int): Bitmap? = try {
+        pdf?.openPage(index)?.use { page ->
+            val height = (width.toFloat() * page.height / page.width).toInt().coerceAtLeast(1)
+            Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also {
+                it.eraseColor(Color.WHITE)
+                page.render(it, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+            }
+        }
+    } catch (e: Throwable) {
+        null
     }
 
     /** A path the page names, as a file in the note's folder; null when it would lead out of it. */
