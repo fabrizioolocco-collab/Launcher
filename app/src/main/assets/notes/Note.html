@@ -29,7 +29,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 .ib.side, #hideSide { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .ib.side:hover, #hideSide:hover { background: var(--sel); color: var(--fg); }
 #hideSide svg, #bar .side svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-#app.noside #side { display: none; }
+/* Hidden only while a note is open: with none, the list is the only way in */
+#app.noside:not(.none) #side { display: none; }
 #app.pc.noside ~ #draw.book { left: 0; }
 .row .kind { width: 18px; height: 18px; color: var(--dim); flex-shrink: 0; display: flex; }
 .row .kind svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
@@ -460,20 +461,44 @@ body.addEventListener("keydown", (e) => {
   if (next) { const r = document.createRange(); r.selectNodeContents(next); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); marks(); }
 });
 
+/** The thing to do whose box (not its words) is under the pointer or the finger of [e]. */
+function boxAt(e) {
+  const pt = e.changedTouches ? e.changedTouches[0] : e, t = e.target;
+  const li = t && t.closest ? t.closest("ul.todo > li") : null;
+  if (!li || !body.contains(li)) return null;
+  const x = pt.clientX - li.getBoundingClientRect().left;
+  return x >= -6 && x < 34 ? li : null;
+}
+function tick(li) {
+  if (li.hasAttribute("data-done")) li.removeAttribute("data-done"); else li.setAttribute("data-done", "1");
+  changed();
+}
+// Ticked on the press itself, which is then stopped there: the caret doesn't go into the line, so
+// the keyboard doesn't come up on the phone, and on a computer no text gets selected instead
+let boxTouch = null;
+body.addEventListener("touchstart", (e) => {
+  boxTouch = e.touches.length === 1 ? boxAt(e) : null;
+  if (boxTouch) e.preventDefault();
+}, { passive: false });
+body.addEventListener("touchend", (e) => {
+  const li = boxTouch;
+  boxTouch = null;
+  if (li && boxAt(e) === li) { e.preventDefault(); tick(li); }
+}, { passive: false });
+body.addEventListener("mousedown", (e) => {
+  if (e.button !== 0) return;
+  const li = boxAt(e);
+  if (li) { e.preventDefault(); tick(li); }
+});
+
 body.addEventListener("click", (e) => {
   const t = e.target;
   // An image or an attached file: a tap opens it
   if (t.tagName === "IMG") { e.preventDefault(); if (/\.svg$/i.test(srcOf(t))) editDrawing(t); else host.open(srcOf(t)); return; }
   const file = t.closest ? t.closest("a.file") : null;
   if (file) { e.preventDefault(); host.open(file.getAttribute("href")); return; }
-  const li = t.closest ? t.closest("ul.todo > li") : null;
-  // A tap on the box of a thing to do, not on its words
-  if (li && e.clientX - li.getBoundingClientRect().left < 30) {
-    e.preventDefault();
-    if (li.hasAttribute("data-done")) li.removeAttribute("data-done"); else li.setAttribute("data-done", "1");
-    changed();
-    return;
-  }
+  // The box of a thing to do was ticked on the press (see boxAt): nothing more here
+  if (boxAt(e)) { e.preventDefault(); return; }
   const a = t.closest ? t.closest("a") : null;
   if (a && (e.ctrlKey || e.metaKey)) { e.preventDefault(); host.open(a.getAttribute("href")); }
   marks();
@@ -2788,7 +2813,8 @@ async function pcStart() {
     try { cache = JSON.parse(localStorage.getItem("tree") || "null"); } catch (e) { cache = null; }
     if (cache && cache.root === saved.name) { pc.tree = cache.tree; pc.pins = cache.pins || []; draw(); }
     $("whereName").textContent = "Cartella: " + saved.name;
-    say("Scegli una nota a sinistra. Se il browser chiede l'accesso alla cartella, scegli \"Consenti a ogni visita\": poi non lo chiede più.");
+    // The button does nothing of its own: any click gives the folder back (see unlock)
+    say("Le note sono nella cartella \"" + saved.name + "\". Se il browser chiede l'accesso, scegli \"Consenti a ogni visita\": poi non lo chiede più.", "Apri le note", () => {});
     let open = null;
     pc.gate = new Promise((ok) => { open = ok; });
     // A click, not the press before it: Chrome counts a pen or a finger on the screen as a gesture
