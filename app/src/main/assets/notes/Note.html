@@ -118,7 +118,10 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #drawBar { flex-shrink: 0; background: var(--card); border-bottom: 1px solid var(--stroke); box-shadow: 0 2px 10px rgba(0,0,0,.35); z-index: 1; }
 #drawBar .tb { display: flex; align-items: center; gap: 8px; padding: 7px 10px; overflow-x: auto; scrollbar-width: none; }
 #drawBar .tb::-webkit-scrollbar { display: none; }
-#drawBar .tb.opts { border-top: 1px solid var(--line); padding-top: 6px; flex-wrap: wrap; overflow: visible; }
+#drawBar .tb.opts { border-top: 1px solid var(--line); padding-top: 6px; }
+/* More to the right than fits: the row fades there, and slides */
+#drawBar .tb.more { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+@media (max-width: 480px) { #drawBar .tb.main { gap: 4px; padding-left: 6px; padding-right: 6px; } #drawBar .tb.main .ib { width: 32px; } #drawBar .tb.main .grp { padding: 2px; gap: 0; } }
 #drawBar .grp { display: flex; align-items: center; gap: 2px; padding: 3px; background: #07090a; border: 1px solid var(--stroke); border-radius: 13px; flex-shrink: 0; }
 #drawBar .ib { position: relative; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; color: #c4ccd3; flex-shrink: 0; transition: background .12s, color .12s; }
 #drawBar .ib:hover { background: #171c20; color: var(--fg); }
@@ -141,7 +144,27 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #drawBar .pill { flex-shrink: 0; position: sticky; right: 0; box-shadow: -14px 0 10px var(--card); }
 #drawBar #title { width: 220px; flex-shrink: 0; margin: 0; font-size: 18px; padding: 0 6px; }
 #draw.book #pad { background: #1c2023; }
-#drawBar .hint { color: var(--dim); font-size: 13px; line-height: 1.35; padding: 0 4px; flex: 1 1 220px; min-width: 0; }
+#drawBar .vsep, #nav .vsep { width: 1px; height: 24px; background: var(--stroke); margin: 0 3px; flex-shrink: 0; }
+#drawBar .opac { gap: 6px; padding: 3px 10px 3px 8px; color: #c4ccd3; font-size: 13px; font-weight: 600; height: 46px; }
+#drawBar .opac svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; flex-shrink: 0; }
+#drawBar .opac span { min-width: 38px; text-align: right; }
+#drawBar .opac input { -webkit-appearance: none; appearance: none; width: 96px; height: 14px; border-radius: 7px; margin: 0; background: linear-gradient(90deg, transparent, var(--ink, #fff)), repeating-conic-gradient(#555 0 25%, #888 0 50%) 0 0/10px 10px; box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }
+#drawBar .opac input::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 2px solid #000; box-shadow: 0 0 0 1px #fff; }
+#drawBar .opac input::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; border: 2px solid #000; }
+/* Under the pages: where one is, and the pages themselves */
+#nav { display: none; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); max-width: calc(100% - 16px); align-items: center; gap: 2px; padding: 4px; background: rgba(15,18,20,.94); border: 1px solid var(--stroke); border-radius: 16px; box-shadow: 0 4px 18px rgba(0,0,0,.55); z-index: 1; overflow-x: auto; scrollbar-width: none; }
+#nav::-webkit-scrollbar { display: none; }
+#nav.on { display: flex; }
+#nav .nb { width: 40px; height: 40px; border-radius: 11px; display: flex; align-items: center; justify-content: center; color: #c4ccd3; flex-shrink: 0; }
+#nav .nb:hover { background: #1b2126; color: #fff; }
+#nav .nb.on { background: #2a3238; color: #fff; box-shadow: inset 0 0 0 1px #46525b; }
+#nav .nb.add { background: var(--fg); color: #000; }
+#nav .nb:disabled { opacity: .3; pointer-events: none; }
+#nav svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#nav .count { height: 40px; min-width: 62px; padding: 0 8px; border-radius: 11px; font-weight: 700; font-size: 14px; white-space: nowrap; flex-shrink: 0; font-variant-numeric: tabular-nums; }
+#nav .count:hover { background: #1b2126; }
+@media (max-width: 480px) { #nav .nb { width: 33px; } #nav .count { min-width: 50px; padding: 0 4px; } #nav .vsep { margin: 0 1px; } }
+#drawBar .hint { color: var(--dim); font-size: 13px; line-height: 1.35; padding: 0 4px; flex: 1 0 240px; }
 #draw { position: fixed; }
 #sheet { display: none; position: absolute; left: 0; right: 0; bottom: 0; top: var(--sheetTop, 0); background: rgba(10,12,14,.97); z-index: 2; flex-direction: column; }
 #sheet.on { display: flex; }
@@ -243,7 +266,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 <div id="veil"><div id="box"></div></div>
 <div id="draw">
   <div id="drawBar"></div>
-  <div id="pad"><canvas></canvas><div id="sheet"></div></div>
+  <div id="pad"><canvas></canvas><div id="nav"></div><div id="sheet"></div></div>
 </div>
 
 <script>
@@ -636,7 +659,12 @@ window.addEventListener("resize", lay);
 
 /** An image or a file now beside the note, at [path] from it: put where the caret was. */
 function inserted(kind, path, name) {
-  if (board.book) { if (kind === "image") bookImage(path); return; }
+  if (board.book) {
+    const as = board.pickAs;
+    board.pickAs = null;
+    if (kind === "image") { if (as === "page") imagePage(path); else bookImage(path); }
+    return;
+  }
   if (kind === "image" || kind === "draw") { insert("<img" + (kind === "draw" ? " class=\"draw\"" : "") + " src=\"" + esc(encodeURI(path)) + "\" alt=\"\"><p><br></p>"); resolve(); }
   else insert("<a class=\"file\" href=\"" + esc(encodeURI(path)) + "\">" + esc(name) + "</a>&nbsp;");
 }
@@ -721,7 +749,8 @@ const board = {
   view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null, book: null,
   touches: new Map(), pinch: null, pan: null, erased: false, penSeen: false, space: false,
   sel: null, cropping: null, drag: null,
-  favs: [null, null, null, null], ruler: null, rTouch: new Map(), rStart: null, pageSel: new Set(),
+  favs: [null, null, null, null], alpha: { pen: 1, marker: 0.35 }, shape: "line", layout: "scroll", gpage: null, addTap: null,
+  ruler: null, rTouch: new Map(), rStart: null, pageSel: new Set(),
 };
 /** Half the width of the ruler, on the screen. */
 const RHW = 34;
@@ -732,8 +761,8 @@ const ESIZES = [8, 18, 36];
 const PW = 794, PH = 1123, PGAP = 28;
 const PAPERS = [["grid", "Quadretti"], ["lines", "Righe"], ["dots", "Puntini"], ["blank", "Bianca"]];
 
-try { const k = JSON.parse(localStorage.getItem("pen") || "{}"); for (const n of ["color", "width", "eraser", "esize", "recent", "favs"]) if (k[n] != null) board[n] = k[n]; } catch (e) { /* defaults */ }
-const keepPen = () => { try { localStorage.setItem("pen", JSON.stringify({ color: board.color, width: board.width, eraser: board.eraser, esize: board.esize, recent: board.recent, favs: board.favs })); } catch (e) { /* not kept */ } };
+try { const k = JSON.parse(localStorage.getItem("pen") || "{}"); for (const n of ["color", "width", "eraser", "esize", "recent", "favs", "alpha", "shape", "layout"]) if (k[n] != null) board[n] = k[n]; } catch (e) { /* defaults */ }
+const keepPen = () => { try { localStorage.setItem("pen", JSON.stringify({ color: board.color, width: board.width, eraser: board.eraser, esize: board.esize, recent: board.recent, favs: board.favs, alpha: board.alpha, shape: board.shape, layout: board.layout })); } catch (e) { /* not kept */ } };
 
 const DI = {
   hand: '<svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5v-6a1.5 1.5 0 0 1 3 0V11"/><path d="M14 10.5V6a1.5 1.5 0 0 1 3 0v5.5"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.6a6 6 0 0 1-4.6-2.2L4.4 14.6a1.6 1.6 0 0 1 2.4-2.1L8 14"/></svg>',
@@ -762,6 +791,15 @@ const DI = {
   right: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
   side: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>',
+  shape: '<svg viewBox="0 0 24 24"><rect x="3.5" y="10.5" width="10" height="10" rx="1.5"/><circle cx="15.5" cy="8.5" r="5"/></svg>',
+  sLine: '<svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg>',
+  sArrow: '<svg viewBox="0 0 24 24"><path d="M5 19L19 5M10 5h9v9"/></svg>',
+  sRect: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"/></svg>',
+  sEllipse: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8.5" ry="6"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
+  vScroll: '<svg viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="8" rx="1.5"/><rect x="6" y="13.5" width="12" height="8" rx="1.5"/></svg>',
+  vSingle: '<svg viewBox="0 0 24 24"><rect x="6" y="3.5" width="12" height="17" rx="1.5"/></svg>',
+  vDouble: '<svg viewBox="0 0 24 24"><rect x="2.5" y="4.5" width="8.5" height="15" rx="1.5"/><rect x="13" y="4.5" width="8.5" height="15" rx="1.5"/></svg>',
   ruler: '<svg viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8" rx="1.5" transform="rotate(-30 12 12)"/><path d="M7.4 13.2l-1-1.7M10 11.7l-1.5-2.6M12.6 10.2l-1-1.7M15.2 8.7l-1.5-2.6" /></svg>',
   grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="15" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="12" r="1.3" fill="currentColor"/><circle cx="15" cy="12" r="1.3" fill="currentColor"/><circle cx="9" cy="18" r="1.3" fill="currentColor"/><circle cx="15" cy="18" r="1.3" fill="currentColor"/></svg>',
 };
@@ -798,7 +836,20 @@ function startBoard(strokes) {
 
 function barOfBoard() {
   const bar = $("drawBar");
+  const was = Array.from(bar.querySelectorAll(".tb")).map((r) => r.scrollLeft);
   bar.innerHTML = "";
+  barRows();
+  // Each row where it was slid to; faded at its end while there is more to its right
+  bar.querySelectorAll(".tb").forEach((r, i) => {
+    r.scrollLeft = was[i] || 0;
+    const mark = () => r.classList.toggle("more", r.scrollWidth - r.clientWidth - r.scrollLeft > 6);
+    r.addEventListener("scroll", mark, { passive: true });
+    mark();
+  });
+}
+
+function barRows() {
+  const bar = $("drawBar");
   const row = (cls) => { const r = document.createElement("div"); r.className = "tb " + (cls || ""); bar.appendChild(r); return r; };
   const group = (r) => { const g = document.createElement("div"); g.className = "grp"; r.appendChild(g); return g; };
   const mk = (into, cls, html, label, run) => {
@@ -816,8 +867,10 @@ function barOfBoard() {
   const top = row("main");
   if (!board.book) mk(top, "ib", DI.close, "Chiudi senza salvare", () => { $("draw").classList.remove("on"); back(); });
   else if (!android) { mk(top, "ib", DI.side, "Mostra o nascondi l'elenco delle note", toggleSide); top.appendChild(title); }
+  // In order: moving and choosing, then what writes, then what helps to write, then undoing, then the rest
   const tools = group(top);
-  const list = [["hand", "Mano: muoviti senza scrivere"]].concat(board.book ? [["select", "Seleziona le immagini"]] : [], [["pen", "Penna"], ["marker", "Evidenziatore"], ["eraser", "Gomma"]]);
+  const list = [["hand", "Mano: muoviti senza scrivere"]].concat(board.book ? [["select", "Seleziona le immagini"]] : [],
+    [["pen", "Penna"], ["marker", "Evidenziatore"], ["shape", "Forme: linea, freccia, rettangolo, ellisse"], ["eraser", "Gomma"]]);
   for (const [t, label] of list) {
     const b = mk(tools, "ib" + (board.tool === t ? " on" : ""), DI[t], label, () => { board.tool = t; if (t !== "select") { board.sel = null; board.cropping = null; paint(); } barOfBoard(); });
     if (t === "pen" || t === "marker") {
@@ -826,25 +879,23 @@ function barOfBoard() {
       tip.style.background = board.color;
       b.appendChild(tip);
     }
+    if (t === "select") { const sep = document.createElement("span"); sep.className = "vsep"; tools.appendChild(sep); }
   }
+  const aids = group(top);
+  mk(aids, "ib" + (board.ruler ? " on" : ""), DI.ruler, "Righello: le linee vicino al bordo vengono dritte. Un dito lo sposta, due lo ruotano", toggleRuler);
+  if (board.book) mk(aids, "ib", DI.image, "Metti un'immagine sulla pagina", () => { board.pickAs = "image"; host.pick("image"); });
   const hist = group(top);
   mk(hist, "ib", DI.undo, "Annulla", undo).disabled = !board.undo.length;
   mk(hist, "ib", DI.redo, "Ripeti", redo).disabled = !board.redo.length;
-  const view = group(top);
-  mk(view, "ib" + (board.ruler ? " on" : ""), DI.ruler, "Righello: le linee vicino al bordo vengono dritte. Un dito lo sposta, due lo ruotano", toggleRuler);
-  mk(view, "ib", DI.fit, board.book ? "Adatta alla larghezza" : "Mostra tutto il disegno", whole);
-  if (board.book) {
-    mk(view, "ib", DI.image, "Metti un'immagine sulla pagina", () => host.pick("image"));
-    mk(view, "ib", DI.pdf, "Aggiungi pagine da un PDF", () => host.pick("pdf"));
-    mk(view, "ib", DI.pages, "Tutte le pagine", openPages);
-    mk(view, "ib", DI.more, "Carta e pagine", bookMenu);
-  }
+  if (board.book) mk(group(top), "ib", DI.more, "Carta, vista e pagina", bookMenu);
+  else mk(group(top), "ib", DI.fit, "Mostra tutto il disegno", whole);
   if (!board.book) {
     const gap = document.createElement("div");
     gap.className = "gap";
     top.appendChild(gap);
     mk(top, "pill", board.editing ? "Salva" : "Inserisci", "Salva il disegno", finishDraw);
   }
+  navOfBook();
 
   // The second row: what the tool in hand can be set to
   const opts = row("opts");
@@ -905,6 +956,11 @@ function barOfBoard() {
     }
     return;
   }
+  if (board.tool === "shape") {
+    const kinds = group(opts);
+    for (const [k, icon, label] of [["line", DI.sLine, "Linea"], ["arrow", DI.sArrow, "Freccia"], ["rect", DI.sRect, "Rettangolo"], ["ellipse", DI.sEllipse, "Ellisse"]])
+      mk(kinds, "ib" + (board.shape === k ? " on" : ""), icon, label, () => { board.shape = k; keepPen(); barOfBoard(); });
+  }
   const colors = group(opts);
   const swatch = (c, label) => {
     const d = mk(colors, "sw" + (c.toLowerCase() === board.color.toLowerCase() ? " on" : ""), "", label || c, () => { board.color = c; keepPen(); barOfBoard(); });
@@ -921,13 +977,75 @@ function barOfBoard() {
     const d = Math.max(3, Math.round(w * 1.4));
     b.firstChild.style.width = b.firstChild.style.height = d + "px";
   }
+  // How much the ink covers: each of pen and highlighter keeps its own
+  const kind = board.tool === "marker" ? "marker" : "pen";
+  const op = group(opts);
+  op.classList.add("opac");
+  op.title = "Opacità";
+  const lab = document.createElement("span");
+  const range = document.createElement("input");
+  range.type = "range";
+  range.min = 10;
+  range.max = 100;
+  range.step = 5;
+  range.value = Math.round(board.alpha[kind] * 100);
+  range.setAttribute("aria-label", "Opacità");
+  range.style.setProperty("--ink", board.color);
+  lab.textContent = range.value + "%";
+  range.oninput = () => { board.alpha[kind] = range.value / 100; lab.textContent = range.value + "%"; };
+  range.onchange = () => { keepPen(); barOfBoard(); };
+  op.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 3.5c3 3.6 6 6.800 6 10.300a6 6 0 0 1-12 0c0-3.500 3-6.700 6-10.300z"/><path d="M12 20a6 6 0 0 0 6-6.200" fill="currentColor" stroke="none" opacity=".5"/></svg>';
+  op.append(range, lab);
+}
+
+/** Under the pages: every page small, the page in view and the ones beside it, a new page, how the pages are laid. */
+function navOfBook() {
+  const nav = $("nav"), b = board.book;
+  nav.className = b ? "on" : "";
+  nav.innerHTML = "";
+  if (!b) return;
+  const mk = (cls, html, label, run) => {
+    const x = document.createElement("button");
+    x.className = cls;
+    x.innerHTML = html;
+    x.title = label;
+    x.setAttribute("aria-label", label);
+    x.onclick = run;
+    nav.appendChild(x);
+    return x;
+  };
+  mk("nb", DI.pages, "Tutte le pagine in miniatura", openPages);
+  mk("nb", DI.left, "Pagina prima", () => turn(-1)).id = "navPrev";
+  mk("count", "", "Tutte le pagine in miniatura", openPages).id = "navCount";
+  mk("nb", DI.right, "Pagina dopo", () => turn(1)).id = "navNext";
+  mk("nb add", DI.plus, "Aggiungi una pagina", addMenu);
+  const sep = document.createElement("span");
+  sep.className = "vsep";
+  nav.appendChild(sep);
+  for (const [k, icon, label] of [["scroll", DI.vScroll, "Pagine una sotto l'altra"], ["single", DI.vSingle, "Una pagina alla volta"], ["double", DI.vDouble, "Due pagine affiancate"]])
+    mk("nb" + (b.layout === k ? " on" : ""), icon, label, () => setLayout(k));
+  mk("nb", DI.fit, "Adatta allo schermo", whole);
+  navCount();
+}
+/** Which page of how many, kept true while the pages move under it. */
+function navCount() {
+  const b = board.book, el = $("navCount");
+  if (!b || !el) return;
+  const sh = paged() ? shown() : [pageInView()], n = b.pages.length;
+  const text = (sh.length > 1 ? (sh[0] + 1) + "–" + (sh[1] + 1) : sh[0] + 1) + " / " + n;
+  if (el.textContent !== text) el.textContent = text;
+  $("navPrev").disabled = sh[0] === 0;
+  // After the last page there is a new one to make
+  const last = sh[sh.length - 1] === n - 1, next = $("navNext");
+  if (next.dataset.last !== String(last)) { next.dataset.last = String(last); next.innerHTML = last ? DI.page : DI.right; next.title = last ? "Nuova pagina in fondo" : "Pagina dopo"; }
 }
 
 // ---------------------------------------------------------------- favourite tools
 
-const sameFav = (f) => board.tool === f.tool && board.color.toLowerCase() === f.color.toLowerCase() && board.width === f.width;
+const sameFav = (f) => board.tool === f.tool && board.color.toLowerCase() === f.color.toLowerCase() && board.width === f.width && (f.o == null || f.o === board.alpha[f.tool]);
 function saveFav(k) {
-  board.favs[k] = { tool: board.tool === "marker" ? "marker" : "pen", color: board.color, width: board.width };
+  const tool = board.tool === "marker" ? "marker" : "pen";
+  board.favs[k] = { tool, color: board.color, width: board.width, o: board.alpha[tool] };
   keepPen();
   barOfBoard();
 }
@@ -935,6 +1053,7 @@ function useFav(f) {
   board.tool = f.tool;
   board.color = f.color;
   board.width = f.width;
+  if (f.o != null) board.alpha[f.tool] = f.o;
   board.sel = null;
   board.cropping = null;
   keepPen();
@@ -1191,14 +1310,54 @@ function fit() {
   canvas.height = h;
   paint();
 }
-new ResizeObserver(() => { if ($("draw").classList.contains("on")) fit(); }).observe($("pad"));
+new ResizeObserver(() => {
+  if (!$("draw").classList.contains("on")) return;
+  // A page whole on the screen stays whole in the room it has now
+  const f = paged() && isFitted();
+  fit();
+  if (f) whole();
+}).observe($("pad"));
 
 const dprOf = () => canvas.width / (canvas.getBoundingClientRect().width || 1);
 
 /** Where on the board a point of the screen is. */
-function toBoard(e) {
-  const r = canvas.getBoundingClientRect(), v = board.view;
-  return [(e.clientX - r.left - v.x) / v.s, (e.clientY - r.top - v.y) / v.s];
+function toBoard(e) { return boardOf(local(e)); }
+
+/*
+ * The pages are kept one under the other, whatever is shown. Shown one or two at a time, each
+ * page on the screen is moved from that place to its place on the screen ([offOf]); a point of
+ * the screen is on the page it falls on, and a line stays on the page where it began.
+ */
+const paged = () => !!board.book && board.book.layout !== "scroll";
+/** The pages on the screen, when they are shown one or two at a time. */
+function shown() {
+  const b = board.book, n = b.pages.length;
+  b.cur = Math.max(0, Math.min(n - 1, b.cur || 0));
+  if (b.layout !== "double") return [b.cur];
+  const left = b.cur - b.cur % 2;
+  return left + 1 < n ? [left, left + 1] : [left];
+}
+function offOf(i) {
+  if (!paged()) return [0, 0];
+  return [shown().indexOf(i) === 1 ? PW + PGAP : 0, -pageTop(i)];
+}
+function pageOfRaw(raw) {
+  if (!paged()) return pageAt(raw[1]);
+  const sh = shown();
+  return sh.length > 1 && raw[0] > PW + PGAP / 2 ? sh[1] : sh[0];
+}
+function boardOf(q) {
+  const v = board.view, raw = [(q[0] - v.x) / v.s, (q[1] - v.y) / v.s];
+  if (!board.book) return raw;
+  const free = board.gpage == null || (board.now && board.now.erasing);
+  const o = offOf(free ? pageOfRaw(raw) : board.gpage);
+  return [raw[0] - o[0], raw[1] - o[1]];
+}
+/** The room after the last page, where a tap makes a new one. */
+const ADD_H = 120;
+function addZone() {
+  const b = board.book, n = b.pages.length;
+  return { y: pageTop(n - 1) + b.pages[n - 1].h + PGAP, h: ADD_H };
 }
 
 function bounds(strokes) {
@@ -1213,6 +1372,15 @@ function bounds(strokes) {
 /** The whole drawing in view, with a margin; in a notebook, the page as wide as the screen. */
 function whole() {
   const r = canvas.getBoundingClientRect();
+  if (paged()) {
+    // The page, or the two, whole on the screen
+    const sh = shown(), w = sh.length > 1 ? 2 * PW + PGAP : PW, h = Math.max(...sh.map((i) => board.book.pages[i].h));
+    const s = Math.max(0.1, Math.min((r.width - 20) / w, (r.height - 84) / h));
+    board.view = { s, x: (r.width - w * s) / 2, y: Math.max(8, (r.height - 64 - h * s) / 2) };
+    board.fitted = { ...board.view };
+    paint();
+    return;
+  }
   if (board.book) {
     const s = Math.min(1.25, Math.max(0.2, (r.width - 24) / PW));
     // The page in the middle of the screen stays the one in view
@@ -1228,13 +1396,15 @@ function whole() {
   paint();
 }
 
+const alphaOf = (s) => (s.o != null ? s.o : s.tool === "marker" ? 0.35 : 1);
+
 function line(g, s, from) {
   const p = s.points;
   g.strokeStyle = s.color;
   g.lineWidth = s.width;
   g.lineCap = s.tool === "marker" ? "butt" : "round";
   g.lineJoin = "round";
-  g.globalAlpha = s.tool === "marker" ? 0.35 : 1;
+  g.globalAlpha = alphaOf(s);
   g.beginPath();
   const start = Math.max(0, from);
   g.moveTo(p[start][0], p[start][1]);
@@ -1382,12 +1552,16 @@ function paint() {
     g.fillStyle = "#1c2023";
     g.fillRect(0, 0, canvas.width, canvas.height);
     g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
-    const px = 1 / v.s, from = -v.y / v.s, to = (r.height - v.y) / v.s;
-    board.book.pages.forEach((pg, i) => {
-      const t = pageTop(i);
-      if (t > to || t + pg.h < from) return;
+    const px = 1 / v.s, from = -v.y / v.s, to = (r.height - v.y) / v.s, b = board.book;
+    const list = paged() ? shown() : b.pages.map((pg, i) => i).filter((i) => pageTop(i) <= to && pageTop(i) + b.pages[i].h >= from);
+    // What is on each page: a line is on the page where it begins
+    const on = new Map(list.map((i) => [i, { strokes: [], items: [] }]));
+    for (const s of board.strokes) { const e = on.get(pageAt(s.points[0][1])); if (e) e.strokes.push(s); }
+    for (const o of board.items) { const e = on.get(pageAt(o.cy)); if (e && !(board.cropping && o === board.sel)) e.items.push(o); }
+    for (const i of list) {
+      const pg = b.pages[i], t = pageTop(i), off = offOf(i);
       g.save();
-      g.translate(0, t);
+      g.translate(off[0], off[1] + t);
       g.shadowColor = "rgba(0,0,0,.45)";
       g.shadowBlur = 10 * dpr;
       g.fillStyle = "#fff";
@@ -1396,17 +1570,44 @@ function paint() {
       g.shadowColor = "transparent";
       drawSheet(g, pg, px);
       g.restore();
-    });
-    // Ink and pictures only on the pages
-    g.save();
-    g.beginPath();
-    board.book.pages.forEach((pg, i) => g.rect(0, pageTop(i), PW, pg.h));
-    g.clip();
-    for (const o of board.items) if (!(board.cropping && o === board.sel)) drawItem(g, o);
-    for (const s of board.strokes) line(g, s, 0);
-    g.restore();
-    drawSelection(g, px);
+      // Ink and pictures only on their page
+      g.save();
+      g.translate(off[0], off[1]);
+      g.beginPath();
+      g.rect(0, t, PW, pg.h);
+      g.clip();
+      for (const o of on.get(i).items) drawItem(g, o);
+      for (const s of on.get(i).strokes) line(g, s, 0);
+      g.restore();
+    }
+    if (!paged()) {
+      // After the last page: room to tap for a new one
+      const z = addZone();
+      if (z.y <= to) {
+        g.save();
+        g.strokeStyle = "#4a555d";
+        g.fillStyle = "rgba(255,255,255,.04)";
+        g.lineWidth = 2 * px;
+        g.setLineDash([8, 7]);
+        g.beginPath();
+        if (g.roundRect) g.roundRect(4, z.y, PW - 8, z.h, 14); else g.rect(4, z.y, PW - 8, z.h);
+        g.fill();
+        g.stroke();
+        g.setLineDash([]);
+        g.fillStyle = "#aab4bc";
+        g.font = "600 30px system-ui, sans-serif";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText("+  Nuova pagina", PW / 2, z.y + z.h / 2);
+        g.restore();
+      }
+    }
+    if (board.sel) {
+      const i = pageAt(board.sel.cy);
+      if (list.includes(i)) { const off = offOf(i); g.save(); g.translate(off[0], off[1]); drawSelection(g, px); g.restore(); }
+    }
     drawRuler();
+    navCount();
     return;
   }
   g.fillStyle = "#fff";
@@ -1426,6 +1627,7 @@ function paint() {
 function boardContext() {
   const g = canvas.getContext("2d"), dpr = dprOf(), v = board.view;
   g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
+  if (board.book && board.gpage != null) { const off = offOf(board.gpage); g.translate(off[0], off[1]); }
   return g;
 }
 
@@ -1479,7 +1681,7 @@ function erase(p) {
       for (let k = 1; k < n; k++) fine.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
     }
     let run = [];
-    const end = () => { if (run.length) out.push({ tool: s.tool, color: s.color, width: s.width, points: run }); run = []; };
+    const end = () => { if (run.length) out.push({ tool: s.tool, color: s.color, width: s.width, o: s.o, points: run }); run = []; };
     for (const pt of fine) { if (Math.hypot(pt[0] - p[0], pt[1] - p[1]) <= lim) end(); else run.push(pt); }
     end();
   }
@@ -1607,7 +1809,8 @@ async function bookImage(path) {
   const nw = (el && el.naturalWidth) || 800, nh = (el && el.naturalHeight) || 600;
   const i = pageInView(), r = canvas.getBoundingClientRect(), t = pageTop(i), pg = board.book.pages[i];
   const w = Math.min(PW * 0.55, nw), h = w * nh / nw;
-  const cy = Math.max(t + h / 2 + 20, Math.min(t + pg.h - h / 2 - 20, (r.height / 2 - board.view.y) / board.view.s));
+  const mid = paged() ? t + pg.h / 2 : (r.height / 2 - board.view.y) / board.view.s;
+  const cy = Math.max(t + h / 2 + 20, Math.min(t + pg.h - h / 2 - 20, mid));
   remember();
   const o = { src, nw, nh, cx: PW / 2, cy, w, h, rot: 0, crop: { x: 0, y: 0, w: nw, h: nh } };
   board.items.push(o);
@@ -1632,23 +1835,47 @@ function begin(e) {
   }
   remember();
   const marker = board.tool === "marker", width = marker ? board.width * 4 : board.width;
-  board.now = { tool: board.tool, color: board.color, width, points: [p] };
+  const o = board.alpha[marker ? "marker" : "pen"];
+  board.now = { tool: marker ? "marker" : "pen", color: board.color, width, points: [p] };
+  if (o !== (marker ? 0.35 : 1)) board.now.o = o;
+  if (board.tool === "shape") { board.now.shape = board.shape; board.now.from = p; board.strokes.push(board.now); return; }
   const snap = snapOf(local(e), width * board.view.s / 2);
   if (snap != null) { board.now.snap = snap; board.now.points = [snapped(e)]; }
   board.strokes.push(board.now);
   if (snap != null) paint(); else line(boardContext(), board.now, 0);
 }
 
+/** The line of a shape drawn from [a] to [b]. */
+function shapePoints(kind, a, b, width) {
+  if (kind === "rect") return [a, [b[0], a[1]], b, [a[0], b[1]], a];
+  if (kind === "ellipse") {
+    const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2, rx = Math.abs(b[0] - a[0]) / 2, ry = Math.abs(b[1] - a[1]) / 2, out = [];
+    for (let k = 0; k <= 64; k++) out.push([cx + rx * Math.cos(k * Math.PI / 32), cy + ry * Math.sin(k * Math.PI / 32)]);
+    return out;
+  }
+  if (kind === "arrow") {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, h = Math.min(len * 0.4, Math.max(12, width * 4)), ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    const tip = (d) => [b[0] - h * Math.cos(ang + d), b[1] - h * Math.sin(ang + d)];
+    return [a, b, tip(0.45), b, tip(-0.45)];
+  }
+  return [a, b];
+}
+
 /** The point of the board on the ruler's edge, level with where the pen is. */
 function snapped(e) {
-  const q = rulerPoint(onRulerAt(local(e)).along, board.now.snap), v = board.view;
-  return [(q[0] - v.x) / v.s, (q[1] - v.y) / v.s];
+  return boardOf(rulerPoint(onRulerAt(local(e)).along, board.now.snap));
 }
 
 const panFrom = (e) => { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view } }; };
 
 /** A pointer that would write: with the hand it moves the pages, with the select tool it takes an image. */
 function press(e) {
+  if (board.book) {
+    const v = board.view, q = local(e), raw = [(q[0] - v.x) / v.s, (q[1] - v.y) / v.s];
+    // A tap after the last page makes a new one
+    if (!paged()) { const z = addZone(); if (raw[1] >= z.y && raw[1] <= z.y + z.h && raw[0] >= 0 && raw[0] <= PW && !flipped(e)) { board.addTap = { id: e.pointerId, at: q }; return; } }
+    board.gpage = pageOfRaw(raw);
+  }
   if (flipped(e)) { begin(e); return; }
   if (board.tool === "hand") { panFrom(e); return; }
   if (board.tool === "select" && board.book) { if (selectDown(e)) board.drawId = e.pointerId; else panFrom(e); return; }
@@ -1730,25 +1957,44 @@ canvas.addEventListener("pointermove", (e) => {
     if (board.eraser === "area") { paint(); ring(e); }
     return;
   }
+  if (s.shape) { s.points = shapePoints(s.shape, s.from, toBoard(e), s.width); paint(); return; }
   // Along the ruler: a straight line from where it began to where the pen is
   if (s.snap != null) { s.points = [s.points[0], snapped(e)]; paint(); return; }
   // Every point the pen went through, not only the ones a busy screen had time to tell: a smooth line
   const from = s.points.length - 1;
   for (const m of (moves.length ? moves : [e])) s.points.push(toBoard(m));
   // A highlighter is drawn again whole, or its see-through ink would darken where its pieces meet
-  if (s.tool === "marker") paint(); else line(boardContext(), s, from);
+  if (alphaOf(s) < 1) paint(); else line(boardContext(), s, from);
 });
 
 function lift(e) {
   if (rulerUp(e)) return;
   board.touches.delete(e.pointerId);
-  if (board.pan && board.pan.id === e.pointerId) board.pan = null;
+  if (board.addTap && board.addTap.id === e.pointerId) {
+    const q = local(e), a = board.addTap.at;
+    board.addTap = null;
+    if (e.type === "pointerup" && Math.hypot(q[0] - a[0], q[1] - a[1]) < 10) addPage();
+    return;
+  }
+  if (board.pan && board.pan.id === e.pointerId) {
+    // One or two pages at a time: a quick slide sideways turns the page
+    const q = local(e), dx = q[0] - board.pan.at[0], dy = q[1] - board.pan.at[1], was = board.pan.view;
+    board.pan = null;
+    if (paged() && e.type === "pointerup" && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) { board.view = was; turn(dx < 0 ? 1 : -1, true); }
+  }
   if (board.touches.size < 2) board.pinch = null;
   if (board.drawId === e.pointerId) {
     const was = board.now, drag = board.drag;
     board.drawId = null;
     board.now = null;
     board.drag = null;
+    board.gpage = null;
+    if (was && was.shape) {
+      // A shape too small to be one: a slip of the pen
+      if (was.points.length < 2) { board.strokes = board.strokes.filter((x) => x !== was); board.undo.pop(); }
+      delete was.shape;
+      delete was.from;
+    }
     if (drag) { if (drag.moved) { barOfBoard(); bookChanged(); } return; }
     if (was && (!was.erasing || board.erased)) { paint(); barOfBoard(); bookChanged(); }
     else if (was) paint();
@@ -1760,6 +2006,11 @@ canvas.addEventListener("wheel", (e) => {
   const [x, y] = local(e);
   if (overRuler([x, y]) && !e.ctrlKey) { board.ruler.a += Math.sign(e.deltaY) * (e.shiftKey ? Math.PI / 12 : Math.PI / 180); paint(); return; }
   // In a notebook the wheel turns the pages, and with Ctrl zooms; on the board it zooms around the pointer
+  if (paged() && !e.ctrlKey) {
+    // A page whole on the screen: the wheel turns it. Bigger than the screen: it moves over it
+    const sh = shown(), h = Math.max(...sh.map((i) => board.book.pages[i].h)) * board.view.s, r = canvas.getBoundingClientRect();
+    if (h <= r.height) { const now = Date.now(); if (now - (board.wheelAt || 0) > 220 && Math.abs(e.deltaY) > 4) { board.wheelAt = now; turn(e.deltaY > 0 ? 1 : -1); } return; }
+  }
   if (board.book && !e.ctrlKey) { board.view.y -= e.deltaY; board.view.x -= e.deltaX; paint(); return; }
   if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(x, y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
   else { board.view.x -= e.deltaX; paint(); }
@@ -1771,6 +2022,10 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") { e.preventDefault(); redo(); }
   if ((e.key === "Delete" || e.key === "Backspace") && board.sel && !board.cropping) { e.preventDefault(); deleteSel(); }
   if (e.key === "Enter" && board.cropping) applyCrop();
+  if (board.book && !$("sheet").classList.contains("on")) {
+    if (e.key === "PageDown" || (paged() && e.key === "ArrowRight")) { e.preventDefault(); turn(1); }
+    if (e.key === "PageUp" || (paged() && e.key === "ArrowLeft")) { e.preventDefault(); turn(-1); }
+  }
 });
 document.addEventListener("keyup", (e) => { if (e.code === "Space") board.space = false; });
 // The page itself must not move, nor a long press select, while a finger draws
@@ -1780,14 +2035,18 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 // ---------------------------------------------------------------- a drawing as a file
 
 const r1 = (n) => Math.round(n * 10) / 10;
-const inkOf = (strokes) => strokes.map((s) => ({ t: s.tool, c: s.color, w: s.width, p: s.points.map(([a, b]) => [r1(a), r1(b)]) }));
-const strokesFrom = (data) => data.map((s) => ({ tool: s.t || "pen", color: s.c, width: s.w, points: s.p }));
+const inkOf = (strokes) => strokes.map((s) => {
+  const d = { t: s.tool, c: s.color, w: s.width, p: s.points.map(([a, b]) => [r1(a), r1(b)]) };
+  if (s.o != null) d.o = s.o;
+  return d;
+});
+const strokesFrom = (data) => data.map((s) => ({ tool: s.t || "pen", color: s.c, width: s.w, o: s.o == null ? undefined : s.o, points: s.p }));
 
 function pathsOf(strokes) {
   return strokes.map((s) => {
     const d = s.points.map(([a, b], i) => (i ? "L" : "M") + r1(a) + " " + r1(b)).join("") + (s.points.length === 1 ? "l0.01 0" : "");
     const marker = s.tool === "marker";
-    return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="' + s.width + '" stroke-linecap="' + (marker ? "butt" : "round") + '" stroke-linejoin="round"' + (marker ? ' stroke-opacity="0.35"' : "") + "/>";
+    return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="' + s.width + '" stroke-linecap="' + (marker ? "butt" : "round") + '" stroke-linejoin="round"' + (alphaOf(s) < 1 ? ' stroke-opacity="' + alphaOf(s) + '"' : "") + "/>";
   }).join("\n");
 }
 
@@ -1887,7 +2146,7 @@ function openBook(html) {
     try { items = JSON.parse(p.getAttribute("data-items") || "[]"); } catch (e) { /* nor pictures */ }
     per.push({ strokes, items });
   }
-  board.book = { paper, pages, tops: [] };
+  board.book = { paper, pages, tops: [], layout: ["single", "double"].includes(board.layout) ? board.layout : "scroll", cur: 0 };
   if (!pages.length) { pages.push(blankPage()); per.push({ strokes: [], items: [] }); }
   board.editing = null;
   if (board.tool === "eraser") board.tool = "pen";
@@ -1905,6 +2164,7 @@ function closeBook() {
   if (!board.book) return;
   board.book = null;
   board.items = [];
+  navOfBook();
   closeSheet();
   $("draw").classList.remove("on", "book");
   $("page").prepend(title);
@@ -1943,34 +2203,89 @@ function bookHtml() {
   return '<div class="notebook" data-paper="' + b.paper + '">\n' + out.join("\n") + "\n</div>";
 }
 
-/** The page in the middle of the screen. */
+/** The page in view: the one in the middle of the screen, or the one shown. */
 function pageInView() {
+  if (paged()) return shown()[0];
   const r = canvas.getBoundingClientRect();
   return pageAt((r.height / 2 - board.view.y) / board.view.s);
 }
 
+/** The page shown is still whole on the screen as [whole] put it: not zoomed nor moved since. */
+const isFitted = () => { const f = board.fitted, v = board.view; return !!f && Math.abs(f.s - v.s) < 1e-6 && Math.abs(f.x - v.x) < 1 && Math.abs(f.y - v.y) < 1; };
+
 function goToPage(i) {
+  const b = board.book;
+  // Whole on the screen before, whole after: one page may be wider or taller than the other
+  if (paged()) { const fit = isFitted(); b.cur = Math.max(0, Math.min(b.pages.length - 1, i)); if (fit) whole(); else paint(); return; }
   board.view.y = 12 - pageTop(i) * board.view.s;
   paint();
 }
 
-function addPage(at) {
+/** A page on, or back; past the last one, a new page. [fitIt]: the page is put whole on the screen again. */
+function turn(d, fitIt) {
+  const b = board.book, n = b.pages.length;
+  if (paged()) {
+    const sh = shown(), step = b.layout === "double" ? 2 : 1;
+    if (d > 0 && sh[sh.length - 1] === n - 1) { addPage(); return; }
+    const fit = fitIt || isFitted();
+    b.cur = Math.max(0, Math.min(n - 1, sh[0] + d * step));
+    board.sel = null;
+    board.cropping = null;
+    if (fit) whole(); else paint();
+    return;
+  }
+  const i = pageInView();
+  if (d > 0 && i === n - 1) { addPage(); return; }
+  goToPage(Math.max(0, i + d));
+}
+
+function setLayout(k) {
+  const b = board.book, here = pageInView();
+  b.layout = k;
+  board.layout = k;
+  b.cur = here;
+  keepPen();
+  board.view = { s: 0, x: 0, y: 0 };
+  whole();
+  if (k === "scroll") goToPage(here);
+  barOfBoard();
+}
+
+/** A new page at [at] (at the end, when not said), of [paper] or of the paper last used. */
+function addPage(at, paper) {
   const k = at == null ? board.book.pages.length : at;
+  if (paper) board.book.paper = paper;
   rearrange((pages, per) => { pages.splice(k, 0, blankPage()); per.splice(k, 0, { strokes: [], items: [] }); });
   goToPage(k);
+}
+
+/** The + under the pages: what kind of page, and it goes after the one in view. */
+function addMenu() {
+  const b = board.book, here = pageInView(), at = here + 1;
+  const items = PAPERS.map(([k, label]) => ["Pagina " + (k === "blank" ? "bianca" : "a " + label.toLowerCase()) + (k === b.paper ? "  ·  come l'ultima" : ""), () => addPage(at, k)]);
+  // The paper last used first: the one most likely wanted again
+  items.sort((x, y) => (y[0].includes("come l'ultima") ? 1 : 0) - (x[0].includes("come l'ultima") ? 1 : 0));
+  items.push(["Pagine da un PDF…", () => host.pick("pdf")]);
+  items.push(["Una foto o un'immagine come pagina…", () => { board.pickAs = "page"; host.pick("image"); }]);
+  items.push(["Copia di questa pagina", () => { rearrange((pages, p) => { pages.splice(at, 0, { ...pages[here] }); p.splice(at, 0, { strokes: p[here].strokes.slice(), items: p[here].items.map((o) => ({ ...o, crop: { ...o.crop } })) }); }); goToPage(at); }]);
+  choose("Nuova pagina dopo la " + (here + 1), items);
+}
+
+/** A picture as a page of its own, to write over: after the page in view. */
+async function imagePage(path) {
+  const src = encodeURI(path), el = await loaded(src);
+  const nw = (el && el.naturalWidth) || 800, nh = (el && el.naturalHeight) || 1100, at = pageInView() + 1;
+  rearrange((pages, per) => { pages.splice(at, 0, { h: PW * nh / nw, paper: board.book.paper, bg: { src } }); per.splice(at, 0, { strokes: [], items: [] }); });
+  goToPage(at);
 }
 
 function bookMenu() {
   const b = board.book, here = pageInView(), pg = b.pages[here];
   const items = [];
-  if (!pg.bg) for (const [k, label] of PAPERS) items.push([(k === pg.paper ? "✓ " : "    ") + "Questa pagina: " + label, () => rearrange((pages) => { pages[here].paper = k; b.paper = k; })]);
-  for (const [k, label] of PAPERS) items.push(["    Tutte le pagine: " + label, () => rearrange((pages) => { pages.forEach((p) => { p.paper = k; }); b.paper = k; })]);
-  items.push(["Tutte le pagine, in piccolo", openPages]);
-  items.push(["Aggiungi una pagina dopo questa (" + (here + 1) + ")", () => addPage(here + 1)]);
-  items.push(["Aggiungi una pagina in fondo", () => addPage()]);
-  items.push(["Aggiungi pagine da un PDF", () => host.pick("pdf")]);
+  if (!pg.bg) for (const [k, label] of PAPERS) items.push([(k === pg.paper ? "✓ " : "    ") + "Carta di questa pagina: " + label, () => rearrange((pages) => { pages[here].paper = k; b.paper = k; })]);
+  for (const [k, label] of PAPERS) items.push(["    Carta di tutte le pagine: " + label, () => rearrange((pages) => { pages.forEach((p) => { p.paper = k; }); b.paper = k; })]);
   items.push(["Elimina la pagina " + (here + 1), () => dropPage(here), true]);
-  choose("Quaderno · pagina " + (here + 1) + " di " + b.pages.length, items);
+  choose("Pagina " + (here + 1) + " di " + b.pages.length, items);
 }
 
 function dropPage(i) {
