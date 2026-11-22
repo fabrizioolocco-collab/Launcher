@@ -165,6 +165,24 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #sheet .card .tick { position: absolute; top: 14px; right: calc(50% - 68px); width: 26px; height: 26px; border-radius: 50%; background: #2a3135; display: flex; align-items: center; justify-content: center; }
 #sheet .card.pick.on .tick { background: #8ab4f8; color: #000; }
 #sheet .card .tick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+#sheet .shHint { color: var(--dim); font-size: 12.5px; padding: 8px 16px 0; }
+#sheet .grid { position: relative; user-select: none; -webkit-user-select: none; }
+#sheet .card.chosen { background: #12263f; box-shadow: inset 0 0 0 2px #8ab4f8; }
+#sheet .card:not(.pick) .tick { display: none; }
+#sheet .card.chosen .tick { display: flex; background: #8ab4f8; color: #000; }
+#sheet .card .grip { position: absolute; top: 12px; left: calc(50% - 72px); width: 30px; height: 30px; border-radius: 8px; background: rgba(28,32,35,.9); color: #fff; display: flex; align-items: center; justify-content: center; touch-action: none; cursor: grab; box-shadow: 0 1px 4px rgba(0,0,0,.5); }
+#sheet .card .grip svg { width: 18px; height: 18px; }
+.carry { position: fixed; z-index: 20; pointer-events: none; opacity: .9; transform: rotate(-3deg); }
+.carry canvas { display: block; border-radius: 3px; box-shadow: 0 8px 24px rgba(0,0,0,.6); background: #fff; }
+.carry span { position: absolute; top: -8px; right: -8px; min-width: 24px; height: 24px; border-radius: 12px; background: #8ab4f8; color: #000; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; padding: 0 6px; }
+#sheet .dropline { position: absolute; width: 4px; border-radius: 2px; background: #8ab4f8; pointer-events: none; }
+#drawBar .favs { gap: 2px; }
+#drawBar .fav { position: relative; width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #c4ccd3; flex-shrink: 0; font-size: 20px; font-weight: 300; -webkit-touch-callout: none; user-select: none; }
+#drawBar .fav:hover { background: #171c20; color: #fff; }
+#drawBar .fav.on { background: var(--fg); color: #000; }
+#drawBar .fav.empty { color: #59646c; border: 1.5px dashed #39434a; width: 36px; height: 36px; margin: 2px; }
+#drawBar .fav svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; margin-top: -5px; }
+#drawBar .fav .tip { position: absolute; left: 9px; right: 9px; bottom: 5px; border-radius: 3px; box-shadow: 0 0 0 1px rgba(255,255,255,.3); }
 #sheet .wait { margin: auto; color: var(--dim); padding: 24px; text-align: center; }
 #app.pc ~ #draw.book { left: 301px; }
 #box.picker { max-width: 360px; }
@@ -678,7 +696,10 @@ const board = {
   view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null, book: null,
   touches: new Map(), pinch: null, pan: null, erased: false, penSeen: false, space: false,
   sel: null, cropping: null, drag: null,
+  favs: [null, null, null, null], ruler: null, rTouch: new Map(), rStart: null, pageSel: new Set(),
 };
+/** Half the width of the ruler, on the screen. */
+const RHW = 34;
 const canvas = document.querySelector("#pad canvas");
 const COLORS = ["#111111", "#5f6368", "#d32f2f", "#f57c00", "#f9a825", "#388e3c", "#1976d2", "#8e24aa"];
 const WIDTHS = [1.5, 3, 5, 8, 14];
@@ -686,8 +707,8 @@ const ESIZES = [8, 18, 36];
 const PW = 794, PH = 1123, PGAP = 28;
 const PAPERS = [["grid", "Quadretti"], ["lines", "Righe"], ["dots", "Puntini"], ["blank", "Bianca"]];
 
-try { const k = JSON.parse(localStorage.getItem("pen") || "{}"); for (const n of ["color", "width", "eraser", "esize", "recent"]) if (k[n] != null) board[n] = k[n]; } catch (e) { /* defaults */ }
-const keepPen = () => { try { localStorage.setItem("pen", JSON.stringify({ color: board.color, width: board.width, eraser: board.eraser, esize: board.esize, recent: board.recent })); } catch (e) { /* not kept */ } };
+try { const k = JSON.parse(localStorage.getItem("pen") || "{}"); for (const n of ["color", "width", "eraser", "esize", "recent", "favs"]) if (k[n] != null) board[n] = k[n]; } catch (e) { /* defaults */ }
+const keepPen = () => { try { localStorage.setItem("pen", JSON.stringify({ color: board.color, width: board.width, eraser: board.eraser, esize: board.esize, recent: board.recent, favs: board.favs })); } catch (e) { /* not kept */ } };
 
 const DI = {
   hand: '<svg viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 10.5v-6a1.5 1.5 0 0 1 3 0V11"/><path d="M14 10.5V6a1.5 1.5 0 0 1 3 0v5.5"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.6a6 6 0 0 1-4.6-2.2L4.4 14.6a1.6 1.6 0 0 1 2.4-2.1L8 14"/></svg>',
@@ -716,6 +737,8 @@ const DI = {
   right: '<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>',
   copy: '<svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>',
   side: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>',
+  ruler: '<svg viewBox="0 0 24 24"><rect x="2.5" y="8" width="19" height="8" rx="1.5" transform="rotate(-30 12 12)"/><path d="M7.4 13.2l-1-1.7M10 11.7l-1.5-2.6M12.6 10.2l-1-1.7M15.2 8.7l-1.5-2.6" /></svg>',
+  grip: '<svg viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.3" fill="currentColor"/><circle cx="15" cy="6" r="1.3" fill="currentColor"/><circle cx="9" cy="12" r="1.3" fill="currentColor"/><circle cx="15" cy="12" r="1.3" fill="currentColor"/><circle cx="9" cy="18" r="1.3" fill="currentColor"/><circle cx="15" cy="18" r="1.3" fill="currentColor"/></svg>',
 };
 
 function openDraw(strokes, editing) {
@@ -783,6 +806,7 @@ function barOfBoard() {
   mk(hist, "ib", DI.undo, "Annulla", undo).disabled = !board.undo.length;
   mk(hist, "ib", DI.redo, "Ripeti", redo).disabled = !board.redo.length;
   const view = group(top);
+  mk(view, "ib" + (board.ruler ? " on" : ""), DI.ruler, "Righello: le linee vicino al bordo vengono dritte. Un dito lo sposta, due lo ruotano", toggleRuler);
   mk(view, "ib", DI.fit, board.book ? "Adatta alla larghezza" : "Mostra tutto il disegno", whole);
   if (board.book) {
     mk(view, "ib", DI.image, "Metti un'immagine sulla pagina", () => host.pick("image"));
@@ -799,6 +823,27 @@ function barOfBoard() {
 
   // The second row: what the tool in hand can be set to
   const opts = row("opts");
+  // Four favourite tools, kept: a pen or highlighter of a colour and a width, a tap away
+  const favs = group(opts);
+  favs.classList.add("favs");
+  board.favs.forEach((f, k) => {
+    const label = f ? (f.tool === "marker" ? "Evidenziatore" : "Penna") + " preferito " + (k + 1) + " · tieni premuto per cambiarlo" : "Posto libero: tocca per salvare qui lo strumento attuale";
+    const b = mk(favs, "fav" + (f ? "" : " empty") + (f && sameFav(f) ? " on" : ""), f ? DI[f.tool] : "+", label, () => {
+      if (b.held) { b.held = false; return; }
+      if (f) useFav(f); else saveFav(k);
+    });
+    if (f) {
+      const tip = document.createElement("span");
+      tip.className = "tip";
+      tip.style.background = f.color;
+      tip.style.height = Math.max(3, Math.min(8, Math.round(f.width / 2) + 2)) + "px";
+      if (f.tool === "marker") tip.style.opacity = "0.6";
+      b.appendChild(tip);
+    }
+    b.onpointerdown = () => { clearTimeout(b.timer); b.timer = setTimeout(() => { b.held = true; favMenu(k); }, 550); };
+    b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(b.timer);
+    b.oncontextmenu = (e) => { e.preventDefault(); clearTimeout(b.timer); favMenu(k); };
+  });
   if (board.tool === "hand") {
     hint(opts, "Trascina con la penna, il dito o il mouse per spostarti. Due dita o la rotellina con Ctrl per lo zoom.");
     return;
@@ -851,6 +896,140 @@ function barOfBoard() {
     const d = Math.max(3, Math.round(w * 1.4));
     b.firstChild.style.width = b.firstChild.style.height = d + "px";
   }
+}
+
+// ---------------------------------------------------------------- favourite tools
+
+const sameFav = (f) => board.tool === f.tool && board.color.toLowerCase() === f.color.toLowerCase() && board.width === f.width;
+function saveFav(k) {
+  board.favs[k] = { tool: board.tool === "marker" ? "marker" : "pen", color: board.color, width: board.width };
+  keepPen();
+  barOfBoard();
+}
+function useFav(f) {
+  board.tool = f.tool;
+  board.color = f.color;
+  board.width = f.width;
+  board.sel = null;
+  board.cropping = null;
+  keepPen();
+  paint();
+  barOfBoard();
+}
+function favMenu(k) {
+  const f = board.favs[k], now = (board.tool === "marker" ? "evidenziatore" : "penna") + " con il colore e lo spessore di adesso";
+  const items = [["Metti qui: " + now, () => saveFav(k)]];
+  if (f) items.push(["Svuota questo posto", () => { board.favs[k] = null; keepPen(); barOfBoard(); }, true]);
+  choose("Preferito " + (k + 1), items);
+}
+
+// ---------------------------------------------------------------- the ruler
+
+/*
+ * A ruler over the board, where it is on the screen whatever the board does under it. A line begun
+ * near one of its edges comes out straight along that edge. One finger (or the mouse) moves it, two
+ * turn it; the wheel over it turns it a degree at a time (with Shift, 15).
+ */
+function toggleRuler() {
+  const r = canvas.getBoundingClientRect();
+  board.ruler = board.ruler ? null : { x: r.width / 2, y: r.height * 0.45, a: 0 };
+  board.rTouch.clear();
+  paint();
+  barOfBoard();
+}
+
+/** A point of the screen measured along the ruler and across it, from its middle. */
+function onRulerAt(q) {
+  const R = board.ruler, c = Math.cos(R.a), s = Math.sin(R.a), dx = q[0] - R.x, dy = q[1] - R.y;
+  return { along: dx * c + dy * s, across: -dx * s + dy * c };
+}
+const overRuler = (q) => board.ruler && Math.abs(onRulerAt(q).across) <= RHW;
+
+/** The point of the screen at [along] the ruler, [across] from its middle line. */
+function rulerPoint(along, across) {
+  const R = board.ruler, c = Math.cos(R.a), s = Math.sin(R.a);
+  return [R.x + along * c - across * s, R.y + along * s + across * c];
+}
+
+function drawRuler() {
+  const R = board.ruler;
+  if (!R) return;
+  const g = canvas.getContext("2d"), dpr = dprOf(), L = 6000;
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.save();
+  g.translate(R.x, R.y);
+  g.rotate(R.a);
+  g.shadowColor = "rgba(0,0,0,.35)";
+  g.shadowBlur = 10;
+  g.fillStyle = "rgba(236,239,242,.88)";
+  g.fillRect(-L / 2, -RHW, L, RHW * 2);
+  g.shadowBlur = 0;
+  g.strokeStyle = "#56616b";
+  g.lineWidth = 1;
+  g.beginPath();
+  for (let x = -L / 2; x <= L / 2; x += 10) {
+    const n = Math.round(x / 10), t = n % 10 === 0 ? 15 : n % 5 === 0 ? 10 : 5;
+    g.moveTo(x + 0.5, -RHW); g.lineTo(x + 0.5, -RHW + t);
+    g.moveTo(x + 0.5, RHW); g.lineTo(x + 0.5, RHW - t);
+  }
+  g.stroke();
+  let deg = Math.round(-R.a * 180 / Math.PI) % 360;
+  if (deg > 180) deg -= 360;
+  if (deg <= -180) deg += 360;
+  const text = Math.abs(deg) + "°";
+  g.font = "600 13px system-ui, sans-serif";
+  const w = g.measureText(text).width + 18;
+  g.fillStyle = "#1c2023";
+  g.beginPath();
+  if (g.roundRect) g.roundRect(-w / 2, -12, w, 24, 12); else g.rect(-w / 2, -12, w, 24);
+  g.fill();
+  g.fillStyle = "#fff";
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, 0, 1);
+  g.restore();
+}
+
+function rulerDown(e) {
+  board.rTouch.set(e.pointerId, local(e));
+  board.rStart = { pts: new Map(board.rTouch), r: { ...board.ruler } };
+}
+function rulerMove(e) {
+  if (!board.rTouch.has(e.pointerId)) return false;
+  board.rTouch.set(e.pointerId, local(e));
+  const st = board.rStart, ids = Array.from(board.rTouch.keys()), R = board.ruler;
+  if (ids.length === 1) {
+    const a = st.pts.get(ids[0]), b = board.rTouch.get(ids[0]);
+    R.x = st.r.x + b[0] - a[0];
+    R.y = st.r.y + b[1] - a[1];
+  } else {
+    const a1 = st.pts.get(ids[0]), a2 = st.pts.get(ids[1]), b1 = board.rTouch.get(ids[0]), b2 = board.rTouch.get(ids[1]);
+    let turn = Math.atan2(b2[1] - b1[1], b2[0] - b1[0]) - Math.atan2(a2[1] - a1[1], a2[0] - a1[0]);
+    let a = st.r.a + turn;
+    // Straight, or at 15, 30, 45... degrees, when it comes close
+    const step = Math.PI / 12, q = Math.round(a / step) * step;
+    if (Math.abs(a - q) < 0.035) { turn += q - a; a = q; }
+    const ma = [(a1[0] + a2[0]) / 2, (a1[1] + a2[1]) / 2], mb = [(b1[0] + b2[0]) / 2, (b1[1] + b2[1]) / 2];
+    const c = Math.cos(turn), s = Math.sin(turn), dx = st.r.x - ma[0], dy = st.r.y - ma[1];
+    R.x = mb[0] + dx * c - dy * s;
+    R.y = mb[1] + dx * s + dy * c;
+    R.a = a;
+  }
+  paint();
+  return true;
+}
+function rulerUp(e) {
+  if (!board.rTouch.delete(e.pointerId)) return false;
+  board.rStart = { pts: new Map(board.rTouch), r: { ...board.ruler } };
+  return true;
+}
+
+/** Where a line begun at [q] on the screen goes, when it begins near an edge of the ruler: how far across it. */
+function snapOf(q, half) {
+  if (!board.ruler) return null;
+  const { across } = onRulerAt(q);
+  if (Math.abs(Math.abs(across) - RHW) > 26) return null;
+  return Math.sign(across || 1) * (RHW + half);
 }
 
 // ---------------------------------------------------------------- any colour
@@ -1202,6 +1381,7 @@ function paint() {
     for (const s of board.strokes) line(g, s, 0);
     g.restore();
     drawSelection(g, px);
+    drawRuler();
     return;
   }
   g.fillStyle = "#fff";
@@ -1215,6 +1395,7 @@ function paint() {
     for (let y = y0; y * v.s + v.y < r.height; y += step) g.fillRect((x * v.s + v.x) * dpr - 1, (y * v.s + v.y) * dpr - 1, 2, 2);
   g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
   for (const s of board.strokes) line(g, s, 0);
+  drawRuler();
 }
 
 function boardContext() {
@@ -1425,10 +1606,18 @@ function begin(e) {
     return;
   }
   remember();
-  const marker = board.tool === "marker";
-  board.now = { tool: board.tool, color: board.color, width: marker ? board.width * 4 : board.width, points: [p] };
+  const marker = board.tool === "marker", width = marker ? board.width * 4 : board.width;
+  board.now = { tool: board.tool, color: board.color, width, points: [p] };
+  const snap = snapOf(local(e), width * board.view.s / 2);
+  if (snap != null) { board.now.snap = snap; board.now.points = [snapped(e)]; }
   board.strokes.push(board.now);
-  line(boardContext(), board.now, 0);
+  if (snap != null) paint(); else line(boardContext(), board.now, 0);
+}
+
+/** The point of the board on the ruler's edge, level with where the pen is. */
+function snapped(e) {
+  const q = rulerPoint(onRulerAt(local(e)).along, board.now.snap), v = board.view;
+  return [(q[0] - v.x) / v.s, (q[1] - v.y) / v.s];
 }
 
 const panFrom = (e) => { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view } }; };
@@ -1446,6 +1635,9 @@ canvas.addEventListener("pointerdown", (e) => {
   // A title being written is done with: written now, before the bar is drawn again under it
   if (document.activeElement === title) title.blur();
   try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
+  // The ruler: a finger or the mouse on it moves it; a second finger, anywhere, turns it
+  if (board.ruler && e.pointerType !== "pen" && board.drawId == null && (e.pointerType !== "mouse" || e.button === 0) && !board.space
+    && (board.rTouch.size || (overRuler(local(e)) && !board.touches.size))) { rulerDown(e); return; }
   if (e.pointerType === "pen") {
     board.penSeen = true;
     if (board.drawId != null || board.pan) return;
@@ -1480,6 +1672,7 @@ canvas.addEventListener("pointerdown", (e) => {
 });
 
 canvas.addEventListener("pointermove", (e) => {
+  if (board.rTouch.has(e.pointerId)) { e.preventDefault(); rulerMove(e); return; }
   if (board.pan && board.pan.id === e.pointerId) {
     e.preventDefault();
     const [x, y] = local(e), o = board.pan;
@@ -1512,6 +1705,8 @@ canvas.addEventListener("pointermove", (e) => {
     if (board.eraser === "area") { paint(); ring(e); }
     return;
   }
+  // Along the ruler: a straight line from where it began to where the pen is
+  if (s.snap != null) { s.points = [s.points[0], snapped(e)]; paint(); return; }
   // Every point the pen went through, not only the ones a busy screen had time to tell: a smooth line
   const from = s.points.length - 1;
   for (const m of (moves.length ? moves : [e])) s.points.push(toBoard(m));
@@ -1520,6 +1715,7 @@ canvas.addEventListener("pointermove", (e) => {
 });
 
 function lift(e) {
+  if (rulerUp(e)) return;
   board.touches.delete(e.pointerId);
   if (board.pan && board.pan.id === e.pointerId) board.pan = null;
   if (board.touches.size < 2) board.pinch = null;
@@ -1537,6 +1733,7 @@ for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, lif
 canvas.addEventListener("wheel", (e) => {
   e.preventDefault();
   const [x, y] = local(e);
+  if (overRuler([x, y]) && !e.ctrlKey) { board.ruler.a += Math.sign(e.deltaY) * (e.shiftKey ? Math.PI / 12 : Math.PI / 180); paint(); return; }
   // In a notebook the wheel turns the pages, and with Ctrl zooms; on the board it zooms around the pointer
   if (board.book && !e.ctrlKey) { board.view.y -= e.deltaY; board.view.x -= e.deltaX; paint(); return; }
   if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(x, y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
@@ -1790,27 +1987,192 @@ function openPages() {
   const sh = $("sheet");
   sh.className = "on";
   sh.dataset.kind = "pages";
+  board.pageSel = new Set();
   renderPages();
+}
+
+/**
+ * Choosing many small pages by sliding over them, as in the launcher's galleries and its PDF
+ * reader: a long press on one chooses it, and the finger kept down chooses every page it passes
+ * to; with some already chosen a slide sideways does the same. With the mouse a press and a drag
+ * is enough. Every page between the first and the one under the finger takes the first one's new
+ * state; going back gives the others back theirs. Near the top or the bottom the grid scrolls.
+ */
+function dragSelect(grid, api) {
+  let st = null;
+  const at = (x, y) => { const el = document.elementFromPoint(x, y), c = el && el.closest ? el.closest(".card") : null; return c && grid.contains(c) ? +c.dataset.i : -1; };
+  const start = (byHold) => {
+    st.active = true;
+    st.decided = true;
+    st.target = !api.get(st.i);
+    st.before = new Map();
+    for (let k = 0; k < api.count(); k++) st.before.set(k, api.get(k));
+    api.set(st.i, st.target);
+    st.last = st.i;
+    api.changed();
+    try { grid.setPointerCapture(st.id); } catch (e) { /* gone */ }
+    if (byHold && navigator.vibrate) try { navigator.vibrate(12); } catch (e) { /* no vibration */ }
+  };
+  grid.addEventListener("pointerdown", (e) => {
+    if (e.button > 0 || (e.target.closest && e.target.closest(".grip, .acts"))) return;
+    const i = at(e.clientX, e.clientY);
+    if (i < 0) return;
+    st = { id: e.pointerId, x: e.clientX, y: e.clientY, i, mouse: e.pointerType === "mouse", active: false, decided: false };
+    clearTimeout(grid.holdTimer);
+    grid.holdTimer = setTimeout(() => { if (st && !st.decided) start(true); }, 450);
+  });
+  grid.addEventListener("pointermove", (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    const dx = e.clientX - st.x, dy = e.clientY - st.y, far = Math.hypot(dx, dy);
+    if (!st.decided) {
+      if (st.mouse && far > 6) start(false);
+      else if (!st.mouse && api.going() && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.2) start(false);
+      else if (far > 10) { st.decided = true; clearTimeout(grid.holdTimer); }
+    }
+    if (!st.active) return;
+    e.preventDefault();
+    const j = at(e.clientX, e.clientY);
+    if (j >= 0 && j !== st.last) {
+      st.last = j;
+      const a = Math.min(st.i, j), b = Math.max(st.i, j);
+      for (let k = 0; k < api.count(); k++) api.set(k, k >= a && k <= b ? st.target : st.before.get(k));
+      api.changed();
+    }
+    const r = grid.getBoundingClientRect();
+    if (e.clientY < r.top + 50) grid.scrollTop -= 14;
+    else if (e.clientY > r.bottom - 50) grid.scrollTop += 14;
+  });
+  const end = (e) => {
+    if (!st || e.pointerId !== st.id) return;
+    clearTimeout(grid.holdTimer);
+    if (st.active) grid.dataset.swallow = "1";
+    st = null;
+  };
+  grid.addEventListener("pointerup", end);
+  grid.addEventListener("pointercancel", end);
+  // Once a slide has begun, the grid no longer scrolls under the finger
+  grid.addEventListener("touchmove", (e) => { if (st && st.active) e.preventDefault(); }, { passive: false });
+  // The click after a slide is not a tap
+  grid.addEventListener("click", (e) => { if (grid.dataset.swallow) { grid.dataset.swallow = ""; e.stopPropagation(); e.preventDefault(); } }, true);
+  grid.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
+/** The pages in a new order: [moved] (indexes) put before what is now page [t]. */
+function movePages(moved, t) {
+  const n = board.book.pages.length, rest = [];
+  for (let k = 0; k < n; k++) if (!moved.includes(k)) rest.push(k);
+  const pos = rest.filter((k) => k < t).length, order = rest.slice(0, pos).concat(moved, rest.slice(pos));
+  if (order.every((k, i) => k === i)) return;
+  rearrange((pages, per) => {
+    const P = pages.slice(), Q = per.slice();
+    order.forEach((k, i) => { pages[i] = P[k]; per[i] = Q[k]; });
+  });
+  board.pageSel = new Set(moved.map((x, i) => pos + i));
+}
+
+/** A page taken by its grip and carried, with the others chosen if it is one of them, to where it is let go. */
+function carryPages(e, i, grid) {
+  e.preventDefault();
+  e.stopPropagation();
+  const sel = board.pageSel, moved = sel.has(i) ? Array.from(sel).sort((a, b) => a - b) : [i];
+  const ghost = document.createElement("div");
+  ghost.className = "carry";
+  const src = grid.querySelector('.card[data-i="' + i + '"] canvas');
+  if (src) { const c = document.createElement("canvas"); c.width = src.width; c.height = src.height; c.getContext("2d").drawImage(src, 0, 0); c.style.width = "110px"; ghost.appendChild(c); }
+  if (moved.length > 1) { const n = document.createElement("span"); n.textContent = moved.length; ghost.appendChild(n); }
+  document.body.appendChild(ghost);
+  const line = document.createElement("div");
+  line.className = "dropline";
+  grid.appendChild(line);
+  let t = -1;
+  const follow = (ev) => {
+    ghost.style.left = ev.clientX - 55 + "px";
+    ghost.style.top = ev.clientY - 30 + "px";
+    let best = null, bd = Infinity;
+    grid.querySelectorAll(".card").forEach((c) => {
+      const r = c.getBoundingClientRect(), d = Math.hypot(ev.clientX - (r.left + r.width / 2), ev.clientY - (r.top + r.height / 2));
+      if (d < bd) { bd = d; best = c; }
+    });
+    if (best) {
+      const r = best.getBoundingClientRect(), g = grid.getBoundingClientRect(), after = ev.clientX > r.left + r.width / 2;
+      t = +best.dataset.i + (after ? 1 : 0);
+      line.style.left = (after ? r.right + 5 : r.left - 9) - g.left + grid.scrollLeft + "px";
+      line.style.top = r.top - g.top + grid.scrollTop + "px";
+      line.style.height = r.height + "px";
+    }
+    const gr = grid.getBoundingClientRect();
+    if (ev.clientY < gr.top + 60) grid.scrollTop -= 16;
+    else if (ev.clientY > gr.bottom - 60) grid.scrollTop += 16;
+  };
+  follow(e);
+  const target = e.currentTarget;
+  try { target.setPointerCapture(e.pointerId); } catch (x) { /* gone */ }
+  const move = (ev) => { if (ev.pointerId === e.pointerId) { ev.preventDefault(); follow(ev); } };
+  const up = (ev) => {
+    if (ev.pointerId !== e.pointerId) return;
+    target.removeEventListener("pointermove", move);
+    target.removeEventListener("pointerup", up);
+    target.removeEventListener("pointercancel", up);
+    ghost.remove();
+    line.remove();
+    if (ev.type === "pointerup" && t >= 0) movePages(moved, t);
+    renderPages();
+  };
+  target.addEventListener("pointermove", move);
+  target.addEventListener("pointerup", up);
+  target.addEventListener("pointercancel", up);
 }
 
 function renderPages() {
   const sh = $("sheet"), b = board.book;
   if (!b) return;
-  const scroll = sh.querySelector(".grid") ? sh.querySelector(".grid").scrollTop : 0;
+  const old = sh.querySelector(".grid"), scroll = old ? old.scrollTop : 0;
   sh.innerHTML = "";
-  const here = pageInView(), per = split();
-  sheetHead(sh, "Pagine · " + b.pages.length, [
+  const here = pageInView(), per = split(), sel = board.pageSel;
+  for (const k of Array.from(sel)) if (k >= b.pages.length) sel.delete(k);
+  const chosen = () => Array.from(sel).sort((x, y) => x - y);
+  if (sel.size) sheetHead(sh, sel.size === 1 ? "1 pagina scelta" : sel.size + " pagine scelte", [
+    ["Duplica", () => {
+      const list = chosen();
+      rearrange((pages, p) => {
+        for (let n = list.length - 1; n >= 0; n--) {
+          const k = list[n];
+          pages.splice(k + 1, 0, { ...pages[k] });
+          p.splice(k + 1, 0, { strokes: p[k].strokes.slice(), items: p[k].items.map((o) => ({ ...o, crop: { ...o.crop } })) });
+        }
+      });
+      sel.clear();
+      renderPages();
+    }, false, DI.copy],
+    ["Elimina", () => {
+      const list = chosen();
+      rearrange((pages, p) => {
+        for (let n = list.length - 1; n >= 0; n--) { pages.splice(list[n], 1); p.splice(list[n], 1); }
+        if (!pages.length) { pages.push(blankPage()); p.push({ strokes: [], items: [] }); }
+      });
+      sel.clear();
+      renderPages();
+    }, false, DI.trash],
+    ["Tutte", () => { b.pages.forEach((x, k) => sel.add(k)); renderPages(); }],
+    ["Fatto", () => { sel.clear(); renderPages(); }, true],
+  ]);
+  else sheetHead(sh, "Pagine · " + b.pages.length, [
     ["Pagina", () => { addPage(); renderPages(); }, false, DI.page],
     ["PDF", () => host.pick("pdf"), false, DI.pdf],
     ["Chiudi", closeSheet, true],
   ]);
+  const hint = document.createElement("div");
+  hint.className = "shHint";
+  hint.textContent = "Tieni premuto e trascina per sceglierne più d'una · trascina ⠿ per spostarle";
+  sh.appendChild(hint);
   const grid = document.createElement("div");
   grid.className = "grid";
   sh.appendChild(grid);
   const dpr = Math.min(window.devicePixelRatio || 1, 2), width = 150, sc = width / PW;
   b.pages.forEach((pg, i) => {
     const card = document.createElement("div");
-    card.className = "card" + (i === here ? " here" : "");
+    card.className = "card" + (i === here ? " here" : "") + (sel.has(i) ? " chosen" : "");
+    card.dataset.i = i;
     const cv = document.createElement("canvas");
     cv.width = Math.round(width * dpr);
     cv.height = Math.round(pg.h * sc * dpr);
@@ -1826,26 +2188,36 @@ function renderPages() {
     per[i].items.forEach((o) => drawItem(g, o));
     per[i].strokes.forEach((s) => line(g, s, 0));
     g.restore();
-    cv.onclick = () => { closeSheet(); goToPage(i); };
-    cv.title = "Vai alla pagina " + (i + 1);
+    card.onclick = () => {
+      if (sel.size) { if (sel.has(i)) sel.delete(i); else sel.add(i); renderPages(); return; }
+      closeSheet();
+      goToPage(i);
+    };
+    card.title = "Vai alla pagina " + (i + 1);
+    const grip = document.createElement("button");
+    grip.className = "grip";
+    grip.innerHTML = DI.grip;
+    grip.title = "Trascina per spostare";
+    grip.setAttribute("aria-label", "Sposta la pagina " + (i + 1));
+    grip.onpointerdown = (e) => carryPages(e, i, grid);
+    grip.onclick = (e) => e.stopPropagation();
+    const tick = document.createElement("div");
+    tick.className = "tick";
+    tick.innerHTML = DI.check;
     const num = document.createElement("div");
     num.className = "num";
     num.textContent = i + 1;
     const acts = document.createElement("div");
     acts.className = "acts";
-    const act = (icon, label, run, off) => {
+    const act = (icon, label, run) => {
       const a = document.createElement("button");
       a.className = "ib";
       a.innerHTML = icon;
       a.title = label;
       a.setAttribute("aria-label", label);
-      a.disabled = !!off;
       a.onclick = (e) => { e.stopPropagation(); run(); renderPages(); };
       acts.appendChild(a);
     };
-    const swap = (a, c) => rearrange((pages, p) => { [pages[a], pages[c]] = [pages[c], pages[a]]; [p[a], p[c]] = [p[c], p[a]]; });
-    act(DI.left, "Sposta prima", () => swap(i - 1, i), i === 0);
-    act(DI.right, "Sposta dopo", () => swap(i, i + 1), i === b.pages.length - 1);
     act(DI.page, "Pagina vuota dopo questa", () => rearrange((pages, p) => { pages.splice(i + 1, 0, blankPage()); p.splice(i + 1, 0, { strokes: [], items: [] }); }));
     act(DI.copy, "Duplica", () => rearrange((pages, p) => { pages.splice(i + 1, 0, { ...pages[i] }); p.splice(i + 1, 0, { strokes: p[i].strokes.slice(), items: p[i].items.map((o) => ({ ...o, crop: { ...o.crop } })) }); }));
     act(DI.trash, "Elimina", () => rearrange((pages, p) => {
@@ -1853,9 +2225,22 @@ function renderPages() {
       pages.splice(i, 1);
       p.splice(i, 1);
     }));
-    card.append(cv, num, acts);
+    card.append(cv, grip, tick, num, acts);
     grid.appendChild(card);
   });
+  dragSelect(grid, {
+    count: () => b.pages.length,
+    get: (k) => sel.has(k),
+    set: (k, v) => { if (v) sel.add(k); else sel.delete(k); },
+    changed: () => {
+      grid.querySelectorAll(".card").forEach((c) => c.classList.toggle("chosen", sel.has(+c.dataset.i)));
+      const h = sh.querySelector(".shHead h2");
+      // The head changes between "pages" and "chosen": drawn again when the slide ends
+      if (h && !!sel.size !== h.textContent.includes("scelt")) grid.dataset.redraw = "1";
+    },
+    going: () => sel.size > 0,
+  });
+  grid.addEventListener("pointerup", () => { if (grid.dataset.redraw) setTimeout(renderPages, 0); });
   grid.scrollTop = scroll;
 }
 
@@ -1895,6 +2280,7 @@ async function pdfChosen(source, name) {
   for (let i = 0; i < count; i++) {
     const card = document.createElement("div");
     card.className = "card pick";
+    card.dataset.i = i;
     const im = document.createElement("img");
     im.alt = "";
     const num = document.createElement("div");
@@ -1910,6 +2296,7 @@ async function pdfChosen(source, name) {
   }
   function ticks() { cards.forEach(({ card }, i) => card.classList.toggle("on", chosen.has(i))); head(); }
   sh.appendChild(grid);
+  dragSelect(grid, { count: () => count, get: (k) => chosen.has(k), set: (k, v) => { if (v) chosen.add(k); else chosen.delete(k); }, changed: ticks, going: () => true });
   ticks();
   async function take() {
     const list = Array.from(chosen).sort((a, b) => a - b);
@@ -2404,23 +2791,31 @@ async function pcStart() {
     say("Scegli una nota a sinistra. Se il browser chiede l'accesso alla cartella, scegli \"Consenti a ogni visita\": poi non lo chiede più.");
     let open = null;
     pc.gate = new Promise((ok) => { open = ok; });
+    // A click, not the press before it: Chrome counts a pen or a finger on the screen as a gesture
+    // that may ask for the folder only once it is lifted, and a request without one fails quietly
+    let asking = false;
     const unlock = async (e) => {
-      if (e && e.target && e.target.closest && e.target.closest("#veil, #box, #changeDir")) return;
-      pc.release();
-      let granted = false;
-      try { granted = await saved.requestPermission({ mode: "readwrite" }) === "granted"; } catch (x) { granted = false; }
-      if (granted) await use(saved); else await pick();
+      if (asking || (e && e.target && e.target.closest && e.target.closest("#veil, #box, #changeDir"))) return;
+      if (e && e.type === "keydown" && (e.key === "Escape" || e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta")) return;
+      asking = true;
+      let state = "";
+      try { state = await saved.requestPermission({ mode: "readwrite" }); } catch (x) { state = "error"; }
+      asking = false;
+      // No gesture the browser would take: the next click tries again
+      if (state === "error") return;
+      if (pc.release) pc.release();
+      if (state === "granted") await use(saved); else await pick();
       pc.gate = null;
       open();
     };
     // Given back, or another folder chosen instead: nothing more waits for a touch
     pc.release = () => {
-      document.removeEventListener("pointerdown", unlock, true);
+      document.removeEventListener("click", unlock, true);
       document.removeEventListener("keydown", unlock, true);
       if (pc.root) { pc.gate = null; open(); }
       pc.release = null;
     };
-    document.addEventListener("pointerdown", unlock, true);
+    document.addEventListener("click", unlock, true);
     document.addEventListener("keydown", unlock, true);
   } else say("Scegli la cartella delle note: quella dove si trova questo file. Viene ricordata.", "Scegli la cartella", pick);
   bindButtons();
