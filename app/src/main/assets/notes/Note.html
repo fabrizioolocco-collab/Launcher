@@ -196,6 +196,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #drawBar .ib.opts::after { content: ""; position: absolute; right: 3px; bottom: 3px; border: 3.5px solid transparent; border-right-color: currentColor; border-bottom-color: currentColor; opacity: .55; }
 #drawBar .ib.opts.open::after { opacity: 1; }
 #drawBar .tb.pop { position: absolute; left: 6px; right: 6px; top: 100%; margin-top: 6px; z-index: 4; flex-wrap: wrap; overflow: visible; padding: 8px; border: 1px solid var(--stroke); border-radius: 16px; background: rgba(15,18,20,.97); box-shadow: 0 8px 26px rgba(0,0,0,.6); max-width: 760px; width: fit-content; }
+/* Reading and writing with nothing around: the bars go, the button that hides them brings them back */
+#focusBtn { display: none; position: absolute; top: 8px; right: 8px; z-index: 2; width: 42px; height: 42px; border-radius: 13px; align-items: center; justify-content: center; color: #e8edf1; background: rgba(15,18,20,.82); border: 1px solid var(--stroke); box-shadow: 0 2px 10px rgba(0,0,0,.45); }
+#draw.book #focusBtn { display: flex; }
+#focusBtn svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+#draw.focus #focusBtn { opacity: .55; }
+#draw.focus #focusBtn:hover, #draw.focus #focusBtn:active { opacity: 1; }
+#draw.focus #drawBar, #draw.focus #nav { display: none; }
+#app.pc ~ #draw.book.focus { left: 0; }
 #drawBar .hint { color: var(--dim); font-size: 13px; line-height: 1.35; padding: 0 4px; flex: 1 0 240px; }
 #draw { position: fixed; }
 #sheet { display: none; position: absolute; inset: 0; background: #0b0d0f; z-index: 3; flex-direction: column; touch-action: pan-y; }
@@ -299,7 +307,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 <div id="veil"><div id="box"></div></div>
 <div id="draw">
   <div id="drawBar"></div>
-  <div id="pad"><canvas></canvas><div id="nav"></div></div>
+  <div id="pad"><canvas></canvas><div id="nav"></div><button id="focusBtn"></button></div>
   <div id="zoom"><canvas></canvas><div id="zoomSide"></div></div>
   <div id="sheet"></div>
 </div>
@@ -667,6 +675,7 @@ const findBar = $("find"), findText = $("findText"), findCount = $("findCount");
 
 function openFind() {
   const bar = findBar;
+  if (board.focus) setFocus(false);
   finder.on = true;
   bar.classList.add("on");
   if (board.book) barOfBoard(); else $("bars").prepend(bar);
@@ -1233,6 +1242,20 @@ function barRows() {
   op.append(range, lab);
 }
 
+const FOCUS_IN = '<svg viewBox="0 0 24 24"><path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/></svg>';
+const FOCUS_OUT = '<svg viewBox="0 0 24 24"><path d="M4 9h5V4M20 9h-5V4M4 15h5v5M20 15h-5v5"/></svg>';
+/** Everything around the page hidden, to read and write undisturbed; or shown again, to change tool or colour. */
+function setFocus(on) {
+  board.focus = !!on && !!board.book;
+  $("draw").classList.toggle("focus", board.focus);
+  const b = $("focusBtn");
+  b.innerHTML = board.focus ? FOCUS_OUT : FOCUS_IN;
+  b.title = board.focus ? "Mostra di nuovo gli strumenti" : "Solo la pagina: nascondi tutto";
+  b.setAttribute("aria-label", b.title);
+  if (board.focus) { board.optsOpen = false; if (finder.on) closeFind(); barOfBoard(); }
+}
+$("focusBtn").onclick = () => setFocus(!board.focus);
+
 /** Under the pages: every page small, the page in view and the ones beside it, a new page, how the pages are laid. */
 function navOfBook() {
   const nav = $("nav"), b = board.book;
@@ -1735,7 +1758,7 @@ function imageOf(src) {
   e = { el: new Image(), ok: false, wait: [] };
   pictures.set(key, e);
   const done = (el) => { e.wait.forEach((f) => f(el)); e.wait = []; };
-  e.el.onload = () => { e.ok = true; done(e.el); paint(); if ($("sheet").dataset.kind === "pages") renderPages(); };
+  e.el.onload = () => { e.ok = true; done(e.el); paint(); if ($("sheet").dataset.kind === "pages") thumbsAgain(); };
   e.el.onerror = () => done(null);
   if (android) e.el.src = new URL(src, document.baseURI).href;
   else pcHost.blob(src).then((u) => { if (u) e.el.src = u; else done(null); });
@@ -2382,6 +2405,8 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && board.cropping) applyCrop();
   if ((e.key === "Delete" || e.key === "Backspace") && board.lsel) { e.preventDefault(); lassoDo("delete"); }
   if (e.key === "Escape" && clearLasso()) { paint(); barOfBoard(); }
+  else if (e.key === "Escape" && board.focus) setFocus(false);
+  if (e.key === "F11" || (e.key.toLowerCase() === "f" && !e.ctrlKey && !e.metaKey && !e.altKey && board.book)) { e.preventDefault(); setFocus(!board.focus); }
   if (board.book && !$("sheet").classList.contains("on")) {
     if (e.key === "PageDown" || (paged() && e.key === "ArrowRight")) { e.preventDefault(); turn(1); }
     if (e.key === "PageUp" || (paged() && e.key === "ArrowLeft")) { e.preventDefault(); turn(-1); }
@@ -3083,6 +3108,7 @@ function openBook(html) {
   // On the phone the notebook takes the whole screen: the bar with the title goes
   if (android && NotesHost.chrome) NotesHost.chrome(false);
   board.optsOpen = false;
+  setFocus(false);
   board.view = { s: 0, x: 0, y: 0 };
   fit();
   whole();
@@ -3093,6 +3119,7 @@ function closeBook() {
   if (!board.book) return;
   commitText();
   board.book = null;
+  setFocus(false);
   board.items = [];
   board.lsel = null;
   board.zoom = null;
@@ -3343,6 +3370,8 @@ function dragSelect(grid, api) {
   };
   grid.addEventListener("pointerup", end);
   grid.addEventListener("pointercancel", end);
+  // The grid moving under the finger: it is scrolling, not choosing
+  grid.addEventListener("scroll", () => { if (st && !st.active) { clearTimeout(grid.holdTimer); st.decided = true; } }, { passive: true });
   // Once a slide has begun, the grid no longer scrolls under the finger
   grid.addEventListener("touchmove", (e) => { if (st && st.active) e.preventDefault(); }, { passive: false });
   // The click after a slide is not a tap
@@ -3416,6 +3445,12 @@ function carryPages(e, i, grid) {
   target.addEventListener("pointercancel", up);
 }
 
+/** A picture of a page has arrived: the small pages are drawn again where they are (soon, and once for many). */
+function thumbsAgain() {
+  clearTimeout(thumbsAgain.t);
+  thumbsAgain.t = setTimeout(() => document.querySelectorAll("#sheet .card").forEach((c) => { if (c.drawIt) c.drawIt(); }), 120);
+}
+
 function renderPages() {
   const sh = $("sheet"), b = board.book;
   if (!b) return;
@@ -3473,16 +3508,19 @@ function renderPages() {
     cv.height = Math.round(pg.h * sc * dpr);
     cv.style.width = width + "px";
     cv.style.height = Math.round(pg.h * sc) + "px";
-    const g = cv.getContext("2d");
-    g.setTransform(sc * dpr, 0, 0, sc * dpr, 0, 0);
-    drawSheet(g, pg, 1 / (sc * dpr));
-    g.save();
-    g.beginPath();
-    g.rect(0, 0, PW, pg.h);
-    g.clip();
-    per[i].items.forEach((o) => drawItem(g, o));
-    per[i].strokes.forEach((s) => line(g, s, 0));
-    g.restore();
+    card.drawIt = () => {
+      const g = cv.getContext("2d");
+      g.setTransform(sc * dpr, 0, 0, sc * dpr, 0, 0);
+      drawSheet(g, pg, 1 / (sc * dpr));
+      g.save();
+      g.beginPath();
+      g.rect(0, 0, PW, pg.h);
+      g.clip();
+      per[i].items.forEach((o) => drawItem(g, o));
+      per[i].strokes.forEach((s) => line(g, s, 0));
+      g.restore();
+    };
+    card.drawIt();
     card.onclick = () => {
       if (sel.size) { if (sel.has(i)) sel.delete(i); else sel.add(i); renderPages(); return; }
       closeSheet();
@@ -3639,6 +3677,7 @@ async function pdfChosen(source, name) {
 /** Back, on the phone: a window open over the note closes first. True when there was one. */
 function goBack() {
   if (finder.on) { closeFind(); return true; }
+  if (board.focus && !$("sheet").classList.contains("on")) { setFocus(false); return true; }
   if ($("veil").classList.contains("on")) { $("veil").classList.remove("on"); $("box").classList.remove("picker"); return true; }
   if ($("sheet").classList.contains("on")) { closeSheet(); return true; }
   if (commitText()) return true;
