@@ -748,7 +748,7 @@ const board = {
   eraser: "area", esize: 18, recent: [],
   view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null, book: null,
   touches: new Map(), pinch: null, pan: null, erased: false, penSeen: false, space: false,
-  sel: null, cropping: null, drag: null,
+  sel: null, cropping: null, drag: null, lastInk: "pen",
   favs: [null, null, null, null], alpha: { pen: 1, marker: 0.35 }, shape: "line", layout: "scroll", gpage: null, addTap: null,
   ruler: null, rTouch: new Map(), rStart: null, pageSel: new Set(),
 };
@@ -872,7 +872,7 @@ function barRows() {
   const list = [["hand", "Mano: muoviti senza scrivere"]].concat(board.book ? [["select", "Seleziona le immagini"]] : [],
     [["pen", "Penna"], ["marker", "Evidenziatore"], ["shape", "Forme: linea, freccia, rettangolo, ellisse"], ["eraser", "Gomma"]]);
   for (const [t, label] of list) {
-    const b = mk(tools, "ib" + (board.tool === t ? " on" : ""), DI[t], label, () => { board.tool = t; if (t !== "select") { board.sel = null; board.cropping = null; paint(); } barOfBoard(); });
+    const b = mk(tools, "ib" + (board.tool === t ? " on" : ""), DI[t], label, () => { board.tool = t; if (t !== "hand" && t !== "select") board.lastInk = t; if (t !== "select") { board.sel = null; board.cropping = null; paint(); } barOfBoard(); });
     if (t === "pen" || t === "marker") {
       const tip = document.createElement("span");
       tip.className = "tip";
@@ -921,7 +921,8 @@ function barRows() {
     b.oncontextmenu = (e) => { e.preventDefault(); clearTimeout(b.timer); favMenu(k); };
   });
   if (board.tool === "hand") {
-    hint(opts, "Trascina con la penna, il dito o il mouse per spostarti. Due dita o la rotellina con Ctrl per lo zoom.");
+    const names = { pen: "la penna", marker: "l'evidenziatore", shape: "le forme", eraser: "la gomma" };
+    hint(opts, "Il dito e il mouse spostano le pagine, due dita o Ctrl + rotellina fanno lo zoom. La penna continua a scrivere (con " + names[board.lastInk] + ").");
     return;
   }
   if (board.tool === "select") {
@@ -1035,9 +1036,7 @@ function navCount() {
   const text = (sh.length > 1 ? (sh[0] + 1) + "–" + (sh[1] + 1) : sh[0] + 1) + " / " + n;
   if (el.textContent !== text) el.textContent = text;
   $("navPrev").disabled = sh[0] === 0;
-  // After the last page there is a new one to make
-  const last = sh[sh.length - 1] === n - 1, next = $("navNext");
-  if (next.dataset.last !== String(last)) { next.dataset.last = String(last); next.innerHTML = last ? DI.page : DI.right; next.title = last ? "Nuova pagina in fondo" : "Pagina dopo"; }
+  $("navNext").disabled = sh[sh.length - 1] === n - 1;
 }
 
 // ---------------------------------------------------------------- favourite tools
@@ -1051,6 +1050,7 @@ function saveFav(k) {
 }
 function useFav(f) {
   board.tool = f.tool;
+  board.lastInk = f.tool;
   board.color = f.color;
   board.width = f.width;
   if (f.o != null) board.alpha[f.tool] = f.o;
@@ -1369,14 +1369,33 @@ function bounds(strokes) {
   return a === Infinity ? null : { x: a, y: b, w: c - a, h: d - b };
 }
 
+/** The page, or the two, shown at a time: how they sit whole on the screen, and how big they are. */
+function fitOf() {
+  const r = canvas.getBoundingClientRect(), sh = shown();
+  const w = sh.length > 1 ? 2 * PW + PGAP : PW, h = Math.max(...sh.map((i) => board.book.pages[i].h));
+  const s = Math.max(0.1, Math.min((r.width - 20) / w, (r.height - 84) / h));
+  return { s, x: (r.width - w * s) / 2, y: Math.max(8, (r.height - 64 - h * s) / 2), w, h };
+}
+
+/**
+ * One or two pages at a time stay where they are: never smaller than whole on the screen, and
+ * moved only once made bigger, and then no further than their own edges.
+ */
+function clampView() {
+  if (!paged()) return;
+  const r = canvas.getBoundingClientRect(), f = fitOf(), v = board.view;
+  if (!r.width || !(v.s > f.s * 1.001)) { board.view = { s: f.s, x: f.x, y: f.y }; board.fitted = { ...board.view }; return; }
+  const W = f.w * v.s, H = f.h * v.s, m = 12, room = r.height - 64;
+  v.x = W <= r.width ? (r.width - W) / 2 : Math.min(m, Math.max(r.width - W - m, v.x));
+  v.y = H <= room ? Math.max(8, (room - H) / 2) : Math.min(m, Math.max(room - H - m, v.y));
+}
+
 /** The whole drawing in view, with a margin; in a notebook, the page as wide as the screen. */
 function whole() {
   const r = canvas.getBoundingClientRect();
   if (paged()) {
-    // The page, or the two, whole on the screen
-    const sh = shown(), w = sh.length > 1 ? 2 * PW + PGAP : PW, h = Math.max(...sh.map((i) => board.book.pages[i].h));
-    const s = Math.max(0.1, Math.min((r.width - 20) / w, (r.height - 84) / h));
-    board.view = { s, x: (r.width - w * s) / 2, y: Math.max(8, (r.height - 64 - h * s) / 2) };
+    const f = fitOf();
+    board.view = { s: f.s, x: f.x, y: f.y };
     board.fitted = { ...board.view };
     paint();
     return;
@@ -1549,6 +1568,7 @@ function paint() {
   const r = canvas.getBoundingClientRect();
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (board.book) {
+    clampView();
     g.fillStyle = "#1c2023";
     g.fillRect(0, 0, canvas.width, canvas.height);
     g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
@@ -1823,10 +1843,13 @@ async function bookImage(path) {
 
 // ---------------------------------------------------------------- the pointer
 
+/** What writes now: with the hand in use, what was in use before it (a pen writes all the same). */
+const inkTool = () => (board.tool === "hand" || board.tool === "select" ? board.lastInk : board.tool);
+
 function begin(e) {
   board.drawId = e.pointerId;
-  const p = toBoard(e);
-  if (board.tool === "eraser" || flipped(e)) {
+  const p = toBoard(e), tool = inkTool();
+  if (tool === "eraser" || flipped(e)) {
     board.erased = false;
     board.now = { erasing: true };
     erase(p);
@@ -1834,11 +1857,11 @@ function begin(e) {
     return;
   }
   remember();
-  const marker = board.tool === "marker", width = marker ? board.width * 4 : board.width;
+  const marker = tool === "marker", width = marker ? board.width * 4 : board.width;
   const o = board.alpha[marker ? "marker" : "pen"];
   board.now = { tool: marker ? "marker" : "pen", color: board.color, width, points: [p] };
   if (o !== (marker ? 0.35 : 1)) board.now.o = o;
-  if (board.tool === "shape") { board.now.shape = board.shape; board.now.from = p; board.strokes.push(board.now); return; }
+  if (tool === "shape") { board.now.shape = board.shape; board.now.from = p; board.strokes.push(board.now); return; }
   const snap = snapOf(local(e), width * board.view.s / 2);
   if (snap != null) { board.now.snap = snap; board.now.points = [snapped(e)]; }
   board.strokes.push(board.now);
@@ -1866,7 +1889,7 @@ function snapped(e) {
   return boardOf(rulerPoint(onRulerAt(local(e)).along, board.now.snap));
 }
 
-const panFrom = (e) => { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view } }; };
+const panFrom = (e) => { board.pan = { id: e.pointerId, at: local(e), view: { ...board.view }, fit: paged() && isFitted() }; };
 
 /** A pointer that would write: with the hand it moves the pages, with the select tool it takes an image. */
 function press(e) {
@@ -1877,7 +1900,8 @@ function press(e) {
     board.gpage = pageOfRaw(raw);
   }
   if (flipped(e)) { begin(e); return; }
-  if (board.tool === "hand") { panFrom(e); return; }
+  // The hand moves the pages with a finger or the mouse; a pen writes all the same
+  if (board.tool === "hand") { if (e.pointerType === "pen") begin(e); else panFrom(e); return; }
   if (board.tool === "select" && board.book) { if (selectDown(e)) board.drawId = e.pointerId; else panFrom(e); return; }
   begin(e);
 }
@@ -1978,9 +2002,10 @@ function lift(e) {
   }
   if (board.pan && board.pan.id === e.pointerId) {
     // One or two pages at a time: a quick slide sideways turns the page
-    const q = local(e), dx = q[0] - board.pan.at[0], dy = q[1] - board.pan.at[1], was = board.pan.view;
+    const q = local(e), dx = q[0] - board.pan.at[0], dy = q[1] - board.pan.at[1], fit = board.pan.fit;
     board.pan = null;
-    if (paged() && e.type === "pointerup" && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) { board.view = was; turn(dx < 0 ? 1 : -1, true); }
+    // Only a page whole on the screen: made bigger, the slide moves over it
+    if (fit && paged() && e.type === "pointerup" && Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) turn(dx < 0 ? 1 : -1, true);
   }
   if (board.touches.size < 2) board.pinch = null;
   if (board.drawId === e.pointerId) {
@@ -2221,12 +2246,12 @@ function goToPage(i) {
   paint();
 }
 
-/** A page on, or back; past the last one, a new page. [fitIt]: the page is put whole on the screen again. */
+/** A page on, or back: never past the last one (a new page is only made when asked for). [fitIt]: the page is put whole on the screen again. */
 function turn(d, fitIt) {
   const b = board.book, n = b.pages.length;
   if (paged()) {
     const sh = shown(), step = b.layout === "double" ? 2 : 1;
-    if (d > 0 && sh[sh.length - 1] === n - 1) { addPage(); return; }
+    if (d > 0 && sh[sh.length - 1] === n - 1) return;
     const fit = fitIt || isFitted();
     b.cur = Math.max(0, Math.min(n - 1, sh[0] + d * step));
     board.sel = null;
@@ -2235,7 +2260,7 @@ function turn(d, fitIt) {
     return;
   }
   const i = pageInView();
-  if (d > 0 && i === n - 1) { addPage(); return; }
+  if (d > 0 && i === n - 1) return;
   goToPage(Math.max(0, i + d));
 }
 
