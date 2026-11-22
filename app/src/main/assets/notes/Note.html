@@ -17,6 +17,8 @@
 <style>
 :root { --bg:#000; --fg:#fff; --dim:#9aa4ad; --line:#22282c; --card:#0f1214; --stroke:#2a3135; --sel:#1b2126; --link:#8ab4f8; }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+/* Two fingers never make the whole page bigger (a palm on the bars did, and everything was moved): only what is meant to zoom does */
+html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
 #app { display: flex; height: 100%; }
@@ -3901,6 +3903,10 @@ function bindButtons() {
     zone.addEventListener("drop", (e) => { if (!pc.drag || (e.target !== zone && zone.id !== "sideTop")) return; e.preventDefault(); $("tree").classList.remove("drop"); moveTo(pc.drag, []); });
   }
 }
+
+// Nor does a pinch on the touchpad, or Ctrl and the wheel, outside the board (which takes them for itself)
+document.addEventListener("wheel", (e) => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+for (const ev of ["gesturestart", "gesturechange"]) document.addEventListener(ev, (e) => e.preventDefault());
 
 const host = android ? androidHost : pcHost;
 try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* older engines keep their own */ }
