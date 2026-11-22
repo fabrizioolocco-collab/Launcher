@@ -192,6 +192,30 @@ class NoteEditorActivity : AppCompatActivity() {
 
         @JavascriptInterface
         fun share(href: String, name: String) = runOnUiThread { fileMenu(href, name) }
+
+        /** A file beside the note, as text (a drawing, to be opened again on the board). */
+        @JavascriptInterface
+        fun readText(path: String): String = inside(path)?.takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }.orEmpty()
+
+        @JavascriptInterface
+        fun saveText(name: String, text: String): String {
+            val dir = note.parentFile ?: return ""
+            return NotesStore.attachBytes(dir, text.toByteArray(), name).orEmpty()
+        }
+
+        /** A file of the note's own `_allegati` folder no longer used (a drawing saved anew). */
+        @JavascriptInterface
+        fun remove(path: String) {
+            val file = inside(path) ?: return
+            if (file.parentFile?.name == NotesStore.FILES) file.delete()
+        }
+    }
+
+    /** A path the page names, as a file in the note's folder; null when it would lead out of it. */
+    private fun inside(path: String): File? {
+        val dir = note.parentFile ?: return null
+        val file = File(dir, path)
+        return file.takeIf { it.canonicalPath.startsWith(dir.canonicalPath + File.separator) }
     }
 
     /** The file a link of the note points to, when it is one beside the note. */

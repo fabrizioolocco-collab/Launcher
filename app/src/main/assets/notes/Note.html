@@ -103,14 +103,14 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 
 #draw { position: fixed; inset: 0; background: var(--bg); display: none; flex-direction: column; z-index: 6; }
 #draw.on { display: flex; }
-#drawBar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); overflow-x: auto; }
-#drawBar .dot { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; flex-shrink: 0; }
+#drawBar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+#drawBar .dot { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; flex-shrink: 0; }
 #drawBar .dot.on { border-color: var(--fg); outline: 2px solid var(--bg); outline-offset: -4px; }
 #drawBar .txt { height: 40px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 600; flex-shrink: 0; }
 #drawBar .txt.on { background: var(--sel); }
 #drawBar .gap { flex: 1; }
-#pad { flex: 1; min-height: 0; background: #fff; touch-action: none; margin: 10px; border-radius: 12px; }
-#pad canvas { width: 100%; height: 100%; display: block; border-radius: 12px; touch-action: none; }
+#pad { flex: 1; min-height: 0; background: #fff; touch-action: none; }
+#pad canvas { width: 100%; height: 100%; display: block; touch-action: none; cursor: crosshair; }
 @media (max-width: 700px) {
   .pc #side { width: 100%; border-right: 0; }
   .pc.reading #side { display: none; }
@@ -330,7 +330,7 @@ body.addEventListener("keydown", (e) => {
 body.addEventListener("click", (e) => {
   const t = e.target;
   // An image or an attached file: a tap opens it
-  if (t.tagName === "IMG") { e.preventDefault(); host.open(t.getAttribute("src")); return; }
+  if (t.tagName === "IMG") { e.preventDefault(); if (/\.svg$/i.test(t.getAttribute("src") || "")) editDrawing(t); else host.open(t.getAttribute("src")); return; }
   const file = t.closest ? t.closest("a.file") : null;
   if (file) { e.preventDefault(); host.open(file.getAttribute("href")); return; }
   const li = t.closest ? t.closest("ul.todo > li") : null;
@@ -478,7 +478,7 @@ window.addEventListener("resize", lay);
 
 /** An image or a file now beside the note, at [path] from it: put where the caret was. */
 function inserted(kind, path, name) {
-  if (kind === "image") insert("<img src=\"" + esc(encodeURI(path)) + "\" alt=\"\"><p><br></p>");
+  if (kind === "image" || kind === "draw") insert("<img" + (kind === "draw" ? " class=\"draw\"" : "") + " src=\"" + esc(encodeURI(path)) + "\" alt=\"\"><p><br></p>");
   else insert("<a class=\"file\" href=\"" + esc(encodeURI(path)) + "\">" + esc(name) + "</a>&nbsp;");
 }
 
@@ -540,59 +540,81 @@ function choose(heading, items) {
 }
 $("veil").addEventListener("click", (e) => { if (e.target === $("veil")) $("veil").classList.remove("on"); });
 
-// ---------------------------------------------------------------- drawing by hand
+// ---------------------------------------------------------------- drawing by hand: a board without edges
 
-const drawing = { color: "#111111", width: 3, strokes: [], now: null, rubber: false };
+/*
+ * A drawing is kept as an SVG file beside the note: what is seen, and inside it (in its <desc>)
+ * every stroke as drawn, so that a tap on it opens it again to go on drawing. The board has no
+ * edges: two fingers (or the mouse wheel, or the mouse with its middle or right button) move it
+ * and zoom it in and out, as far as one likes; what is saved is only the part that has ink on it.
+ */
+const board = {
+  strokes: [], now: null, tool: "pen", color: "#111111", width: 3,
+  view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null,
+  pointers: new Map(), pinch: null, pan: null, erased: false,
+};
 const canvas = document.querySelector("#pad canvas");
+const COLORS = ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f9a825", "#8e24aa"];
+const WIDTHS = [["Fine", 2], ["Media", 4], ["Spessa", 9]];
 
-function openDraw() {
-  drawing.strokes = [];
-  drawing.color = "#111111";
-  drawing.width = 3;
-  drawing.rubber = false;
-  // The keyboard goes: the sheet takes the whole screen
+function openDraw(strokes, editing) {
+  board.strokes = strokes || [];
+  board.editing = editing || null;
+  board.undo = [];
+  board.redo = [];
+  board.now = null;
+  board.pointers.clear();
+  board.pinch = null;
+  board.pan = null;
+  if (board.tool === "eraser") board.tool = "pen";
+  // The keyboard goes: the board takes the whole screen
   if (document.activeElement) document.activeElement.blur();
+  barOfBoard();
+  $("draw").classList.add("on");
+  board.view = { s: 1, x: 0, y: 0 };
+  fit();
+  if (board.strokes.length) whole();
+}
+
+function barOfBoard() {
   const bar = $("drawBar");
   bar.innerHTML = "";
-  for (const c of ["#111111", "#d32f2f", "#1976d2", "#388e3c", "#f9a825"]) {
-    const d = document.createElement("button");
-    d.className = "dot" + (c === drawing.color ? " on" : "");
-    d.style.background = c;
-    d.setAttribute("aria-label", "Colore");
-    d.onclick = () => { drawing.color = c; bar.querySelectorAll(".dot").forEach((x) => x.classList.toggle("on", x === d)); };
-    bar.appendChild(d);
-  }
-  for (const [label, w] of [["Fine", 3], ["Media", 6], ["Spessa", 12]]) {
+  const mk = (cls, html, label, run) => {
     const b = document.createElement("button");
-    b.className = "txt" + (w === drawing.width ? " on" : "");
-    b.textContent = label;
-    b.dataset.w = w;
-    b.onclick = () => { drawing.width = w; bar.querySelectorAll("[data-w]").forEach((x) => x.classList.toggle("on", x === b)); };
+    b.className = cls;
+    b.innerHTML = html;
+    b.title = label;
+    b.setAttribute("aria-label", label);
+    b.onclick = run;
     bar.appendChild(b);
+    return b;
+  };
+  const tools = [["pen", "Penna"], ["marker", "Evidenziatore"], ["eraser", "Gomma"]];
+  for (const [t, label] of tools) mk("txt" + (board.tool === t ? " on" : ""), label, label, () => { board.tool = t; barOfBoard(); }).dataset.t = t;
+  for (const c of COLORS) {
+    const d = mk("dot" + (c === board.color ? " on" : ""), "", "Colore", () => { board.color = c; if (board.tool === "eraser") board.tool = "pen"; barOfBoard(); });
+    d.style.background = c;
   }
+  for (const [label, w] of WIDTHS) mk("txt" + (w === board.width ? " on" : ""), label, label, () => { board.width = w; barOfBoard(); });
+  mk("txt", "↶", "Annulla", () => { if (!board.undo.length) return; board.redo.push(board.strokes); board.strokes = board.undo.pop(); paint(); });
+  mk("txt", "↷", "Ripeti", () => { if (!board.redo.length) return; board.undo.push(board.strokes); board.strokes = board.redo.pop(); paint(); });
+  mk("txt", "Tutto", "Mostra tutto il disegno", whole);
   const gap = document.createElement("div");
   gap.className = "gap";
   bar.appendChild(gap);
-  const mk = (label, run, pill) => { const b = document.createElement("button"); b.className = pill ? "pill" : "txt"; b.textContent = label; b.onclick = run; bar.appendChild(b); };
-  const rubber = document.createElement("button");
-  rubber.className = "txt";
-  rubber.textContent = "Gomma";
-  rubber.onclick = () => { drawing.rubber = !drawing.rubber; rubber.classList.toggle("on", drawing.rubber); };
-  bar.insertBefore(rubber, gap);
-  mk("Indietro", () => { drawing.strokes.pop(); paint(); });
-  mk("Annulla", () => { $("draw").classList.remove("on"); back(); });
-  mk("Inserisci", async () => {
-    $("draw").classList.remove("on");
-    if (!drawing.strokes.length) { back(); return; }
-    const path = await host.saveData("disegno.png", canvas.toDataURL("image/png"));
-    if (path) inserted("image", path, "disegno.png");
-  }, true);
-  $("draw").classList.add("on");
-  fit();
+  mk("txt", "Chiudi", "Chiudi senza salvare", () => { $("draw").classList.remove("on"); back(); });
+  mk("pill", board.editing ? "Salva" : "Inserisci", "Salva il disegno", finishDraw);
+}
+
+/** Before a change, so that it can be undone. */
+function remember() {
+  board.undo.push(board.strokes.slice());
+  if (board.undo.length > 100) board.undo.shift();
+  board.redo = [];
 }
 
 /**
- * The sheet's own pixels follow its size on the screen. It changes after it opens (the keyboard
+ * The board's own pixels follow its size on the screen. It changes after it opens (the keyboard
  * going away gives it more room, the phone is turned): left as it was, the picture would be
  * stretched and the line would no longer come out under the finger.
  */
@@ -606,49 +628,231 @@ function fit() {
 }
 new ResizeObserver(() => { if ($("draw").classList.contains("on")) fit(); }).observe($("pad"));
 
-function stroke(g, s, dpr, from) {
-  g.strokeStyle = s.color;
-  g.lineWidth = s.width * dpr;
-  g.lineCap = "round";
-  g.lineJoin = "round";
+const dprOf = () => canvas.width / (canvas.getBoundingClientRect().width || 1);
+
+/** Where on the board a point of the screen is. */
+function toBoard(e) {
+  const r = canvas.getBoundingClientRect(), v = board.view;
+  return [(e.clientX - r.left - v.x) / v.s, (e.clientY - r.top - v.y) / v.s];
+}
+
+function bounds(strokes) {
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const s of strokes) for (const [x, y] of s.points) {
+    const h = s.width / 2;
+    a = Math.min(a, x - h); b = Math.min(b, y - h); c = Math.max(c, x + h); d = Math.max(d, y + h);
+  }
+  return a === Infinity ? null : { x: a, y: b, w: c - a, h: d - b };
+}
+
+/** The whole drawing in view, with a margin. */
+function whole() {
+  const box = bounds(board.strokes), r = canvas.getBoundingClientRect();
+  if (!box || !r.width) { board.view = { s: 1, x: 0, y: 0 }; paint(); return; }
+  const s = Math.min(4, Math.max(0.02, Math.min((r.width - 40) / Math.max(box.w, 1), (r.height - 40) / Math.max(box.h, 1))));
+  board.view = { s, x: r.width / 2 - (box.x + box.w / 2) * s, y: r.height / 2 - (box.y + box.h / 2) * s };
+  paint();
+}
+
+function line(g, s, from) {
   const p = s.points;
+  g.strokeStyle = s.color;
+  g.lineWidth = s.width;
+  g.lineCap = s.tool === "marker" ? "butt" : "round";
+  g.lineJoin = "round";
+  g.globalAlpha = s.tool === "marker" ? 0.35 : 1;
   g.beginPath();
   const start = Math.max(0, from);
-  g.moveTo(p[start][0] * dpr, p[start][1] * dpr);
-  if (p.length === 1) g.lineTo(p[0][0] * dpr + 0.1, p[0][1] * dpr);
-  for (let i = start + 1; i < p.length; i++) g.lineTo(p[i][0] * dpr, p[i][1] * dpr);
+  g.moveTo(p[start][0], p[start][1]);
+  if (p.length === 1) g.lineTo(p[0][0] + 0.01, p[0][1]);
+  for (let i = start + 1; i < p.length; i++) g.lineTo(p[i][0], p[i][1]);
   g.stroke();
+  g.globalAlpha = 1;
 }
 
 function paint() {
-  const g = canvas.getContext("2d"), dpr = canvas.width / (canvas.getBoundingClientRect().width || 1);
+  const g = canvas.getContext("2d"), dpr = dprOf(), v = board.view;
+  g.setTransform(1, 0, 0, 1, 0, 0);
   g.fillStyle = "#fff";
   g.fillRect(0, 0, canvas.width, canvas.height);
-  for (const s of drawing.strokes) stroke(g, s, dpr, 0);
+  // A grid of dots, a sheet without edges: drawn only while its dots are far enough apart
+  let step = 40;
+  while (step * v.s < 18) step *= 4;
+  const r = canvas.getBoundingClientRect();
+  g.fillStyle = "#d4d8dc";
+  const x0 = Math.floor(-v.x / v.s / step) * step, y0 = Math.floor(-v.y / v.s / step) * step;
+  for (let x = x0; x * v.s + v.x < r.width; x += step)
+    for (let y = y0; y * v.s + v.y < r.height; y += step) g.fillRect((x * v.s + v.x) * dpr - 1, (y * v.s + v.y) * dpr - 1, 2, 2);
+  g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
+  for (const s of board.strokes) line(g, s, 0);
 }
-const at = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+
+function boardContext() {
+  const g = canvas.getContext("2d"), dpr = dprOf(), v = board.view;
+  g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
+  return g;
+}
+
+/** The strokes the rubber touches at [p] go, whole. */
+function erase(p) {
+  const r = 10 / board.view.s;
+  const near = (s) => {
+    const q = s.points, lim = r + s.width / 2;
+    for (let i = 0; i < q.length; i++) {
+      const a = q[i], b = q[i + 1] || a;
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = dx * dx + dy * dy;
+      const t = len ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len)) : 0;
+      if (Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]) <= lim) return true;
+    }
+    return false;
+  };
+  const kept = board.strokes.filter((s) => !near(s));
+  if (kept.length === board.strokes.length) return;
+  if (!board.erased) { remember(); board.erased = true; }
+  board.strokes = kept;
+  paint();
+}
+
+function zoomAt(cx, cy, factor) {
+  const v = board.view, s = Math.min(80, Math.max(0.002, v.s * factor)), k = s / v.s;
+  board.view = { s, x: cx - (cx - v.x) * k, y: cy - (cy - v.y) * k };
+  paint();
+}
+
+const local = (e) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+
 canvas.addEventListener("pointerdown", (e) => {
   e.preventDefault();
   try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
-  drawing.now = drawing.rubber ? { color: "#ffffff", width: 26, points: [at(e)] } : { color: drawing.color, width: drawing.width, points: [at(e)] };
-  drawing.strokes.push(drawing.now);
-  stroke(canvas.getContext("2d"), drawing.now, canvas.width / (canvas.getBoundingClientRect().width || 1), 0);
+  board.pointers.set(e.pointerId, local(e));
+  // The mouse's middle or right button, or the space bar held: the board moves
+  if (e.pointerType === "mouse" && (e.button === 1 || e.button === 2 || board.space)) {
+    board.pan = { at: local(e), view: { ...board.view } };
+    return;
+  }
+  if (board.pointers.size === 2) {
+    // A second finger: what the first one began was the start of a move, not a line
+    if (board.now) { board.strokes.pop(); board.undo.pop(); board.now = null; paint(); }
+    const [a, b] = Array.from(board.pointers.values());
+    board.pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], view: { ...board.view } };
+    return;
+  }
+  if (board.pointers.size > 2 || board.pinch) return;
+  const p = toBoard(e);
+  if (board.tool === "eraser") { board.erased = false; erase(p); board.now = { erasing: true }; return; }
+  remember();
+  const marker = board.tool === "marker";
+  board.now = { tool: board.tool, color: board.color, width: marker ? board.width * 4 : board.width, points: [p] };
+  board.strokes.push(board.now);
+  line(boardContext(), board.now, 0);
 });
+
 canvas.addEventListener("pointermove", (e) => {
-  const s = drawing.now;
-  if (!s) return;
+  if (!board.pointers.has(e.pointerId)) return;
   e.preventDefault();
-  // Every point the finger went through, not only the ones a busy screen had time to tell: a smooth line.
-  // Only the new piece is drawn, so a long drawing stays as quick as a short one.
-  const from = s.points.length - 1;
+  board.pointers.set(e.pointerId, local(e));
+  if (board.pan) {
+    const [x, y] = local(e), o = board.pan;
+    board.view = { s: o.view.s, x: o.view.x + x - o.at[0], y: o.view.y + y - o.at[1] };
+    paint();
+    return;
+  }
+  if (board.pinch) {
+    const pts = Array.from(board.pointers.values());
+    if (pts.length < 2) return;
+    const [a, b] = pts, o = board.pinch;
+    const d = Math.hypot(a[0] - b[0], a[1] - b[1]) || 1, m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const s = Math.min(80, Math.max(0.002, o.view.s * d / o.d));
+    // The point between the fingers stays under them while they move apart, together or around
+    const wx = (o.m[0] - o.view.x) / o.view.s, wy = (o.m[1] - o.view.y) / o.view.s;
+    board.view = { s, x: m[0] - wx * s, y: m[1] - wy * s };
+    paint();
+    return;
+  }
+  const s = board.now;
+  if (!s) return;
   const moves = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
-  for (const m of (moves.length ? moves : [e])) s.points.push(at(m));
-  stroke(canvas.getContext("2d"), s, canvas.width / (canvas.getBoundingClientRect().width || 1), from);
+  if (s.erasing) { for (const m of (moves.length ? moves : [e])) erase(toBoard(m)); return; }
+  // Every point the finger went through, not only the ones a busy screen had time to tell: a smooth line
+  const from = s.points.length - 1;
+  for (const m of (moves.length ? moves : [e])) s.points.push(toBoard(m));
+  // A highlighter is drawn again whole, or its see-through ink would darken where its pieces meet
+  if (s.tool === "marker") paint(); else line(boardContext(), s, from);
 });
-for (const ev of ["pointerup", "pointercancel", "pointerleave"]) canvas.addEventListener(ev, () => { drawing.now = null; });
+
+function lift(e) {
+  board.pointers.delete(e.pointerId);
+  if (board.pan && e.pointerType === "mouse") board.pan = null;
+  if (board.pointers.size < 2) board.pinch = null;
+  if (!board.pointers.size) board.now = null;
+}
+for (const ev of ["pointerup", "pointercancel"]) canvas.addEventListener(ev, lift);
+canvas.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const [x, y] = local(e);
+  // A wheel zooms around the pointer; a touchpad's sideways roll moves the board
+  if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) zoomAt(x, y, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)));
+  else { board.view.x -= e.deltaX; paint(); }
+}, { passive: false });
+document.addEventListener("keydown", (e) => { if (e.code === "Space" && $("draw").classList.contains("on")) { board.space = true; e.preventDefault(); } });
+document.addEventListener("keyup", (e) => { if (e.code === "Space") board.space = false; });
 // The page itself must not move, nor a long press select, while a finger draws
 for (const ev of ["touchstart", "touchmove"]) canvas.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// ---------------------------------------------------------------- a drawing as a file
+
+const r1 = (n) => Math.round(n * 10) / 10;
+
+function svgOf(strokes) {
+  const box = bounds(strokes), m = 16;
+  const x = Math.floor(box.x - m), y = Math.floor(box.y - m), w = Math.ceil(box.w + 2 * m), h = Math.ceil(box.h + 2 * m);
+  const data = strokes.map((s) => ({ t: s.tool, c: s.color, w: s.width, p: s.points.map(([a, b]) => [r1(a), r1(b)]) }));
+  // The strokes as drawn, for the next time it is opened: written so that no character can close the tag
+  const json = JSON.stringify(data).replace(/&/g, "\\u0026").replace(/</g, "\\u003c").replace(/>/g, "\\u003e");
+  const paths = strokes.map((s) => {
+    const d = s.points.map(([a, b], i) => (i ? "L" : "M") + r1(a) + " " + r1(b)).join("") + (s.points.length === 1 ? "l0.01 0" : "");
+    const marker = s.tool === "marker";
+    return '<path d="' + d + '" fill="none" stroke="' + s.color + '" stroke-width="' + s.width + '" stroke-linecap="' + (marker ? "butt" : "round") + '" stroke-linejoin="round"' + (marker ? ' stroke-opacity="0.35"' : "") + "/>";
+  }).join("\n");
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="' + x + " " + y + " " + w + " " + h + '">\n'
+    + '<desc id="minima-strokes">' + json + "</desc>\n"
+    + '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" fill="#ffffff"/>\n' + paths + "\n</svg>\n";
+}
+
+function strokesOf(svg) {
+  const m = /<desc id="minima-strokes">([\s\S]*?)<\/desc>/.exec(svg || "");
+  if (!m) return null;
+  try { return JSON.parse(m[1]).map((s) => ({ tool: s.t || "pen", color: s.c, width: s.w, points: s.p })); } catch (e) { return null; }
+}
+
+async function finishDraw() {
+  $("draw").classList.remove("on");
+  const editing = board.editing;
+  if (!board.strokes.length) {
+    // Everything rubbed out: the drawing goes from the note
+    if (editing) { editing.img.remove(); host.remove(editing.path); changed(); }
+    else back();
+    return;
+  }
+  const path = await host.saveText("disegno.svg", svgOf(board.strokes));
+  if (!path) return;
+  if (editing) {
+    // A new file each time: the old picture can't come back from a cache
+    editing.img.setAttribute("src", encodeURI(path));
+    host.remove(editing.path);
+    changed();
+  } else inserted("draw", path, "disegno.svg");
+}
+
+/** A tap on a drawing: opened again on the board, when it was made here. */
+async function editDrawing(img) {
+  const src = decodeURIComponent(img.getAttribute("src") || "");
+  const strokes = strokesOf(await host.readText(src));
+  if (!strokes) { host.open(img.getAttribute("src")); return; }
+  keep();
+  openDraw(strokes, { img, path: src });
+}
 
 /** Back, on the phone: a window open over the note closes first. True when there was one. */
 function goBack() {
@@ -666,6 +870,9 @@ const androidHost = {
   saveData: async (name, data) => NotesHost.saveData(name, data.slice(data.indexOf(",") + 1)),
   open: (href) => NotesHost.open(href),
   share: (href, name) => NotesHost.share(href, name),
+  readText: async (path) => NotesHost.readText(path),
+  saveText: async (name, text) => NotesHost.saveText(name, text),
+  remove: (path) => NotesHost.remove(path),
 };
 
 // ---------------------------------------------------------------- on a computer: the folder itself
@@ -719,6 +926,8 @@ async function scan(dir, path) {
 async function reload() {
   pc.tree = await scan(pc.root, []);
   try { pc.pins = JSON.parse(await readText(pc.root, "_note.json")).pinned || []; } catch (e) { pc.pins = []; }
+  // Kept for the next opening: the tree shows at once, before the browser lets the folder be read again
+  try { localStorage.setItem("tree", JSON.stringify({ root: pc.root.name, tree: pc.tree, pins: pc.pins })); } catch (e) { /* too big, or not allowed */ }
   draw();
 }
 const keyOf = (n) => n.path.concat(n.file).join("/");
@@ -847,6 +1056,7 @@ async function moveTo(what, path) {
 function say2(text) { choose(text, [["OK", () => {}]]); }
 
 async function openNote(n) {
+  if (pc.gate) await pc.gate;
   flush();
   const text = await readText(await dirOf(n.path), n.file);
   pc.open = n;
@@ -934,6 +1144,25 @@ const pcHost = {
     return FILES + "/" + file;
   },
   open: (href) => window.open(new URL(href, document.baseURI).href, "_blank", "noopener"),
+  readText: async (path) => {
+    try {
+      const parts = path.split("/").filter((x) => x && x !== ".");
+      return await readText(await dirOf(pc.open.path.concat(parts.slice(0, -1))), parts[parts.length - 1]);
+    } catch (e) { return ""; }
+  },
+  saveText: async (name, text) => {
+    const dir = await (await dirOf(pc.open.path)).getDirectoryHandle(FILES, { create: true });
+    const file = await freeName(dir, name);
+    await writeFile(dir, file, text);
+    return FILES + "/" + file;
+  },
+  remove: async (path) => {
+    try {
+      const parts = path.split("/").filter((x) => x && x !== ".");
+      if (parts[0] !== FILES || parts.length !== 2) return;
+      await (await dirOf(pc.open.path.concat(FILES))).removeEntry(parts[1]);
+    } catch (e) { /* already gone */ }
+  },
   // On a computer: a copy where the browser keeps what is downloaded
   share: async (href, name) => {
     try {
@@ -980,22 +1209,33 @@ async function pcStart() {
     try { if (await saved.queryPermission({ mode: "readwrite" }) === "granted") { await use(saved); bindButtons(); return; } } catch (e) { /* asked below */ }
   }
   if (saved) {
-    say("Le note sono in \"" + saved.name + "\". Se il browser chiede, scegli \"Consenti a ogni visita\": la prossima volta si aprono da sole.", "Apri le note", async () => {
-      if (await saved.requestPermission({ mode: "readwrite" }) === "granted") await use(saved); else await pick();
-    });
-    const other = document.createElement("button");
-    other.className = "pill ghost";
-    other.style.marginLeft = "8px";
-    other.textContent = "Un'altra cartella";
-    other.onclick = pick;
-    $("emptyText").appendChild(other);
+    // The tree of the last time shows at once; the first touch anywhere (a note, most likely) lets the
+    // browser give the folder back, which it allows only on a touch, and then that note opens
+    let cache = null;
+    try { cache = JSON.parse(localStorage.getItem("tree") || "null"); } catch (e) { cache = null; }
+    if (cache && cache.root === saved.name) { pc.tree = cache.tree; pc.pins = cache.pins || []; draw(); }
+    say("Scegli una nota a sinistra. Se il browser chiede l'accesso alla cartella, scegli \"Consenti a ogni visita\": poi non lo chiede più.");
+    let open = null;
+    pc.gate = new Promise((ok) => { open = ok; });
+    const unlock = async (e) => {
+      if (e && e.target && e.target.closest && e.target.closest("#veil, #box")) return;
+      document.removeEventListener("pointerdown", unlock, true);
+      document.removeEventListener("keydown", unlock, true);
+      let granted = false;
+      try { granted = await saved.requestPermission({ mode: "readwrite" }) === "granted"; } catch (x) { granted = false; }
+      if (granted) await use(saved); else await pick();
+      pc.gate = null;
+      open();
+    };
+    document.addEventListener("pointerdown", unlock, true);
+    document.addEventListener("keydown", unlock, true);
   } else say("Scegli la cartella delle note: quella dove si trova questo file. Viene ricordata.", "Scegli la cartella", pick);
   bindButtons();
 }
 
 function bindButtons() {
-  $("newNote").onclick = () => pc.root && newNote([]);
-  $("newFolder").onclick = () => pc.root && newFolder([]);
+  $("newNote").onclick = async () => { if (pc.gate) await pc.gate; if (pc.root) newNote([]); };
+  $("newFolder").onclick = async () => { if (pc.gate) await pc.gate; if (pc.root) newFolder([]); };
   // Dropped on the empty part of the tree, or on its title: out of every folder
   for (const zone of [$("tree"), $("sideTop")]) {
     zone.addEventListener("dragover", (e) => { if (pc.drag && (e.target === zone || zone.id === "sideTop")) { e.preventDefault(); $("tree").classList.add("drop"); } });
