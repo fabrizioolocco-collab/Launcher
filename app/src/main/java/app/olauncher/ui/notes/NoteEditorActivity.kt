@@ -48,6 +48,9 @@ class NoteEditorActivity : AppCompatActivity() {
     /** The PDF chosen to take pages from, and its pages being read. */
     private var pdfFile: File? = null
     private var pdf: PdfRenderer? = null
+    /** A PDF being made of the notebook, as its pieces come from the page. */
+    private var exportFile: File? = null
+    private var exportOut: java.io.OutputStream? = null
 
     private val picker = registerForActivityResult(PickFiles()) { uris ->
         val source = uris.firstOrNull()?.path?.let { File(it) } ?: return@registerForActivityResult
@@ -225,6 +228,29 @@ class NoteEditorActivity : AppCompatActivity() {
             return NotesStore.attachBytes(dir, text.toByteArray(), name).orEmpty()
         }
 
+        /** A file the page makes (the notebook as a PDF): begun, sent in pieces, then offered to share, save or open. */
+        @JavascriptInterface
+        fun exportBegin(name: String) {
+            runCatching { exportOut?.close() }
+            val dir = File(cacheDir, "note-export").apply { deleteRecursively(); mkdirs() }
+            val safe = name.replace(Regex("[\\\\/:*?\"<>|\\n\\r]"), " ").trim().ifBlank { "Quaderno.pdf" }
+            exportFile = File(dir, safe)
+            exportOut = runCatching { exportFile!!.outputStream().buffered() }.getOrNull()
+        }
+
+        @JavascriptInterface
+        fun exportChunk(base64: String) {
+            runCatching { exportOut?.write(Base64.decode(base64, Base64.DEFAULT)) }
+        }
+
+        @JavascriptInterface
+        fun exportEnd() {
+            val ok = runCatching { exportOut?.close() }.isSuccess && exportOut != null
+            exportOut = null
+            val file = exportFile?.takeIf { ok && it.length() > 0 }
+            runOnUiThread { if (file == null) showToast(getString(R.string.ml_notes_failed)) else fileMenu(file, file.name) }
+        }
+
         /** The PDF just chosen, opened to take pages from: how many it has, -1 when it can't be read. */
         @JavascriptInterface
         fun pdfOpen(path: String): Int {
@@ -305,7 +331,10 @@ class NoteEditorActivity : AppCompatActivity() {
 
     /** Share, save elsewhere or open with another app, an image or a file of the note. */
     private fun fileMenu(href: String, name: String) {
-        val file = fileOf(href) ?: return showToast(getString(R.string.ml_search_cannot_open))
+        fileMenu(fileOf(href) ?: return showToast(getString(R.string.ml_search_cannot_open)), name)
+    }
+
+    private fun fileMenu(file: File, name: String) {
         val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "*/*"
         val uri = try {
             FileProvider.getUriForFile(this, "$packageName.files", file)
