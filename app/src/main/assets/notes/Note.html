@@ -189,6 +189,13 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #find svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 ::highlight(find) { background: #6b5d00; color: #fff; }
 ::highlight(findNow) { background: #ffd54f; color: #000; }
+#drawBar { position: relative; }
+#drawBar .tb.main { padding-top: 4px; padding-bottom: 4px; }
+#drawBar .tb.main .ib, #drawBar .tb.main .fav { height: 38px; }
+#drawBar .tb.main .fav.empty { height: 32px; width: 32px; margin: 3px 2px; }
+#drawBar .ib.opts::after { content: ""; position: absolute; right: 3px; bottom: 3px; border: 3.5px solid transparent; border-right-color: currentColor; border-bottom-color: currentColor; opacity: .55; }
+#drawBar .ib.opts.open::after { opacity: 1; }
+#drawBar .tb.pop { position: absolute; left: 6px; right: 6px; top: 100%; margin-top: 6px; z-index: 4; flex-wrap: wrap; overflow: visible; padding: 8px; border: 1px solid var(--stroke); border-radius: 16px; background: rgba(15,18,20,.97); box-shadow: 0 8px 26px rgba(0,0,0,.6); max-width: 760px; width: fit-content; }
 #drawBar .hint { color: var(--dim); font-size: 13px; line-height: 1.35; padding: 0 4px; flex: 1 0 240px; }
 #draw { position: fixed; }
 #sheet { display: none; position: absolute; inset: 0; background: #0b0d0f; z-index: 3; flex-direction: column; touch-action: pan-y; }
@@ -679,18 +686,52 @@ function closeFind() {
   if (board.book) { paint(); barOfBoard(); }
 }
 
+/** Lower case and without accents, a character for a character: "perché" is found by "perche". */
+const fold = (t) => Array.from(String(t)).map((c) => (c.normalize("NFD")[0] || c).toLowerCase()).join("");
+
+/** Where [q] is among the words of a PDF's page: for each place, a box a line (fractions of the page). */
+function inWords(words, q) {
+  let text = "";
+  const owner = [];
+  words.forEach((w, i) => {
+    if (i) { text += " "; owner.push(-1); }
+    const t = fold(w[0]);
+    text += t;
+    for (let k = 0; k < t.length; k++) owner.push(i);
+  });
+  const out = [];
+  for (let at = text.indexOf(q); at >= 0; at = text.indexOf(q, at + q.length)) {
+    const rects = [];
+    let last = -1;
+    for (let k = at; k < at + q.length; k++) {
+      const i = owner[k];
+      if (i < 0 || i === last) continue;
+      last = i;
+      const w = words[i], r = rects[rects.length - 1];
+      // On the same line as the one before: one box for both
+      if (r && w[2] < r[1] + r[3] && w[2] + w[4] > r[1]) { const x1 = Math.max(r[0] + r[2], w[1] + w[3]), y1 = Math.max(r[1] + r[3], w[2] + w[4]); r[0] = Math.min(r[0], w[1]); r[1] = Math.min(r[1], w[2]); r[2] = x1 - r[0]; r[3] = y1 - r[1]; }
+      else rects.push([w[1], w[2], w[3], w[4]]);
+    }
+    if (rects.length) out.push(rects);
+  }
+  return out;
+}
+
 function runFind() {
-  const q = findText.value.trim().toLowerCase();
+  const q = fold(findText.value.trim().replace(/\s+/g, " "));
   finder.list = [];
   finder.item = null;
   if (q && board.book) {
-    board.book.pages.forEach((pg, i) => { if (pg.title && pg.title.toLowerCase().includes(q)) finder.list.push({ page: i, top: -1 }); });
-    for (const o of board.items) if (o.kind === "text" && o.text.toLowerCase().includes(q)) finder.list.push({ page: pageAt(o.cy), top: o.cy, item: o });
+    board.book.pages.forEach((pg, i) => {
+      if (pg.title && fold(pg.title).includes(q)) finder.list.push({ page: i, top: -1 });
+      if (pg.words) for (const rects of inWords(pg.words, q)) finder.list.push({ page: i, top: pageTop(i) + rects[0][1] * pg.h, rects });
+    });
+    for (const o of board.items) if (o.kind === "text" && fold(o.text).includes(q)) finder.list.push({ page: pageAt(o.cy), top: o.cy, item: o });
     finder.list.sort((a, b) => a.page - b.page || a.top - b.top);
   } else if (q) {
     const walk = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-      const text = n.nodeValue.toLowerCase();
+      const text = fold(n.nodeValue);
       for (let k = text.indexOf(q); k >= 0; k = text.indexOf(q, k + q.length)) {
         const r = document.createRange();
         r.setStart(n, k);
@@ -711,7 +752,7 @@ function showFound() {
     if (cur) {
       goToPage(cur.page);
       // The words found in the middle of the screen, where the pages go under one another
-      if (!paged() && cur.item) { const r = canvas.getBoundingClientRect(); board.view.y = r.height * 0.4 - cur.item.cy * board.view.s; }
+      if (!paged() && cur.top >= 0) { const r = canvas.getBoundingClientRect(); board.view.y = r.height * 0.4 - cur.top * board.view.s; }
     }
     paint();
     return;
@@ -879,7 +920,7 @@ const board = {
   eraser: "area", esize: 18, recent: [],
   view: { s: 1, x: 0, y: 0 }, undo: [], redo: [], editing: null, book: null,
   touches: new Map(), pinch: null, pan: null, erased: false, penSeen: false, space: false,
-  sel: null, cropping: null, drag: null, lastInk: "pen", gest: null, lsel: null, lpath: null, tedit: null, zoom: null, onlyMarks: false,
+  sel: null, cropping: null, drag: null, lastInk: "pen", optsOpen: false, gest: null, lsel: null, lpath: null, tedit: null, zoom: null, onlyMarks: false,
   favs: [null, null, null, null], alpha: { pen: 1, marker: 0.35 }, shape: "line", layout: "scroll", gpage: null, addTap: null,
   ruler: null, rTouch: new Map(), rStart: null, pageSel: new Set(),
 };
@@ -1004,29 +1045,71 @@ function barRows() {
   const top = row("main");
   if (!board.book) mk(top, "ib", DI.close, "Chiudi senza salvare", () => { $("draw").classList.remove("on"); back(); });
   else if (!android) { mk(top, "ib", DI.side, "Mostra o nascondi l'elenco delle note", toggleSide); top.appendChild(title); }
-  // In order: moving and choosing, then what writes, then what helps to write, then undoing, then the rest
-  const tools = group(top);
-  const list = [["hand", "Mano: muoviti senza scrivere"]].concat(board.book ? [["select", "Seleziona immagini e testi"]] : [], [["lasso", "Lazo: scegli dei tratti per spostarli, ingrandirli, colorarli"]],
-    [["pen", "Penna"], ["marker", "Evidenziatore"], ["shape", "Forme: linea, freccia, rettangolo, ellisse"]], board.book ? [["text", "Testo scritto con la tastiera"]] : [], [["eraser", "Gomma"]]);
-  for (const [t, label] of list) {
-    const b = mk(tools, "ib" + (board.tool === t ? " on" : ""), DI[t], label, () => { commitText(); clearLasso(); board.tool = t; if (["pen", "marker", "shape", "eraser"].includes(t)) board.lastInk = t; if (t !== "select") { board.sel = null; board.cropping = null; } paint(); barOfBoard(); });
+  // On the phone the notebook has the whole screen: the way back is here
+  else mk(top, "ib", DI.left, "Torna all'elenco delle note", () => NotesHost.close());
+  // One row, what is used most first: the hand and what writes, the favourite pens, undoing; then the rest
+  const HAS_OPTS = ["pen", "marker", "shape", "eraser"];
+  const tool = (into, t, label) => {
+    const b = mk(into, "ib" + (board.tool === t ? " on" : "") + (board.tool === t && HAS_OPTS.includes(t) ? " opts" + (board.optsOpen ? " open" : "") : ""), DI[t], label + (HAS_OPTS.includes(t) ? " · tocca di nuovo per colori e opzioni" : ""), () => {
+      commitText();
+      clearLasso();
+      // The tool already in hand, touched again: its colours and settings open under it, or close
+      if (board.tool === t) board.optsOpen = !board.optsOpen;
+      else { board.tool = t; board.optsOpen = false; }
+      if (HAS_OPTS.includes(t)) board.lastInk = t;
+      if (t !== "select") { board.sel = null; board.cropping = null; }
+      paint();
+      barOfBoard();
+    });
     if (t === "pen" || t === "marker") {
       const tip = document.createElement("span");
       tip.className = "tip";
       tip.style.background = board.color;
       b.appendChild(tip);
     }
-    if (t === "lasso") { const sep = document.createElement("span"); sep.className = "vsep"; tools.appendChild(sep); }
-  }
+  };
+  const write = group(top);
+  tool(write, "hand", "Mano: muoviti senza scrivere");
+  tool(write, "pen", "Penna");
+  tool(write, "marker", "Evidenziatore");
+  tool(write, "eraser", "Gomma");
+  // The favourite pens: those kept, and a place to keep the one in hand while there is room for it
+  const favs = group(top);
+  favs.classList.add("favs");
+  const free = board.favs.indexOf(null);
+  board.favs.forEach((f, k) => {
+    if (!f && k !== free) return;
+    const label = f ? (f.tool === "marker" ? "Evidenziatore" : "Penna") + " preferito · tieni premuto per cambiarlo" : "Tieni tra i preferiti la penna o l'evidenziatore di adesso";
+    const b = mk(favs, "fav" + (f ? "" : " empty") + (f && sameFav(f) ? " on" : ""), f ? DI[f.tool] : "+", label, () => {
+      if (b.held) { b.held = false; return; }
+      if (f) useFav(f); else saveFav(k);
+    });
+    if (f) {
+      const tip = document.createElement("span");
+      tip.className = "tip";
+      tip.style.background = f.color;
+      tip.style.height = Math.max(3, Math.min(7, Math.round(f.width / 2) + 2)) + "px";
+      if (f.tool === "marker") tip.style.opacity = "0.6";
+      b.appendChild(tip);
+    }
+    b.onpointerdown = () => { clearTimeout(b.timer); b.timer = setTimeout(() => { b.held = true; favMenu(k); }, 550); };
+    b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(b.timer);
+    b.oncontextmenu = (e) => { e.preventDefault(); clearTimeout(b.timer); favMenu(k); };
+  });
+  const hist = group(top);
+  mk(hist, "ib", DI.undo, "Annulla", undo).disabled = !board.undo.length;
+  mk(hist, "ib", DI.redo, "Ripeti", redo).disabled = !board.redo.length;
+  const more = group(top);
+  if (board.book) tool(more, "select", "Seleziona immagini e testi");
+  tool(more, "lasso", "Lazo: scegli dei tratti per spostarli, ingrandirli, colorarli");
+  tool(more, "shape", "Forme: linea, freccia, rettangolo, ellisse");
+  if (board.book) tool(more, "text", "Testo scritto con la tastiera");
   const aids = group(top);
   mk(aids, "ib" + (board.ruler ? " on" : ""), DI.ruler, "Righello: le linee vicino al bordo vengono dritte. Un dito lo sposta, due lo ruotano", toggleRuler);
   if (board.book) {
     mk(aids, "ib", DI.image, "Metti un'immagine sulla pagina", () => { board.pickAs = "image"; host.pick("image"); });
     mk(aids, "ib" + (board.zoom ? " on" : ""), DI.wzoom, "Zoom di scrittura: scrivi in grande in una fascia in basso, viene piccolo sulla pagina", toggleZoom);
   }
-  const hist = group(top);
-  mk(hist, "ib", DI.undo, "Annulla", undo).disabled = !board.undo.length;
-  mk(hist, "ib", DI.redo, "Ripeti", redo).disabled = !board.redo.length;
   if (board.book) {
     const last = group(top);
     mk(last, "ib" + (finder.on ? " on" : ""), DI.find, "Cerca nei testi del quaderno", () => (finder.on ? closeFind() : openFind()));
@@ -1041,29 +1124,11 @@ function barRows() {
   }
   navOfBook();
 
-  // The second row: what the tool in hand can be set to
-  const opts = row("opts");
-  // Four favourite tools, kept: a pen or highlighter of a colour and a width, a tap away
-  const favs = group(opts);
-  favs.classList.add("favs");
-  board.favs.forEach((f, k) => {
-    const label = f ? (f.tool === "marker" ? "Evidenziatore" : "Penna") + " preferito " + (k + 1) + " · tieni premuto per cambiarlo" : "Posto libero: tocca per salvare qui lo strumento attuale";
-    const b = mk(favs, "fav" + (f ? "" : " empty") + (f && sameFav(f) ? " on" : ""), f ? DI[f.tool] : "+", label, () => {
-      if (b.held) { b.held = false; return; }
-      if (f) useFav(f); else saveFav(k);
-    });
-    if (f) {
-      const tip = document.createElement("span");
-      tip.className = "tip";
-      tip.style.background = f.color;
-      tip.style.height = Math.max(3, Math.min(8, Math.round(f.width / 2) + 2)) + "px";
-      if (f.tool === "marker") tip.style.opacity = "0.6";
-      b.appendChild(tip);
-    }
-    b.onpointerdown = () => { clearTimeout(b.timer); b.timer = setTimeout(() => { b.held = true; favMenu(k); }, 550); };
-    b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(b.timer);
-    b.oncontextmenu = (e) => { e.preventDefault(); clearTimeout(b.timer); favMenu(k); };
-  });
+  // What the tool in hand can be set to: a card under the row, there only when asked for (the tool
+  // touched again) or when there is something chosen to act on; it goes as soon as the pen writes
+  const acting = (board.tool === "select" && (board.sel || board.cropping)) || (board.tool === "lasso" && board.lsel);
+  if (!board.optsOpen && !acting) return;
+  const opts = row("opts pop");
   if (board.tool === "hand") {
     const names = { pen: "la penna", marker: "l'evidenziatore", shape: "le forme", eraser: "la gomma" };
     hint(opts, "Il dito e il mouse spostano le pagine, due dita o Ctrl + rotellina fanno lo zoom. La penna continua a scrivere (con " + names[board.lastInk] + ").");
@@ -1221,6 +1286,7 @@ function saveFav(k) {
 }
 function useFav(f) {
   board.tool = f.tool;
+  board.optsOpen = false;
   board.lastInk = f.tool;
   board.color = f.color;
   board.width = f.width;
@@ -1785,6 +1851,13 @@ function paint() {
       g.shadowColor = "transparent";
       drawSheet(g, pg, px);
       drawMarks(g, pg, px);
+      if (finder.on) for (const m of finder.list) {
+        if (m.page !== i || !m.rects) continue;
+        const now = m === finder.list[finder.at];
+        g.fillStyle = now ? "rgba(255,170,0,.5)" : "rgba(255,221,60,.35)";
+        for (const [x, y, w, h] of m.rects) g.fillRect(x * PW - 2, y * pg.h - 2, w * PW + 4, h * pg.h + 4);
+        if (now) { g.strokeStyle = "#e65100"; g.lineWidth = 1.5 * px; for (const [x, y, w, h] of m.rects) g.strokeRect(x * PW - 2, y * pg.h - 2, w * PW + 4, h * pg.h + 4); }
+      }
       g.restore();
       // Ink and pictures only on their page
       g.save();
@@ -2144,6 +2217,7 @@ canvas.addEventListener("pointerdown", (e) => {
   if (document.activeElement === title) title.blur();
   try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* a pointer already gone */ }
   board.flingId = (board.flingId || 0) + 1;
+  if (board.optsOpen) { board.optsOpen = false; barOfBoard(); }
   // Words being typed: a touch outside them ends the typing, and does nothing else
   if (commitText()) return;
   // The ruler: a finger or the mouse on it moves it; a second finger, anywhere, turns it
@@ -2988,6 +3062,7 @@ function openBook(html) {
     const pg = { h: vb[3] > 0 ? vb[3] : PH, paper: p.getAttribute("data-paper") || paper, bg: bg ? { src: bg } : null };
     if (p.getAttribute("data-mark")) pg.mark = true;
     if (p.getAttribute("data-title")) pg.title = p.getAttribute("data-title");
+    if (p.getAttribute("data-text")) { try { pg.words = JSON.parse(p.getAttribute("data-text")); } catch (e) { /* no words */ } }
     pages.push(pg);
     let strokes = [], items = [];
     try { strokes = strokesFrom(JSON.parse(p.getAttribute("data-ink") || "[]")); } catch (e) { /* a page without ink */ }
@@ -3005,6 +3080,9 @@ function openBook(html) {
   startBoard(board.strokes);
   bookDirty = false;
   $("draw").classList.add("on", "book");
+  // On the phone the notebook takes the whole screen: the bar with the title goes
+  if (android && NotesHost.chrome) NotesHost.chrome(false);
+  board.optsOpen = false;
   board.view = { s: 0, x: 0, y: 0 };
   fit();
   whole();
@@ -3060,6 +3138,7 @@ function bookHtml() {
     return '<svg class="page" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + PW + " " + r1(pg.h) + '" width="' + PW + '" height="' + r1(pg.h) + '"'
       + (pg.bg ? ' data-bg="' + esc(pg.bg.src) + '"' : ' data-paper="' + pg.paper + '"')
       + (pg.mark ? ' data-mark="1"' : "") + (pg.title ? ' data-title="' + esc(pg.title) + '"' : "")
+      + (pg.words ? ' data-text="' + esc(JSON.stringify(pg.words)) + '"' : "")
       + ' data-ink="' + esc(JSON.stringify(inkOf(per[i].strokes))) + '"'
       + (items.length ? ' data-items="' + esc(JSON.stringify(items)) + '"' : "") + ">"
       + '<rect width="' + PW + '" height="' + r1(pg.h) + '" fill="#fff"/>' + back + pics + "\n" + pathsOf(per[i].strokes) + "</svg>";
@@ -3541,7 +3620,10 @@ async function pdfChosen(source, name) {
     rearrange((pages, per) => {
       if (empty) { pages.splice(0, 1); per.splice(0, 1); }
       got.forEach((p, n) => {
-        pages.splice(at + n, 0, { h: PW * p.h / p.w, paper: board.book.paper, bg: { src: encodeURI(p.src) } });
+        const pg = { h: PW * p.h / p.w, paper: board.book.paper, bg: { src: encodeURI(p.src) } };
+        // The words of the page and where each is (fractions of the page), to be looked for
+        if (Array.isArray(p.text) && p.text.length) pg.words = p.text;
+        pages.splice(at + n, 0, pg);
         per.splice(at + n, 0, { strokes: [], items: [] });
       });
     });
@@ -3708,7 +3790,7 @@ function draw() {
   };
   if (q) {
     // By title at once; by what is written inside as the notes are read (once, the first time)
-    const hits = all.filter((n) => n.name.toLowerCase().includes(q) || (n.text || "").includes(q));
+    const fq = fold(q), hits = all.filter((n) => fold(n.name).includes(fq) || (n.text || "").includes(fq));
     hits.forEach((n) => note(n, 0, false));
     if (!hits.length) { const none = document.createElement("div"); none.className = "row"; none.style.cssText = "padding-left:14px;color:var(--dim);cursor:default"; none.textContent = pc.reading ? "Leggo le note…" : "Niente"; tree.appendChild(none); }
     readTexts(all);
@@ -3736,10 +3818,14 @@ async function readTexts(all) {
   pc.reading = true;
   for (const n of todo) {
     try {
-      const html = bodyOf(await readText(await dirOf(n.path), n.file)).replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/td|\/tspan)[^>]*>/gi, " ").replace(/<[^>]+>/g, "");
+      const whole = bodyOf(await readText(await dirOf(n.path), n.file));
+      // The words of the pages taken from a PDF are kept beside each page
+      let pdfWords = "";
+      for (const m of whole.matchAll(/data-text="([^"]*)"/g)) for (const w of m[1].matchAll(/\[&quot;((?:[^&]|&(?!quot;))*)&quot;/g)) pdfWords += " " + w[1];
+      const html = (whole + pdfWords).replace(/<(br|\/p|\/div|\/li|\/h[1-6]|\/tr|\/td|\/tspan)[^>]*>/gi, " ").replace(/<[^>]+>/g, "");
       const t = document.createElement("textarea");
       t.innerHTML = html;
-      n.text = t.value.replace(/\s+/g, " ").toLowerCase();
+      n.text = fold(t.value.replace(/\s+/g, " "));
     } catch (e) { n.text = ""; }
   }
   pc.reading = false;
@@ -3940,11 +4026,25 @@ const pcHost = {
   pdfThumb: async (i) => (await pcHost.pdfDraw(i, 160)).cv.toDataURL("image/jpeg", 0.7),
   pdfPage: async (i) => {
     const { cv, w, h } = await pcHost.pdfDraw(i, 1600);
+    let text = [];
+    try {
+      const page = await pc.pdf.getPage(i + 1), vp = page.getViewport({ scale: 1 });
+      for (const it of (await page.getTextContent()).items) {
+        if (!it.str || !it.str.trim()) continue;
+        const m = pdfjsLib.Util.transform(vp.transform, it.transform), fh = Math.hypot(m[2], m[3]) || it.height || 10;
+        // A run of words: each takes of its width what its letters are of the run's
+        let done = 0;
+        for (const part of it.str.split(/(\s+)/)) {
+          if (part.trim()) text.push([part, +((m[4] + it.width * done / it.str.length) / vp.width).toFixed(4), +((m[5] - fh) / vp.height).toFixed(4), +(it.width * part.length / it.str.length / vp.width).toFixed(4), +(fh * 1.25 / vp.height).toFixed(4)]);
+          done += part.length;
+        }
+      }
+    } catch (e) { text = []; }
     const blob = await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.88));
     const dir = await (await dirOf(pc.open.path)).getDirectoryHandle(FILES, { create: true });
     const name = await freeName(dir, "pagina pdf.jpg");
     await writeFile(dir, name, blob);
-    return { src: FILES + "/" + name, w, h };
+    return { src: FILES + "/" + name, w, h, text };
   },
   open: async (href) => {
     if (!/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) { const url = await pcHost.blob(href); if (url) { window.open(url, "_blank", "noopener"); return; } }

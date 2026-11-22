@@ -41,6 +41,30 @@ class PdfSearch private constructor(private val pages: List<PageText>) {
         return hits
     }
 
+    /** The words of [page] (lower case, without accents) with their boxes: for a notebook that takes the page. */
+    fun words(page: Int): List<Pair<String, RectF>> {
+        val p = pages.getOrNull(page) ?: return emptyList()
+        val out = mutableListOf<Pair<String, RectF>>()
+        val word = StringBuilder()
+        var box: RectF? = null
+        fun end() {
+            val b = box
+            if (word.isNotBlank() && b != null) out += word.toString() to b
+            word.setLength(0)
+            box = null
+        }
+        p.text.forEachIndexed { i, c ->
+            val b = p.boxes.getOrNull(i)
+            if (c == ' ' || b == null) end()
+            else {
+                word.append(c)
+                box = box?.apply { union(b) } ?: RectF(b)
+            }
+        }
+        end()
+        return out
+    }
+
     /** The characters' boxes joined into one rectangle per line. */
     private fun lines(boxes: List<RectF?>): List<RectF> {
         val out = mutableListOf<RectF>()

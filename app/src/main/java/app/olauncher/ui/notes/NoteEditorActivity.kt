@@ -45,9 +45,13 @@ class NoteEditorActivity : AppCompatActivity() {
     private lateinit var note: File
     private lateinit var web: WebView
     private var pickKind = "image"
+    private var topBar: android.view.View? = null
     /** The PDF chosen to take pages from, and its pages being read. */
     private var pdfFile: File? = null
     private var pdf: PdfRenderer? = null
+    /** The words of that PDF, read the first time a page of it is taken. */
+    private var pdfWords: app.olauncher.ui.pdf.PdfSearch? = null
+    private var pdfWordsRead = false
     /** A PDF being made of the notebook, as its pieces come from the page. */
     private var exportFile: File? = null
     private var exportOut: java.io.OutputStream? = null
@@ -84,6 +88,7 @@ class NoteEditorActivity : AppCompatActivity() {
         }
         val bar = UiKit.appBar(this, getString(R.string.ml_notes_app), onBack = { close() })
         bar.view.setPadding(4, 4, 4, 4)
+        topBar = bar.view
         UiKit.setSubtitle(bar, note.parentFile?.takeIf { it != root }?.relativeTo(root)?.invariantSeparatorsPath?.replace("/", " › "))
         column.addView(bar.view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
 
@@ -188,6 +193,14 @@ class NoteEditorActivity : AppCompatActivity() {
             }
         }
 
+        /** A notebook takes the whole screen: the bar with the title goes ([shown] false), and comes back for a note of words. */
+        @JavascriptInterface
+        fun chrome(shown: Boolean) = runOnUiThread { topBar?.visibility = if (shown) android.view.View.VISIBLE else android.view.View.GONE }
+
+        /** The arrow back, in the page's own bar when the title bar is hidden. */
+        @JavascriptInterface
+        fun close() = runOnUiThread { this@NoteEditorActivity.close() }
+
         @JavascriptInterface
         fun rename(title: String): String {
             note = NotesStore.rename(root, note, title)
@@ -269,6 +282,8 @@ class NoteEditorActivity : AppCompatActivity() {
             val file = pdfFile?.takeIf { it.absolutePath == path } ?: return -1
             return try {
                 pdf?.close()
+                pdfWords = null
+                pdfWordsRead = false
                 pdf = PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY))
                 pdf!!.pageCount
             } catch (e: Exception) {
@@ -297,7 +312,21 @@ class NoteEditorActivity : AppCompatActivity() {
             bmp.compress(Bitmap.CompressFormat.JPEG, 88, out)
             bmp.recycle()
             val path = NotesStore.attachBytes(dir, out.toByteArray(), "pagina pdf.jpg") ?: return ""
-            return JSONObject().put("src", path).put("w", page.first).put("h", page.second).toString()
+            // The words of the page and where each is, so that a search in the notebook finds them
+            val text = org.json.JSONArray()
+            try {
+                if (!pdfWordsRead) {
+                    pdfWordsRead = true
+                    pdfWords = pdfFile?.let { app.olauncher.ui.pdf.PdfSearch.load(this@NoteEditorActivity, it) }
+                }
+                pdfWords?.words(index)?.forEach { (word, box) ->
+                    fun r(v: Float) = Math.round(v * 10000) / 10000.0
+                    text.put(org.json.JSONArray().put(word).put(r(box.left)).put(r(box.top)).put(r(box.width())).put(r(box.height())))
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+            return JSONObject().put("src", path).put("w", page.first).put("h", page.second).put("text", text).toString()
         }
 
         /** A file of the note's own `_allegati` folder no longer used (a drawing saved anew). */

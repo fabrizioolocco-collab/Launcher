@@ -252,7 +252,12 @@ object NotesStore {
     }
 
     /** The words of a note, without its markup: what a search looks in. */
-    fun text(note: File): String = body(note)
+    fun text(note: File): String = body(note).let { body ->
+        // A notebook keeps the words of the pages it took from a PDF beside each page
+        body + Regex("data-text=\"([^\"]*)\"").findAll(body).joinToString("") { m ->
+            Regex("\\[&quot;((?:[^&]|&(?!quot;))*)&quot;").findAll(m.groupValues[1]).joinToString("") { " " + it.groupValues[1] }
+        }
+    }
         .replace(Regex("<(br|/p|/div|/li|/h[1-6]|/tr|/td)[^>]*>", RegexOption.IGNORE_CASE), " ")
         .replace(Regex("<[^>]+>"), "")
         .replace("&nbsp;", " ").replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">").replace("&quot;", "\"")
