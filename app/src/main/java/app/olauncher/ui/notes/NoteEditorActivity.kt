@@ -222,6 +222,18 @@ class NoteEditorActivity : AppCompatActivity() {
         @JavascriptInterface
         fun readText(path: String): String = inside(path)?.takeIf { it.isFile }?.let { runCatching { it.readText() }.getOrNull() }.orEmpty()
 
+        /** A picture beside the note as a data URL: one the page may read back after drawing it (for the PDF). */
+        @JavascriptInterface
+        fun readData(path: String): String {
+            val file = inside(path)?.takeIf { it.isFile } ?: return ""
+            return try {
+                val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase()) ?: "image/jpeg"
+                "data:$mime;base64," + Base64.encodeToString(file.readBytes(), Base64.NO_WRAP)
+            } catch (e: Throwable) {
+                ""
+            }
+        }
+
         @JavascriptInterface
         fun saveText(name: String, text: String): String {
             val dir = note.parentFile ?: return ""

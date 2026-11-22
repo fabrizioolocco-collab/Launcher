@@ -1518,7 +1518,11 @@ function paperOf(paper, h) {
 
 /** The pictures of the board (the pages of a PDF, the images laid on them), each read once. */
 const pictures = new Map();
+/** While a PDF is made: the pictures as the page itself may read them back once drawn. */
+let exportPics = null;
+
 function imageOf(src) {
+  if (exportPics && exportPics.has(src)) return { el: exportPics.get(src), ok: true, wait: [] };
   const key = (android ? document.baseURI : (pc.open ? pc.open.path.join("/") : "")) + "|" + src;
   let e = pictures.get(key);
   if (e) return e;
@@ -2456,8 +2460,19 @@ function drawMarks(g, pg, px) {
 /** Page [i] as a picture [width] pixels wide. */
 async function pagePicture(i, width, per) {
   const pg = board.book.pages[i], sc = width / PW;
-  if (pg.bg) await loaded(pg.bg.src);
-  for (const o of per[i].items) if (o.kind !== "text") await loaded(o.src);
+  const need = (pg.bg ? [pg.bg.src] : []).concat(per[i].items.filter((o) => o.kind !== "text").map((o) => o.src));
+  exportPics = new Map();
+  for (const src of need) {
+    if (exportPics.has(src)) continue;
+    // On the phone a picture taken straight from its file can be drawn but not read back: it is
+    // asked of the phone as data instead. One that can't be had is left out, not the whole PDF
+    let el = null;
+    if (host.dataUrl) {
+      const url = await host.dataUrl(src);
+      if (url) el = await new Promise((ok) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => ok(null); im.src = url; });
+    } else el = await loaded(src);
+    exportPics.set(src, el || document.createElement("canvas"));
+  }
   const cv = document.createElement("canvas");
   cv.width = Math.round(width);
   cv.height = Math.round(pg.h * sc);
@@ -2469,6 +2484,7 @@ async function pagePicture(i, width, per) {
   g.clip();
   per[i].items.forEach((o) => drawItem(g, o));
   per[i].strokes.forEach((s) => line(g, s, 0));
+  exportPics = null;
   return cv;
 }
 
@@ -2516,14 +2532,16 @@ async function exportPdf(list) {
       await new Promise((ok) => setTimeout(ok, 0));
       const cv = await pagePicture(which[n], 1654, per);
       const blob = await new Promise((ok) => cv.toBlob(ok, "image/jpeg", 0.86));
+      if (!blob) throw new Error("pagina " + (which[n] + 1) + " troppo grande");
       pages.push({ jpeg: new Uint8Array(await blob.arrayBuffer()), w: cv.width, h: cv.height, pw: 595.28, ph: 595.28 * cv.height / cv.width });
     }
     w.textContent = "Salvo il PDF…";
     await host.exportFile((shownName || "Quaderno") + ".pdf", pdfOf(pages));
     closeSheet();
   } catch (e) {
+    exportPics = null;
     closeSheet();
-    say2("Non è stato possibile fare il PDF.");
+    say2("Non è stato possibile fare il PDF (" + ((e && (e.message || e.name)) || "errore") + ").");
   }
 }
 
@@ -2801,10 +2819,12 @@ function openBook(html) {
     for (const o of items) if (!o.crop) o.crop = { x: 0, y: 0, w: 1, h: 1 };
     per.push({ strokes, items });
   }
-  board.book = { paper, pages, tops: [], layout: ["single", "double"].includes(board.layout) ? board.layout : "scroll", cur: 0 };
+  // Always opened the same way: the pages one under the other, and the hand (a pen writes all the same)
+  board.book = { paper, pages, tops: [], layout: "scroll", cur: 0 };
   if (!pages.length) { pages.push(blankPage()); per.push({ strokes: [], items: [] }); }
   board.editing = null;
-  if (board.tool === "eraser") board.tool = "pen";
+  if (["pen", "marker", "shape"].includes(board.tool)) board.lastInk = board.tool;
+  board.tool = "hand";
   join(per);
   startBoard(board.strokes);
   bookDirty = false;
@@ -3375,6 +3395,7 @@ const androidHost = {
   save: (page) => NotesHost.save(page),
   rename: async (name) => NotesHost.rename(name),
   pick: (kind) => NotesHost.pick(kind),
+  dataUrl: async (src) => { let path = src; try { path = decodeURIComponent(src); } catch (e) { /* plain */ } return NotesHost.readData(path); },
   pdfOpen: async (path) => NotesHost.pdfOpen(path),
   pdfThumb: async (i) => NotesHost.pdfThumb(i),
   pdfPage: async (i) => JSON.parse(NotesHost.pdfPage(i) || "null"),
