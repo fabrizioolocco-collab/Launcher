@@ -126,17 +126,42 @@ object WeatherRepository {
                         "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max," +
                         "wind_speed_10m_max,wind_direction_10m_dominant,sunrise,sunset,uv_index_max" +
                         "&wind_speed_unit=ms&timezone=auto&forecast_days=7&timeformat=unixtime"
-                val conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 15_000
-                    readTimeout = 20_000
+                // Open-Meteo refuses (403) the name a phone's requests carry by themselves: the app's own
+                // name first, a browser's if that is refused too
+                val version = try {
+                    ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName
+                } catch (e: Exception) {
+                    null
+                } ?: "1"
+                val agents = listOf("MinimaLauncher/$version (Android)", "Mozilla/5.0 (Linux; Android 14) MinimaLauncher/$version")
+                var body: String? = null
+                var failure = ""
+                for (agent in agents) {
+                    val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 15_000
+                        readTimeout = 20_000
+                        setRequestProperty("User-Agent", agent)
+                        setRequestProperty("Accept", "application/json")
+                    }
+                    try {
+                        val status = conn.responseCode
+                        if (status == 200) {
+                            body = conn.inputStream.bufferedReader().use { it.readText() }
+                            break
+                        }
+                        // What the service says about it, when it does ({"error":true,"reason":"..."})
+                        val reason = try {
+                            conn.errorStream?.bufferedReader()?.use { it.readText() }?.let { JSONObject(it).optString("reason") }
+                        } catch (e: Exception) {
+                            null
+                        }
+                        failure = "HTTP $status" + (reason?.takeIf { it.isNotBlank() }?.let { ": ${it.take(80)}" } ?: "")
+                        if (status != 403) break
+                    } finally {
+                        conn.disconnect()
+                    }
                 }
-                val status = conn.responseCode
-                if (status != 200) {
-                    conn.disconnect()
-                    throw java.io.IOException("HTTP $status")
-                }
-                val body = conn.inputStream.bufferedReader().use { it.readText() }
-                conn.disconnect()
+                if (body == null) throw java.io.IOException(failure)
                 val json = JSONObject(body)
                 json.put("fetched", System.currentTimeMillis())
                 json.put("place", placeName(ctx, position) ?: "")
