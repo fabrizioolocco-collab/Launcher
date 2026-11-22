@@ -613,6 +613,15 @@
             android:taskAffinity="app.minimalauncher.notes"
             android:theme="@style/ViewerTheme"
             android:windowSoftInputMode="stateHidden|adjustResize" />
+        <!-- A PDF in the page of the notebooks: the reader every PDF opens in -->
+        <activity
+            android:name=".ui.pdf.PdfBookActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:exported="false"
+            android:label="@string/ml_pdf_tool"
+            android:taskAffinity="app.minimalauncher.files"
+            android:theme="@style/ViewerTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity
             android:name=".ui.notes.NoteEditorActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"

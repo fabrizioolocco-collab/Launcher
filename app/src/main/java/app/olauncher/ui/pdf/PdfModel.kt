@@ -22,6 +22,8 @@ sealed class Annotation(val page: Int) {
 
     /** Free drawing. [points] are fractions of the page; [highlighter] draws wide and translucent. */
     class Stroke(page: Int, val points: List<Pair<Float, Float>>, var widthFraction: Float, var color: Int, val highlighter: Boolean) : Annotation(page) {
+        /** How much the ink covers (0..1), when it is not the tool's own: full for a pen, a third for a highlighter. */
+        var alpha: Float? = null
         override val box: RectF = RectF(
             points.minOf { it.first }, points.minOf { it.second }, points.maxOf { it.first }, points.maxOf { it.second },
         )

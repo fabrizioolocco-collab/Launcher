@@ -230,6 +230,12 @@ class PdfViewerActivity : AppCompatActivity() {
     }
 
     private fun start(opened: File) {
+        // A PDF opens in the same page that writes the notebooks; this reader stays, for when it is asked for by name
+        if (!intent.getBooleanExtra(EXTRA_OLD, false)) {
+            startActivity(PdfBookActivity.intent(this, opened, intent.getBooleanExtra(EXTRA_IN_PLACE, false)))
+            finish()
+            return
+        }
         file = opened
         sourceFile = opened
         if (!openRenderer()) {
@@ -2040,6 +2046,11 @@ class PdfViewerActivity : AppCompatActivity() {
     companion object {
         const val EXTRA_PATH = "path"
         private const val EXTRA_IN_PLACE = "inPlace"
+        private const val EXTRA_OLD = "old"
+
+        /** This reader itself, not the page of the notebooks. */
+        fun oldIntent(context: Context, file: File): Intent =
+            Intent(context, PdfViewerActivity::class.java).putExtra(EXTRA_PATH, file.absolutePath).putExtra(EXTRA_OLD, true)
 
         /** A PDF to write on and save where it is (one beside a note). */
         fun editIntent(context: Context, file: File): Intent =

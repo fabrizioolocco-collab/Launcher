@@ -87,8 +87,9 @@ object PdfSaver {
             is Annotation.Stroke -> {
                 val pts = a.currentPoints()
                 if (pts.size >= 2) {
-                    if (a.highlighter) {
-                        val gs = PDExtendedGraphicsState().apply { strokingAlphaConstant = 0.35f }
+                    val alpha = a.alpha ?: if (a.highlighter) 0.35f else 1f
+                    if (alpha < 1f) {
+                        val gs = PDExtendedGraphicsState().apply { strokingAlphaConstant = alpha.coerceIn(0.05f, 1f) }
                         cs.setGraphicsStateParameters(gs)
                     }
                     cs.setStrokingColor(a.color.r(), a.color.g(), a.color.b())

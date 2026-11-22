@@ -54,6 +54,9 @@ class PdfText(private val context: Context, private val file: File, private val 
 
     fun isRecognised(page: Int) = ocr.containsKey(page)
 
+    /** The words read from the picture of [page], once [recognise] has read them. */
+    fun recognised(page: Int): List<Word>? = ocr[page]
+
     /** Whether [page] has text of its own (else it's a scan to recognise). Blocking. */
     fun pageHasText(page: Int): Boolean = hasText.getOrPut(page) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) withPage(page) { p -> NativePdfText.hasText(p) } ?: false

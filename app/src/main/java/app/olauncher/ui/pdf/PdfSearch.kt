@@ -18,7 +18,8 @@ class PdfSearch private constructor(private val pages: List<PageText>) {
     /** A match: its page (original index) and its boxes, one per line it spans. */
     class Hit(val page: Int, val rects: List<RectF>)
 
-    private class PageText(val text: String, val boxes: List<RectF?>)
+    /** [text] is what is searched (lower case, no accents); [raw] the same characters as written. */
+    private class PageText(val text: String, val boxes: List<RectF?>, val raw: String)
 
     fun hasText(page: Int) = pages.getOrNull(page)?.text?.isNotBlank() == true
 
@@ -41,7 +42,7 @@ class PdfSearch private constructor(private val pages: List<PageText>) {
         return hits
     }
 
-    /** The words of [page] (lower case, without accents) with their boxes: for a notebook that takes the page. */
+    /** The words of [page], as written, with their boxes: for the notebook that shows the page. */
     fun words(page: Int): List<Pair<String, RectF>> {
         val p = pages.getOrNull(page) ?: return emptyList()
         val out = mutableListOf<Pair<String, RectF>>()
@@ -57,7 +58,7 @@ class PdfSearch private constructor(private val pages: List<PageText>) {
             val b = p.boxes.getOrNull(i)
             if (c == ' ' || b == null) end()
             else {
-                word.append(c)
+                word.append(p.raw.getOrElse(i) { c })
                 box = box?.apply { union(b) } ?: RectF(b)
             }
         }
@@ -122,7 +123,7 @@ class PdfSearch private constructor(private val pages: List<PageText>) {
                         endPage = i + 1
                     }
                     c.getText(doc)
-                    PageText(fold(c.text.toString()), c.boxes)
+                    PageText(fold(c.text.toString()), c.boxes, c.text.toString())
                 }
             }.let { PdfSearch(it) }
         } catch (e: Throwable) {

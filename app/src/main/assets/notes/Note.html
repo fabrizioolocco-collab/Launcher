@@ -189,7 +189,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #find svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 ::highlight(find) { background: #6b5d00; color: #fff; }
 ::highlight(findNow) { background: #ffd54f; color: #000; }
-#drawBar { position: relative; }
+#drawBar { position: relative; z-index: 3; }
+#drawBar .tb.pop .grp { flex-wrap: wrap; max-width: 100%; }
 #drawBar .tb.main { padding-top: 4px; padding-bottom: 4px; }
 #drawBar .tb.main .ib, #drawBar .tb.main .fav { height: 38px; }
 #drawBar .tb.main .fav.empty { height: 32px; width: 32px; margin: 3px 2px; }
@@ -204,6 +205,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #draw.focus #focusBtn:hover, #draw.focus #focusBtn:active { opacity: 1; }
 #draw.focus #drawBar, #draw.focus #nav { display: none; }
 #app.pc ~ #draw.book.focus { left: 0; }
+#drawBar .pill.save { height: 34px; padding: 0 14px; position: static; box-shadow: none; }
+#drawBar .pill.save.idle { background: #1b2126; color: #7d8790; }
 #drawBar .hint { color: var(--dim); font-size: 13px; line-height: 1.35; padding: 0 4px; flex: 1 0 240px; }
 #draw { position: fixed; }
 #sheet { display: none; position: absolute; inset: 0; background: #0b0d0f; z-index: 3; flex-direction: column; touch-action: pan-y; }
@@ -428,6 +431,8 @@ function changed() {
 function flush() {
   clearTimeout(timer);
   if (!dirty || shownName == null) return;
+  // A PDF is written when asked to, with what was added drawn into it
+  if (board.book && board.book.pdf) return;
   dirty = false;
   if (board.book) { bookDirty = false; host.save(pageOf(shownName, bookHtml())); return; }
   host.save(pageOf(shownName, noteHtml()));
@@ -730,10 +735,20 @@ function runFind() {
   const q = fold(findText.value.trim().replace(/\s+/g, " "));
   finder.list = [];
   finder.item = null;
+  if (q && isPdf() && board.book.pages.some((pg) => pg.orig != null && pg.words === undefined)) {
+    // The first search in a PDF: its words are read, then looked through
+    findCount.textContent = "Leggo…";
+    if (!finder.reading) {
+      finder.reading = true;
+      setTimeout(async () => { for (let i = 0; i < board.book.pages.length; i++) await needWords(i); finder.reading = false; if (finder.on) runFind(); }, 30);
+    }
+    return;
+  }
   if (q && board.book) {
     board.book.pages.forEach((pg, i) => {
       if (pg.title && fold(pg.title).includes(q)) finder.list.push({ page: i, top: -1 });
-      if (pg.words) for (const rects of inWords(pg.words, q)) finder.list.push({ page: i, top: pageTop(i) + rects[0][1] * pg.h, rects });
+      const words = wordsOf(pg);
+      if (words) for (const rects of inWords(words, q)) finder.list.push({ page: i, top: pageTop(i) + rects[0][1] * pg.h, rects });
     });
     for (const o of board.items) if (o.kind === "text" && fold(o.text).includes(q)) finder.list.push({ page: pageAt(o.cy), top: o.cy, item: o });
     finder.list.sort((a, b) => a.page - b.page || a.top - b.top);
@@ -843,7 +858,7 @@ function inserted(kind, path, name) {
   if (board.book) {
     const as = board.pickAs;
     board.pickAs = null;
-    if (kind === "image") { if (as === "page") imagePage(path); else bookImage(path); }
+    if (kind === "image") { if (as === "page") imagePage(path); else bookImage(path, name === "firma" ? 0.3 : 0.55); }
     return;
   }
   if (kind === "image" || kind === "draw") { insert("<img" + (kind === "draw" ? " class=\"draw\"" : "") + " src=\"" + esc(encodeURI(path)) + "\" alt=\"\"><p><br></p>"); resolve(); }
@@ -976,6 +991,10 @@ const DI = {
   text: '<svg viewBox="0 0 24 24"><path d="M5 7V5h14v2M12 5v14M9 19h6"/></svg>',
   mark: '<svg viewBox="0 0 24 24"><path d="M7 3.500h10a1 1 0 0 1 1 1V21l-6-4.500L6 21V4.500a1 1 0 0 1 1-1z"/></svg>',
   find: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.500L21 21"/></svg>',
+  tsel: '<svg viewBox="0 0 24 24"><path d="M9 4h6M9 20h6M12 4v16"/><path d="M4 9v6M20 9v6" stroke-dasharray="1.500 2.500"/></svg>',
+  sign: '<svg viewBox="0 0 24 24"><path d="M3 17c2.500-6 4.500-9 6-9 2 0 .500 7 2.500 7 1.500 0 2-3 3.500-3 1.200 0 1 2 2.500 2H21"/><path d="M3 20.500h18"/></svg>',
+  sCheck: '<svg viewBox="0 0 24 24"><path d="M5 13l4.500 5L19 6"/></svg>',
+  sCross: '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   wzoom: '<svg viewBox="0 0 24 24"><circle cx="10.500" cy="10.500" r="6.500"/><path d="M15.500 15.500L21 21M8 10.500h5M10.500 8v5"/></svg>',
   shape: '<svg viewBox="0 0 24 24"><rect x="3.5" y="10.5" width="10" height="10" rx="1.5"/><circle cx="15.5" cy="8.5" r="5"/></svg>',
   sLine: '<svg viewBox="0 0 24 24"><path d="M5 19L19 5"/></svg>',
@@ -1055,13 +1074,18 @@ function barRows() {
   if (!board.book) mk(top, "ib", DI.close, "Chiudi senza salvare", () => { $("draw").classList.remove("on"); back(); });
   else if (!android) { mk(top, "ib", DI.side, "Mostra o nascondi l'elenco delle note", toggleSide); top.appendChild(title); }
   // On the phone the notebook has the whole screen: the way back is here
-  else mk(top, "ib", DI.left, "Torna all'elenco delle note", () => NotesHost.close());
+  else {
+    mk(top, "ib", DI.left, isPdf() ? "Chiudi il PDF" : "Torna all'elenco delle note", () => NotesHost.close());
+    // A PDF is written when asked to: what was added goes into the file itself
+    if (isPdf()) mk(top, "pill save" + (bookDirty ? "" : " idle"), "Salva", "Salva il PDF con quello che hai aggiunto dentro", () => pdfSave("save"));
+  }
   // One row, what is used most first: the hand and what writes, the favourite pens, undoing; then the rest
   const HAS_OPTS = ["pen", "marker", "shape", "eraser"];
   const tool = (into, t, label) => {
     const b = mk(into, "ib" + (board.tool === t ? " on" : "") + (board.tool === t && HAS_OPTS.includes(t) ? " opts" + (board.optsOpen ? " open" : "") : ""), DI[t], label + (HAS_OPTS.includes(t) ? " · tocca di nuovo per colori e opzioni" : ""), () => {
       commitText();
       clearLasso();
+      board.tsel = null;
       // The tool already in hand, touched again: its colours and settings open under it, or close
       if (board.tool === t) board.optsOpen = !board.optsOpen;
       else { board.tool = t; board.optsOpen = false; }
@@ -1113,10 +1137,12 @@ function barRows() {
   tool(more, "lasso", "Lazo: scegli dei tratti per spostarli, ingrandirli, colorarli");
   tool(more, "shape", "Forme: linea, freccia, rettangolo, ellisse");
   if (board.book) tool(more, "text", "Testo scritto con la tastiera");
+  if (board.book && (isPdf() || board.book.pages.some((x) => x.words))) tool(more, "tsel", "Seleziona il testo della pagina: per copiarlo, evidenziarlo, sottolinearlo");
   const aids = group(top);
   mk(aids, "ib" + (board.ruler ? " on" : ""), DI.ruler, "Righello: le linee vicino al bordo vengono dritte. Un dito lo sposta, due lo ruotano", toggleRuler);
   if (board.book) {
     mk(aids, "ib", DI.image, "Metti un'immagine sulla pagina", () => { board.pickAs = "image"; host.pick("image"); });
+    if (isPdf()) mk(aids, "ib", DI.sign, "Firma", () => host.pick("signature"));
     mk(aids, "ib" + (board.zoom ? " on" : ""), DI.wzoom, "Zoom di scrittura: scrivi in grande in una fascia in basso, viene piccolo sulla pagina", toggleZoom);
   }
   if (board.book) {
@@ -1135,12 +1161,22 @@ function barRows() {
 
   // What the tool in hand can be set to: a card under the row, there only when asked for (the tool
   // touched again) or when there is something chosen to act on; it goes as soon as the pen writes
-  const acting = (board.tool === "select" && (board.sel || board.cropping)) || (board.tool === "lasso" && board.lsel);
+  const acting = (board.tool === "select" && (board.sel || board.cropping)) || (board.tool === "lasso" && board.lsel) || (board.tool === "tsel" && board.tsel);
   if (!board.optsOpen && !acting) return;
   const opts = row("opts pop");
   if (board.tool === "hand") {
     const names = { pen: "la penna", marker: "l'evidenziatore", shape: "le forme", eraser: "la gomma" };
     hint(opts, "Il dito e il mouse spostano le pagine, due dita o Ctrl + rotellina fanno lo zoom. La penna continua a scrivere (con " + names[board.lastInk] + ").");
+    return;
+  }
+  if (board.tool === "tsel") {
+    if (board.tsel) {
+      const g = group(opts);
+      wide(g, DI.copy, "Copia", "Copia il testo scelto", tselCopy);
+      wide(g, DI.marker, "Evidenzia", "Evidenzia il testo scelto", () => tselMark(false));
+      wide(g, DI.sLine, "Sottolinea", "Sottolinea il testo scelto", () => tselMark(true));
+      if (host.shareText) wide(g, DI.front, "Condividi", "Manda il testo scelto a un'altra app", () => { host.shareText(board.tsel.text); });
+    } else hint(opts, "Trascina sul testo della pagina per sceglierlo: poi puoi copiarlo, evidenziarlo o sottolinearlo.");
     return;
   }
   if (board.tool === "lasso" && !board.lsel) {
@@ -1193,7 +1229,7 @@ function barRows() {
   }
   if (board.tool === "shape") {
     const kinds = group(opts);
-    for (const [k, icon, label] of [["line", DI.sLine, "Linea"], ["arrow", DI.sArrow, "Freccia"], ["rect", DI.sRect, "Rettangolo"], ["ellipse", DI.sEllipse, "Ellisse"]])
+    for (const [k, icon, label] of [["line", DI.sLine, "Linea"], ["arrow", DI.sArrow, "Freccia"], ["rect", DI.sRect, "Rettangolo"], ["ellipse", DI.sEllipse, "Ellisse"], ["check", DI.sCheck, "Spunta: un tocco la mette"], ["cross", DI.sCross, "Croce: un tocco la mette"]])
       mk(kinds, "ib" + (board.shape === k ? " on" : ""), icon, label, () => { board.shape = k; keepPen(); barOfBoard(); });
   }
   const colors = group(opts);
@@ -1284,6 +1320,8 @@ function navOfBook() {
     mk("nb" + (b.layout === k ? " on" : ""), icon, label, () => setLayout(k));
   mk("nb", DI.fit, "Adatta allo schermo", whole);
   mk("nb", DI.mark, "Segnalibro su questa pagina", toggleMark).id = "navMark";
+  // A PDF keeps no bookmarks of ours: nothing to offer
+  if (isPdf()) $("navMark").style.display = "none";
   navCount();
 }
 /** Which page of how many, kept true while the pages move under it. */
@@ -1750,6 +1788,8 @@ const pictures = new Map();
 /** While a PDF is made: the pictures as the page itself may read them back once drawn. */
 let exportPics = null;
 
+const bigPages = [];
+
 function imageOf(src) {
   if (exportPics && exportPics.has(src)) return { el: exportPics.get(src), ok: true, wait: [] };
   const key = (android ? document.baseURI : (pc.open ? pc.open.path.join("/") : "")) + "|" + src;
@@ -1757,6 +1797,11 @@ function imageOf(src) {
   if (e) return e;
   e = { el: new Image(), ok: false, wait: [] };
   pictures.set(key, e);
+  // The big pictures of a PDF's pages: only the last few seen are kept, a long PDF would fill the memory
+  if (src.startsWith(PDF_AT) && src.includes("w=1600")) {
+    bigPages.push(key);
+    while (bigPages.length > 8) { const k = bigPages.shift(), old = pictures.get(k); if (old) { old.el.onload = old.el.onerror = null; old.el.src = ""; } pictures.delete(k); }
+  }
   const done = (el) => { e.wait.forEach((f) => f(el)); e.wait = []; };
   e.el.onload = () => { e.ok = true; done(e.el); paint(); if ($("sheet").dataset.kind === "pages") thumbsAgain(); };
   e.el.onerror = () => done(null);
@@ -1767,12 +1812,15 @@ function imageOf(src) {
 const loaded = (src) => new Promise((ok) => { const e = imageOf(src); if (e.ok) ok(e.el); else e.wait.push(ok); });
 
 /** A page's paper, or its picture, with the page's top left corner at 0, 0. */
-function drawSheet(g, pg, px) {
+function drawSheet(g, pg, px, small) {
   g.fillStyle = "#fff";
   g.fillRect(0, 0, PW, pg.h);
   if (pg.bg) {
-    const e = imageOf(pg.bg.src);
+    // A small picture for a small page; and under the big one while it has not come yet
+    const little = pg.bg.thumb ? imageOf(pg.bg.thumb) : null;
+    const e = small && little ? little : imageOf(pg.bg.src);
     if (e.ok) g.drawImage(e.el, 0, 0, PW, pg.h);
+    else if (little && little.ok) g.drawImage(little.el, 0, 0, PW, pg.h);
     return;
   }
   const paper = paperOf(pg.paper, pg.h);
@@ -1874,6 +1922,7 @@ function paint() {
       g.shadowColor = "transparent";
       drawSheet(g, pg, px);
       drawMarks(g, pg, px);
+      if (board.tsel && board.tsel.page === i) { g.fillStyle = "rgba(26,115,232,.3)"; for (const [x, y, w, h] of board.tsel.rects) g.fillRect(x * PW - 1, y * pg.h - 1, w * PW + 2, h * pg.h + 2); }
       if (finder.on) for (const m of finder.list) {
         if (m.page !== i || !m.rects) continue;
         const now = m === finder.list[finder.at];
@@ -2127,11 +2176,11 @@ function deleteSel() {
 }
 
 /** An image chosen to lay on the page in view: in its middle, not wider than half the page. */
-async function bookImage(path) {
+async function bookImage(path, part) {
   const src = encodeURI(path), el = await loaded(src);
   const nw = (el && el.naturalWidth) || 800, nh = (el && el.naturalHeight) || 600;
   const i = pageInView(), r = canvas.getBoundingClientRect(), t = pageTop(i), pg = board.book.pages[i];
-  const w = Math.min(PW * 0.55, nw), h = w * nh / nw;
+  const w = Math.min(PW * (part || 0.55), nw), h = w * nh / nw;
   const mid = paged() ? t + pg.h / 2 : (r.height / 2 - board.view.y) / board.view.s;
   const cy = Math.max(t + h / 2 + 20, Math.min(t + pg.h - h / 2 - 20, mid));
   remember();
@@ -2164,7 +2213,14 @@ function begin(e) {
   const o = board.alpha[marker ? "marker" : "pen"];
   board.now = { tool: marker ? "marker" : "pen", color: board.color, width, points: [p] };
   if (o !== (marker ? 0.35 : 1)) board.now.o = o;
-  if (tool === "shape") { board.now.shape = board.shape; board.now.from = p; board.strokes.push(board.now); return; }
+  if (tool === "shape") {
+    board.now.shape = board.shape;
+    board.now.from = p;
+    if (board.shape === "check" || board.shape === "cross") board.now.points = shapePoints(board.shape, p, p, width);
+    board.strokes.push(board.now);
+    paint();
+    return;
+  }
   const snap = snapOf(local(e), width * board.view.s / 2);
   if (snap != null) { board.now.snap = snap; board.now.points = [snapped(e)]; }
   board.strokes.push(board.now);
@@ -2174,6 +2230,13 @@ function begin(e) {
 /** The line of a shape drawn from [a] to [b]. */
 function shapePoints(kind, a, b, width) {
   if (kind === "rect") return [a, [b[0], a[1]], b, [a[0], b[1]], a];
+  if (kind === "check" || kind === "cross") {
+    // In the box from [a] to [b]; a tap with no drag gives one of the size of a box to tick
+    let x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]), w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
+    if (w < 6 && h < 6) { w = h = 22; x = a[0] - 11; y = a[1] - 11; }
+    if (kind === "check") return [[x + w * 0.08, y + h * 0.55], [x + w * 0.38, y + h * 0.9], [x + w * 0.95, y + h * 0.1]];
+    return [[x + w * 0.1, y + h * 0.1], [x + w * 0.9, y + h * 0.9], [x + w * 0.5, y + h * 0.5], [x + w * 0.9, y + h * 0.1], [x + w * 0.1, y + h * 0.9]];
+  }
   if (kind === "ellipse") {
     const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2, rx = Math.abs(b[0] - a[0]) / 2, ry = Math.abs(b[1] - a[1]) / 2, out = [];
     for (let k = 0; k <= 64; k++) out.push([cx + rx * Math.cos(k * Math.PI / 32), cy + ry * Math.sin(k * Math.PI / 32)]);
@@ -2228,6 +2291,7 @@ function press(e) {
   if (flipped(e)) { begin(e); return; }
   if (board.tool === "lasso") { lassoDown(e); board.drawId = e.pointerId; return; }
   if (board.tool === "text" && board.book) { textDown(e); return; }
+  if (board.tool === "tsel" && board.book) { board.drawId = e.pointerId; tselDown(e); return; }
   // The hand moves the pages with a finger or the mouse; a pen writes all the same
   if (board.tool === "hand") { if (e.pointerType === "pen") begin(e); else panFrom(e); return; }
   if (board.tool === "select" && board.book) { if (selectDown(e)) board.drawId = e.pointerId; else panFrom(e); return; }
@@ -2974,6 +3038,191 @@ zcanvas.addEventListener("contextmenu", (e) => e.preventDefault());
   add(DI.close, "Chiudi lo zoom di scrittura", toggleZoom);
 }
 
+// ---------------------------------------------------------------- a PDF opened as a notebook
+
+/*
+ * A PDF is shown with the same tools as a notebook, its pages staying the PDF's own: the phone
+ * draws them when they come into view. Nothing is saved by itself: "Salva" has the phone write
+ * the PDF with everything added drawn into its pages, and so does sharing, so that what is sent
+ * on always carries what was written (a signature above all).
+ */
+const PDF_AT = "https://pdf.minima.invalid/p/";
+const pdfSrc = (orig, rot, w, v) => PDF_AT + orig + "?w=" + w + "&r=" + rot + "&v=" + v;
+const isPdf = () => !!(board.book && board.book.pdf);
+
+/** Page [orig] of the PDF, [w] by [h] points, turned by [rot] degrees. */
+function pdfPage(orig, w, h, rot, v) {
+  const side = rot % 180 !== 0;
+  return { h: PW * (side ? w / h : h / w), paper: "blank", bg: { src: pdfSrc(orig, rot, 1600, v), thumb: pdfSrc(orig, rot, 280, v) }, orig, pw: w, ph: h, rot };
+}
+
+function showPdf(name, info) {
+  if (finder.on) closeFind();
+  shownName = name;
+  title.value = name;
+  dirty = false;
+  app.classList.remove("none");
+  app.classList.add("reading");
+  body.innerHTML = "";
+  pictures.clear();
+  const pages = info.pages.map(([w, h], i) => pdfPage(i, w, h, 0, info.v));
+  board.book = { paper: "blank", pages, tops: [], layout: "scroll", cur: 0, pdf: { v: info.v, inPlace: !!info.inPlace } };
+  startBook(pages.map(() => ({ strokes: [], items: [] })));
+}
+
+/** Pages scanned and put after the PDF's own: [sizes] of the new ones, the first being page [from] of the file. */
+function pdfAdded(sizes, from) {
+  if (!isPdf()) return;
+  const at = board.book.pages.length;
+  rearrange((pages, per) => sizes.forEach(([w, h], k) => { pages.push(pdfPage(from + k, w, h, 0, board.book.pdf.v)); per.push({ strokes: [], items: [] }); }));
+  goToPage(at);
+}
+
+/** A box of words of a page (fractions of it, as the PDF has it) as it is on the page turned by [rot]. */
+function turnBox([x, y, w, h], rot) {
+  if (rot === 90) return [1 - y - h, x, h, w];
+  if (rot === 180) return [1 - x - w, 1 - y - h, w, h];
+  if (rot === 270) return [y, 1 - x - w, h, w];
+  return [x, y, w, h];
+}
+/** The words of a page where they are now: [[word, x, y, w, h], ...]. */
+function wordsOf(pg) {
+  if (!pg.words) return null;
+  if (!pg.rot) return pg.words;
+  if (!pg.turned || pg.turned.rot !== pg.rot) pg.turned = { rot: pg.rot, list: pg.words.map((w) => [w[0]].concat(turnBox(w.slice(1), pg.rot))) };
+  return pg.turned.list;
+}
+/** Has the phone read the words of page [i], when it is a page of the PDF and they are not known yet. */
+async function needWords(i) {
+  const pg = board.book.pages[i];
+  if (pg.words !== undefined || pg.orig == null || !host.pdfWords) return;
+  try { pg.words = JSON.parse(await host.pdfWords(pg.orig)); } catch (e) { pg.words = []; }
+}
+
+/** A page turned a quarter to the right, with what is written on it. */
+function rotatePage(i) {
+  rearrange((pages, per) => {
+    const pg = pages[i], old = pg.h, k = PW / old, rot = ((pg.rot || 0) + 90) % 360;
+    const turn = ([x, y]) => [(old - y) * k, x * k];
+    pages[i] = Object.assign(pdfPage(pg.orig, pg.pw, pg.ph, rot, board.book.pdf.v), { words: pg.words });
+    per[i].strokes = per[i].strokes.map((s) => ({ ...s, width: s.width * k, points: s.points.map(turn) }));
+    per[i].items = per[i].items.map((o) => { const [cx, cy] = turn([o.cx, o.cy]); return { ...o, cx, cy, w: o.w * k, h: o.h * k, rot: o.rot + Math.PI / 2, size: o.size ? o.size * k : o.size }; });
+  });
+}
+
+/** What the phone needs to write the PDF: the pages in their order, and what is on each, in fractions of the page. */
+function pdfPayload() {
+  const b = board.book, per = split(), f4 = (n) => Math.round(n * 1e4) / 1e4, deg = (r) => Math.round(r * 180 / Math.PI * 10) / 10;
+  const pages = b.pages.map((pg, i) => {
+    const out = pg.orig != null ? { o: pg.orig, r: pg.rot || 0 } : { w: 595.28, h: f4(595.28 * pg.h / PW) };
+    const X = (x) => f4(x / PW), Y = (y) => f4(y / pg.h);
+    out.s = per[i].strokes.map((s) => {
+      const d = { p: s.points.map(([x, y]) => [X(x), Y(y)]), w: f4(s.width / PW), c: s.color, m: s.tool === "marker" };
+      if (s.o != null) d.a = s.o;
+      return d;
+    });
+    // The lines of the paper of a page added, so that it is in the PDF as it was written on
+    if (pg.orig == null && !pg.bg) {
+      const paper = paperOf(pg.paper, pg.h), c = pg.paper === "lines" ? "#b9cde4" : "#d5dee8";
+      const lines = paper.lines.map(([x1, y1, x2, y2]) => ({ p: [[X(x1), Y(y1)], [X(x2), Y(y2)]], w: f4(0.8 / PW), c, m: false }));
+      if (paper.margin) lines.push({ p: [[X(paper.margin[0]), 0], [X(paper.margin[2]), 1]], w: f4(0.8 / PW), c: "#f2a7a7", m: false });
+      out.s = lines.concat(out.s);
+    }
+    out.t = [];
+    out.i = [];
+    // A picture that is the page itself: laid over the whole of a blank one
+    if (pg.orig == null && pg.bg) out.i.push({ src: pg.bg.src, x: 0, y: 0, w: 1, h: 1, r: 0 });
+    for (const o of per[i].items) {
+      if (o.kind === "text") {
+        // A line of words each, turned with its box around the middle of the whole text
+        const cos = Math.cos(o.rot), sin = Math.sin(o.rot), lh = o.size * 1.25;
+        textLines(o).forEach((t, n) => {
+          if (!t.trim()) return;
+          const ly = -o.h / 2 + o.size * 1.3 * n + lh / 2, cx = o.cx - ly * sin, cy = o.cy + ly * cos;
+          out.t.push({ s: t, x: X(cx - o.w / 2), y: Y(cy - lh / 2), w: X(o.w), h: Y(lh), c: o.color, r: deg(o.rot) });
+        });
+      } else out.i.push({ src: o.src, x: X(o.cx - o.w / 2), y: Y(o.cy - o.h / 2), w: X(o.w), h: Y(o.h), r: deg(o.rot), crop: [o.crop.x, o.crop.y, o.crop.w, o.crop.h].map(Math.round) });
+    }
+    return out;
+  });
+  return JSON.stringify({ pages });
+}
+function pdfSave(mode) {
+  commitText();
+  NotesHost.pdfSave(mode, bookDirty ? pdfPayload() : "");
+}
+
+// ---------------------------------------------------------------- the words of a page taken with the finger: to copy, highlight, underline
+
+/** The word of [words] nearest to point [q] (fractions of the page). */
+function wordNear(words, q) {
+  let best = -1, bd = Infinity;
+  words.forEach((w, i) => {
+    const dx = Math.max(w[1] - q[0], 0, q[0] - w[1] - w[3]), dy = Math.max(w[2] - q[1], 0, q[1] - w[2] - w[4]), d = dx * dx + dy * dy * 9;
+    if (d < bd) { bd = d; best = i; }
+  });
+  return best;
+}
+/** One box a line for words [a]..[b]. */
+function lineBoxes(words, a, b) {
+  const rects = [];
+  for (let i = a; i <= b; i++) {
+    const w = words[i], r = rects[rects.length - 1];
+    if (r && w[2] < r[1] + r[3] * 0.6 && w[2] + w[4] > r[1] + r[3] * 0.4) { const x1 = Math.max(r[0] + r[2], w[1] + w[3]), y1 = Math.max(r[1] + r[3], w[2] + w[4]); r[0] = Math.min(r[0], w[1]); r[1] = Math.min(r[1], w[2]); r[2] = x1 - r[0]; r[3] = y1 - r[1]; }
+    else rects.push([w[1], w[2], w[3], w[4]]);
+  }
+  return rects;
+}
+
+async function tselDown(e) {
+  const i = board.gpage, pg = board.book.pages[i], id = e.pointerId, at = toBoard(e);
+  board.tsel = null;
+  board.gest = { id, move: () => {}, up: () => {} };
+  await needWords(i);
+  // A page that is a picture: its words read from the picture, once
+  if (pg.words && !pg.words.length && !pg.read && host.pdfOcr && pg.orig != null) {
+    pg.read = true;
+    findCountSay("Riconosco il testo…");
+    await new Promise((ok) => setTimeout(ok, 30));
+    try { pg.words = JSON.parse(await host.pdfOcr(pg.orig)); } catch (x) { pg.words = []; }
+  }
+  const words = wordsOf(pg);
+  if (!words || !words.length) { say2("In questa pagina non c'è testo da selezionare."); board.gest = null; board.drawId = null; return; }
+  const frac = (p) => [p[0] / PW, (p[1] - pageTop(i)) / pg.h];
+  const a = wordNear(words, frac(at));
+  const set = (b) => { const lo = Math.min(a, b), hi = Math.max(a, b); board.tsel = { page: i, rects: lineBoxes(words, lo, hi), text: words.slice(lo, hi + 1).map((w) => w[0]).join(" ") }; paint(); };
+  set(a);
+  if (!board.gest || board.gest.id !== id) { barOfBoard(); return; }
+  board.gest.move = (ev) => set(wordNear(words, frac(toBoard(ev))));
+  board.gest.up = () => barOfBoard();
+}
+function findCountSay() { /* a moment's word to the reader: nothing shown when no search is open */ }
+
+/** The words taken, marked on the page: a highlighter over each line, or a line under it. */
+function tselMark(under) {
+  const t = board.tsel;
+  if (!t) return;
+  const pg = board.book.pages[t.page], top = pageTop(t.page);
+  remember();
+  for (const [x, y, w, h] of t.rects) {
+    const yy = top + (under ? y + h * 1.02 : y + h / 2) * pg.h;
+    board.strokes.push(under ? { tool: "pen", color: board.color, width: Math.max(1.2, h * pg.h * 0.07), points: [[x * PW, yy], [(x + w) * PW, yy]] }
+      : { tool: "marker", color: "#fdd835", width: h * pg.h * 1.05, points: [[x * PW, yy], [(x + w) * PW, yy]] });
+  }
+  board.tsel = null;
+  paint();
+  barOfBoard();
+  bookChanged();
+}
+function tselCopy() {
+  const t = board.tsel;
+  if (!t) return;
+  if (host.copy) host.copy(t.text); else if (navigator.clipboard) navigator.clipboard.writeText(t.text).catch(() => {});
+  board.tsel = null;
+  paint();
+  barOfBoard();
+}
+
 // ---------------------------------------------------------------- a drawing as a file
 
 const r1 = (n) => Math.round(n * 10) / 10;
@@ -3098,6 +3347,12 @@ function openBook(html) {
   // Always opened the same way: the pages one under the other, and the hand (a pen writes all the same)
   board.book = { paper, pages, tops: [], layout: "scroll", cur: 0 };
   if (!pages.length) { pages.push(blankPage()); per.push({ strokes: [], items: [] }); }
+  startBook(per);
+}
+
+/** The pages of [board.book] shown, with what is on each. */
+function startBook(per) {
+  board.tsel = null;
   board.editing = null;
   if (["pen", "marker", "shape"].includes(board.tool)) board.lastInk = board.tool;
   board.tool = "hand";
@@ -3132,7 +3387,9 @@ function closeBook() {
 
 function bookChanged() {
   if (!board.book) return;
+  const was = bookDirty;
   bookDirty = true;
+  if (board.book.pdf) { if (!was) barOfBoard(); return; }
   dirty = true;
   clearTimeout(timer);
   timer = setTimeout(flush, 800);
@@ -3238,7 +3495,8 @@ function addMenu() {
   const items = PAPERS.map(([k, label]) => ["Pagina " + (k === "blank" ? "bianca" : "a " + label.toLowerCase()) + (k === b.paper ? "  ·  come l'ultima" : ""), () => addPage(at, k)]);
   // The paper last used first: the one most likely wanted again
   items.sort((x, y) => (y[0].includes("come l'ultima") ? 1 : 0) - (x[0].includes("come l'ultima") ? 1 : 0));
-  items.push(["Pagine da un PDF…", () => host.pick("pdf")]);
+  if (isPdf()) items.push(["Pagine dallo scanner…", () => host.pick("scan")]);
+  else items.push(["Pagine da un PDF…", () => host.pick("pdf")]);
   items.push(["Una foto o un'immagine come pagina…", () => { board.pickAs = "page"; host.pick("image"); }]);
   items.push(["Copia di questa pagina", () => { rearrange((pages, p) => { pages.splice(at, 0, { ...pages[here] }); p.splice(at, 0, { strokes: p[here].strokes.slice(), items: p[here].items.map((o) => ({ ...o, crop: { ...o.crop } })) }); }); goToPage(at); }]);
   choose("Nuova pagina dopo la " + (here + 1), items);
@@ -3257,7 +3515,13 @@ function bookMenu() {
   const items = [];
   if (!pg.bg) for (const [k, label] of PAPERS) items.push([(k === pg.paper ? "✓ " : "    ") + "Carta di questa pagina: " + label, () => rearrange((pages) => { pages[here].paper = k; b.paper = k; })]);
   for (const [k, label] of PAPERS) items.push(["    Carta di tutte le pagine: " + label, () => rearrange((pages) => { pages.forEach((p) => { p.paper = k; }); b.paper = k; })]);
-  items.unshift(
+  if (isPdf()) items.unshift(
+    ["Salva (le aggiunte entrano nel PDF)", () => pdfSave("save")],
+    ["Condividi il PDF con le aggiunte dentro", () => pdfSave("share")],
+    ["Ruota questa pagina", () => rotatePage(here)],
+    ["Apri con il lettore di prima", () => NotesHost.oldReader()],
+  );
+  else items.unshift(
     ["Indice: sezioni e segnalibri", openIndex],
     [pg.mark ? "Togli il segnalibro da questa pagina" : "Segnalibro su questa pagina", toggleMark],
     [pg.title ? "Titolo della sezione: " + pg.title : "Dai un titolo alla sezione che comincia qui", nameSection],
@@ -3481,14 +3745,14 @@ function renderPages() {
       sel.clear();
       renderPages();
     }, false, DI.trash],
-    ["PDF", () => exportPdf(chosen()), false, DI.pdf],
+    ...(isPdf() ? [] : [["PDF", () => exportPdf(chosen()), false, DI.pdf]]),
     ["Tutte", () => { b.pages.forEach((x, k) => sel.add(k)); renderPages(); }],
     ["Fatto", () => { sel.clear(); renderPages(); }, true],
   ]);
   else sheetHead(sh, "Pagine · " + b.pages.length, [
-    [board.onlyMarks ? "Tutte le pagine" : "Solo segnalibri", () => { board.onlyMarks = !board.onlyMarks; renderPages(); }, false, DI.mark],
+    ...(isPdf() ? [] : [[board.onlyMarks ? "Tutte le pagine" : "Solo segnalibri", () => { board.onlyMarks = !board.onlyMarks; renderPages(); }, false, DI.mark]]),
     ["Pagina", () => { addPage(); renderPages(); }, false, DI.page],
-    ["Da PDF", () => host.pick("pdf"), false, DI.pdf],
+    ...(isPdf() ? [] : [["Da PDF", () => host.pick("pdf"), false, DI.pdf]]),
     ["Chiudi", closeSheet, true],
   ]);
   const hint = document.createElement("div");
@@ -3511,7 +3775,7 @@ function renderPages() {
     card.drawIt = () => {
       const g = cv.getContext("2d");
       g.setTransform(sc * dpr, 0, 0, sc * dpr, 0, 0);
-      drawSheet(g, pg, 1 / (sc * dpr));
+      drawSheet(g, pg, 1 / (sc * dpr), true);
       g.save();
       g.beginPath();
       g.rect(0, 0, PW, pg.h);
@@ -3552,6 +3816,7 @@ function renderPages() {
       acts.appendChild(a);
     };
     act(DI.page, "Pagina vuota dopo questa", () => rearrange((pages, p) => { pages.splice(i + 1, 0, blankPage()); p.splice(i + 1, 0, { strokes: [], items: [] }); }));
+    if (pg.orig != null && isPdf()) act(DI.rotate, "Ruota", () => rotatePage(i));
     act(DI.copy, "Duplica", () => rearrange((pages, p) => { pages.splice(i + 1, 0, { ...pages[i] }); p.splice(i + 1, 0, { strokes: p[i].strokes.slice(), items: p[i].items.map((o) => ({ ...o, crop: { ...o.crop } })) }); }));
     act(DI.trash, "Elimina", () => rearrange((pages, p) => {
       if (pages.length === 1) { pages[0] = blankPage(); p[0] = { strokes: [], items: [] }; return; }
@@ -3677,6 +3942,7 @@ async function pdfChosen(source, name) {
 /** Back, on the phone: a window open over the note closes first. True when there was one. */
 function goBack() {
   if (finder.on) { closeFind(); return true; }
+  if (board.tsel) { board.tsel = null; paint(); barOfBoard(); return true; }
   if (board.focus && !$("sheet").classList.contains("on")) { setFocus(false); return true; }
   if ($("veil").classList.contains("on")) { $("veil").classList.remove("on"); $("box").classList.remove("picker"); return true; }
   if ($("sheet").classList.contains("on")) { closeSheet(); return true; }
@@ -3696,6 +3962,11 @@ const androidHost = {
   pick: (kind) => NotesHost.pick(kind),
   dataUrl: async (src) => { let path = src; try { path = decodeURIComponent(src); } catch (e) { /* plain */ } return NotesHost.readData(path); },
   pdfOpen: async (path) => NotesHost.pdfOpen(path),
+  // Only where a PDF is open as a notebook: its words, read or recognised, and what is done with them
+  pdfWords: window.NotesHost && NotesHost.pdfWords ? async (i) => NotesHost.pdfWords(i) : null,
+  pdfOcr: window.NotesHost && NotesHost.pdfOcr ? async (i) => NotesHost.pdfOcr(i) : null,
+  copy: window.NotesHost && NotesHost.copy ? (t) => NotesHost.copy(t) : null,
+  shareText: window.NotesHost && NotesHost.shareText ? (t) => NotesHost.shareText(t) : null,
   pdfThumb: async (i) => NotesHost.pdfThumb(i),
   pdfPage: async (i) => JSON.parse(NotesHost.pdfPage(i) || "null"),
   saveData: async (name, data) => NotesHost.saveData(name, data.slice(data.indexOf(",") + 1)),
@@ -4249,7 +4520,8 @@ for (const ev of ["gesturestart", "gesturechange"]) document.addEventListener(ev
 
 const host = android ? androidHost : pcHost;
 try { document.execCommand("defaultParagraphSeparator", false, "p"); } catch (e) { /* older engines keep their own */ }
-window.Notes = { show, flush, inserted, goBack, pdfPicked: (path, name) => pdfChosen(path, name) };
+window.Notes = { show, flush, inserted, goBack, pdfPicked: (path, name) => pdfChosen(path, name),
+  showPdf, pdfAdded, pdfPayload, pdfDirty: () => isPdf() && bookDirty };
 if (android) NotesHost.ready(); else pcStart();
 </script>
 </body>
