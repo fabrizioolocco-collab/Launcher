@@ -1435,7 +1435,7 @@ function fitOf() {
 function clampView() {
   if (!paged()) return;
   const r = canvas.getBoundingClientRect(), f = fitOf(), v = board.view;
-  if (!r.width || !(v.s > f.s * 1.001)) { board.view = { s: f.s, x: f.x, y: f.y }; board.fitted = { ...board.view }; return; }
+  if (!r.width || !(v.s > f.s * 1.001)) { v.s = f.s; v.x = f.x; v.y = f.y; board.fitted = { ...v }; return; }
   const W = f.w * v.s, H = f.h * v.s, m = 12, room = r.height - 64;
   v.x = W <= r.width ? (r.width - W) / 2 : Math.min(m, Math.max(r.width - W - m, v.x));
   v.y = H <= room ? Math.max(8, (room - H) / 2) : Math.min(m, Math.max(room - H - m, v.y));
@@ -1620,11 +1620,12 @@ function drawSelection(g, px) {
 }
 
 function paint() {
+  // First: a page shown whole is put back where it belongs before anything is drawn from where it is
+  if (board.book) clampView();
   const g = canvas.getContext("2d"), dpr = dprOf(), v = board.view;
   const r = canvas.getBoundingClientRect();
   g.setTransform(1, 0, 0, 1, 0, 0);
   if (board.book) {
-    clampView();
     g.fillStyle = "#1c2023";
     g.fillRect(0, 0, canvas.width, canvas.height);
     g.setTransform(dpr * v.s, 0, 0, dpr * v.s, dpr * v.x, dpr * v.y);
