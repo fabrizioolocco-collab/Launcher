@@ -393,6 +393,18 @@
     <string name="ml_edit_rotate_saving">Saving the rotated video…</string>
     <string name="ml_edit_crop_saving">Re-encoding the cropped video, this takes a while…</string>
     <string name="ml_edit_hint">Everything is saved together with Save: crop, rotate and draw in any order.</string>
+    <string name="ml_edit_add">Add</string>
+    <string name="ml_edit_image">Picture</string>
+    <string name="ml_edit_text">Text</string>
+    <string name="ml_edit_text_hint">Type the text</string>
+    <string name="ml_edit_modify">Edit</string>
+    <string name="ml_edit_color">Colour</string>
+    <string name="ml_edit_style">Style</string>
+    <string name="ml_edit_plate">Backdrop</string>
+    <string name="ml_edit_white">White</string>
+    <string name="ml_edit_duplicate">Duplicate</string>
+    <string name="ml_edit_front">To front</string>
+    <string name="ml_edit_add_hint">Touch a picture or a text to choose it: drag it, pinch with two fingers to resize and turn it, or pull the dot in its corner.</string>
     <!-- PDF tool -->
     <string name="ml_pdf_tool">PDF tool</string>
     <string name="ml_pdf_open_in">Open PDFs in</string>
