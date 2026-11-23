@@ -255,7 +255,7 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
-                <!-- Some systems open a fresh screenshot from its preview with "edit": it lands in the viewer, which has the editor one tap away -->
+                <!-- Some systems open a fresh screenshot from its preview with "edit": it goes straight to the editor -->
                 <action android:name="android.intent.action.EDIT" />
                 <action android:name="com.android.camera.action.REVIEW" />
                 <action android:name="android.provider.action.REVIEW" />

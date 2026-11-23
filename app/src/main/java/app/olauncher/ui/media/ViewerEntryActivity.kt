@@ -12,7 +12,8 @@ import java.io.File
  * The built-in viewer as an app for photos and videos: opened by other apps (the camera's preview,
  * a file manager, "Open with"). A media file on the phone opens with its folder to swipe through;
  * anything else (another app's private file) is copied to the cache and opened alone. The viewer
- * stays in the caller's task, so back returns to it (e.g. the camera).
+ * stays in the caller's task, so back returns to it (e.g. the camera). Asked to edit, it opens
+ * the photo or video editor instead.
  */
 class ViewerEntryActivity : Activity() {
 
@@ -21,10 +22,16 @@ class ViewerEntryActivity : Activity() {
         val uri = intent?.data ?: run { finish(); return }
         val type = intent.type ?: contentResolver.getType(uri)
         Thread {
-            val file = localFile(uri) ?: copyToCache(uri, type)
+            val local = localFile(uri)
+            val file = local ?: copyToCache(uri, type)
+            // Asked to edit (the preview of a fresh screenshot does): straight into the editor, when the file
+            // is on the phone, so that what is saved lands next to it; a copy in the cache is only shown
+            val edit = intent.action == android.content.Intent.ACTION_EDIT && local != null
             runOnUiThread {
                 if (file == null) showToast(getString(R.string.ml_search_cannot_open))
                 else if (AudioPlayerActivity.isAudio(file.name, type)) AudioPlayerActivity.open(this, file)
+                else if (edit && MediaThumbnails.isVideo(file)) VideoEditActivity.open(this, file)
+                else if (edit) PhotoEditActivity.open(this, file)
                 else startActivity(MediaViewerActivity.intent(this, file))
                 finish()
                 overridePendingTransition(0, 0)
