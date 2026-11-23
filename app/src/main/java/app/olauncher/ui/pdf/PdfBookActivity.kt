@@ -111,6 +111,9 @@ class PdfBookActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Turns with the phone even with the rotation locked, like the photo and video viewer: only
+        // this screen, the system setting is not touched
+        requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR
         WindowCompat.setDecorFitsSystemWindows(window, false)
         source = File(intent.getStringExtra(EXTRA_PATH) ?: return finish())
         file = source

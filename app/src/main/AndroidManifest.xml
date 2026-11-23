@@ -286,11 +286,13 @@
             android:theme="@style/ViewerTheme" />
         <activity
             android:name=".ui.media.PhotoEditActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
             android:taskAffinity="app.minimalauncher.files"
             android:theme="@style/ViewerTheme" />
         <activity
             android:name=".ui.media.VideoEditActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="false"
             android:taskAffinity="app.minimalauncher.files"
             android:theme="@style/ViewerTheme" />

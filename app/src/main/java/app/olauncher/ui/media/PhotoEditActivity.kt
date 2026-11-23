@@ -53,6 +53,7 @@ import kotlin.math.min
  * colour the photo itself becomes one of them, for collages). Two fingers zoom while drawing.
  * Saves as a copy next to the original (name + " (1)") or over it.
  */
+// The screen can be turned while editing: the manifest keeps the activity (and the work in it) alive, the views lay themselves out again
 class PhotoEditActivity : AppCompatActivity() {
 
     private lateinit var file: File
