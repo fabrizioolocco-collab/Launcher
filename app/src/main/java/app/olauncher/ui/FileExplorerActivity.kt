@@ -549,6 +549,11 @@ open class FileExplorerActivity : AppCompatActivity() {
                 askRename(entry)
             }
         }
+        // Several PDFs: joined into one, in the order they were marked, and opened (its "Pages" take out the unwanted ones)
+        val pdfs = selected.mapNotNull { key -> chosen.firstOrNull { it.key == key } }
+        if (pdfs.size >= 2 && pdfs.size == chosen.size && pdfs.all { !it.isFolder && (it.mime == "application/pdf" || it.name.endsWith(".pdf", ignoreCase = true)) }) {
+            items += MenuEntry(getString(R.string.ml_pdf_merge)) { mergePdfs(pdfs.map { it.file }) }
+        }
         // Hide keeps the files where they are: they just leave the list (back with "Hidden files" in the view)
         val allHidden = chosen.isNotEmpty() && chosen.all { it.name in hiddenNames }
         items += MenuEntry(getString(if (allHidden) R.string.ml_explorer_unhide else R.string.ml_explorer_hide)) {
@@ -564,6 +569,24 @@ open class FileExplorerActivity : AppCompatActivity() {
             askNewFolder()
         }
         showMenuDialog(getString(R.string.ml_explorer_selected, chosen.size), items)
+    }
+
+    /** One PDF with the pages of [files] one after the other, next to the first; then it is opened. */
+    private fun mergePdfs(files: List<File>) {
+        val first = files.first()
+        val base = getString(R.string.ml_pdf_merged_name, first.nameWithoutExtension)
+        var out = File(first.parentFile, "$base.pdf")
+        var i = 2
+        while (out.exists()) out = File(first.parentFile, "$base (${i++}).pdf")
+        selected.clear()
+        run(getString(R.string.ml_pdf_merge), then = { ok ->
+            if (ok) {
+                showToast(getString(R.string.ml_pdf_merged, out.name), android.widget.Toast.LENGTH_LONG)
+                app.olauncher.ui.pdf.PdfViewerActivity.open(this, out)
+            }
+        }) {
+            app.olauncher.ui.pdf.PdfMerge.merge(applicationContext, files, out)
+        }
     }
 
     private fun hideSelected(chosen: List<Entry>, hide: Boolean) {

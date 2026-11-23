@@ -32,8 +32,6 @@ import app.olauncher.helper.showMenuDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.UiKit
 import app.olauncher.ui.scanner.ScannerActivity
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
-import com.tom_roush.pdfbox.pdmodel.PDDocument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,7 +39,7 @@ import java.io.File
 
 /**
  * Page thumbnails of a PDF: drag to reorder, long press to rotate, delete or restore; "Scan" adds
- * scanned pages at the end. The result (order and rotations, indexes of the original pages) goes
+ * scanned pages at the end, "Add PDF" the pages of other PDFs (to join files). The result (order and rotations, indexes of the original pages) goes
  * back to the viewer; when pages were scanned, also the path of the working copy that has them
  * after the original ones (the original indexes don't change).
  */
@@ -60,7 +58,30 @@ class PdfPagesActivity : AppCompatActivity() {
 
     private val scanLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val added = result.data?.getStringExtra(ScannerActivity.EXTRA_PDF_PATH)?.let { File(it) } ?: return@registerForActivityResult
-        addScanned(added)
+        append(listOf(added), R.string.ml_scan_failed)
+    }
+
+    /** Other PDFs whose pages are added after these: copied to the cache first, as they may belong to another app. */
+    private val pdfPicker = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) return@registerForActivityResult
+        lifecycleScope.launch {
+            val copies = withContext(Dispatchers.IO) {
+                val dir = File(cacheDir, "pdf").apply { mkdirs() }
+                uris.mapIndexedNotNull { i, uri ->
+                    try {
+                        val copy = File(dir, "add-${System.currentTimeMillis()}-$i.pdf")
+                        contentResolver.openInputStream(uri)?.use { input -> copy.outputStream().use { input.copyTo(it) } }
+                        copy.takeIf { it.length() > 0 }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+            if (copies.size < uris.size) {
+                copies.forEach { it.delete() }
+                showToast(getString(R.string.ml_pdf_add_failed))
+            } else append(copies, R.string.ml_pdf_add_failed)
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -108,6 +129,13 @@ class PdfPagesActivity : AppCompatActivity() {
             this, getString(R.string.ml_pdf_pages), { finish() },
             listOf(
                 restoreButton,
+                UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_pdf_add)) {
+                    try {
+                        pdfPicker.launch("application/pdf")
+                    } catch (e: Exception) {
+                        showToast(getString(R.string.ml_pdf_add_failed))
+                    }
+                },
                 UiKit.iconButton(this, R.drawable.ic_m_scan, getString(R.string.ml_scan_add_pages)) { scanLauncher.launch(ScannerActivity.pickIntent(this)) },
                 UiKit.iconButton(this, R.drawable.ic_m_check, getString(R.string.ml_done)) { done() },
             ),
@@ -162,29 +190,19 @@ class PdfPagesActivity : AppCompatActivity() {
     }
 
     /**
-     * Appends the scanned pages: a working copy in the cache gets the current pages followed by the
-     * scanned ones, the thumbnails switch to it, and the new pages join the end of the order.
+     * Appends the pages of [added] (scanned ones, or other PDFs): a working copy in the cache gets
+     * the current pages followed by theirs, the thumbnails switch to it, and the new pages join the
+     * end of the order. [added] are copies of ours: they are deleted afterwards.
      */
-    private fun addScanned(added: File) {
+    private fun append(added: List<File>, failed: Int) {
+        if (added.isEmpty()) return
         lifecycleScope.launch {
             val work = File(File(cacheDir, "pdf").apply { mkdirs() }, "work-${System.currentTimeMillis()}.pdf")
             val ok = withContext(Dispatchers.IO) {
                 try {
-                    PDFBoxResourceLoader.init(applicationContext)
-                    PDDocument.load(file).use { doc ->
-                        doc.isAllSecurityToBeRemoved = true
-                        PDDocument.load(added).use { scan ->
-                            scan.pages.forEach { doc.importPage(it) }
-                            doc.save(work)
-                        }
-                    }
-                    true
-                } catch (e: Throwable) {
-                    e.printStackTrace()
-                    work.delete()
-                    false
+                    PdfMerge.merge(applicationContext, listOf(file) + added, work)
                 } finally {
-                    added.delete()
+                    added.forEach { it.delete() }
                 }
             }
             val opened = if (ok) try {
@@ -194,7 +212,7 @@ class PdfPagesActivity : AppCompatActivity() {
             } else null
             if (opened == null) {
                 work.delete()
-                showToast(getString(R.string.ml_scan_failed))
+                showToast(getString(failed))
                 return@launch
             }
             renderer?.let { synchronized(it) { it.close() } }

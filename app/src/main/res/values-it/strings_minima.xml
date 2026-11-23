@@ -461,6 +461,11 @@
     <string name="ml_pdf_choose_folder">Scegli cartella</string>
     <string name="ml_pdf_overwrite">«%1$s» esiste già. Sostituirlo?</string>
     <string name="ml_pdf_replace">Sostituisci</string>
+    <string name="ml_pdf_add">Aggiungi PDF</string>
+    <string name="ml_pdf_add_failed">Non è stato possibile aggiungere il PDF (protetto o danneggiato)</string>
+    <string name="ml_pdf_merge">Unisci i PDF</string>
+    <string name="ml_pdf_merged_name">%1$s (unito)</string>
+    <string name="ml_pdf_merged">Salvato come %1$s. In Pagine puoi togliere quelle che non vuoi.</string>
 
     <!-- App drawer: list or grid -->
     <string name="ml_drawer_layout">Vista menù app</string>

@@ -464,6 +464,11 @@
     <string name="ml_pdf_choose_folder">Choose folder</string>
     <string name="ml_pdf_overwrite">«%1$s» already exists. Replace it?</string>
     <string name="ml_pdf_replace">Replace</string>
+    <string name="ml_pdf_add">Add PDF</string>
+    <string name="ml_pdf_add_failed">The PDF could not be added (protected or damaged)</string>
+    <string name="ml_pdf_merge">Join the PDFs</string>
+    <string name="ml_pdf_merged_name">%1$s (joined)</string>
+    <string name="ml_pdf_merged">Saved as %1$s. In Pages you can take out the ones you do not want.</string>
 
     <!-- App drawer: list or grid -->
     <string name="ml_drawer_layout">App list view</string>
