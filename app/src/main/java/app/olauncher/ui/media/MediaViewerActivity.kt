@@ -45,6 +45,7 @@ import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.showConfirmDialog
 import app.olauncher.helper.showMenuDialog
+import app.olauncher.helper.showTextDialog
 import app.olauncher.helper.showToast
 import app.olauncher.ui.UiKit
 import kotlinx.coroutines.Dispatchers
@@ -118,6 +119,7 @@ class MediaViewerActivity : AppCompatActivity() {
 
         val bar = UiKit.appBar(this, "", onBack = { finish() }, actions = listOf(
             UiKit.iconButton(this, R.drawable.ic_m_share, getString(R.string.ml_explorer_share)) { share() },
+            UiKit.iconButton(this, R.drawable.ic_m_text, getString(R.string.ml_ocr_title)) { readText() },
             UiKit.iconButton(this, R.drawable.ic_m_edit, getString(R.string.ml_todo_edit)) { edit() },
             UiKit.iconButton(this, R.drawable.ic_m_delete, getString(R.string.ml_explorer_delete)) { delete() },
             UiKit.iconButton(this, R.drawable.ic_m_info, getString(R.string.info)) { details() },
@@ -126,8 +128,12 @@ class MediaViewerActivity : AppCompatActivity() {
         title = bar.title
         counter = bar.subtitle
         title.ellipsize = TextUtils.TruncateAt.MIDDLE
-        // Dark scrim fading into the photo, so the bar stays readable on bright pictures
-        topBar.background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xCC000000.toInt(), 0x66000000, 0x00000000))
+        // Almost black, with only a short fade at its foot: over a see-through bar the name and the buttons
+        // mixed with what the picture has there (a screenshot has its own writing at the top)
+        topBar.background = GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            intArrayOf(0xF2000000.toInt(), 0xF2000000.toInt(), 0xF2000000.toInt(), 0xF2000000.toInt(), 0x00000000),
+        )
         topBar.setPadding(4.dpToPx(), 8.dpToPx(), 4.dpToPx(), 20.dpToPx())
         ViewCompat.setOnApplyWindowInsetsListener(topBar) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -201,6 +207,44 @@ class MediaViewerActivity : AppCompatActivity() {
         val intent = Intent(Intent.ACTION_SEND).setType(MediaThumbnails.mimeOf(file.name) ?: "*/*")
             .putExtra(Intent.EXTRA_STREAM, uriFor(file)).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         startActivity(Intent.createChooser(intent, file.name))
+    }
+
+    private val recognizer by lazy {
+        com.google.mlkit.vision.text.TextRecognition.getClient(com.google.mlkit.vision.text.latin.TextRecognizerOptions.DEFAULT_OPTIONS)
+    }
+
+    /** The words written in the photo, recognised on the phone, to select and copy. */
+    private fun readText() {
+        val file = currentFile() ?: return
+        if (MediaThumbnails.isVideo(file)) {
+            showToast(getString(R.string.ml_ocr_photos_only))
+            return
+        }
+        showToast(getString(R.string.ml_ocr_reading))
+        lifecycleScope.launch {
+            val bitmap = withContext(Dispatchers.IO) { decodeForScreen(file) }
+            val text = if (bitmap == null) null else try {
+                kotlinx.coroutines.suspendCancellableCoroutine<String> { c ->
+                    recognizer.process(com.google.mlkit.vision.common.InputImage.fromBitmap(bitmap, 0))
+                        .addOnSuccessListener { result ->
+                            if (c.isActive) c.resumeWith(Result.success(result.textBlocks.joinToString("\n\n") { block -> block.lines.joinToString("\n") { it.text } }))
+                        }
+                        .addOnFailureListener { if (c.isActive) c.resumeWith(Result.failure(it)) }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
+            when {
+                text == null -> showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_ocr_title)))
+                text.isBlank() -> showToast(getString(R.string.ml_ocr_none))
+                else -> showTextDialog(getString(R.string.ml_ocr_title), text, getString(R.string.ml_ocr_copy_all)) {
+                    (getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager)
+                        .setPrimaryClip(android.content.ClipData.newPlainText(file.name, text))
+                    showToast(getString(R.string.ml_copied))
+                }
+            }
+        }
     }
 
     private fun edit() {

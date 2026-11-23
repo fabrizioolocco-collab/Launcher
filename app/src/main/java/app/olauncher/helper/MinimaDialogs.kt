@@ -466,6 +466,35 @@ fun Context.showTextInputDialog(
     return dialog
 }
 
+/** A text to read, select and copy (e.g. the words recognised in a photo); [action] is the one button, e.g. "copy all". */
+fun Context.showTextDialog(title: String, text: String, action: String, onAction: () -> Unit): OlDialog {
+    val (dialog, binding) = baseDialog(title)
+    val ctx = dialog.context
+    val body = TextView(ctx).apply {
+        this.text = text
+        textSize = 16f
+        setTextColor(ctx.getColorFromAttr(R.attr.primaryColor))
+        setTextIsSelectable(true)
+        setPadding(0, 12.dpToPx(), 8.dpToPx(), 12.dpToPx())
+    }
+    // A long text scrolls inside the dialog instead of pushing its button off the screen
+    val long = text.length > 400 || text.count { it == '\n' } > 10
+    val scroll = ScrollView(ctx).apply {
+        addView(body)
+        layoutParams = ViewGroup.MarginLayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, if (long) 340.dpToPx() else ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+    binding.contentContainer.addView(scroll)
+    binding.contentContainer.isVisible = true
+    binding.tvAction.text = action
+    binding.tvAction.isVisible = true
+    binding.tvAction.setOnClickListener {
+        dialog.dismiss()
+        onAction()
+    }
+    dialog.showRespectingStatusBar()
+    return dialog
+}
+
 /** A dialog whose message can be updated while something runs (e.g. waiting for a GPS fix). */
 class StatusDialog(private val dialog: OlDialog, private val binding: DialogBaseBinding) {
     fun setMessage(message: String) {
