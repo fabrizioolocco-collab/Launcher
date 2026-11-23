@@ -402,6 +402,9 @@
     <string name="ml_edit_duplicate">Duplica</string>
     <string name="ml_edit_front">Sopra</string>
     <string name="ml_edit_add_hint">Tocca un\'immagine o un testo per sceglierlo: trascinalo, con due dita lo allarghi e lo ruoti, oppure tira il pallino nell\'angolo.</string>
+    <string name="ml_edit_border">Cornice</string>
+    <string name="ml_edit_border_none">Nessuna cornice</string>
+    <string name="ml_edit_backdrop_hint">Ora la foto è libera sullo sfondo: ridimensionala e spostala come le altre immagini. Con Ritaglia dai la forma al foglio.</string>
     <!-- PDF tool -->
     <string name="ml_pdf_tool">Strumento PDF</string>
     <string name="ml_pdf_open_in">Apri i PDF in</string>

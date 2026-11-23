@@ -55,7 +55,8 @@ import kotlin.math.sin
 /**
  * Photo editor: crop (drag the frame or its corners, rotate 90°), draw (brush with colours and
  * widths, undo), add (other pictures and texts laid over the photo: each one is moved, pinched
- * bigger or smaller, turned, and a picture can be cropped too; good for small collages).
+ * bigger or smaller, turned, and a picture can be cropped and framed too; with a backdrop of one
+ * colour the photo itself becomes one of them, for collages). Two fingers zoom while drawing.
  * Saves as a copy next to the original (name + " (1)") or over it.
  */
 class PhotoEditActivity : AppCompatActivity() {
@@ -199,6 +200,7 @@ class PhotoEditActivity : AppCompatActivity() {
             }
         }, toolParams())
         addTools.addView(UiKit.toolButton(this, R.drawable.ic_m_text, getString(R.string.ml_edit_text)) { askText(null) }, toolParams())
+        addTools.addView(UiKit.toolButton(this, R.drawable.ic_m_tab, getString(R.string.ml_edit_plate)) { askBackdrop() }, toolParams())
         bottom.addView(addTools, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 8.dpToPx() })
         itemTools = UiKit.toolBar(this)
         bottom.addView(itemTools, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = 8.dpToPx() })
@@ -273,10 +275,29 @@ class PhotoEditActivity : AppCompatActivity() {
             }
         } else {
             tool(R.drawable.ic_m_crop, R.string.ml_edit_crop, active = editor.itemCrop) { editor.itemCrop = !editor.itemCrop }
+            tool(R.drawable.ic_m_resize, R.string.ml_edit_border) {
+                showColorPickerDialog(getString(R.string.ml_edit_border), item.border, getString(R.string.ml_edit_border_none)) { picked ->
+                    item.border = picked
+                    editor.invalidate()
+                }
+            }
             tool(R.drawable.ic_m_copy, R.string.ml_edit_duplicate) { editor.duplicateSelected() }
         }
         tool(R.drawable.ic_m_up, R.string.ml_edit_front) { editor.selectedToFront() }
         tool(R.drawable.ic_m_delete, R.string.ml_delete) { editor.deleteSelected() }
+    }
+
+    /**
+     * A backdrop of one colour under everything: the photo becomes a picture like the added ones,
+     * to be made smaller and moved over it.
+     */
+    private fun askBackdrop() {
+        showColorPickerDialog(getString(R.string.ml_edit_plate), editor.backdrop, getString(R.string.ml_edit_white)) { picked ->
+            val first = editor.backdrop == 0
+            if (!editor.setBackdrop(if (picked == 0) Color.WHITE else picked)) {
+                showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_edit_plate)))
+            } else if (first) showToast(getString(R.string.ml_edit_backdrop_hint), android.widget.Toast.LENGTH_LONG)
+        }
     }
 
     /** Asks for the words of a new text, or of [item] when one is being changed. */
@@ -429,6 +450,15 @@ class PhotoEditActivity : AppCompatActivity() {
         private var image: Bitmap? = null
         /** Image → view transform (fit, centered). */
         private val fit = Matrix()
+        /** What two fingers add to the fit while drawing: bigger and moved, in view pixels. */
+        private val zoom = Matrix()
+        private var zooming = false
+        private var zoomX = 0f
+        private var zoomY = 0f
+        private var zoomSpan = 0f
+        /** The colour of the backdrop, 0 while the photo is still the bottom of everything. */
+        var backdrop = 0
+            private set
         private val inverse = Matrix()
         private var crop = RectF()
         private var rotation = 0
@@ -452,13 +482,14 @@ class PhotoEditActivity : AppCompatActivity() {
             set(value) {
                 field = value
                 if (value != MODE_ADD) select(null)
+                if (value == MODE_CROP) zoom.reset()
                 computeFit()
                 invalidate()
             }
         private val cropMode get() = mode == MODE_CROP
         var brushColor = Color.RED
         var brushWidth = 8f * resources.displayMetrics.density
-        val isModified get() = rotation != 0 || strokes.isNotEmpty() || items.isNotEmpty() || image?.let { crop != RectF(0f, 0f, it.width.toFloat(), it.height.toFloat()) } == true
+        val isModified get() = rotation != 0 || backdrop != 0 || strokes.isNotEmpty() || items.isNotEmpty() || image?.let { crop != RectF(0f, 0f, it.width.toFloat(), it.height.toFloat()) } == true
 
         private val dim = Paint().apply { color = 0x99000000.toInt() }
         private val frame = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -480,6 +511,7 @@ class PhotoEditActivity : AppCompatActivity() {
         private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
         private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 80 }
         private val platePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        private val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
         private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply { textSize = TEXT_SIZE }
         private val handleRadius = 10f * resources.displayMetrics.density
         private val touchRadius = 32f * resources.displayMetrics.density
@@ -489,6 +521,8 @@ class PhotoEditActivity : AppCompatActivity() {
             crop = RectF(0f, 0f, bitmap.width.toFloat(), bitmap.height.toFloat())
             strokes.clear()
             items.clear()
+            zoom.reset()
+            backdrop = 0
             rotation = 0
             requestLayout()
             computeFit()
@@ -511,7 +545,112 @@ class PhotoEditActivity : AppCompatActivity() {
             fit.postTranslate(-area.left, -area.top)
             fit.postScale(s, s)
             fit.postTranslate((width - area.width() * s) / 2f, (height - area.height() * s) / 2f)
+            if (!zoom.isIdentity) {
+                fit.postConcat(zoom)
+                // The zoomed picture is not let go off the view: it stays centred where it is smaller, and covers the view where it is bigger
+                val shown = RectF(area).also { fit.mapRect(it) }
+                val dx = when {
+                    shown.width() <= width -> (width - shown.width()) / 2f - shown.left
+                    shown.left > 0f -> -shown.left
+                    shown.right < width -> width - shown.right
+                    else -> 0f
+                }
+                val dy = when {
+                    shown.height() <= height -> (height - shown.height()) / 2f - shown.top
+                    shown.top > 0f -> -shown.top
+                    shown.bottom < height -> height - shown.bottom
+                    else -> 0f
+                }
+                zoom.postTranslate(dx, dy)
+                fit.postTranslate(dx, dy)
+            }
             fit.invert(inverse)
+        }
+
+        private fun zoomScale(): Float {
+            val v = FloatArray(9)
+            zoom.getValues(v)
+            return v[Matrix.MSCALE_X]
+        }
+
+        /**
+         * Two fingers zoom and move the picture while drawing (and while adding, when nothing is chosen:
+         * on a chosen thing they resize it). True when the touch was theirs.
+         */
+        private fun zoomTouch(e: MotionEvent): Boolean {
+            when (e.actionMasked) {
+                MotionEvent.ACTION_POINTER_DOWN -> if (e.pointerCount == 2 && !(mode == MODE_ADD && chosen != null)) {
+                    zooming = true
+                    // The stroke begun by the first finger is dropped
+                    currentPath = null
+                    zoomX = (e.getX(0) + e.getX(1)) / 2f
+                    zoomY = (e.getY(0) + e.getY(1)) / 2f
+                    zoomSpan = hypot(e.getX(1) - e.getX(0), e.getY(1) - e.getY(0))
+                    invalidate()
+                    return true
+                }
+
+                MotionEvent.ACTION_MOVE -> if (zooming) {
+                    if (e.pointerCount >= 2) {
+                        val x = (e.getX(0) + e.getX(1)) / 2f
+                        val y = (e.getY(0) + e.getY(1)) / 2f
+                        val span = hypot(e.getX(1) - e.getX(0), e.getY(1) - e.getY(0))
+                        if (span > 1f && zoomSpan > 1f) {
+                            val now = zoomScale()
+                            val target = (now * span / zoomSpan).coerceIn(1f, MAX_ZOOM)
+                            zoom.postTranslate(x - zoomX, y - zoomY)
+                            zoom.postScale(target / now, target / now, x, y)
+                            if (target <= 1.001f) zoom.reset()
+                            computeFit()
+                            invalidate()
+                        }
+                        zoomX = x
+                        zoomY = y
+                        zoomSpan = span
+                    }
+                    return true
+                }
+
+                // With one finger lifted the other does not start drawing: both go up first
+                MotionEvent.ACTION_POINTER_UP -> if (zooming) {
+                    zoomSpan = 0f
+                    return true
+                }
+
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> if (zooming) {
+                    zooming = false
+                    return true
+                }
+            }
+            return false
+        }
+
+        /** Puts a backdrop of [color] under everything; the first time the photo becomes a thing laid over it. False when memory is short. */
+        fun setBackdrop(color: Int): Boolean {
+            val img = image ?: return false
+            try {
+                if (backdrop != 0 && img.isMutable) img.eraseColor(color)
+                else {
+                    val base = Bitmap.createBitmap(img.width, img.height, Bitmap.Config.RGB_565)
+                    base.eraseColor(color)
+                    image = base
+                    if (backdrop == 0) {
+                        val item = Layer(img, "")
+                        item.crop.set(0f, 0f, img.width.toFloat(), img.height.toFloat())
+                        item.cx = img.width / 2f
+                        item.cy = img.height / 2f
+                        // A little smaller at once, so the backdrop shows and the photo is seen to be free
+                        item.scale = 0.85f
+                        items.add(0, item)
+                        select(item)
+                    }
+                }
+            } catch (e: Throwable) {
+                return false
+            }
+            backdrop = color
+            invalidate()
+            return true
         }
 
         fun rotate() {
@@ -615,6 +754,7 @@ class PhotoEditActivity : AppCompatActivity() {
             copy.color = item.color
             copy.style = item.style
             copy.plate = item.plate
+            copy.border = item.border
             val step = 0.05f * min(crop.width(), crop.height())
             copy.cx = item.cx + step
             copy.cy = item.cy + step
@@ -657,6 +797,14 @@ class PhotoEditActivity : AppCompatActivity() {
                 if (ghost) canvas.drawBitmap(b, -b.width / 2f, -b.height / 2f, ghostPaint)
                 canvas.clipRect(box)
                 canvas.drawBitmap(b, -b.width / 2f, -b.height / 2f, bitmapPaint)
+                if (item.border != 0) {
+                    // Inside the edge, so the picture keeps its size
+                    val w = BORDER * min(box.width(), box.height())
+                    borderPaint.color = item.border
+                    borderPaint.strokeWidth = w
+                    box.inset(w / 2f, w / 2f)
+                    canvas.drawRect(box, borderPaint)
+                }
             } else {
                 if (item.plate != 0) {
                     platePaint.color = if (item.plate == 1) 0x99000000.toInt() else 0xD9FFFFFF.toInt()
@@ -929,6 +1077,7 @@ class PhotoEditActivity : AppCompatActivity() {
 
         override fun onTouchEvent(e: MotionEvent): Boolean {
             val img = image ?: return false
+            if (mode != MODE_CROP && zoomTouch(e)) return true
             if (mode == MODE_ADD) return onAddTouch(e)
             val p = floatArrayOf(e.x, e.y)
             inverse.mapPoints(p)
@@ -1006,6 +1155,8 @@ class PhotoEditActivity : AppCompatActivity() {
         var style = 0
         /** Behind a text: nothing, a dark plate or a light one. */
         var plate = 0
+        /** The colour of the frame around a picture, 0 for none. */
+        var border = 0
         val isText get() = bitmap == null
     }
 
@@ -1020,6 +1171,9 @@ class PhotoEditActivity : AppCompatActivity() {
         private const val TEXT_PAD = 24f
         private const val MIN_SCALE = 0.01f
         private const val MAX_SCALE = 100f
+        private const val MAX_ZOOM = 8f
+        /** The frame of a picture, as a part of its shorter side. */
+        private const val BORDER = 0.03f
         private const val G_NONE = 0
         private const val G_MOVE = 1
         private const val G_HANDLE = 2
