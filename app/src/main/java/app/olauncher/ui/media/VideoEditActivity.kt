@@ -6,6 +6,7 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.SurfaceTexture
@@ -27,6 +28,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -51,6 +53,8 @@ import kotlin.math.min
  * as a copy without re-encoding (MediaExtractor → MediaMuxer), so it's fast and keeps the quality.
  * The cut lands on key frames, so the precision is about a second or two. The rotation (90° steps)
  * only changes the video's orientation flag: instant and lossless, also together with a crop.
+ * Pictures and texts can be laid over the video ([LayerBoard]): they stay for all its length, and
+ * saving them re-encodes it like a crop does.
  */
 class VideoEditActivity : AppCompatActivity() {
 
@@ -79,6 +83,26 @@ class VideoEditActivity : AppCompatActivity() {
     private var videoH = 0
     private var rotation = 0
     private var progressText: TextView? = null
+
+    /** The pictures and texts laid over the video, in displayed pixels (the video's own rotation applied). */
+    private lateinit var layersView: LayersView
+    private lateinit var board: LayerBoard
+    private lateinit var addButton: ImageView
+    private lateinit var addTools: LinearLayout
+    private lateinit var itemTools: LinearLayout
+    private var adding = false
+    private val pickImages = registerForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
+        if (uris.isEmpty()) return@registerForActivityResult
+        lifecycleScope.launch {
+            val bitmaps = withContext(Dispatchers.IO) { uris.take(LayerBoard.MAX_PICK).mapNotNull { LayerBoard.decode(applicationContext, it) } }
+            if (bitmaps.isEmpty()) showToast(getString(R.string.ml_search_cannot_open))
+            else {
+                val before = board.items.size
+                board.addImages(bitmaps, layerArea())
+                upright(before)
+            }
+        }
+    }
     private val ticker = object : Runnable {
         override fun run() {
             if (video.isPlaying) {
@@ -143,7 +167,9 @@ class VideoEditActivity : AppCompatActivity() {
         cropButton = UiKit.iconButton(this, R.drawable.ic_m_crop, getString(R.string.ml_edit_crop)) { toggleCrop() }
         rotateButton = UiKit.iconButton(this, R.drawable.ic_m_rotate, getString(R.string.ml_edit_rotate)) { rotate() }
         muteButton = UiKit.iconButton(this, R.drawable.ic_m_volume, getString(R.string.ml_edit_mute)) { toggleMute() }
+        addButton = UiKit.iconButton(this, R.drawable.ic_m_add, getString(R.string.ml_edit_add)) { setAdding(!adding) }
         val bar = UiKit.appBar(this, getString(R.string.ml_edit_trim), onBack = { finish() }, actions = listOf(
+            addButton,
             muteButton,
             rotateButton,
             cropButton,
@@ -178,9 +204,42 @@ class VideoEditActivity : AppCompatActivity() {
             setOnClickListener { togglePlay() }
         }
         frame.addView(playButton, FrameLayout.LayoutParams(72.dpToPx(), 72.dpToPx(), Gravity.CENTER))
+        layersView = LayersView(this)
+        board = LayerBoard(resources.displayMetrics.density) { layersView.invalidate() }
+        board.onSelection = { updateItemTools() }
+        stage.addView(layersView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         cropView = CropOverlay(this).apply { isVisible = false }
         stage.addView(cropView, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(frame, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        // Add tools: a picture or a text over the video; under them the tools of the chosen one
+        fun toolParams() = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+            val m = 2.dpToPx()
+            setMargins(m, m, m, m)
+        }
+        fun rowParams() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(12.dpToPx(), 8.dpToPx(), 12.dpToPx(), 0)
+        }
+        addTools = UiKit.toolBar(this).apply { isVisible = false }
+        addTools.addView(UiKit.toolButton(this, R.drawable.ic_m_image, getString(R.string.ml_edit_image)) {
+            try {
+                pickImages.launch("image/*")
+            } catch (e: Exception) {
+                showToast(getString(R.string.ml_search_cannot_open))
+            }
+        }, toolParams())
+        addTools.addView(UiKit.toolButton(this, R.drawable.ic_m_text, getString(R.string.ml_edit_text)) {
+            if (videoW == 0 || videoH == 0) return@toolButton
+            val before = board.items.size
+            LayerBoard.askText(this, board, null) {
+                // The text is laid right after this is asked: it is set upright as soon as it is there
+                layersView.post { upright(before) }
+                layerArea()
+            }
+        }, toolParams())
+        root.addView(addTools, rowParams())
+        itemTools = UiKit.toolBar(this).apply { isVisible = false }
+        root.addView(itemTools, rowParams())
 
         // Trim range and the strip of frames, in a card
         val trimCard = LinearLayout(this).apply {
@@ -201,6 +260,87 @@ class VideoEditActivity : AppCompatActivity() {
             setMargins(12.dpToPx(), 10.dpToPx(), 12.dpToPx(), 12.dpToPx())
         })
         return root
+    }
+
+    /** Adding on or off: while on, touches on the preview go to the pictures and texts, and the play button is away. */
+    private fun setAdding(on: Boolean) {
+        if (on && (videoW == 0 || videoH == 0)) {
+            showToast(getString(R.string.ml_search_cannot_open))
+            return
+        }
+        adding = on
+        UiKit.setToolActive(addButton, on)
+        addTools.isVisible = on
+        playButton.isVisible = !on
+        if (on) {
+            video.pause()
+            showPlaying(false)
+            layersView.bringToFront()
+            val prefs = getSharedPreferences("app.minimalauncher.hints", MODE_PRIVATE)
+            if (!prefs.getBoolean("edit_add_hint", false)) {
+                prefs.edit().putBoolean("edit_add_hint", true).apply()
+                showToast(getString(R.string.ml_edit_add_hint), android.widget.Toast.LENGTH_LONG)
+            }
+        } else {
+            board.select(null)
+            cropView.bringToFront()
+        }
+        updateItemTools()
+        layersView.invalidate()
+    }
+
+    private fun updateItemTools() {
+        itemTools.isVisible = LayerBoard.fillTools(this, itemTools, board) { layerArea() } && adding
+    }
+
+    /** The video as shown, its own rotation applied. */
+    private fun shownW() = if (rotation % 180 == 0) videoW else videoH
+    private fun shownH() = if (rotation % 180 == 0) videoH else videoW
+
+    /** Where new things are laid: the part kept by the crop, or the whole picture. */
+    private fun layerArea(): RectF {
+        val r = if (cropView.isVisible) cropView.cropRect() else null
+        return if (r != null && r.width() > 0 && r.height() > 0) RectF(r) else RectF(0f, 0f, shownW().toFloat(), shownH().toFloat())
+    }
+
+    /** The things added from [from] on stand upright on the screen even when the video was turned. */
+    private fun upright(from: Int) {
+        if (userRotation == 0) return
+        for (i in from until board.items.size) board.items[i].rot = -userRotation.toFloat()
+        layersView.invalidate()
+    }
+
+    /**
+     * The pictures and texts drawn as the encoder wants them: on the stored frame (before the
+     * rotation flag), only the part inside [crop], at the size of the saved video.
+     */
+    private fun overlayBitmap(crop: VideoCropper.Crop): Bitmap? = try {
+        val bitmap = Bitmap.createBitmap(max(2, (crop.width / 2) * 2), max(2, (crop.height / 2) * 2), Bitmap.Config.ARGB_8888)
+        val m = Matrix()
+        // Displayed pixels → stored pixels (the inverse of what sourceCrop does to the crop)
+        when (rotation) {
+            90 -> {
+                m.postRotate(-90f)
+                m.postTranslate(0f, shownW().toFloat())
+            }
+
+            180 -> {
+                m.postRotate(180f)
+                m.postTranslate(shownW().toFloat(), shownH().toFloat())
+            }
+
+            270 -> {
+                m.postRotate(90f)
+                m.postTranslate(shownH().toFloat(), 0f)
+            }
+        }
+        m.postTranslate(-crop.left.toFloat(), -crop.top.toFloat())
+        val canvas = Canvas(bitmap)
+        canvas.concat(m)
+        board.draw(canvas, preview = false)
+        bitmap
+    } catch (e: Throwable) {
+        null
     }
 
     /** Play icon when stopped; a faint pause icon while the video plays (tap to pause). */
@@ -252,6 +392,7 @@ class VideoEditActivity : AppCompatActivity() {
             return
         }
         val on = !cropView.isVisible
+        if (on) setAdding(false)
         cropView.isVisible = on
         UiKit.setToolActive(cropButton, on)
         if (on) {
@@ -424,7 +565,14 @@ class VideoEditActivity : AppCompatActivity() {
         }
         video.pause()
         showPlaying(false)
-        val crop = sourceCrop()
+        val layered = board.items.isNotEmpty() && videoW > 0 && videoH > 0
+        // Things laid over the video are drawn on every frame: the whole picture is re-encoded like a crop
+        val crop = sourceCrop() ?: if (layered) VideoCropper.Crop(0, 0, videoW, videoH) else null
+        val overlay = if (layered && crop != null) overlayBitmap(crop) else null
+        if (layered && overlay == null) {
+            showToast(getString(R.string.ml_explorer_failed, getString(R.string.ml_save)))
+            return
+        }
         val trimmed = startMs > 0 || endMs < durationMs
         val turn = userRotation
         val mute = muted
@@ -433,6 +581,7 @@ class VideoEditActivity : AppCompatActivity() {
             return
         }
         showToast(getString(when {
+            layered -> R.string.ml_edit_layers_saving
             crop != null -> R.string.ml_edit_crop_saving
             trimmed -> R.string.ml_edit_trim_saving
             turn != 0 -> R.string.ml_edit_rotate_saving
@@ -458,6 +607,7 @@ class VideoEditActivity : AppCompatActivity() {
                 val ok = if (crop != null) VideoCropper(file, out).also { c ->
                     c.onProgress = { p -> runOnUiThread { progress.text = "${(p * 100).toInt()}%" } }
                     c.extraRotation = turn
+                    c.overlay = overlay
                     c.mute = mute
                 }.run(crop, startMs * 1000, endMs * 1000)
                 else trim(file, out, startMs * 1000, endMs * 1000, turn, mute)
@@ -632,6 +782,34 @@ class VideoEditActivity : AppCompatActivity() {
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> dragging = 0
             }
             return true
+        }
+    }
+
+    /** The pictures and texts over the preview; it takes the touches only while adding. */
+    private inner class LayersView(context: Context) : View(context) {
+        private val fit = Matrix()
+        private val inverse = Matrix()
+
+        private fun computeFit(): Boolean {
+            val w = shownW()
+            val h = shownH()
+            if (w == 0 || h == 0 || width == 0 || height == 0) return false
+            fit.setScale(width.toFloat() / w, height.toFloat() / h)
+            return fit.invert(inverse)
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            if (board.items.isEmpty() || !computeFit()) return
+            canvas.save()
+            canvas.concat(fit)
+            board.draw(canvas, preview = true)
+            canvas.restore()
+            if (adding) board.drawSelection(canvas, fit)
+        }
+
+        override fun onTouchEvent(e: MotionEvent): Boolean {
+            if (!adding || !computeFit()) return false
+            return board.onTouch(e, fit, inverse)
         }
     }
 

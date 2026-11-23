@@ -405,6 +405,7 @@
     <string name="ml_edit_duplicate">Duplicate</string>
     <string name="ml_edit_front">To front</string>
     <string name="ml_edit_add_hint">Touch a picture or a text to choose it: drag it, pinch with two fingers to resize and turn it, or pull the dot in its corner.</string>
+    <string name="ml_edit_layers_saving">Re-encoding the video with what you added, this takes a while…</string>
     <string name="ml_edit_border">Frame</string>
     <string name="ml_edit_border_none">No frame</string>
     <string name="ml_edit_backdrop_hint">The photo is now free on the backdrop: resize it and move it like the other pictures. Crop gives the sheet its shape.</string>

@@ -1,5 +1,6 @@
 package app.olauncher.ui.media
 
+import android.graphics.Bitmap
 import android.graphics.SurfaceTexture
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
@@ -14,6 +15,7 @@ import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES11Ext
 import android.opengl.GLES20
+import android.opengl.GLUtils
 import android.view.Surface
 import java.io.File
 import java.nio.ByteBuffer
@@ -36,6 +38,9 @@ class VideoCropper(private val src: File, private val dst: File) {
 
     /** Quarter turns (degrees, clockwise) added to the video's own orientation flag. */
     var extraRotation = 0
+
+    /** Drawn over every frame: as big as the saved video (the crop, in stored pixels), transparent where the video shows. */
+    var overlay: Bitmap? = null
 
     /** Called with the progress (0..1) from the encoding thread. */
     var onProgress: ((Float) -> Unit)? = null
@@ -77,6 +82,7 @@ class VideoCropper(private val src: File, private val dst: File) {
             val srcW = inFormat.getInteger(MediaFormat.KEY_WIDTH)
             val srcH = inFormat.getInteger(MediaFormat.KEY_HEIGHT)
             gl.setCrop(crop, srcW, srcH)
+            overlay?.let { gl.setOverlay(it) }
 
             decoder = MediaCodec.createDecoderByType(inFormat.getString(MediaFormat.KEY_MIME)!!)
             // The decoder would rotate the frames on the surface by the track's rotation: keep them as
@@ -226,6 +232,10 @@ class VideoCropper(private val src: File, private val dst: File) {
         private val vertices: FloatBuffer
         private var texCoords: FloatBuffer
         private val transform = FloatArray(16)
+        private var overlayTexture = 0
+        private var overlayProgram = 0
+        /** The first row of a bitmap is the bottom of its texture: the top vertices take it. */
+        private val overlayCoords = floats(floatArrayOf(0f, 1f, 1f, 1f, 0f, 0f, 1f, 0f))
 
         init {
             display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
@@ -279,6 +289,23 @@ class VideoCropper(private val src: File, private val dst: File) {
             texCoords = floats(floatArrayOf(l, bottom, r, bottom, l, top, r, top))
         }
 
+        /** A picture drawn over every frame, stretched to the whole output. */
+        fun setOverlay(bitmap: Bitmap) {
+            val tex = IntArray(1)
+            GLES20.glGenTextures(1, tex, 0)
+            overlayTexture = tex[0]
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTexture)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE)
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE)
+            GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, bitmap, 0)
+            overlayProgram = GLES20.glCreateProgram()
+            GLES20.glAttachShader(overlayProgram, shader(GLES20.GL_VERTEX_SHADER, OVERLAY_VERTEX))
+            GLES20.glAttachShader(overlayProgram, shader(GLES20.GL_FRAGMENT_SHADER, OVERLAY_FRAGMENT))
+            GLES20.glLinkProgram(overlayProgram)
+        }
+
         override fun onFrameAvailable(st: SurfaceTexture) {
             synchronized(lock) {
                 frameAvailable = true
@@ -311,6 +338,25 @@ class VideoCropper(private val src: File, private val dst: File) {
             GLES20.glBindTexture(GLES11Ext.GL_TEXTURE_EXTERNAL_OES, textureId)
             GLES20.glUniform1i(GLES20.glGetUniformLocation(program, "uTexture"), 0)
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+            if (overlayProgram != 0) drawOverlay()
+        }
+
+        private fun drawOverlay() {
+            // Bitmaps are uploaded with the colours already multiplied by their alpha
+            GLES20.glEnable(GLES20.GL_BLEND)
+            GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA)
+            GLES20.glUseProgram(overlayProgram)
+            val pos = GLES20.glGetAttribLocation(overlayProgram, "aPosition")
+            val tc = GLES20.glGetAttribLocation(overlayProgram, "aTexCoord")
+            GLES20.glEnableVertexAttribArray(pos)
+            GLES20.glVertexAttribPointer(pos, 2, GLES20.GL_FLOAT, false, 0, vertices)
+            GLES20.glEnableVertexAttribArray(tc)
+            GLES20.glVertexAttribPointer(tc, 2, GLES20.GL_FLOAT, false, 0, overlayCoords)
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, overlayTexture)
+            GLES20.glUniform1i(GLES20.glGetUniformLocation(overlayProgram, "uTexture"), 0)
+            GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+            GLES20.glDisable(GLES20.GL_BLEND)
         }
 
         fun setPresentationTime(ns: Long) {
@@ -333,6 +379,23 @@ class VideoCropper(private val src: File, private val dst: File) {
         }
 
         companion object {
+            private const val OVERLAY_VERTEX = """
+                attribute vec4 aPosition;
+                attribute vec2 aTexCoord;
+                varying vec2 vTexCoord;
+                void main() {
+                    gl_Position = aPosition;
+                    vTexCoord = aTexCoord;
+                }
+            """
+            private const val OVERLAY_FRAGMENT = """
+                precision mediump float;
+                varying vec2 vTexCoord;
+                uniform sampler2D uTexture;
+                void main() {
+                    gl_FragColor = texture2D(uTexture, vTexCoord);
+                }
+            """
             private const val VERTEX = """
                 attribute vec4 aPosition;
                 attribute vec2 aTexCoord;
