@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.MediaStore
 import app.olauncher.R
+import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.showToast
 import java.io.File
 
