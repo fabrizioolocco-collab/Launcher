@@ -204,12 +204,15 @@ class YtPlayerActivity : AppCompatActivity() {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             updatePip()
             controls.refresh()
+            updateAwake()
         }
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) = updateAwake()
         override fun onVideoSizeChanged(videoSize: VideoSize) = updatePip()
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             // Over: the controls come back, as on a video of the gallery
             if (playbackState == Player.STATE_ENDED && !inPip) setChrome(true)
+            updateAwake()
             if (playbackState == Player.STATE_READY && !played) {
                 played = true
                 val streams = YtPlayerService.now?.streams ?: return
@@ -315,6 +318,7 @@ class YtPlayerActivity : AppCompatActivity() {
             player = exo
             exo.addListener(listener)
             playerView.player = exo
+            updateAwake()
             showVideo(true)
             handleIntent(intent)
         }, ContextCompat.getMainExecutor(this))
@@ -630,6 +634,11 @@ class YtPlayerActivity : AppCompatActivity() {
         TubeExport.onChange = null
         rotation?.disable()
         if (!inPip) showVideo(false)
+    }
+
+    /** The screen stays on while a video plays (buffering included); a podcast is only listened to, so it may sleep. */
+    private fun updateAwake() {
+        playerView.keepScreenOn = transport.isPlaying && YtPlayerService.now?.isEpisode != true
     }
 
     override fun onDestroy() {
