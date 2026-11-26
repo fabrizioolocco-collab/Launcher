@@ -34,6 +34,7 @@ import app.olauncher.data.FolderView
 import app.olauncher.data.FolderViewsRepository
 import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.MenuEntry
+import app.olauncher.helper.StorageVolumes
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.pillButton
@@ -190,6 +191,88 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private val storageRoot: File get() = Environment.getExternalStorageDirectory()
 
+    /** Storages mounted (phone memory, SD card, USB drives), refreshed when one is plugged in or out. */
+    private var volumes: List<StorageVolumes.Volume> = emptyList()
+    private lateinit var storageBar: LinearLayout
+    private lateinit var storageScroll: android.widget.HorizontalScrollView
+
+    /** Root of the storage holding [f]: the phone memory, or an SD card / USB drive. */
+    private fun rootOf(f: File): File = StorageVolumes.of(volumes, f)?.dir ?: storageRoot
+
+    private fun volumeLabel(v: StorageVolumes.Volume): String = when {
+        v.primary -> getString(R.string.ml_search_phone)
+        v.label.isNotBlank() -> v.label
+        else -> getString(if (v.usb) R.string.ml_storage_usb else R.string.ml_storage_sd)
+    }
+
+    private fun volumeIcon(v: StorageVolumes.Volume?) = when {
+        v == null || v.primary -> R.drawable.ic_m_phone
+        v.usb -> R.drawable.ic_m_usb
+        else -> R.drawable.ic_m_sdcard
+    }
+
+    /** A USB drive or SD card plugged in or taken out: the bar follows, and a removed one is left. */
+    private val volumesReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val old = volumes
+            val before = old.map { it.dir.absolutePath }.toSet()
+            refreshVolumes()
+            val after = volumes.map { it.dir.absolutePath }.toSet()
+            if (before == after) return
+            volumes.filter { it.dir.absolutePath !in before }.forEach { showToast(getString(R.string.ml_storage_connected, volumeLabel(it))) }
+            if (intent.action != Intent.ACTION_MEDIA_MOUNTED) {
+                val gone = before - after
+                old.filter { it.dir.absolutePath in gone }.forEach { showToast(getString(R.string.ml_storage_removed, volumeLabel(it))) }
+                // Its files can't be pasted any more
+                clip?.let { c -> if (c.entries.any { e -> gone.any { g -> e.file.absolutePath.startsWith("$g/") } }) clip = null }
+                if (::location.isInitialized && gone.any { location.absolutePath == it || location.absolutePath.startsWith("$it/") }) {
+                    open(storageRoot)
+                    return
+                }
+            }
+            if (::location.isInitialized) load()
+        }
+    }
+
+    private fun refreshVolumes() {
+        volumes = StorageVolumes.list(this)
+        if (::storageBar.isInitialized) updateStorageBar()
+    }
+
+    /** One chip per storage, shown only while an SD card or a USB drive is there. */
+    private fun updateStorageBar() {
+        storageBar.removeAllViews()
+        storageScroll.isVisible = volumes.size > 1
+        if (volumes.size <= 1) return
+        val current = if (::location.isInitialized) StorageVolumes.of(volumes, location) else null
+        val primary = UiKit.primary(this)
+        volumes.forEach { v ->
+            val active = v.dir.absolutePath == (current?.dir ?: storageRoot).absolutePath
+            val chip = TextView(this, null, 0, R.style.TextSmall).apply {
+                text = volumeLabel(v)
+                setTextColor(primary)
+                gravity = Gravity.CENTER_VERTICAL
+                isSingleLine = true
+                setPadding(12.dpToPx(), 7.dpToPx(), 14.dpToPx(), 7.dpToPx())
+                compoundDrawablePadding = 6.dpToPx()
+                ContextCompat.getDrawable(this@FileExplorerActivity, volumeIcon(v))?.mutate()?.let { d ->
+                    d.setTint(primary)
+                    d.setBounds(0, 0, 16.dpToPx(), 16.dpToPx())
+                    setCompoundDrawablesRelative(d, null, null, null)
+                }
+                background = UiKit.border(this@FileExplorerActivity, 16,
+                    fill = if (active) androidx.core.graphics.ColorUtils.setAlphaComponent(primary, 0x22) else 0)
+                setOnClickListener {
+                    if (selecting) clearSelection()
+                    if (!active) open(v.dir)
+                }
+            }
+            storageBar.addView(chip, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                marginEnd = 8.dpToPx()
+            })
+        }
+    }
+
     /** Identity of a place, for the back gesture and the selection. */
     private fun keyOf(dir: File): String = dir.absolutePath
 
@@ -203,7 +286,16 @@ open class FileExplorerActivity : AppCompatActivity() {
             deleteSharedPreferences("app.minimalauncher.onedrive")
             File(cacheDir, "onedrive").deleteRecursively()
         }.start()
+        volumes = StorageVolumes.list(this)
         setContentView(buildLayout())
+        ContextCompat.registerReceiver(this, volumesReceiver, android.content.IntentFilter().apply {
+            addAction(Intent.ACTION_MEDIA_MOUNTED)
+            addAction(Intent.ACTION_MEDIA_UNMOUNTED)
+            addAction(Intent.ACTION_MEDIA_EJECT)
+            addAction(Intent.ACTION_MEDIA_REMOVED)
+            addAction(Intent.ACTION_MEDIA_BAD_REMOVAL)
+            addDataScheme("file")
+        }, ContextCompat.RECEIVER_NOT_EXPORTED)
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() = when {
                 selecting -> clearSelection()
@@ -214,6 +306,14 @@ open class FileExplorerActivity : AppCompatActivity() {
         location = startLocation(intent)
         entryKey = keyOf(location)
         load()
+    }
+
+    override fun onDestroy() {
+        try {
+            unregisterReceiver(volumesReceiver)
+        } catch (e: Exception) {
+        }
+        super.onDestroy()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -275,6 +375,18 @@ open class FileExplorerActivity : AppCompatActivity() {
         subtitle.gravity = Gravity.CENTER_VERTICAL
         headerButtons = listOf(searchButton, viewButton, newFolder)
         root.addView(bar.view)
+        // Storages (phone, SD card, USB drive), shown while more than one is mounted
+        storageBar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(16.dpToPx(), 2.dpToPx(), 16.dpToPx(), 6.dpToPx())
+        }
+        storageScroll = android.widget.HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(storageBar)
+            isVisible = false
+        }
+        root.addView(storageScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         // Search field under the bar, shown by the search button
         searchRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -439,7 +551,13 @@ open class FileExplorerActivity : AppCompatActivity() {
 
     private fun goUp() {
         val dir = location
-        if (dir.absolutePath == storageRoot.absolutePath) finish() else open(dir.parentFile ?: storageRoot)
+        val root = rootOf(dir)
+        when {
+            dir.absolutePath != root.absolutePath -> open(dir.parentFile ?: root)
+            // At the top of a USB drive or SD card: back to the phone
+            root.absolutePath != storageRoot.absolutePath -> open(storageRoot)
+            else -> finish()
+        }
     }
 
     /** Back gesture: up one folder while inside the place the explorer was opened in; past it, leave the explorer. */
@@ -447,7 +565,9 @@ open class FileExplorerActivity : AppCompatActivity() {
         val entry = entryKey
         val key = keyOf(location)
         val inside = key != entry && key.startsWith("$entry/")
-        if (inside) goUp() else finish()
+        // Inside a USB drive or SD card reached from the phone: up to its top, then back to the phone
+        val otherStorage = !key.startsWith(entry) && rootOf(location).absolutePath != storageRoot.absolutePath
+        if (inside || otherStorage) goUp() else finish()
     }
 
     private fun open(loc: File) {
@@ -462,13 +582,15 @@ open class FileExplorerActivity : AppCompatActivity() {
         if (changed) selected.clear()
         if (changed && searchRow.isVisible) closeSearch(reload = false)
         loadedKey = key
+        refreshVolumes()
         updatePasteBar()
         loadLocal(location)
         updateSelection()
     }
 
     private fun titleOf(dir: File): String =
-        if (dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else dir.name
+        volumes.firstOrNull { it.dir.absolutePath == dir.absolutePath }?.let { volumeLabel(it) }
+            ?: if (dir.absolutePath == storageRoot.absolutePath) getString(R.string.ml_search_phone) else dir.name
 
     // ---------------------------------------------------------------- multiple selection
 
@@ -748,7 +870,7 @@ open class FileExplorerActivity : AppCompatActivity() {
     private fun loadLocal(dir: File) {
         title.text = titleOf(dir)
         emptyView.isVisible = false
-        setSubtitleIcon(R.drawable.ic_m_phone)
+        setSubtitleIcon(volumeIcon(StorageVolumes.of(volumes, dir)))
         subtitle.text = "/" + relative(dir)
         subtitle.isVisible = true
         // An album folder (only photos and videos) shows no path, like the album grid
@@ -788,7 +910,7 @@ open class FileExplorerActivity : AppCompatActivity() {
             setEntries(listed.filter {
                 (view.showHidden || !isHidden(it.name)) && (!foldersOnly || it.isFolder) && (!filePick || it.isFolder || pickAccepts(it.name, it.mime))
             })
-            showStatus(null)
+            showStatus(if (StorageVolumes.of(volumes, dir)?.readOnly == true) getString(R.string.ml_storage_read_only) else null)
             emptyView.isVisible = entries.isEmpty()
         }
     }
@@ -920,7 +1042,7 @@ open class FileExplorerActivity : AppCompatActivity() {
         }
     })
 
-    private fun relative(f: File) = f.absolutePath.removePrefix(storageRoot.absolutePath).trimStart('/')
+    private fun relative(f: File) = f.absolutePath.removePrefix(rootOf(f).absolutePath).trimStart('/')
 
     private fun mimeOf(name: String) =
         MimeTypeMap.getSingleton().getMimeTypeFromExtension(name.substringAfterLast('.', "").lowercase())
@@ -1055,7 +1177,11 @@ open class FileExplorerActivity : AppCompatActivity() {
         clip = null
         val label = getString(if (c.move) R.string.ml_explorer_move else R.string.ml_explorer_copy)
         run(label) {
-            c.entries.map { entry -> pasteToLocal(entry, target, c.move) }.all { it }
+            val results = c.entries.map { entry -> pasteToLocal(entry, target, c.move) }
+            // Photos, videos and music copied from a USB drive must show in the gallery and players
+            val pasted = results.filterNotNull().flatMap { f -> f.walkTopDown().filter { it.isFile }.map { it.absolutePath }.toList() }
+            if (pasted.isNotEmpty()) android.media.MediaScannerConnection.scanFile(applicationContext, pasted.toTypedArray(), null, null)
+            results.all { it != null }
         }
     }
 
@@ -1069,12 +1195,13 @@ open class FileExplorerActivity : AppCompatActivity() {
         return f
     }
 
-    private fun pasteToLocal(entry: Entry, dir: File, move: Boolean): Boolean {
+    /** Copies or moves [entry] into [dir] (also between the phone and a USB drive); returns where it went, or null. */
+    private fun pasteToLocal(entry: Entry, dir: File, move: Boolean): File? {
         val src = entry.file
         val dest = uniqueTarget(dir, src.name)
-        if (move && src.renameTo(dest)) return true
-        if (!src.copyRecursively(dest)) return false
-        return !move || src.deleteRecursively()
+        if (move && src.renameTo(dest)) return dest
+        if (!src.copyRecursively(dest)) return null
+        return if (!move || src.deleteRecursively()) dest else null
     }
 
     // ---------------------------------------------------------------- list
