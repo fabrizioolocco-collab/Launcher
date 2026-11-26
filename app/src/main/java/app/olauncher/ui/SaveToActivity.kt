@@ -33,6 +33,30 @@ class SaveToActivity : Activity() {
             finish()
             return
         }
+        // A photo or a video asked to be shown under a type that is not a picture's (some cameras do, from the
+        // small preview of the shot): the viewer was not offered for it and this was the only answer. It is
+        // shown, not saved. Asked as a picture, both were offered and "Save to" was the one chosen: it stays.
+        if (intent?.action == Intent.ACTION_VIEW) {
+            val declared = intent.type
+            val real = try {
+                contentResolver.getType(uris[0])
+            } catch (e: Exception) {
+                null
+            }
+            fun media(type: String?) = type != null && (type.startsWith("image/") || type.startsWith("video/"))
+            if (!media(declared) && media(real)) {
+                try {
+                    startActivity(
+                        Intent(this, app.olauncher.ui.media.ViewerEntryActivity::class.java).setAction(Intent.ACTION_VIEW)
+                            .setDataAndType(uris[0], real).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    )
+                    finish()
+                    return
+                } catch (e: Exception) {
+                    // falls back to saving
+                }
+            }
+        }
         val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.R || Environment.isExternalStorageManager()
         if (!allowed) {
             // The explorer asks for the files access itself
