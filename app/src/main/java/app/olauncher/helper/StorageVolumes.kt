@@ -21,6 +21,9 @@ object StorageVolumes {
         /** Most likely a USB drive (not an SD card). */
         val usb: Boolean,
         val readOnly: Boolean,
+        /** Id of the storage ("1234-ABCD"), used to ask the system for write access to it. */
+        val uuid: String? = null,
+        val system: StorageVolume? = null,
     )
 
     fun list(ctx: Context): List<Volume> {
@@ -35,7 +38,7 @@ object StorageVolumes {
                 if (!dir.exists()) continue
                 val isPrimary = v.isPrimary || dir.absolutePath == primaryDir.absolutePath
                 val label = v.getDescription(ctx)?.takeIf { it.isNotBlank() } ?: dir.name
-                found += Volume(dir, label, isPrimary, isUsb(v, label, dir), state == Environment.MEDIA_MOUNTED_READ_ONLY)
+                found += Volume(dir, label, isPrimary, isUsb(v, label, dir), state == Environment.MEDIA_MOUNTED_READ_ONLY, v.uuid, v)
             }
         } catch (e: Exception) {
             e.printStackTrace()

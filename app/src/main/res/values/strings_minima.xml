@@ -239,6 +239,10 @@
     <string name="ml_storage_connected">%1$s connected</string>
     <string name="ml_storage_removed">%1$s removed</string>
     <string name="ml_storage_read_only">Read only: files can be copied from here, not into it</string>
+    <string name="ml_storage_grant_title">Allow writing</string>
+    <string name="ml_storage_grant_message">To put files on %1$s, Android asks to allow it once: in the screen that opens, tap \"Use this folder\" and then \"Allow\".</string>
+    <string name="ml_storage_grant_continue">Continue</string>
+    <string name="ml_storage_grant_wrong">Choose the top folder of %1$s, not a folder inside it</string>
     <string name="ml_explorer_delete_confirm">Delete «%1$s»? This cannot be undone.</string>
     <string name="ml_explorer_into_itself">A folder can\'t go inside itself</string>
     <!-- Search result tabs -->

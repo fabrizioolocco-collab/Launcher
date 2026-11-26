@@ -236,6 +236,10 @@
     <string name="ml_storage_connected">%1$s collegata</string>
     <string name="ml_storage_removed">%1$s scollegata</string>
     <string name="ml_storage_read_only">Sola lettura: si possono copiare i file da qui, non metterne dentro</string>
+    <string name="ml_storage_grant_title">Permesso di scrittura</string>
+    <string name="ml_storage_grant_message">Per mettere file su %1$s, Android chiede di autorizzarla una volta: nella schermata che si apre tocca «Usa questa cartella» e poi «Consenti».</string>
+    <string name="ml_storage_grant_continue">Continua</string>
+    <string name="ml_storage_grant_wrong">Scegli la cartella principale di %1$s, non una cartella al suo interno</string>
     <string name="ml_explorer_delete_confirm">Eliminare «%1$s»? Non si può annullare.</string>
     <string name="ml_explorer_into_itself">Una cartella non può andare dentro se stessa</string>
     <!-- Search result tabs -->

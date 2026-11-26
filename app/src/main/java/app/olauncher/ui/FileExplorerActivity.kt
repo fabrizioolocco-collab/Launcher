@@ -35,6 +35,7 @@ import app.olauncher.data.FolderViewsRepository
 import app.olauncher.helper.MediaThumbnails
 import app.olauncher.helper.MenuEntry
 import app.olauncher.helper.StorageVolumes
+import app.olauncher.helper.StorageWriter
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.getColorFromAttr
 import app.olauncher.helper.pillButton
@@ -231,6 +232,46 @@ open class FileExplorerActivity : AppCompatActivity() {
                 }
             }
             if (::location.isInitialized) load()
+        }
+    }
+
+    /** Writes on the phone and on USB drives (through the permission granted in the system picker when needed). */
+    private val writer by lazy { StorageWriter(this) { volumes } }
+    private var pendingWrite: (() -> Unit)? = null
+    private var pendingVolume: StorageVolumes.Volume? = null
+
+    private val drivePicker = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+        val v = pendingVolume
+        val action = pendingWrite
+        pendingVolume = null
+        pendingWrite = null
+        val uri = result.data?.data
+        if (result.resultCode != RESULT_OK || uri == null || v == null) return@registerForActivityResult
+        if (!writer.keepGrant(v, uri)) {
+            showToast(getString(R.string.ml_storage_grant_wrong, volumeLabel(v)))
+            return@registerForActivityResult
+        }
+        action?.invoke()
+    }
+
+    /**
+     * Runs [action] once the storages of [files] can be written: a USB drive the phone doesn't let
+     * the app write on is granted first, once, in the system picker.
+     */
+    private fun withWriteAccess(files: List<File>, action: () -> Unit) {
+        val v = files.mapNotNull { StorageVolumes.of(volumes, it) }.distinctBy { it.dir.absolutePath }
+            .firstOrNull { writer.needsGrant(it) } ?: return action()
+        showConfirmDialog(getString(R.string.ml_storage_grant_title), getString(R.string.ml_storage_grant_message, volumeLabel(v)),
+            getString(R.string.ml_storage_grant_continue)) {
+            pendingVolume = v
+            pendingWrite = { withWriteAccess(files, action) }
+            try {
+                drivePicker.launch(writer.pickIntent(v))
+            } catch (e: Exception) {
+                pendingVolume = null
+                pendingWrite = null
+                showToast(getString(R.string.ml_search_cannot_open))
+            }
         }
     }
 
@@ -652,8 +693,10 @@ open class FileExplorerActivity : AppCompatActivity() {
             getString(R.string.ml_explorer_delete),
         ) {
             selected.clear()
-            run(getString(R.string.ml_explorer_delete)) {
-                chosen.map { it.file.deleteRecursively() }.all { it }
+            withWriteAccess(chosen.map { it.file }) {
+                run(getString(R.string.ml_explorer_delete)) {
+                    chosen.map { writer.delete(it.file) }.all { it }
+                }
             }
         }
     }
@@ -1115,8 +1158,8 @@ open class FileExplorerActivity : AppCompatActivity() {
                 views.setHidden(viewDir, listOf(entry.name), hide = false)
                 views.setHidden(viewDir, listOf(name), hide = true)
             }
-            run(getString(R.string.rename)) {
-                entry.file.renameTo(File(entry.file.parentFile, name))
+            withWriteAccess(listOf(entry.file)) {
+                run(getString(R.string.rename)) { writer.rename(entry.file, name) }
             }
         }
     }
@@ -1133,7 +1176,9 @@ open class FileExplorerActivity : AppCompatActivity() {
         showTextInputDialog(getString(R.string.ml_explorer_new_folder), "", getString(R.string.ml_explorer_folder_name), getString(R.string.ml_save)) { name ->
             // While copying or moving, go into the new folder: more can be made inside, then paste
             val dir = File(location, name)
-            run(getString(R.string.ml_explorer_new_folder), then = { ok -> if (ok && clip != null) open(dir) }) { dir.mkdirs() }
+            withWriteAccess(listOf(dir)) {
+                run(getString(R.string.ml_explorer_new_folder), then = { ok -> if (ok && clip != null) open(dir) }) { writer.mkdir(dir) }
+            }
         }
     }
 
@@ -1174,6 +1219,11 @@ open class FileExplorerActivity : AppCompatActivity() {
             showToast(getString(R.string.ml_explorer_into_itself))
             return
         }
+        // Moving also deletes the originals: their storage must be writable too
+        withWriteAccess(listOf(target) + (if (c.move) c.entries.map { it.file } else emptyList<File>())) { pasteNow(c, target) }
+    }
+
+    private fun pasteNow(c: Clip, target: File) {
         clip = null
         val label = getString(if (c.move) R.string.ml_explorer_move else R.string.ml_explorer_copy)
         run(label) {
@@ -1200,8 +1250,8 @@ open class FileExplorerActivity : AppCompatActivity() {
         val src = entry.file
         val dest = uniqueTarget(dir, src.name)
         if (move && src.renameTo(dest)) return dest
-        if (!src.copyRecursively(dest)) return null
-        return if (!move || src.deleteRecursively()) dest else null
+        if (!writer.copy(src, dest)) return null
+        return if (!move || writer.delete(src)) dest else null
     }
 
     // ---------------------------------------------------------------- list
