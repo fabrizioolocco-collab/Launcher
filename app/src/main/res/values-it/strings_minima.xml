@@ -1299,4 +1299,11 @@
     <string name="ml_yt_links_open">Apri impostazioni</string>
     <string name="ml_yt_links_help">Android lascia aprire i link di YouTube a un\'app solo se glielo permetti tu.\n\n1. Nella pagina che si apre accendi \"Apri link supportati\".\n2. Tocca \"Aggiungi link\" e spunta tutti quelli di YouTube.\n\nSe hai l\'app di YouTube, nelle sue impostazioni spegni \"Apri link supportati\", altrimenti i link restano suoi.\n\nI link si aprono in Tube quando li tocchi in una pagina, in una ricerca Google o in un messaggio; un indirizzo scritto a mano nella barra del browser resta nel browser. Puoi sempre condividere un link con Tube dal menu Condividi.</string>
     <string name="ml_yt_links_now">Adesso:</string>
+    <string name="ml_wa_blinders">WhatsApp con i paraocchi</string>
+    <string name="ml_wa_blinders_hint">In WhatsApp sono coperti Aggiornamenti, Community e Meta AI. Chat, gruppi, file e chiamate funzionano come sempre. Tieni premuto su un punto coperto per togliere i paraocchi per 5 minuti.</string>
+    <string name="ml_wa_blinders_needs_service">Attiva il servizio di accessibilità di MinimaLauncher per far funzionare i paraocchi</string>
+    <string name="ml_wa_blinders_blocked">Aggiornamenti e Community sono spenti: torni alle chat</string>
+    <string name="ml_wa_blinders_covered">Nascosto dai paraocchi. Tieni premuto per toglierli per 5 minuti</string>
+    <string name="ml_wa_blinders_paused">Paraocchi tolti per 5 minuti</string>
+    <string name="ml_wa_blinders_loop_off">WhatsApp tornava sempre su una pagina bloccata: paraocchi disattivati</string>
 </resources>
