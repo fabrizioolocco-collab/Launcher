@@ -136,6 +136,9 @@ class Prefs(context: Context) {
     private val DETOX_LOCKOUT_RESET = "DETOX_LOCKOUT_RESET"
     private val ALARM_VIBRATE_SECONDS = "ALARM_VIBRATE_SECONDS"
     private val HOME_DETOX = "HOME_DETOX"
+    private val ESSENTIAL_HOME = "ESSENTIAL_HOME"
+    private val ESSENTIAL_SECONDS = "ESSENTIAL_SECONDS"
+    private val ESSENTIAL_SIGN = "ESSENTIAL_SIGN"
     private val HOME_DETOX_SECONDS = "HOME_DETOX_SECONDS"
     private val HOME_DETOX_LOCKOUT_AFTER = "HOME_DETOX_LOCKOUT_AFTER"
     private val HOME_DETOX_LOCKOUT_MINUTES = "HOME_DETOX_LOCKOUT_MINUTES"
@@ -224,6 +227,20 @@ class Prefs(context: Context) {
     var homeDetox: Boolean
         get() = prefs.getBoolean(HOME_DETOX, false)
         set(value) = prefs.edit { putBoolean(HOME_DETOX, value) }
+
+    /** Essential home: only the clock and the dock; a tap shows the whole home for [essentialSeconds]. */
+    var essentialHome: Boolean
+        get() = prefs.getBoolean(ESSENTIAL_HOME, false)
+        set(value) = prefs.edit { putBoolean(ESSENTIAL_HOME, value) }
+
+    var essentialSeconds: Int
+        get() = prefs.getInt(ESSENTIAL_SECONDS, 8)
+        set(value) = prefs.edit { putInt(ESSENTIAL_SECONDS, value) }
+
+    /** How essential home says other apps have notifications: [ESSENTIAL_SIGN_DOTS] or [ESSENTIAL_SIGN_COUNT]. */
+    var essentialSign: Int
+        get() = prefs.getInt(ESSENTIAL_SIGN, ESSENTIAL_SIGN_DOTS)
+        set(value) = prefs.edit { putInt(ESSENTIAL_SIGN, value) }
 
     var homeDetoxSeconds: Int
         get() = prefs.getInt(HOME_DETOX_SECONDS, 30)
@@ -931,6 +948,10 @@ class Prefs(context: Context) {
     fun setAppRenameLabel(appPackage: String, renameLabel: String) = prefs.edit { putString(appPackage, renameLabel) }
 
     companion object {
+        /** Essential home: one dot per app with notifications. */
+        const val ESSENTIAL_SIGN_DOTS = 0
+        /** Essential home: the number of notifications. */
+        const val ESSENTIAL_SIGN_COUNT = 1
         /** Detox home on the search page: the countdown goes on from home's. */
         const val HOME_DETOX_SEARCH_SHARED = 0
         /** Detox home on the search page: the countdown waits. */

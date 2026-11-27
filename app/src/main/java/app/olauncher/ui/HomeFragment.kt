@@ -85,6 +85,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     private lateinit var widgets: HomeWidgetsController
     private lateinit var detox: DetoxController
     private lateinit var homeDetox: HomeDetoxBar
+    private lateinit var essential: EssentialHome
     /** With detox home on, the ring and its count take the place of the Detox button's icon. */
     private val detoxRingListener: () -> Unit = { updateDetoxButton() }
 
@@ -175,7 +176,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 onImagePicked = callback
                 imagePicker.launch(PickFiles.Request(types = arrayOf("image/*")))
             },
-            onChanged = { news.render() },
+            onChanged = {
+                news.render()
+                if (::essential.isInitialized) essential.setNotifications(NotificationRepository.current(), dock.appKeys())
+            },
         )
         viewModel.homeApps.value?.let { dock.setApps(it) }
         // A recording started or ended (from here with a double tap, or in the recorder): its icon says so
@@ -273,6 +277,16 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             keepScreen = { viewModel.keepCurrentScreen = it },
         )
 
+        essential = EssentialHome(
+            context = requireContext(),
+            root = binding.mainLayout,
+            homeColumn = binding.homeColumn,
+            dock = binding.dock,
+            hidden = { listOf(binding.widgetsLayout, binding.widgetsFree, binding.searchRow, binding.emptyHomeHint) },
+            prefs = prefs,
+            isSearching = { search.isActive },
+        )
+
         homeDetox = HomeDetoxBar(
             root = binding.mainLayout,
             prefs = prefs,
@@ -309,6 +323,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
     override fun onStop() {
         search.onHomeStopped()
+        essential.onHomeStopped()
         HomeWidgetsController.stopListening(requireContext())
         super.onStop()
     }
@@ -322,6 +337,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         detox.onResume()
         homeDetox.onResume()
         search.onHomeResumed()
+        essential.onHomeResumed()
         if (!prefs.welcomeShown) {
             prefs.welcomeShown = true
             detox.showPermissions()
@@ -427,6 +443,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         NotificationRepository.state.observe(viewLifecycleOwner) {
             widgets.setNotifications(it)
             dock.setNotifications(it)
+            essential.setNotifications(it, dock.appKeys())
             news.setNotifications(it)
             detoxPage.setNotifications(it)
         }
@@ -916,6 +933,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         widgets.release()
         detox.release()
         homeDetox.release()
+        essential.release()
         app.olauncher.ui.widgets.CalendarWidgetView.onTouched = null
         app.olauncher.ui.widgets.DetoxRingView.State.listeners -= detoxRingListener
         _binding = null

@@ -1299,4 +1299,18 @@
     <string name="ml_yt_links_open">Apri impostazioni</string>
     <string name="ml_yt_links_help">Android lascia aprire i link di YouTube a un\'app solo se glielo permetti tu.\n\n1. Nella pagina che si apre accendi \"Apri link supportati\".\n2. Tocca \"Aggiungi link\" e spunta tutti quelli di YouTube.\n\nSe hai l\'app di YouTube, nelle sue impostazioni spegni \"Apri link supportati\", altrimenti i link restano suoi.\n\nI link si aprono in Tube quando li tocchi in una pagina, in una ricerca Google o in un messaggio; un indirizzo scritto a mano nella barra del browser resta nel browser. Puoi sempre condividere un link con Tube dal menu Condividi.</string>
     <string name="ml_yt_links_now">Adesso:</string>
+    <string name="ml_essential_home">Home essenziale</string>
+    <string name="ml_essential_home_hint">La home mostra solo ora e dock. Tocca in un altro punto per vedere la home completa per qualche secondo.</string>
+    <string name="ml_essential_seconds">Home essenziale: secondi di home completa</string>
+    <string name="ml_essential_sign">Home essenziale: altre notifiche</string>
+    <string name="ml_essential_sign_dots">Puntini</string>
+    <string name="ml_essential_sign_count">Numero</string>
+    <plurals name="ml_essential_apps">
+        <item quantity="one">%1$d altra app ha notifiche</item>
+        <item quantity="other">%1$d altre app hanno notifiche</item>
+    </plurals>
+    <plurals name="ml_essential_count">
+        <item quantity="one">notifica da altre app</item>
+        <item quantity="other">notifiche da altre app</item>
+    </plurals>
 </resources>
