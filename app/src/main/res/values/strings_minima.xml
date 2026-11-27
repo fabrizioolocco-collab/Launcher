@@ -1302,9 +1302,9 @@
     <string name="ml_yt_links_open">Open settings</string>
     <string name="ml_yt_links_help">Android lets an app open YouTube links only if you allow it.\n\n1. On the page that opens switch on \"Open supported links\".\n2. Tap \"Add links\" and tick every YouTube one.\n\nIf you have the YouTube app, switch off \"Open supported links\" in its settings, or links stay its own.\n\nLinks open in Tube when you tap them in a page, a Google search or a message; an address typed in the bar of the browser stays in the browser. You can always share a link to Tube from the Share menu.</string>
     <string name="ml_yt_links_now">Now:</string>
-    <string name="ml_essential_home">Essential home</string>
-    <string name="ml_essential_home_hint">Home shows only the clock and the dock. Tap anywhere else to see the whole home for a few seconds.</string>
-    <string name="ml_essential_seconds">Essential home: seconds of whole home</string>
+    <string name="ml_essential_home">Home view</string>
+    <string name="ml_essential_home_hint">Home shows the clock and your main apps. The key All apps opens the others.</string>
+    <string name="ml_essential_seconds">Simple view: seconds of the page of apps</string>
     <string name="ml_essential_sign">Essential home: other notifications</string>
     <string name="ml_essential_sign_dots">Dots</string>
     <string name="ml_essential_sign_count">Number</string>
@@ -1316,11 +1316,16 @@
         <item quantity="one">notification from other apps</item>
         <item quantity="other">notifications from other apps</item>
     </plurals>
-    <string name="ml_essential_data">Essential home: shown under the clock</string>
+    <string name="ml_essential_data">Simple view: shown under the clock</string>
     <string name="ml_essential_data_date">Date</string>
     <string name="ml_essential_data_battery">Battery</string>
     <string name="ml_essential_data_alarm">Next alarm</string>
     <string name="ml_essential_data_weather">Weather</string>
     <string name="ml_essential_data_event">Next appointment</string>
     <string name="ml_essential_tomorrow">Tomorrow</string>
+    <string name="ml_view_full">Full</string>
+    <string name="ml_view_simple">Simple</string>
+    <string name="ml_essential_all">All apps</string>
+    <string name="ml_essential_back">Back</string>
+    <string name="ml_essential_notified">With notifications</string>
 </resources>

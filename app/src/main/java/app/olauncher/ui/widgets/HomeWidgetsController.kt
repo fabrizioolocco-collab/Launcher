@@ -431,6 +431,49 @@ class HomeWidgetsController(
         updateBadges()
     }
 
+    /** An icon of essential home's page of apps: what it shows and what a tap does. */
+    class PageItem(val label: String, val count: Int, val icon: suspend (Int) -> android.graphics.Bitmap?, val open: () -> Unit)
+
+    /**
+     * The grid's apps and folders in their order, then the apps that are nowhere on home but have
+     * notifications ([exclude]: the keys of the dock's apps, which have their own keys there).
+     */
+    fun pageItems(exclude: Set<String>): List<PageItem> {
+        val context = activity.applicationContext
+        val iconPack = prefs.iconPack
+        fun appItem(app: AppModel.App) = PageItem(
+            app.appLabel, notificationCount(app),
+            { size -> withContext(Dispatchers.IO) { IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size) } },
+        ) {
+            if (notificationCount(app) > 0) NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) }
+            else onLaunchApp(app)
+        }
+        val items = mutableListOf<PageItem>()
+        widgets.filter { it.isApp && it.row >= 0 }.sortedWith(compareBy({ it.row }, { it.col })).forEach { item ->
+            if (!DetoxManager.isAllowed(activity, item.packageName.orEmpty())) return@forEach
+            val folder = folderFor(item)
+            if (folder != null) {
+                val inside = folderApps(folder)
+                val user = android.os.Process.myUserHandle()
+                items += PageItem(folder.name, inside.sumOf { notificationCount(it) }, { size ->
+                    withContext(Dispatchers.IO) {
+                        if (CustomIcons.hasCustom(context, folder.packageName, null, user))
+                            IconPackManager.getIcon(context, folder.packageName, null, user, iconPack, size)
+                        else AppFolders.previewIcon(size, inside) { app, s ->
+                            IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, s)
+                        }
+                    }
+                }) { openFolder(item) }
+            } else findApp(item)?.let { items += appItem(it) }
+        }
+        val onHome = appKeys() + exclude
+        apps.filter { app ->
+            notificationCount(app) > 0 && NotificationRepository.key(app.appPackage, app.user.toString()) !in onHome &&
+                DetoxManager.isAllowed(activity, app.appPackage)
+        }.distinctBy { NotificationRepository.key(it.appPackage, it.user.toString()) }.forEach { items += appItem(it) }
+        return items
+    }
+
     private fun findApp(item: HomeWidget): AppModel.App? =
         if (AppFolders.isAppFolder(item.packageName)) folderFor(item)?.let { AppFolders.toApp(it) }
         else apps.firstOrNull { it.appPackage == item.packageName && it.user.toString() == item.user && it.activityClassName == item.activityClassName }

@@ -178,7 +178,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             },
             onChanged = {
                 news.render()
-                if (::essential.isInitialized) essential.setNotifications(NotificationRepository.current(), dock.appKeys())
+                if (::essential.isInitialized) essential.setNotifications(dock.appKeys())
             },
         )
         viewModel.homeApps.value?.let { dock.setApps(it) }
@@ -250,7 +250,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         )
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, object : androidx.activity.OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (search.isActive) search.close()
+                if (search.isActive) search.close() else essential.onBack()
             }
         })
         // Keep the search bar above the keyboard
@@ -282,13 +282,16 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             root = binding.mainLayout,
             homeColumn = binding.homeColumn,
             dock = binding.dock,
-            hidden = { listOf(binding.headerLayout, binding.widgetsLayout, binding.widgetsFree, binding.searchRow, binding.emptyHomeHint) },
+            searchRow = binding.searchRow,
+            hidden = { listOf(binding.headerLayout, binding.widgetsLayout, binding.widgetsFree, binding.emptyHomeHint) },
             prefs = prefs,
             isSearching = { search.isActive },
             scope = uiScope,
-            onRest = { rest ->
-                dock.keys = rest
-                binding.searchRow.isVisible = !rest
+            items = { exclude -> widgets.pageItems(exclude) },
+            onState = { state ->
+                dock.keys = state == EssentialHome.REST
+                binding.dockSlot.isVisible = state != EssentialHome.PAGE
+                binding.searchRow.isVisible = state != EssentialHome.REST
             },
         )
 
@@ -444,12 +447,13 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             dock.setApps(it)
             news.setApps(it)
             detoxPage.setApps(it)
+            essential.setNotifications(dock.appKeys())
         }
         NotificationRepository.state.observe(viewLifecycleOwner) {
             widgets.setNotifications(it)
             dock.setNotifications(it)
-            essential.setNotifications(it, dock.appKeys())
             news.setNotifications(it)
+            essential.setNotifications(dock.appKeys())
             detoxPage.setNotifications(it)
         }
         DetoxManager.state.observe(viewLifecycleOwner) {

@@ -14,23 +14,29 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ImageView
+import android.widget.ScrollView
 import android.widget.TextView
+import android.util.TypedValue
 import app.olauncher.R
 import app.olauncher.data.Prefs
-import app.olauncher.helper.AppNotifications
+import app.olauncher.helper.IconPackManager
+import app.olauncher.helper.Skin
+import app.olauncher.ui.widgets.HomeWidgetsController
+import kotlinx.coroutines.launch
 import app.olauncher.helper.dpToPx
 import app.olauncher.helper.expandNotificationDrawer
 import app.olauncher.helper.getColorFromAttr
 import kotlin.math.abs
 
 /**
- * Essential home: at rest home shows only the clock, the dock and a sign that other apps have
- * notifications (dots or a number); the grid, the widgets and the search bar are hidden. A tap
- * anywhere off the dock shows the whole home for [Prefs.essentialSeconds], then it hides again;
- * every touch on it starts the time again. Opening an app or coming back to home hides it at once.
+ * The simple view of home: at rest only a clock with a few data under it, the dock as big keys and
+ * a key "All apps", red when one of the other apps has notifications. That key opens a page with
+ * the apps of the home grid (those with notifications first, in red) and the search bar; the page
+ * goes by itself after [Prefs.essentialSeconds] without a touch, or with Back.
  *
- * A transparent layer above home does the work: at rest it takes every touch except those on the
- * dock; while the whole home shows it only notices touches and lets them through.
+ * A layer above home does the work: home's own grid and widgets stay hidden under it, and it lets
+ * through only the touches on the dock (at rest) or on the search row (on the page).
  */
 class EssentialHome(
     private val context: Context,
@@ -38,13 +44,16 @@ class EssentialHome(
     /** Above it, the layer sits; under it, everything it covers. */
     private val homeColumn: View,
     private val dock: View,
-    /** Hidden at rest: the grid, the free widgets, the search row. */
+    private val searchRow: View,
+    /** Hidden while the simple view is on: the header, the grid, the free widgets. */
     private val hidden: () -> List<View>,
     private val prefs: Prefs,
     private val isSearching: () -> Boolean,
     private val scope: kotlinx.coroutines.CoroutineScope,
-    /** At rest (true) or the whole home (false): the dock turns into big keys, the search row goes. */
-    private val onRest: (Boolean) -> Unit,
+    /** The apps of the page (the dock's are left out by the keys given). */
+    private val items: (Set<String>) -> List<HomeWidgetsController.PageItem>,
+    /** [OFF], [REST] or [PAGE]: the dock as keys or gone, the search row gone or back. */
+    private val onState: (Int) -> Unit,
 ) {
     private val face = EssentialFace(context, prefs, scope)
     private val minute = object : Runnable {
@@ -54,49 +63,69 @@ class EssentialHome(
         }
     }
     private val handler = Handler(Looper.getMainLooper())
+    /** The page of apps is open. */
     private var full = false
     private var deadline = 0L
-    private var notifications: Map<String, AppNotifications> = emptyMap()
     private var dockKeys: Set<String> = emptySet()
+    private var searchGrace = 0L
+    private var wasSearching = false
+    private val skinned = Skin.isOn(context)
+    private val ink = if (skinned) Skin.palette(context).text else context.getColorFromAttr(R.attr.primaryColor)
+    private val red = NotificationBadge.NOTIFICATION_COLOR
 
-    private val sign = LinearLayout(context).apply {
-        orientation = LinearLayout.VERTICAL
-        gravity = Gravity.CENTER_HORIZONTAL
-    }
-    private val signMark = LinearLayout(context).apply { gravity = Gravity.CENTER }
-    private val signText = TextView(context, null, 0, R.style.TextSmall).apply {
+    private val allButton = TextView(context).apply {
         gravity = Gravity.CENTER
-        alpha = 0.6f
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        setAllCaps(true)
+        letterSpacing = 0.12f
+        Skin.bodyFace(context)?.let { typeface = it }
+        foreground = UiKit.ripple(context)
+        setOnClickListener { showPage() }
+    }
+
+    private val pageList = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 12.dpToPx())
+    }
+    private val page = ScrollView(context).apply {
+        isVerticalScrollBarEnabled = false
+        overScrollMode = View.OVER_SCROLL_NEVER
+        isFillViewport = true
+        visibility = View.GONE
+        addView(pageList, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     private val layer = object : FrameLayout(context) {
         private var downX = 0f
         private var downY = 0f
-        private var onDock = false
         private val slop = ViewConfiguration.get(context).scaledTouchSlop
+
+        override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+            if (full && ev.actionMasked == MotionEvent.ACTION_DOWN) {
+                restartTime()
+                // The search is about to open: its results take the page's place at once
+                if (inView(searchRow, ev.rawX, ev.rawY)) {
+                    searchGrace = SystemClock.elapsedRealtime() + 700
+                    page.visibility = View.INVISIBLE
+                }
+            }
+            return super.dispatchTouchEvent(ev)
+        }
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(ev: MotionEvent): Boolean {
             if (!active()) return false
-            if (full) {
-                // Only noticed: the touch goes on to the home under it
-                if (ev.actionMasked == MotionEvent.ACTION_DOWN) restartTime()
-                return false
-            }
+            if (full) return page.visibility == View.VISIBLE && !inView(searchRow, ev.rawX, ev.rawY)
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    onDock = inDock(ev.rawX, ev.rawY)
-                    if (onDock) return false
+                    if (inView(dock, ev.rawX, ev.rawY)) return false
                     downX = ev.x
                     downY = ev.y
                 }
                 MotionEvent.ACTION_UP -> {
                     val dx = ev.x - downX
                     val dy = ev.y - downY
-                    when {
-                        abs(dx) < slop && abs(dy) < slop -> showFull()
-                        dy > slop * 4 && abs(dy) > abs(dx) && !prefs.swipeDownOff -> expandNotificationDrawer(context)
-                    }
+                    if (dy > slop * 4 && abs(dy) > abs(dx) && !prefs.swipeDownOff) expandNotificationDrawer(context)
                 }
             }
             return true
@@ -104,29 +133,40 @@ class EssentialHome(
 
         override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
             super.onLayout(changed, l, t, r, b)
-            placeSign()
+            place()
         }
     }
 
     private val ticker = object : Runnable {
         override fun run() {
             if (!full) return
-            // Searching or a menu open on home: the time waits
-            if (isSearching() || !root.hasWindowFocus()) restartTime()
-            if (SystemClock.elapsedRealtime() >= deadline) hideFull(animate = true)
-            else handler.postDelayed(this, 250)
+            val searching = isSearching()
+            val now = SystemClock.elapsedRealtime()
+            // Searching or a menu open on home: the time waits, and the search has the screen
+            if (searching || !root.hasWindowFocus()) restartTime()
+            if (searching || now < searchGrace) page.visibility = View.INVISIBLE
+            else if (page.visibility != View.VISIBLE) {
+                // The search closed and put home's views back: the page's own again
+                onState(PAGE)
+                page.visibility = View.VISIBLE
+                place()
+            }
+            wasSearching = searching
+            if (now >= deadline) hidePage(animate = true)
+            else handler.postDelayed(this, 200)
         }
     }
 
     init {
-        sign.addView(signMark)
-        sign.addView(signText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = 6.dpToPx()
-        })
         layer.addView(face.view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         face.onTap = { if (calendarOpen) closeCalendar(animate = true) else openCalendar() }
-        layer.addView(sign, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        dock.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeSign() }
+        layer.addView(allButton, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, BUTTON_DP.dpToPx()).apply {
+            marginStart = 16.dpToPx()
+            marginEnd = 16.dpToPx()
+        })
+        layer.addView(page, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        dock.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
+        searchRow.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> place() }
         root.addView(layer, root.indexOfChild(homeColumn) + 1,
             FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         apply()
@@ -138,24 +178,24 @@ class EssentialHome(
     fun apply() {
         handler.removeCallbacks(ticker)
         full = false
+        page.visibility = View.GONE
         closeCalendar(animate = false)
         if (active()) {
             layer.visibility = View.VISIBLE
             face.view.animate().cancel()
             face.view.visibility = View.VISIBLE
             face.view.alpha = 1f
-            setHidden(true, animate = false)
-            onRest(true)
-            renderSign()
+            setHidden(true)
+            onState(REST)
+            renderButton()
         } else {
             layer.visibility = View.GONE
-            sign.visibility = View.GONE
-            setHidden(false, animate = false)
-            onRest(false)
+            setHidden(false)
+            onState(OFF)
         }
     }
 
-    /** Back from an app (hidden while home is out of sight, so it doesn't flash on return). */
+    /** Back from an app (at rest while home is out of sight, so the page doesn't flash on return). */
     fun onHomeStopped() {
         apply()
         face.stop()
@@ -171,12 +211,19 @@ class EssentialHome(
         }
     }
 
+    /** Back closes the page of apps; false when there was none to close. */
+    fun onBack(): Boolean {
+        if (!full) return false
+        hidePage(animate = true)
+        return true
+    }
+
     fun release() {
         handler.removeCallbacks(ticker)
         handler.removeCallbacks(minute)
         face.stop()
-        setHidden(false, animate = false)
-        onRest(false)
+        setHidden(false)
+        onState(OFF)
         calendar?.let { layer.removeView(it) }
         calendar = null
         root.removeView(layer)
@@ -208,7 +255,7 @@ class EssentialHome(
         calendarOpen = true
         view.visibility = View.VISIBLE
         view.alpha = 0f
-        placeSign()
+        place()
         view.animate().alpha(1f).setDuration(200).start()
     }
 
@@ -221,123 +268,220 @@ class EssentialHome(
             if (!calendarOpen) view.visibility = View.GONE
         }.start()
         else view.visibility = View.GONE
-        placeSign()
+        place()
     }
 
-    fun setNotifications(map: Map<String, AppNotifications>, dockAppKeys: Set<String>) {
-        notifications = map
+    /** Notifications or the dock's apps changed. */
+    fun setNotifications(dockAppKeys: Set<String>) {
         dockKeys = dockAppKeys
-        if (active()) renderSign()
+        if (!active()) return
+        renderButton()
+        if (full) renderPage()
     }
 
-    private fun showFull() {
+    private fun showPage() {
         full = true
-        closeCalendar(animate = true)
-        sign.animate().alpha(0f).setDuration(200).start()
-        // Out of the way too: its tags must not take the taps meant for the home under them
-        face.view.animate().alpha(0f).setDuration(200).withEndAction { if (full) face.view.visibility = View.INVISIBLE }.start()
-        onRest(false)
-        setHidden(false, animate = true)
+        closeCalendar(animate = false)
+        face.view.visibility = View.INVISIBLE
+        allButton.visibility = View.GONE
+        onState(PAGE)
+        renderPage()
+        page.scrollTo(0, 0)
+        page.alpha = 0f
+        page.visibility = View.VISIBLE
+        page.animate().alpha(1f).setDuration(180).start()
         restartTime()
+        place()
         handler.removeCallbacks(ticker)
         handler.post(ticker)
     }
 
-    private fun hideFull(animate: Boolean) {
+    private fun hidePage(animate: Boolean) {
         full = false
         handler.removeCallbacks(ticker)
-        setHidden(true, animate)
-        onRest(true)
+        page.animate().cancel()
+        page.visibility = View.GONE
+        onState(REST)
         face.view.animate().cancel()
         face.view.visibility = View.VISIBLE
-        if (animate) face.view.animate().alpha(1f).setDuration(250).start() else face.view.alpha = 1f
-        renderSign()
+        face.view.alpha = if (animate) 0f else 1f
+        if (animate) face.view.animate().alpha(1f).setDuration(200).start()
+        renderButton()
     }
 
     private fun restartTime() {
         deadline = SystemClock.elapsedRealtime() + prefs.essentialSeconds * 1000L
     }
 
-    private fun setHidden(hide: Boolean, animate: Boolean) {
-        val target = if (hide) 0f else 1f
+    private fun setHidden(hide: Boolean) {
         hidden().forEach { view ->
             view.animate().cancel()
-            if (animate) view.animate().alpha(target).setDuration(250).start()
-            else view.alpha = target
+            view.alpha = if (hide) 0f else 1f
         }
     }
 
-    private fun inDock(x: Float, y: Float): Boolean {
-        if (dock.visibility != View.VISIBLE) return false
-        val pos = IntArray(2).also { dock.getLocationOnScreen(it) }
-        return Rect(pos[0], pos[1], pos[0] + dock.width, pos[1] + dock.height).contains(x.toInt(), y.toInt())
+    private fun inView(view: View, x: Float, y: Float): Boolean {
+        if (view.visibility != View.VISIBLE || view.height == 0) return false
+        val pos = IntArray(2).also { view.getLocationOnScreen(it) }
+        return Rect(pos[0], pos[1], pos[0] + view.width, pos[1] + view.height).contains(x.toInt(), y.toInt())
     }
 
-    // ---------------------------------------------------------------- the sign
+    private fun panel(notified: Boolean, cut: Int) = if (skinned) Skin.panel(
+        context, if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor), if (notified) red else null, cut, 16,
+    ) else GradientDrawable().apply {
+        cornerRadius = 16.dpToPx().toFloat()
+        setColor(if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor))
+        if (notified) setStroke(1.dpToPx(), red)
+    }
 
-    private fun renderSign() {
-        val others = notifications.filter { (key, n) -> key !in dockKeys && n.count > 0 }
-        val apps = others.size
-        val total = others.values.sumOf { it.count }
-        signMark.removeAllViews()
-        if (apps == 0 || full) {
-            sign.visibility = View.GONE
+    // ---------------------------------------------------------------- the key "All apps"
+
+    private fun renderButton() {
+        if (full) return
+        val count = try { items(dockKeys).sumOf { it.count } } catch (e: Exception) { 0 }
+        allButton.text = context.getString(R.string.ml_essential_all) + if (count > 0) "   $count" else ""
+        allButton.setTextColor(if (count > 0) red else ink)
+        allButton.background = panel(count > 0, 10)
+        allButton.visibility = View.VISIBLE
+        place()
+    }
+
+    // ---------------------------------------------------------------- the page of apps
+
+    private fun label(text: String, color: Int) = TextView(context).apply {
+        this.text = text
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+        setAllCaps(true)
+        letterSpacing = 0.14f
+        setTextColor(color)
+        Skin.bodyFace(context)?.let { typeface = it }
+        setPadding(2.dpToPx(), 14.dpToPx(), 0, 8.dpToPx())
+    }
+
+    private fun renderPage() {
+        pageList.removeAllViews()
+        pageList.addView(TextView(context).apply {
+            text = "‹  " + context.getString(R.string.ml_essential_back)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setAllCaps(true)
+            letterSpacing = 0.08f
+            setTextColor(ink)
+            alpha = 0.7f
+            Skin.bodyFace(context)?.let { typeface = it }
+            setPadding(2.dpToPx(), 10.dpToPx(), 24.dpToPx(), 6.dpToPx())
+            setOnClickListener { hidePage(animate = true) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val all = try { items(dockKeys) } catch (e: Exception) { emptyList() }
+        val notified = all.filter { it.count > 0 }
+        if (notified.isNotEmpty()) {
+            pageList.addView(label(context.getString(R.string.ml_essential_notified), red))
+            addGrid(notified, NOTIFIED_COLUMNS, 54) { wideTile(it) }
+        }
+        val others = all.filter { it.count == 0 }
+        if (others.isNotEmpty()) {
+            pageList.addView(label(context.getString(R.string.ml_essential_all), (ink and 0x00FFFFFF) or 0x99000000.toInt()))
+            addGrid(others, COLUMNS, 82) { tile(it) }
+        }
+    }
+
+    private fun addGrid(list: List<HomeWidgetsController.PageItem>, columns: Int, heightDp: Int, make: (HomeWidgetsController.PageItem) -> View) {
+        val gap = 7.dpToPx()
+        list.chunked(columns).forEachIndexed { r, line ->
+            val row = LinearLayout(context)
+            for (c in 0 until columns) {
+                val lp = LinearLayout.LayoutParams(0, heightDp.dpToPx(), 1f).apply {
+                    marginStart = if (c == 0) 0 else gap / 2
+                    marginEnd = if (c == columns - 1) 0 else gap / 2
+                }
+                row.addView(line.getOrNull(c)?.let(make) ?: View(context), lp)
+            }
+            pageList.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                if (r > 0) topMargin = gap
+            })
+        }
+    }
+
+    private fun icon(item: HomeWidgetsController.PageItem, sizeDp: Int) = ImageView(context).apply {
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        if (skinned && Skin.palette(context).iconTint != 0)
+            colorFilter = android.graphics.PorterDuffColorFilter(Skin.palette(context).text, android.graphics.PorterDuff.Mode.MULTIPLY)
+        val size = sizeDp.dpToPx()
+        scope.launch {
+            val bitmap = try { item.icon(size) } catch (e: Exception) { null } ?: return@launch
+            setImageDrawable(IconPackManager.toDrawable(context, bitmap, size))
+        }
+    }
+
+    private fun name(item: HomeWidgetsController.PageItem, sp: Float) = TextView(context).apply {
+        text = item.label
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
+        setAllCaps(true)
+        letterSpacing = 0.06f
+        setTextColor(ink)
+        maxLines = 1
+        ellipsize = android.text.TextUtils.TruncateAt.END
+        Skin.bodyFace(context)?.let { typeface = it }
+    }
+
+    private fun LinearLayout.opens(item: HomeWidgetsController.PageItem) {
+        foreground = UiKit.ripple(context)
+        contentDescription = item.label
+        setOnClickListener { item.open() }
+    }
+
+    /** An app without notifications: its icon over its name. */
+    private fun tile(item: HomeWidgetsController.PageItem) = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        background = panel(false, 9)
+        setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
+        addView(icon(item, 28), LinearLayout.LayoutParams(28.dpToPx(), 28.dpToPx()))
+        addView(name(item, 11f).apply { gravity = Gravity.CENTER; alpha = 0.85f },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 7.dpToPx() })
+        opens(item)
+    }
+
+    /** An app with notifications: red, its icon, its name and how many. */
+    private fun wideTile(item: HomeWidgetsController.PageItem) = LinearLayout(context).apply {
+        gravity = Gravity.CENTER_VERTICAL
+        background = panel(true, 9)
+        setPadding(10.dpToPx(), 0, 10.dpToPx(), 0)
+        addView(icon(item, 24), LinearLayout.LayoutParams(24.dpToPx(), 24.dpToPx()))
+        addView(name(item, 13f), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = 9.dpToPx() })
+        addView(TextView(context).apply {
+            text = if (item.count > 99) "99+" else item.count.toString()
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setTextColor(red)
+            setTypeface(Skin.bodyFace(context) ?: typeface, android.graphics.Typeface.BOLD)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 6.dpToPx() })
+        opens(item)
+    }
+
+    // ---------------------------------------------------------------- places
+
+    /** The clock at the top, the key just above the dock, the calendar between them, the page down to the search row. */
+    private fun place() {
+        if (layer.height == 0) return
+        val faceTop = layer.height * 0.04f
+        face.view.translationY = faceTop
+        val layerTop = IntArray(2).also { layer.getLocationInWindow(it) }[1]
+        fun topOf(view: View, fallback: Int) =
+            if (view.visibility == View.VISIBLE && view.height > 0) IntArray(2).also { view.getLocationInWindow(it) }[1] - layerTop else fallback
+        if (full) {
+            val height = topOf(searchRow, layer.height - 80.dpToPx()).coerceAtLeast(0)
+            val lp = page.layoutParams
+            if (lp.height != height) {
+                lp.height = height
+                page.post { page.layoutParams = lp }
+            }
             return
         }
-        val color = context.getColorFromAttr(R.attr.primaryColor)
-        if (prefs.essentialSign == Prefs.ESSENTIAL_SIGN_COUNT) {
-            signMark.addView(TextView(context, null, 0, R.style.TextDefault).apply {
-                text = total.toString()
-                setTextColor(color)
-                setPadding(14.dpToPx(), 2.dpToPx(), 14.dpToPx(), 2.dpToPx())
-                background = GradientDrawable().apply {
-                    cornerRadius = 100f
-                    setStroke(1.dpToPx(), (color and 0x00FFFFFF) or 0x66000000)
-                }
-            })
-            signText.text = context.resources.getQuantityString(R.plurals.ml_essential_count, total, total)
-        } else {
-            val size = 8.dpToPx()
-            repeat(apps.coerceAtMost(MAX_DOTS)) {
-                signMark.addView(View(context).apply {
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(color)
-                    }
-                    alpha = 0.85f
-                }, LinearLayout.LayoutParams(size, size).apply { marginStart = 3.dpToPx(); marginEnd = 3.dpToPx() })
-            }
-            signText.text = context.resources.getQuantityString(R.plurals.ml_essential_apps, apps, apps)
-        }
-        sign.visibility = View.VISIBLE
-        sign.alpha = 1f
-        placeSign()
-    }
-
-    /** Just above the dock (or the bottom of the screen without one). */
-    private fun placeSign() {
-        if (layer.height == 0) return
-        // The clock a little above the upper third, like a watch face; higher with the calendar open
-        val faceTop = layer.height * (if (calendarOpen) 0.04f else 0.12f)
-        face.view.translationY = faceTop
-        val layerPos = IntArray(2).also { layer.getLocationInWindow(it) }
-        val dockPos = IntArray(2).also { dock.getLocationInWindow(it) }
-        val bottom = if (dock.visibility == View.VISIBLE && dock.height > 0) dockPos[1] - layerPos[1]
-        else layer.height - 96.dpToPx()
-        var free = bottom.toFloat()
-        if (sign.visibility == View.VISIBLE) {
-            sign.measure(
-                View.MeasureSpec.makeMeasureSpec(layer.width, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-            )
-            sign.translationY = (bottom - sign.measuredHeight - 20.dpToPx()).toFloat().coerceAtLeast(0f)
-            free = sign.translationY
-        }
+        val buttonTop = (topOf(dock, layer.height - 96.dpToPx()) - BUTTON_DP.dpToPx() - 4.dpToPx()).toFloat().coerceAtLeast(0f)
+        allButton.translationY = buttonTop
         val cal = calendar ?: return
         if (!calendarOpen) return
-        // Between the face and the sign (or the dock)
         val top = faceTop + face.view.height + 14.dpToPx()
-        val height = (free - 12.dpToPx() - top).toInt().coerceAtLeast(MIN_CALENDAR_DP.dpToPx())
+        val height = (buttonTop - 12.dpToPx() - top).toInt().coerceAtLeast(MIN_CALENDAR_DP.dpToPx())
         cal.translationY = top
         val lp = cal.layoutParams
         if (lp.height != height) {
@@ -348,7 +492,13 @@ class EssentialHome(
     }
 
     companion object {
-        private const val MAX_DOTS = 12
+        const val OFF = 0
+        const val REST = 1
+        const val PAGE = 2
+        private const val BUTTON_DP = 46
+        private const val COLUMNS = 4
+        private const val NOTIFIED_COLUMNS = 2
+        private const val TILE_RED = 0xFF3A1715.toInt()
         private const val MIN_CALENDAR_DP = 160
         /** Settings of the calendar shown here when home has no calendar widget. */
         private const val OWN_CALENDAR_ID = -7001

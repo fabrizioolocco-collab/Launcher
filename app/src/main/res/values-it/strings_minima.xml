@@ -1299,9 +1299,9 @@
     <string name="ml_yt_links_open">Apri impostazioni</string>
     <string name="ml_yt_links_help">Android lascia aprire i link di YouTube a un\'app solo se glielo permetti tu.\n\n1. Nella pagina che si apre accendi \"Apri link supportati\".\n2. Tocca \"Aggiungi link\" e spunta tutti quelli di YouTube.\n\nSe hai l\'app di YouTube, nelle sue impostazioni spegni \"Apri link supportati\", altrimenti i link restano suoi.\n\nI link si aprono in Tube quando li tocchi in una pagina, in una ricerca Google o in un messaggio; un indirizzo scritto a mano nella barra del browser resta nel browser. Puoi sempre condividere un link con Tube dal menu Condividi.</string>
     <string name="ml_yt_links_now">Adesso:</string>
-    <string name="ml_essential_home">Home essenziale</string>
-    <string name="ml_essential_home_hint">La home mostra solo ora e dock. Tocca in un altro punto per vedere la home completa per qualche secondo.</string>
-    <string name="ml_essential_seconds">Home essenziale: secondi di home completa</string>
+    <string name="ml_essential_home">Vista home</string>
+    <string name="ml_essential_home_hint">La home mostra l\'ora e le app principali. Il tasto Tutte le app apre le altre.</string>
+    <string name="ml_essential_seconds">Vista semplificata: secondi della pagina app</string>
     <string name="ml_essential_sign">Home essenziale: altre notifiche</string>
     <string name="ml_essential_sign_dots">Puntini</string>
     <string name="ml_essential_sign_count">Numero</string>
@@ -1313,11 +1313,16 @@
         <item quantity="one">notifica da altre app</item>
         <item quantity="other">notifiche da altre app</item>
     </plurals>
-    <string name="ml_essential_data">Home essenziale: dati sotto l\'ora</string>
+    <string name="ml_essential_data">Vista semplificata: dati sotto l\'ora</string>
     <string name="ml_essential_data_date">Data</string>
     <string name="ml_essential_data_battery">Batteria</string>
     <string name="ml_essential_data_alarm">Prossima sveglia</string>
     <string name="ml_essential_data_weather">Meteo</string>
     <string name="ml_essential_data_event">Prossimo appuntamento</string>
     <string name="ml_essential_tomorrow">Domani</string>
+    <string name="ml_view_full">Completa</string>
+    <string name="ml_view_simple">Semplificata</string>
+    <string name="ml_essential_all">Tutte le app</string>
+    <string name="ml_essential_back">Indietro</string>
+    <string name="ml_essential_notified">Con notifiche</string>
 </resources>

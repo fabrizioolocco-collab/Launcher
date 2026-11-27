@@ -350,14 +350,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 prefs.essentialSeconds = it
             }
             R.id.essentialData -> showEssentialData()
-            R.id.essentialSign -> requireContext().showMenuDialog(getString(R.string.ml_essential_sign), listOf(
-                Prefs.ESSENTIAL_SIGN_DOTS, Prefs.ESSENTIAL_SIGN_COUNT,
-            ).map { mode ->
-                MenuEntry(essentialSignLabel(mode)) {
-                    prefs.essentialSign = mode
-                    if (_binding != null) populateTextStyle()
-                }
-            })
             R.id.homeDetoxSearch -> requireContext().showMenuDialog(getString(R.string.ml_home_detox_search), listOf(
                 Prefs.HOME_DETOX_SEARCH_SHARED, Prefs.HOME_DETOX_SEARCH_UNLIMITED, Prefs.HOME_DETOX_SEARCH_LIMITED,
             ).map { mode ->
@@ -525,7 +517,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeDetox.setOnClickListener(this)
         binding.essentialHome.setOnClickListener(this)
         binding.essentialSeconds.setOnClickListener(this)
-        binding.essentialSign.setOnClickListener(this)
         binding.essentialData.setOnClickListener(this)
         binding.homeDetoxSeconds.setOnClickListener(this)
         binding.homeDetoxSearch.setOnClickListener(this)
@@ -614,10 +605,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         dialog.setOnDismissListener { if (_binding != null) populateTextStyle() }
     }
 
-    private fun essentialSignLabel(mode: Int) = getString(
-        if (mode == Prefs.ESSENTIAL_SIGN_COUNT) R.string.ml_essential_sign_count else R.string.ml_essential_sign_dots
-    )
-
     private fun populateTextStyle() {
         val ctx = requireContext()
         binding.appFont.text = FontManager.label(ctx, prefs.appFont)
@@ -638,9 +625,8 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.alarmVibrateSeconds.text = getString(R.string.ml_detox_seconds, prefs.alarmVibrateSeconds)
         binding.lockoutApps.text = DetoxManager.lockoutApps(ctx).size.toString()
         binding.homeDetox.setText(if (prefs.homeDetox) R.string.on else R.string.off)
-        binding.essentialHome.setText(if (prefs.essentialHome) R.string.on else R.string.off)
+        binding.essentialHome.setText(if (prefs.essentialHome) R.string.ml_view_simple else R.string.ml_view_full)
         binding.essentialSeconds.text = getString(R.string.ml_detox_seconds, prefs.essentialSeconds)
-        binding.essentialSign.text = essentialSignLabel(prefs.essentialSign)
         binding.essentialData.text = prefs.essentialData.size.toString()
         binding.homeDetoxSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSeconds)
         binding.homeDetoxSearch.text = homeDetoxSearchLabel(prefs.homeDetoxSearch)
