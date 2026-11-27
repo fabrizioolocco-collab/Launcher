@@ -775,7 +775,7 @@ class YouTubeActivity : AppCompatActivity() {
             isVisible = false
             isClickable = true
             isFocusable = true
-            setOnClickListener { startActivity(YtPlayerActivity.resumeIntent(this@YouTubeActivity)) }
+            setOnClickListener { startActivity(YtPlayerActivity.resumeIntent(this@YouTubeActivity, fromList = true)) }
         }
         nowThumb = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP

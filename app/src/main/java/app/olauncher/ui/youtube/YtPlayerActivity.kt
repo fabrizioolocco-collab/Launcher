@@ -284,12 +284,12 @@ class YtPlayerActivity : AppCompatActivity() {
                         requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ->
                         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                     // An episode goes on playing: the bar at the bottom of the list brings back here
-                    YtPlayerService.now?.isEpisode == true -> finish()
+                    YtPlayerService.now?.isEpisode == true -> leave()
                     else -> {
                         // Back leaves the video: it stops. The floating window is for home, or its button
                         closing = true
                         YtPlayerService.savePosition()
-                        finish()
+                        leave()
                     }
                 }
             }
@@ -613,6 +613,17 @@ class YtPlayerActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * The player is a task of its own: finished alone it would give way to home. Opened from Tube's
+     * list, back brings that list to the front again, as it was.
+     */
+    private fun leave() {
+        if (intent?.getBooleanExtra(EXTRA_FROM_LIST, false) == true) {
+            runCatching { startActivity(Intent(this, YouTubeActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+        finish()
+    }
+
     private fun playInBackground() {
         leavingForAudio = true
         updatePip()
@@ -914,6 +925,7 @@ class YtPlayerActivity : AppCompatActivity() {
         private const val EXTRA_AUDIO = "audio"
         private const val EXTRA_IMAGE = "image"
         private const val EXTRA_START = "start"
+        private const val EXTRA_FROM_LIST = "from_list"
 
         /** A video named by a link alone (opened from a browser): its title comes with its streams. */
         fun linkIntent(ctx: Context, videoId: String, startMs: Long): Intent = Intent(ctx, YtPlayerActivity::class.java)
@@ -925,10 +937,13 @@ class YtPlayerActivity : AppCompatActivity() {
         private const val EXTRA_CHANNEL_ID = "channel_id"
 
         /** Back to the video the service is playing (the "now playing" bar of the list). */
-        fun resumeIntent(ctx: Context): Intent = Intent(ctx, YtPlayerActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        fun resumeIntent(ctx: Context, fromList: Boolean = false): Intent = Intent(ctx, YtPlayerActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(EXTRA_FROM_LIST, fromList)
 
         fun intent(ctx: Context, video: YtVideo): Intent = Intent(ctx, YtPlayerActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .putExtra(EXTRA_FROM_LIST, true)
             .putExtra(EXTRA_ID, video.id)
             .putExtra(EXTRA_TITLE, video.title)
             .putExtra(EXTRA_CHANNEL, video.channel)
