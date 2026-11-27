@@ -167,11 +167,17 @@ class DockController(
     }
 
     private fun renderKeys(shown: List<Pair<PinnedApp, AppModel.App>>) {
+        keyViews.clear()
+        container.clipChildren = false
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = false
         }
         shown.chunked(KEY_COLUMNS).forEachIndexed { r, line ->
-            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            val row = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                clipChildren = false
+            }
             for (c in 0 until KEY_COLUMNS) {
                 val lp = LinearLayout.LayoutParams(0, KEY_HEIGHT_DP.dpToPx(), 1f).apply {
                     marginStart = if (c == 0) 0 else (KEY_GAP_DP / 2).dpToPx()
@@ -187,6 +193,8 @@ class DockController(
         container.addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
+    private val keyViews = ArrayList<View>()
+
     /** A big key: the app's icon and name, its notifications as a red tile with their number. */
     private fun key(index: Int, dockApp: PinnedApp, app: AppModel.App) = FrameLayout(context).apply {
         val count = notificationCount(app)
@@ -201,16 +209,25 @@ class DockController(
         }
         foreground = UiKit.ripple(context)
         contentDescription = app.appLabel
-        isClickable = true
-        isLongClickable = true
-        setOnClickListener {
-            if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
-            else onLaunch(app)
-        }
-        setOnLongClickListener {
-            showAppMenu(index, dockApp, app)
-            true
-        }
+        // A tap opens, a long press shows the menu, a key moved after the long press takes another's place
+        tag = dockApp
+        keyViews += this
+        setOnTouchListener(TileDrag(
+            this, { keyViews }, { !prefs.homeLocked },
+            onClick = {
+                if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
+                else onLaunch(app)
+            },
+            onMenu = { showAppMenu(index, dockApp, app) },
+            onDrop = { target ->
+                val from = dock.indexOfFirst { it.samePackageAndUser(dockApp) }
+                val to = (target.tag as? PinnedApp)?.let { t -> dock.indexOfFirst { it.samePackageAndUser(t) } } ?: -1
+                if (from >= 0 && to >= 0 && from != to) {
+                    dock.add(to, dock.removeAt(from))
+                    save()
+                }
+            },
+        ))
         val textColor = if (skinned) Skin.palette(context).text else context.getColorFromAttr(R.attr.primaryColor)
         val icon = ImageView(context).apply {
             scaleType = ImageView.ScaleType.FIT_CENTER

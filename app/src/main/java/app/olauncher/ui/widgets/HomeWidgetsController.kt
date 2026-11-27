@@ -435,8 +435,30 @@ class HomeWidgetsController(
     class PageItem(
         val label: String, val count: Int, val icon: suspend (Int) -> android.graphics.Bitmap?,
         /** The menu of the icon on home; null for an app that is not there. */
-        val menu: (() -> Unit)?, val open: () -> Unit,
+        val menu: (() -> Unit)?,
+        /** What [movePageItem] takes to move the icon on home's grid; null for an app that is not there. */
+        val key: Any?, val open: () -> Unit,
     )
+
+    /**
+     * On the page of apps [from] was dragged onto [to]: it takes its place in the order, and the
+     * icons between them shift by one. The grid's cells that hold icons stay the same ones.
+     */
+    fun movePageItem(from: Any, to: Any) {
+        val icons = widgets.filter { it.isApp && it.row >= 0 }.sortedWith(compareBy({ it.row }, { it.col }))
+        val cells = icons.map { it.col to it.row }
+        val a = icons.indexOfFirst { it === from }
+        val b = icons.indexOfFirst { it === to }
+        if (a < 0 || b < 0 || a == b) return
+        val order = icons.toMutableList()
+        order.add(b, order.removeAt(a))
+        order.forEachIndexed { i, item ->
+            item.col = cells[i].first
+            item.row = cells[i].second
+        }
+        save()
+        render()
+    }
 
     /**
      * The grid's apps and folders in their order, then the apps that are nowhere on home but have
@@ -445,10 +467,10 @@ class HomeWidgetsController(
     fun pageItems(exclude: Set<String>): List<PageItem> {
         val context = activity.applicationContext
         val iconPack = prefs.iconPack
-        fun appItem(app: AppModel.App, menu: (() -> Unit)?) = PageItem(
+        fun appItem(app: AppModel.App, menu: (() -> Unit)?, key: Any? = null) = PageItem(
             app.appLabel, notificationCount(app),
             { size -> withContext(Dispatchers.IO) { IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size) } },
-            menu,
+            menu, key,
         ) {
             if (notificationCount(app) > 0) NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) }
             else onLaunchApp(app)
@@ -468,8 +490,8 @@ class HomeWidgetsController(
                             IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, s)
                         }
                     }
-                }, { showIconMenu(item) }) { openFolder(item) }
-            } else findApp(item)?.let { items += appItem(it) { showIconMenu(item) } }
+                }, { showIconMenu(item) }, item) { openFolder(item) }
+            } else findApp(item)?.let { items += appItem(it, { showIconMenu(item) }, item) }
         }
         val onHome = appKeys() + exclude
         apps.filter { app ->

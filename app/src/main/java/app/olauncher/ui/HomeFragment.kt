@@ -305,6 +305,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                 updateDetoxButton()
             },
             onLongPress = { showHomeMenu(null) },
+            onMove = { from, to -> widgets.movePageItem(from, to) },
         )
 
         homeDetox = HomeDetoxBar(

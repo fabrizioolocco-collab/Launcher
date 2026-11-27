@@ -56,6 +56,8 @@ class EssentialHome(
     private val onState: (Int) -> Unit,
     /** A long press on an empty spot: home's menu (add an app, the settings). */
     private val onLongPress: () -> Unit,
+    /** A tile of the page dragged onto another: the first takes the second's place on home's grid. */
+    private val onMove: (Any, Any) -> Unit,
 ) {
     private val face = EssentialFace(context, prefs, scope)
     private val minute = object : Runnable {
@@ -85,6 +87,8 @@ class EssentialHome(
 
     private val pageList = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
+        clipChildren = false
+        clipToPadding = false
         setPadding(16.dpToPx(), 8.dpToPx(), 16.dpToPx(), 12.dpToPx())
     }
     private val page = ScrollView(context).apply {
@@ -103,11 +107,6 @@ class EssentialHome(
         private var downX = 0f
         private var downY = 0f
         private val slop = ViewConfiguration.get(context).scaledTouchSlop
-        private val longPress = Runnable {
-            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            onLongPress()
-        }
-
         override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
             if (full && ev.actionMasked == MotionEvent.ACTION_DOWN) restartTime()
             return super.dispatchTouchEvent(ev)
@@ -122,17 +121,13 @@ class EssentialHome(
                     if (inView(searchRow, ev.rawX, ev.rawY) || (!full && inView(dock, ev.rawX, ev.rawY))) return false
                     downX = ev.x
                     downY = ev.y
-                    handler.postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
                 }
-                MotionEvent.ACTION_MOVE ->
-                    if (abs(ev.x - downX) > slop || abs(ev.y - downY) > slop) handler.removeCallbacks(longPress)
+                // No long press on the background at rest: a finger often lies there
                 MotionEvent.ACTION_UP -> {
-                    handler.removeCallbacks(longPress)
                     val dx = ev.x - downX
                     val dy = ev.y - downY
                     if (!full && dy > slop * 4 && abs(dy) > abs(dx) && !prefs.swipeDownOff) expandNotificationDrawer(context)
                 }
-                MotionEvent.ACTION_CANCEL -> handler.removeCallbacks(longPress)
             }
             return true
         }
@@ -373,6 +368,7 @@ class EssentialHome(
 
     private fun renderPage() {
         pageList.removeAllViews()
+        gridTiles.clear()
         pageList.addView(TextView(context).apply {
             text = "‹  " + context.getString(R.string.ml_essential_back)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
@@ -400,7 +396,8 @@ class EssentialHome(
     private fun addGrid(list: List<HomeWidgetsController.PageItem>, columns: Int, heightDp: Int, make: (HomeWidgetsController.PageItem) -> View) {
         val gap = 7.dpToPx()
         list.chunked(columns).forEachIndexed { r, line ->
-            val row = LinearLayout(context)
+            // A dragged tile leaves its row
+            val row = LinearLayout(context).apply { clipChildren = false }
             for (c in 0 until columns) {
                 val lp = LinearLayout.LayoutParams(0, heightDp.dpToPx(), 1f).apply {
                     marginStart = if (c == 0) 0 else gap / 2
@@ -436,15 +433,31 @@ class EssentialHome(
         Skin.bodyFace(context)?.let { typeface = it }
     }
 
-    private fun LinearLayout.opens(item: HomeWidgetsController.PageItem) {
+    /** The tiles of the grid "All apps": one dragged onto another takes its place. */
+    private val gridTiles = ArrayList<View>()
+
+    /**
+     * A tap opens; a long press shows the icon's own menu (remove it, its icon…), or home's for an
+     * app that isn't on home; a tile of the grid moved after the long press is dragged to a new place.
+     */
+    private fun LinearLayout.opens(item: HomeWidgetsController.PageItem, inGrid: Boolean) {
         foreground = UiKit.ripple(context)
         contentDescription = item.label
-        setOnClickListener { item.open() }
-        // The icon's own menu (remove it, its icon…), home's for an app that isn't on home
-        setOnLongClickListener {
-            item.menu?.invoke() ?: onLongPress()
-            true
-        }
+        tag = item
+        if (inGrid) gridTiles += this
+        setOnTouchListener(TileDrag(
+            this, { gridTiles }, { inGrid && item.key != null && !prefs.homeLocked },
+            onClick = { item.open() },
+            onMenu = { item.menu?.invoke() ?: onLongPress() },
+            onDrop = { target ->
+                val from = item.key
+                val to = (target.tag as? HomeWidgetsController.PageItem)?.key
+                if (from != null && to != null) {
+                    onMove(from, to)
+                    renderPage()
+                }
+            },
+        ))
     }
 
     /** An app without notifications: its icon over its name. */
@@ -456,7 +469,7 @@ class EssentialHome(
         addView(icon(item, 28), LinearLayout.LayoutParams(28.dpToPx(), 28.dpToPx()))
         addView(name(item, 11f).apply { gravity = Gravity.CENTER; alpha = 0.85f },
             LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 7.dpToPx() })
-        opens(item)
+        opens(item, inGrid = true)
     }
 
     /** An app with notifications: red, its icon, its name and how many. */
@@ -472,7 +485,7 @@ class EssentialHome(
             setTextColor(red)
             setTypeface(Skin.bodyFace(context) ?: typeface, android.graphics.Typeface.BOLD)
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = 6.dpToPx() })
-        opens(item)
+        opens(item, inGrid = false)
     }
 
     // ---------------------------------------------------------------- places
