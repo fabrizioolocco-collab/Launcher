@@ -139,6 +139,7 @@ class Prefs(context: Context) {
     private val ESSENTIAL_HOME = "ESSENTIAL_HOME"
     private val ESSENTIAL_SECONDS = "ESSENTIAL_SECONDS"
     private val ESSENTIAL_SIGN = "ESSENTIAL_SIGN"
+    private val ESSENTIAL_DATA = "ESSENTIAL_DATA"
     private val HOME_DETOX_SECONDS = "HOME_DETOX_SECONDS"
     private val HOME_DETOX_LOCKOUT_AFTER = "HOME_DETOX_LOCKOUT_AFTER"
     private val HOME_DETOX_LOCKOUT_MINUTES = "HOME_DETOX_LOCKOUT_MINUTES"
@@ -241,6 +242,13 @@ class Prefs(context: Context) {
     var essentialSign: Int
         get() = prefs.getInt(ESSENTIAL_SIGN, ESSENTIAL_SIGN_DOTS)
         set(value) = prefs.edit { putInt(ESSENTIAL_SIGN, value) }
+
+    /** What essential home shows under its clock: some of [ESSENTIAL_DATA_ALL]. */
+    var essentialData: Set<String>
+        get() = prefs.getStringSet(ESSENTIAL_DATA, null)?.toSet() ?: ESSENTIAL_DATA_ALL.toSet()
+        set(value) = prefs.edit { putStringSet(ESSENTIAL_DATA, value) }
+
+    fun essentialShows(item: String) = item in essentialData
 
     var homeDetoxSeconds: Int
         get() = prefs.getInt(HOME_DETOX_SECONDS, 30)
@@ -948,6 +956,12 @@ class Prefs(context: Context) {
     fun setAppRenameLabel(appPackage: String, renameLabel: String) = prefs.edit { putString(appPackage, renameLabel) }
 
     companion object {
+        const val ESSENTIAL_DATE = "date"
+        const val ESSENTIAL_BATTERY = "battery"
+        const val ESSENTIAL_ALARM = "alarm"
+        const val ESSENTIAL_WEATHER = "weather"
+        const val ESSENTIAL_EVENT = "event"
+        val ESSENTIAL_DATA_ALL = listOf(ESSENTIAL_DATE, ESSENTIAL_BATTERY, ESSENTIAL_ALARM, ESSENTIAL_WEATHER, ESSENTIAL_EVENT)
         /** Essential home: one dot per app with notifications. */
         const val ESSENTIAL_SIGN_DOTS = 0
         /** Essential home: the number of notifications. */

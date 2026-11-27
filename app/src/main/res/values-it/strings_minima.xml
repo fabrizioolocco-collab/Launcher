@@ -1313,4 +1313,11 @@
         <item quantity="one">notifica da altre app</item>
         <item quantity="other">notifiche da altre app</item>
     </plurals>
+    <string name="ml_essential_data">Home essenziale: dati sotto l\'ora</string>
+    <string name="ml_essential_data_date">Data</string>
+    <string name="ml_essential_data_battery">Batteria</string>
+    <string name="ml_essential_data_alarm">Prossima sveglia</string>
+    <string name="ml_essential_data_weather">Meteo</string>
+    <string name="ml_essential_data_event">Prossimo appuntamento</string>
+    <string name="ml_essential_tomorrow">Domani</string>
 </resources>

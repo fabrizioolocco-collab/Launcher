@@ -42,7 +42,15 @@ class EssentialHome(
     private val hidden: () -> List<View>,
     private val prefs: Prefs,
     private val isSearching: () -> Boolean,
+    scope: kotlinx.coroutines.CoroutineScope,
 ) {
+    private val face = EssentialFace(context, prefs, scope)
+    private val minute = object : Runnable {
+        override fun run() {
+            if (active() && !full) face.refresh()
+            handler.postDelayed(this, 60_000L)
+        }
+    }
     private val handler = Handler(Looper.getMainLooper())
     private var full = false
     private var deadline = 0L
@@ -113,6 +121,7 @@ class EssentialHome(
         sign.addView(signText, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = 6.dpToPx()
         })
+        layer.addView(face.view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         layer.addView(sign, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dock.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeSign() }
         root.addView(layer, root.indexOfChild(homeColumn) + 1,
@@ -128,6 +137,8 @@ class EssentialHome(
         full = false
         if (active()) {
             layer.visibility = View.VISIBLE
+            face.view.animate().cancel()
+            face.view.alpha = 1f
             setHidden(true, animate = false)
             renderSign()
         } else {
@@ -138,11 +149,25 @@ class EssentialHome(
     }
 
     /** Back from an app (hidden while home is out of sight, so it doesn't flash on return). */
-    fun onHomeStopped() = apply()
-    fun onHomeResumed() = apply()
+    fun onHomeStopped() {
+        apply()
+        face.stop()
+        handler.removeCallbacks(minute)
+    }
+
+    fun onHomeResumed() {
+        apply()
+        handler.removeCallbacks(minute)
+        if (active()) {
+            face.start()
+            handler.postDelayed(minute, 60_000L)
+        }
+    }
 
     fun release() {
         handler.removeCallbacks(ticker)
+        handler.removeCallbacks(minute)
+        face.stop()
         setHidden(false, animate = false)
         root.removeView(layer)
     }
@@ -156,6 +181,7 @@ class EssentialHome(
     private fun showFull() {
         full = true
         sign.animate().alpha(0f).setDuration(200).start()
+        face.view.animate().alpha(0f).setDuration(200).start()
         setHidden(false, animate = true)
         restartTime()
         handler.removeCallbacks(ticker)
@@ -166,6 +192,8 @@ class EssentialHome(
         full = false
         handler.removeCallbacks(ticker)
         setHidden(true, animate)
+        face.view.animate().cancel()
+        if (animate) face.view.animate().alpha(1f).setDuration(250).start() else face.view.alpha = 1f
         renderSign()
     }
 
@@ -231,7 +259,10 @@ class EssentialHome(
 
     /** Just above the dock (or the bottom of the screen without one). */
     private fun placeSign() {
-        if (sign.visibility != View.VISIBLE || layer.height == 0) return
+        if (layer.height == 0) return
+        // The clock a little above the upper third, like a watch face
+        face.view.translationY = layer.height * 0.12f
+        if (sign.visibility != View.VISIBLE) return
         val layerPos = IntArray(2).also { layer.getLocationInWindow(it) }
         val dockPos = IntArray(2).also { dock.getLocationInWindow(it) }
         val bottom = if (dock.visibility == View.VISIBLE && dock.height > 0) dockPos[1] - layerPos[1]

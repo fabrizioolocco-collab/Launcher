@@ -282,9 +282,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             root = binding.mainLayout,
             homeColumn = binding.homeColumn,
             dock = binding.dock,
-            hidden = { listOf(binding.widgetsLayout, binding.widgetsFree, binding.searchRow, binding.emptyHomeHint) },
+            hidden = { listOf(binding.headerLayout, binding.widgetsLayout, binding.widgetsFree, binding.searchRow, binding.emptyHomeHint) },
             prefs = prefs,
             isSearching = { search.isActive },
+            scope = uiScope,
         )
 
         homeDetox = HomeDetoxBar(

@@ -349,6 +349,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.essentialSeconds -> askNumber(R.string.ml_essential_seconds, prefs.essentialSeconds, 2..60) {
                 prefs.essentialSeconds = it
             }
+            R.id.essentialData -> showEssentialData()
             R.id.essentialSign -> requireContext().showMenuDialog(getString(R.string.ml_essential_sign), listOf(
                 Prefs.ESSENTIAL_SIGN_DOTS, Prefs.ESSENTIAL_SIGN_COUNT,
             ).map { mode ->
@@ -525,6 +526,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.essentialHome.setOnClickListener(this)
         binding.essentialSeconds.setOnClickListener(this)
         binding.essentialSign.setOnClickListener(this)
+        binding.essentialData.setOnClickListener(this)
         binding.homeDetoxSeconds.setOnClickListener(this)
         binding.homeDetoxSearch.setOnClickListener(this)
         binding.homeDetoxSearchSeconds.setOnClickListener(this)
@@ -595,6 +597,23 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             ?: getString(R.string.ml_system_icons)
     }
 
+    private fun showEssentialData() {
+        val labels = mapOf(
+            Prefs.ESSENTIAL_DATE to R.string.ml_essential_data_date,
+            Prefs.ESSENTIAL_BATTERY to R.string.ml_essential_data_battery,
+            Prefs.ESSENTIAL_ALARM to R.string.ml_essential_data_alarm,
+            Prefs.ESSENTIAL_WEATHER to R.string.ml_essential_data_weather,
+            Prefs.ESSENTIAL_EVENT to R.string.ml_essential_data_event,
+        )
+        val dialog = requireContext().showMenuDialog(getString(R.string.ml_essential_data), Prefs.ESSENTIAL_DATA_ALL.map { item ->
+            MenuEntry(getString(labels.getValue(item)), checked = prefs.essentialShows(item), onToggle = { on ->
+                prefs.essentialData = if (on) prefs.essentialData + item else prefs.essentialData - item
+                true
+            })
+        })
+        dialog.setOnDismissListener { if (_binding != null) populateTextStyle() }
+    }
+
     private fun essentialSignLabel(mode: Int) = getString(
         if (mode == Prefs.ESSENTIAL_SIGN_COUNT) R.string.ml_essential_sign_count else R.string.ml_essential_sign_dots
     )
@@ -622,6 +641,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.essentialHome.setText(if (prefs.essentialHome) R.string.on else R.string.off)
         binding.essentialSeconds.text = getString(R.string.ml_detox_seconds, prefs.essentialSeconds)
         binding.essentialSign.text = essentialSignLabel(prefs.essentialSign)
+        binding.essentialData.text = prefs.essentialData.size.toString()
         binding.homeDetoxSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSeconds)
         binding.homeDetoxSearch.text = homeDetoxSearchLabel(prefs.homeDetoxSearch)
         binding.homeDetoxSearchSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSearchSeconds)
