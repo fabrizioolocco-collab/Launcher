@@ -16,18 +16,9 @@ class MyAccessibilityService : AccessibilityService() {
         return START_STICKY
     }
 
-    private var blinders: WhatsAppBlinders? = null
-
     override fun onServiceConnected() {
         Prefs(applicationContext).lockModeOn = true
-        blinders = WhatsAppBlinders(this)
         super.onServiceConnected()
-    }
-
-    override fun onDestroy() {
-        blinders?.release()
-        blinders = null
-        super.onDestroy()
     }
 
     private var lastBlockToast = 0L
@@ -88,11 +79,6 @@ class MyAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         try {
             checkDetox(event)
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        try {
-            blinders?.onEvent(event)
         } catch (e: Exception) {
             e.printStackTrace()
         }

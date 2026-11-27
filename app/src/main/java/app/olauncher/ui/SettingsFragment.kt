@@ -341,17 +341,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
                 prefs.homeDetox = !prefs.homeDetox
                 populateTextStyle()
             }
-            R.id.waBlinders -> {
-                prefs.waBlinders = !prefs.waBlinders
-                populateTextStyle()
-                if (prefs.waBlinders) {
-                    if (isAccessServiceEnabled(requireContext())) requireContext().showToast(R.string.ml_wa_blinders_hint, android.widget.Toast.LENGTH_LONG)
-                    else {
-                        requireContext().showToast(getString(R.string.ml_wa_blinders_needs_service))
-                        showAccessibilityDialog()
-                    }
-                }
-            }
             R.id.homeDetoxSearch -> requireContext().showMenuDialog(getString(R.string.ml_home_detox_search), listOf(
                 Prefs.HOME_DETOX_SEARCH_SHARED, Prefs.HOME_DETOX_SEARCH_UNLIMITED, Prefs.HOME_DETOX_SEARCH_LIMITED,
             ).map { mode ->
@@ -517,7 +506,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.alarmVibrateSeconds.setOnClickListener(this)
         binding.lockoutApps.setOnClickListener(this)
         binding.homeDetox.setOnClickListener(this)
-        binding.waBlinders.setOnClickListener(this)
         binding.homeDetoxSeconds.setOnClickListener(this)
         binding.homeDetoxSearch.setOnClickListener(this)
         binding.homeDetoxSearchSeconds.setOnClickListener(this)
@@ -608,7 +596,6 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.alarmVibrateSeconds.text = getString(R.string.ml_detox_seconds, prefs.alarmVibrateSeconds)
         binding.lockoutApps.text = DetoxManager.lockoutApps(ctx).size.toString()
         binding.homeDetox.setText(if (prefs.homeDetox) R.string.on else R.string.off)
-        binding.waBlinders.setText(if (prefs.waBlinders) R.string.on else R.string.off)
         binding.homeDetoxSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSeconds)
         binding.homeDetoxSearch.text = homeDetoxSearchLabel(prefs.homeDetoxSearch)
         binding.homeDetoxSearchSeconds.text = getString(R.string.ml_detox_seconds, prefs.homeDetoxSearchSeconds)

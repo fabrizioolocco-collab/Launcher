@@ -136,7 +136,6 @@ class Prefs(context: Context) {
     private val DETOX_LOCKOUT_RESET = "DETOX_LOCKOUT_RESET"
     private val ALARM_VIBRATE_SECONDS = "ALARM_VIBRATE_SECONDS"
     private val HOME_DETOX = "HOME_DETOX"
-    private val WA_BLINDERS = "WA_BLINDERS"
     private val HOME_DETOX_SECONDS = "HOME_DETOX_SECONDS"
     private val HOME_DETOX_LOCKOUT_AFTER = "HOME_DETOX_LOCKOUT_AFTER"
     private val HOME_DETOX_LOCKOUT_MINUTES = "HOME_DETOX_LOCKOUT_MINUTES"
@@ -225,11 +224,6 @@ class Prefs(context: Context) {
     var homeDetox: Boolean
         get() = prefs.getBoolean(HOME_DETOX, false)
         set(value) = prefs.edit { putBoolean(HOME_DETOX, value) }
-
-    /** WhatsApp with blinders: Updates, Communities and Meta AI covered inside WhatsApp. */
-    var waBlinders: Boolean
-        get() = prefs.getBoolean(WA_BLINDERS, false)
-        set(value) = prefs.edit { putBoolean(WA_BLINDERS, value) }
 
     var homeDetoxSeconds: Int
         get() = prefs.getInt(HOME_DETOX_SECONDS, 30)
