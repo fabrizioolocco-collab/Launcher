@@ -523,6 +523,10 @@
     <string name="ml_parking_auto_saved">Car parked here</string>
     <string name="ml_parking_auto_saving">Saving the car\'s position…</string>
     <string name="ml_parking_take_me">Take me there</string>
+    <string name="ml_parking_show_map">Show the car on the map</string>
+    <string name="ml_parking_opens">Parking opens</string>
+    <string name="ml_parking_opens_walk">Walking directions</string>
+    <string name="ml_parking_opens_map">Position only</string>
     <string name="ml_home_full">No room left on home</string>
     <string name="ml_settings_drawer">App list</string>
     <string name="ml_settings_notifications">Notifications and detox</string>

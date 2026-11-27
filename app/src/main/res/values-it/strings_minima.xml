@@ -520,6 +520,10 @@
     <string name="ml_parking_auto_saved">Auto parcheggiata qui</string>
     <string name="ml_parking_auto_saving">Salvo la posizione dell\'auto…</string>
     <string name="ml_parking_take_me">Portami lì</string>
+    <string name="ml_parking_show_map">Mostra l\'auto sulla mappa</string>
+    <string name="ml_parking_opens">Il parcheggio apre</string>
+    <string name="ml_parking_opens_walk">Navigazione a piedi</string>
+    <string name="ml_parking_opens_map">Solo la posizione</string>
     <string name="ml_home_full">Non c\u2019è più spazio in home</string>
     <string name="ml_settings_drawer">Menù app</string>
     <string name="ml_settings_notifications">Notifiche e detox</string>

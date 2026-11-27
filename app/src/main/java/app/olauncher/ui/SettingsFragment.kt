@@ -376,6 +376,11 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
             R.id.alarmVibrateSeconds -> askNumber(R.string.ml_alarm_vibrate_seconds, prefs.alarmVibrateSeconds, 0..300) {
                 prefs.alarmVibrateSeconds = it
             }
+            R.id.parkingOpens -> {
+                val ctx = requireContext()
+                app.olauncher.helper.ParkingShortcut.setWalksThere(ctx, !app.olauncher.helper.ParkingShortcut.walksThere(ctx))
+                populateParkingOpens()
+            }
             R.id.alarmRampSeconds -> askNumber(R.string.ml_alarm_ramp_seconds, prefs.alarmRampSeconds, 0..300) {
                 prefs.alarmRampSeconds = it
             }
@@ -525,6 +530,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeDetoxLockoutMinutes.setOnClickListener(this)
         binding.homeDetoxLockoutReset.setOnClickListener(this)
         binding.alarmRampSeconds.setOnClickListener(this)
+        binding.parkingOpens.setOnClickListener(this)
         binding.detoxLockColor.setOnClickListener(this)
         binding.phoneFolders?.setOnClickListener(this)
         binding.mediaViewer?.setOnClickListener(this)
@@ -636,6 +642,7 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
         binding.homeDetoxLockoutMinutes.text = getString(R.string.ml_detox_minutes, prefs.homeDetoxLockoutMinutes)
         binding.homeDetoxLockoutReset.text = getString(R.string.ml_detox_minutes, prefs.homeDetoxLockoutReset)
         binding.alarmRampSeconds.text = getString(R.string.ml_detox_seconds, prefs.alarmRampSeconds)
+        populateParkingOpens()
         binding.detoxLockColor.text = if (prefs.detoxLockColor == 0) getString(R.string.ml_default)
         else "#%06X".format(prefs.detoxLockColor and 0xFFFFFF)
         binding.newsOrder.setText(if (prefs.newsSortByCount) R.string.ml_news_count else R.string.ml_news_recent)
@@ -1121,6 +1128,12 @@ class SettingsFragment : BaseFragment(), View.OnClickListener, View.OnLongClickL
 
     private fun populateTextSize() {
         binding.textSizeValue.text = formatScale(prefs.textSizeScale)
+    }
+
+    private fun populateParkingOpens() {
+        binding.parkingOpens.text = getString(
+            if (app.olauncher.helper.ParkingShortcut.walksThere(requireContext())) R.string.ml_parking_opens_walk else R.string.ml_parking_opens_map
+        )
     }
 
     private fun toggleBoldFont() {

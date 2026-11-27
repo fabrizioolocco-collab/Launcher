@@ -212,14 +212,24 @@ object ParkingShortcut {
     /** Long press on the button walks to the car, unless the tap already does (then: the menu). */
     fun longPressOpensMaps(context: Context) = !ParkingAuto.isOn(context) && saved(context) != null
 
-    /** Walking navigation to the saved position in Google Maps, or null when nothing is saved. */
+    /** What opening the parking does (settings): walking navigation to the car, or only its position on the map. */
+    fun walksThere(context: Context) = prefs(context).getBoolean("WALK", true)
+
+    fun setWalksThere(context: Context, walk: Boolean) = prefs(context).edit { putBoolean("WALK", walk) }
+
+    /**
+     * Google Maps on the saved position, or null when nothing is saved: walking navigation already
+     * started, or only the pin on the map, as chosen in the settings.
+     */
     fun navigationIntent(context: Context): Intent? {
         val position = saved(context) ?: return null
-        return Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${position.latitude},${position.longitude}&mode=w"))
-            .setPackage("com.google.android.apps.maps")
+        val point = "${position.latitude},${position.longitude}"
+        val uri = if (walksThere(context)) "google.navigation:q=$point&mode=w"
+        else "geo:$point?q=$point(${Uri.encode(context.getString(R.string.ml_parking))})"
+        return Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage("com.google.android.apps.maps")
     }
 
-    /** Walks to the saved position in Google Maps (another maps app, or the browser, as a fallback). */
+    /** Opens the saved position in Google Maps as chosen (another maps app, or the browser, as a fallback). */
     fun openMaps(context: Context) {
         val position = saved(context) ?: run {
             context.showToast(context.getString(R.string.ml_parking_none))
@@ -227,11 +237,13 @@ object ParkingShortcut {
         }
         val label = Uri.encode(context.getString(R.string.ml_parking))
         val point = "${position.latitude},${position.longitude}"
+        val web = if (walksThere(context)) "https://www.google.com/maps/dir/?api=1&destination=$point&travelmode=walking"
+        else "https://www.google.com/maps/search/?api=1&query=$point"
         val intents = listOfNotNull(
             navigationIntent(context),
-            Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/maps/dir/?api=1&destination=$point&travelmode=walking"))
-                .setPackage("com.google.android.apps.maps"),
+            Intent(Intent.ACTION_VIEW, Uri.parse(web)).setPackage("com.google.android.apps.maps"),
             Intent(Intent.ACTION_VIEW, Uri.parse("geo:$point?q=$point($label)")),
+            Intent(Intent.ACTION_VIEW, Uri.parse(web)),
         )
         for (intent in intents) {
             try {
@@ -255,7 +267,7 @@ object ParkingShortcut {
 
     /** Menu entries of the parking button: walk there, save now (then [ParkingAuto.menuEntries], at the end). */
     fun menuEntries(activity: Activity): List<MenuEntry> = listOfNotNull(
-        if (saved(activity) != null) MenuEntry(activity.getString(R.string.ml_parking_open_maps)) { openMaps(activity) } else null,
+        if (saved(activity) != null) MenuEntry(activity.getString(if (walksThere(activity)) R.string.ml_parking_open_maps else R.string.ml_parking_show_map)) { openMaps(activity) } else null,
         MenuEntry(activity.getString(R.string.ml_parking_save)) { save(activity) },
     )
 
