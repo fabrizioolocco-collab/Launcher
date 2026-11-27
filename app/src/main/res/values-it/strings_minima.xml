@@ -1325,4 +1325,5 @@
     <string name="ml_essential_all">Tutte le app</string>
     <string name="ml_essential_back">Indietro</string>
     <string name="ml_essential_notified">Con notifiche</string>
+    <string name="ml_search_hint_short">Cerca</string>
 </resources>

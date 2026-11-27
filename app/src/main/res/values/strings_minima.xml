@@ -1328,4 +1328,5 @@
     <string name="ml_essential_all">All apps</string>
     <string name="ml_essential_back">Back</string>
     <string name="ml_essential_notified">With notifications</string>
+    <string name="ml_search_hint_short">Search</string>
 </resources>

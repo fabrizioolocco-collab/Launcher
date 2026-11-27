@@ -300,6 +300,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
                         binding.dock.requestLayout()
                     }
                 }
+                // The simple view's bar says only "Search"
+                binding.searchInput.setHint(if (state == EssentialHome.OFF) R.string.ml_search_hint_all else R.string.ml_search_hint_short)
                 updateDetoxButton()
             },
             onLongPress = { showHomeMenu(null) },
