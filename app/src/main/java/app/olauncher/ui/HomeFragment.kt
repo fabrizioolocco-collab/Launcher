@@ -291,7 +291,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             items = { exclude -> widgets.pageItems(exclude) },
             onState = { state ->
                 dock.keys = state == EssentialHome.REST
-                binding.dockSlot.isVisible = state != EssentialHome.PAGE
+                // The search page hides the dock: back from an app it opened, it stays hidden
+                binding.dockSlot.isVisible = state != EssentialHome.PAGE && !search.isActive
                 // The keys as far from the search bar as from one another
                 (binding.dock.layoutParams as ViewGroup.MarginLayoutParams).let {
                     val margin = (if (state == EssentialHome.REST) 4 else 8).dpToPx()
