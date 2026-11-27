@@ -44,6 +44,9 @@ class EssentialFace(private val context: Context, private val prefs: Prefs, priv
     private val soft = (ink and 0x00FFFFFF) or 0xCC000000.toInt()
     private val alert = 0xFFE0473E.toInt()
 
+    /** A tap on a tag or on the appointment (essential home opens the calendar under them). */
+    var onTap: (() -> Unit)? = null
+
     val view = LinearLayout(context).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER_HORIZONTAL
@@ -103,6 +106,8 @@ class EssentialFace(private val context: Context, private val prefs: Prefs, priv
             marginStart = 4.dpToPx(); marginEnd = 4.dpToPx()
         }) }
         view.addView(tags, wrap(top = 26))
+        listOf(battery.first, alarm.first, weather.first).forEach { it.setOnClickListener { onTap?.invoke() } }
+        event.setOnClickListener { onTap?.invoke() }
         view.addView(event, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 16.dpToPx() })
     }
 

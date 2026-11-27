@@ -42,7 +42,7 @@ class EssentialHome(
     private val hidden: () -> List<View>,
     private val prefs: Prefs,
     private val isSearching: () -> Boolean,
-    scope: kotlinx.coroutines.CoroutineScope,
+    private val scope: kotlinx.coroutines.CoroutineScope,
     /** At rest (true) or the whole home (false): the dock turns into big keys, the search row goes. */
     private val onRest: (Boolean) -> Unit,
 ) {
@@ -124,6 +124,7 @@ class EssentialHome(
             topMargin = 6.dpToPx()
         })
         layer.addView(face.view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        face.onTap = { if (calendarOpen) closeCalendar(animate = true) else openCalendar() }
         layer.addView(sign, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dock.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placeSign() }
         root.addView(layer, root.indexOfChild(homeColumn) + 1,
@@ -137,9 +138,11 @@ class EssentialHome(
     fun apply() {
         handler.removeCallbacks(ticker)
         full = false
+        closeCalendar(animate = false)
         if (active()) {
             layer.visibility = View.VISIBLE
             face.view.animate().cancel()
+            face.view.visibility = View.VISIBLE
             face.view.alpha = 1f
             setHidden(true, animate = false)
             onRest(true)
@@ -174,7 +177,51 @@ class EssentialHome(
         face.stop()
         setHidden(false, animate = false)
         onRest(false)
+        calendar?.let { layer.removeView(it) }
+        calendar = null
         root.removeView(layer)
+    }
+
+    // ---------------------------------------------------------------- the calendar under the face
+
+    private var calendar: app.olauncher.ui.widgets.CalendarWidgetView? = null
+    private var calendarOpen = false
+
+    /** The calendar widget of home, with its settings (or a calendar of its own when home has none). */
+    private fun calendarWidgetId(): Int =
+        app.olauncher.data.HomeWidgetsRepository(context).load()
+            .firstOrNull { it.builtin == app.olauncher.ui.widgets.CalendarWidgetView.KIND }?.appWidgetId ?: OWN_CALENDAR_ID
+
+    private fun openCalendar() {
+        val activity = context as? android.app.Activity ?: return
+        val id = calendarWidgetId()
+        val view = calendar?.takeIf { it.widgetId == id } ?: run {
+            calendar?.let { layer.removeView(it) }
+            app.olauncher.ui.widgets.CalendarWidgetView(activity, id, scope).also {
+                layer.addView(it, layer.indexOfChild(face.view) + 1, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0).apply {
+                    marginStart = 16.dpToPx()
+                    marginEnd = 16.dpToPx()
+                })
+                calendar = it
+            }
+        }
+        calendarOpen = true
+        view.visibility = View.VISIBLE
+        view.alpha = 0f
+        placeSign()
+        view.animate().alpha(1f).setDuration(200).start()
+    }
+
+    private fun closeCalendar(animate: Boolean) {
+        if (!calendarOpen) return
+        calendarOpen = false
+        val view = calendar ?: return
+        view.animate().cancel()
+        if (animate) view.animate().alpha(0f).setDuration(150).withEndAction {
+            if (!calendarOpen) view.visibility = View.GONE
+        }.start()
+        else view.visibility = View.GONE
+        placeSign()
     }
 
     fun setNotifications(map: Map<String, AppNotifications>, dockAppKeys: Set<String>) {
@@ -185,8 +232,10 @@ class EssentialHome(
 
     private fun showFull() {
         full = true
+        closeCalendar(animate = true)
         sign.animate().alpha(0f).setDuration(200).start()
-        face.view.animate().alpha(0f).setDuration(200).start()
+        // Out of the way too: its tags must not take the taps meant for the home under them
+        face.view.animate().alpha(0f).setDuration(200).withEndAction { if (full) face.view.visibility = View.INVISIBLE }.start()
         onRest(false)
         setHidden(false, animate = true)
         restartTime()
@@ -200,6 +249,7 @@ class EssentialHome(
         setHidden(true, animate)
         onRest(true)
         face.view.animate().cancel()
+        face.view.visibility = View.VISIBLE
         if (animate) face.view.animate().alpha(1f).setDuration(250).start() else face.view.alpha = 1f
         renderSign()
     }
@@ -267,21 +317,40 @@ class EssentialHome(
     /** Just above the dock (or the bottom of the screen without one). */
     private fun placeSign() {
         if (layer.height == 0) return
-        // The clock a little above the upper third, like a watch face
-        face.view.translationY = layer.height * 0.12f
-        if (sign.visibility != View.VISIBLE) return
+        // The clock a little above the upper third, like a watch face; higher with the calendar open
+        val faceTop = layer.height * (if (calendarOpen) 0.04f else 0.12f)
+        face.view.translationY = faceTop
         val layerPos = IntArray(2).also { layer.getLocationInWindow(it) }
         val dockPos = IntArray(2).also { dock.getLocationInWindow(it) }
         val bottom = if (dock.visibility == View.VISIBLE && dock.height > 0) dockPos[1] - layerPos[1]
         else layer.height - 96.dpToPx()
-        sign.measure(
-            View.MeasureSpec.makeMeasureSpec(layer.width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
-        )
-        sign.translationY = (bottom - sign.measuredHeight - 20.dpToPx()).toFloat().coerceAtLeast(0f)
+        var free = bottom.toFloat()
+        if (sign.visibility == View.VISIBLE) {
+            sign.measure(
+                View.MeasureSpec.makeMeasureSpec(layer.width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+            )
+            sign.translationY = (bottom - sign.measuredHeight - 20.dpToPx()).toFloat().coerceAtLeast(0f)
+            free = sign.translationY
+        }
+        val cal = calendar ?: return
+        if (!calendarOpen) return
+        // Between the face and the sign (or the dock)
+        val top = faceTop + face.view.height + 14.dpToPx()
+        val height = (free - 12.dpToPx() - top).toInt().coerceAtLeast(MIN_CALENDAR_DP.dpToPx())
+        cal.translationY = top
+        val lp = cal.layoutParams
+        if (lp.height != height) {
+            lp.height = height
+            // Not in the middle of this layout pass
+            cal.post { cal.layoutParams = lp }
+        }
     }
 
     companion object {
         private const val MAX_DOTS = 12
+        private const val MIN_CALENDAR_DP = 160
+        /** Settings of the calendar shown here when home has no calendar widget. */
+        private const val OWN_CALENDAR_ID = -7001
     }
 }
