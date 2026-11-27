@@ -169,7 +169,6 @@ class DockController(
     private fun renderKeys(shown: List<Pair<PinnedApp, AppModel.App>>) {
         val column = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, 0, 0, 12.dpToPx())
         }
         shown.chunked(KEY_COLUMNS).forEachIndexed { r, line ->
             val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }

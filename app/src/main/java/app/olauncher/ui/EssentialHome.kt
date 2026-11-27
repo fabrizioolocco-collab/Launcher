@@ -54,6 +54,8 @@ class EssentialHome(
     private val items: (Set<String>) -> List<HomeWidgetsController.PageItem>,
     /** [OFF], [REST] or [PAGE]: the dock as keys or gone, the search row gone or back. */
     private val onState: (Int) -> Unit,
+    /** A long press on an empty spot: home's menu (add an app, the settings). */
+    private val onLongPress: () -> Unit,
 ) {
     private val face = EssentialFace(context, prefs, scope)
     private val minute = object : Runnable {
@@ -67,8 +69,6 @@ class EssentialHome(
     private var full = false
     private var deadline = 0L
     private var dockKeys: Set<String> = emptySet()
-    private var searchGrace = 0L
-    private var wasSearching = false
     private val skinned = Skin.isOn(context)
     private val ink = if (skinned) Skin.palette(context).text else context.getColorFromAttr(R.attr.primaryColor)
     private val red = NotificationBadge.NOTIFICATION_COLOR
@@ -92,6 +92,10 @@ class EssentialHome(
         overScrollMode = View.OVER_SCROLL_NEVER
         isFillViewport = true
         visibility = View.GONE
+        pageList.setOnLongClickListener {
+            onLongPress()
+            true
+        }
         addView(pageList, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
@@ -99,34 +103,36 @@ class EssentialHome(
         private var downX = 0f
         private var downY = 0f
         private val slop = ViewConfiguration.get(context).scaledTouchSlop
+        private val longPress = Runnable {
+            performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            onLongPress()
+        }
 
         override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-            if (full && ev.actionMasked == MotionEvent.ACTION_DOWN) {
-                restartTime()
-                // The search is about to open: its results take the page's place at once
-                if (inView(searchRow, ev.rawX, ev.rawY)) {
-                    searchGrace = SystemClock.elapsedRealtime() + 700
-                    page.visibility = View.INVISIBLE
-                }
-            }
+            if (full && ev.actionMasked == MotionEvent.ACTION_DOWN) restartTime()
             return super.dispatchTouchEvent(ev)
         }
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(ev: MotionEvent): Boolean {
             if (!active()) return false
-            if (full) return page.visibility == View.VISIBLE && !inView(searchRow, ev.rawX, ev.rawY)
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    if (inView(dock, ev.rawX, ev.rawY)) return false
+                    // The search row always, the dock at rest: theirs
+                    if (inView(searchRow, ev.rawX, ev.rawY) || (!full && inView(dock, ev.rawX, ev.rawY))) return false
                     downX = ev.x
                     downY = ev.y
+                    handler.postDelayed(longPress, ViewConfiguration.getLongPressTimeout().toLong())
                 }
+                MotionEvent.ACTION_MOVE ->
+                    if (abs(ev.x - downX) > slop || abs(ev.y - downY) > slop) handler.removeCallbacks(longPress)
                 MotionEvent.ACTION_UP -> {
+                    handler.removeCallbacks(longPress)
                     val dx = ev.x - downX
                     val dy = ev.y - downY
-                    if (dy > slop * 4 && abs(dy) > abs(dx) && !prefs.swipeDownOff) expandNotificationDrawer(context)
+                    if (!full && dy > slop * 4 && abs(dy) > abs(dx) && !prefs.swipeDownOff) expandNotificationDrawer(context)
                 }
+                MotionEvent.ACTION_CANCEL -> handler.removeCallbacks(longPress)
             }
             return true
         }
@@ -137,23 +143,30 @@ class EssentialHome(
         }
     }
 
-    private val ticker = object : Runnable {
+    private var hadFocus = true
+
+    /** While home is on screen: steps aside for the search, counts the page's time. */
+    private val watch = object : Runnable {
         override fun run() {
-            if (!full) return
+            if (!active()) return
             val searching = isSearching()
-            val now = SystemClock.elapsedRealtime()
-            // Searching or a menu open on home: the time waits, and the search has the screen
-            if (searching || !root.hasWindowFocus()) restartTime()
-            if (searching || now < searchGrace) page.visibility = View.INVISIBLE
-            else if (page.visibility != View.VISIBLE) {
-                // The search closed and put home's views back: the page's own again
-                onState(PAGE)
-                page.visibility = View.VISIBLE
+            val focus = root.hasWindowFocus()
+            if (searching) {
+                if (layer.visibility == View.VISIBLE) layer.visibility = View.INVISIBLE
+            } else if (layer.visibility != View.VISIBLE) {
+                // The search closed and put home's views back: this view's own again
+                onState(if (full) PAGE else REST)
+                layer.visibility = View.VISIBLE
                 place()
             }
-            wasSearching = searching
-            if (now >= deadline) hidePage(animate = true)
-            else handler.postDelayed(this, 200)
+            if (full) {
+                // Searching or a menu open: the time waits; a menu closed may have changed the apps
+                if (searching || !focus) restartTime()
+                if (focus && !hadFocus) renderPage()
+                if (SystemClock.elapsedRealtime() >= deadline) hidePage(animate = true)
+            } else if (focus && !hadFocus) renderButton()
+            hadFocus = focus
+            handler.postDelayed(this, 150)
         }
     }
 
@@ -176,7 +189,6 @@ class EssentialHome(
 
     /** Settings changed or home came back: at rest, or out of the way when switched off. */
     fun apply() {
-        handler.removeCallbacks(ticker)
         full = false
         page.visibility = View.GONE
         closeCalendar(animate = false)
@@ -200,14 +212,18 @@ class EssentialHome(
         apply()
         face.stop()
         handler.removeCallbacks(minute)
+        handler.removeCallbacks(watch)
     }
 
     fun onHomeResumed() {
         apply()
         handler.removeCallbacks(minute)
+        handler.removeCallbacks(watch)
         if (active()) {
             face.start()
             handler.postDelayed(minute, 60_000L)
+            hadFocus = true
+            handler.post(watch)
         }
     }
 
@@ -219,7 +235,7 @@ class EssentialHome(
     }
 
     fun release() {
-        handler.removeCallbacks(ticker)
+        handler.removeCallbacks(watch)
         handler.removeCallbacks(minute)
         face.stop()
         setHidden(false)
@@ -292,13 +308,10 @@ class EssentialHome(
         page.animate().alpha(1f).setDuration(180).start()
         restartTime()
         place()
-        handler.removeCallbacks(ticker)
-        handler.post(ticker)
     }
 
     private fun hidePage(animate: Boolean) {
         full = false
-        handler.removeCallbacks(ticker)
         page.animate().cancel()
         page.visibility = View.GONE
         onState(REST)
@@ -427,6 +440,11 @@ class EssentialHome(
         foreground = UiKit.ripple(context)
         contentDescription = item.label
         setOnClickListener { item.open() }
+        // The icon's own menu (remove it, its icon…), home's for an app that isn't on home
+        setOnLongClickListener {
+            item.menu?.invoke() ?: onLongPress()
+            true
+        }
     }
 
     /** An app without notifications: its icon over its name. */
@@ -476,12 +494,12 @@ class EssentialHome(
             }
             return
         }
-        val buttonTop = (topOf(dock, layer.height - 96.dpToPx()) - BUTTON_DP.dpToPx() - 4.dpToPx()).toFloat().coerceAtLeast(0f)
+        val buttonTop = (topOf(dock, layer.height - 96.dpToPx()) - BUTTON_DP.dpToPx() - GAP_DP.dpToPx()).toFloat().coerceAtLeast(0f)
         allButton.translationY = buttonTop
         val cal = calendar ?: return
         if (!calendarOpen) return
         val top = faceTop + face.view.height + 14.dpToPx()
-        val height = (buttonTop - 12.dpToPx() - top).toInt().coerceAtLeast(MIN_CALENDAR_DP.dpToPx())
+        val height = (buttonTop - GAP_DP.dpToPx() - top).toInt().coerceAtLeast(MIN_CALENDAR_DP.dpToPx())
         cal.translationY = top
         val lp = cal.layoutParams
         if (lp.height != height) {
@@ -496,6 +514,8 @@ class EssentialHome(
         const val REST = 1
         const val PAGE = 2
         private const val BUTTON_DP = 46
+        /** Between the calendar, the key All apps and the dock's keys: the same as between the keys. */
+        private const val GAP_DP = 8
         private const val COLUMNS = 4
         private const val NOTIFIED_COLUMNS = 2
         private const val TILE_RED = 0xFF3A1715.toInt()

@@ -97,7 +97,8 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
         val b = _binding ?: return
         val ring = app.olauncher.ui.widgets.DetoxRingView.State.enabled
         b.detoxButton.imageAlpha = if (ring) 0 else 255
-        val show = ring || b.detoxButton.isVisible
+        // The simple view of home has no Detox button
+        val show = (ring || b.detoxButton.isVisible) && !(::prefs.isInitialized && prefs.essentialHome)
         if (b.detoxButtonBox.isVisible != show) b.detoxButtonBox.isVisible = show
     }
     private lateinit var detoxPage: DetoxPage
@@ -291,8 +292,17 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             onState = { state ->
                 dock.keys = state == EssentialHome.REST
                 binding.dockSlot.isVisible = state != EssentialHome.PAGE
-                binding.searchRow.isVisible = state != EssentialHome.REST
+                // The keys as far from the search bar as from one another
+                (binding.dock.layoutParams as ViewGroup.MarginLayoutParams).let {
+                    val margin = (if (state == EssentialHome.REST) 4 else 8).dpToPx()
+                    if (it.bottomMargin != margin) {
+                        it.bottomMargin = margin
+                        binding.dock.requestLayout()
+                    }
+                }
+                updateDetoxButton()
             },
+            onLongPress = { showHomeMenu(null) },
         )
 
         homeDetox = HomeDetoxBar(
@@ -509,29 +519,7 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
 
             override fun onEmptyLongPress(rawX: Float, rawY: Float) {
                 // New items land on the pressed cell when they fit there
-                val cell = binding.widgetsLayout.cellAt(rawX, rawY)
-                news.showHomeMenu(
-                    openSettings = {
-                        try {
-                            findNavController().navigate(R.id.action_mainFragment_to_settingsFragment)
-                            viewModel.firstOpen(false)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    },
-                    addApp = {
-                        widgets.setPreferredCell(cell?.first, cell?.second)
-                        widgets.showAddAppDialog()
-                    },
-                    addWidget = {
-                        widgets.setPreferredCell(cell?.first, cell?.second)
-                        widgets.showAddWidgetDialog()
-                    },
-                    addFolder = { createFolderShortcut() },
-                    parking = { showParkingMenu() },
-                    detox = { detox.open() },
-                    onLockChanged = { widgets.endEditing() },
-                )
+                showHomeMenu(binding.widgetsLayout.cellAt(rawX, rawY))
             }
 
             override fun onEmptyDoubleTap() {
@@ -895,6 +883,32 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
     }
 
     /** Launches an app shown on home; the fake test app "opens" by clearing its notifications. */
+    /** Home's own menu: lock, add an app, a widget or a folder, tools, the settings. */
+    private fun showHomeMenu(cell: Pair<Int, Int>?) {
+        news.showHomeMenu(
+            openSettings = {
+                try {
+                    findNavController().navigate(R.id.action_mainFragment_to_settingsFragment)
+                    viewModel.firstOpen(false)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            },
+            addApp = {
+                widgets.setPreferredCell(cell?.first, cell?.second)
+                widgets.showAddAppDialog()
+            },
+            addWidget = {
+                widgets.setPreferredCell(cell?.first, cell?.second)
+                widgets.showAddWidgetDialog()
+            },
+            addFolder = { createFolderShortcut() },
+            parking = { showParkingMenu() },
+            detox = { detox.open() },
+            onLockChanged = { widgets.endEditing() },
+        )
+    }
+
     private fun launchHomeApp(app: AppModel.App) {
         if (FolderShortcuts.isFolder(app.appPackage)) FolderShortcuts.open(requireContext(), app.appPackage)
         else if (ParkingShortcut.isParking(app.appPackage)) ParkingShortcut.onTap(requireActivity()) { showParkingMenu() }

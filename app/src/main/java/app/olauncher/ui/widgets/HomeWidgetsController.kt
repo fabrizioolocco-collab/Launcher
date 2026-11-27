@@ -432,7 +432,11 @@ class HomeWidgetsController(
     }
 
     /** An icon of essential home's page of apps: what it shows and what a tap does. */
-    class PageItem(val label: String, val count: Int, val icon: suspend (Int) -> android.graphics.Bitmap?, val open: () -> Unit)
+    class PageItem(
+        val label: String, val count: Int, val icon: suspend (Int) -> android.graphics.Bitmap?,
+        /** The menu of the icon on home; null for an app that is not there. */
+        val menu: (() -> Unit)?, val open: () -> Unit,
+    )
 
     /**
      * The grid's apps and folders in their order, then the apps that are nowhere on home but have
@@ -441,9 +445,10 @@ class HomeWidgetsController(
     fun pageItems(exclude: Set<String>): List<PageItem> {
         val context = activity.applicationContext
         val iconPack = prefs.iconPack
-        fun appItem(app: AppModel.App) = PageItem(
+        fun appItem(app: AppModel.App, menu: (() -> Unit)?) = PageItem(
             app.appLabel, notificationCount(app),
             { size -> withContext(Dispatchers.IO) { IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size) } },
+            menu,
         ) {
             if (notificationCount(app) > 0) NotificationBadge.showNotifications(activity, app) { onLaunchApp(app) }
             else onLaunchApp(app)
@@ -463,14 +468,14 @@ class HomeWidgetsController(
                             IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, s)
                         }
                     }
-                }) { openFolder(item) }
-            } else findApp(item)?.let { items += appItem(it) }
+                }, { showIconMenu(item) }) { openFolder(item) }
+            } else findApp(item)?.let { items += appItem(it) { showIconMenu(item) } }
         }
         val onHome = appKeys() + exclude
         apps.filter { app ->
             notificationCount(app) > 0 && NotificationRepository.key(app.appPackage, app.user.toString()) !in onHome &&
                 DetoxManager.isAllowed(activity, app.appPackage)
-        }.distinctBy { NotificationRepository.key(it.appPackage, it.user.toString()) }.forEach { items += appItem(it) }
+        }.distinctBy { NotificationRepository.key(it.appPackage, it.user.toString()) }.forEach { items += appItem(it, null) }
         return items
     }
 
