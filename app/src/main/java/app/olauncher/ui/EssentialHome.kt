@@ -43,6 +43,8 @@ class EssentialHome(
     private val prefs: Prefs,
     private val isSearching: () -> Boolean,
     scope: kotlinx.coroutines.CoroutineScope,
+    /** At rest (true) or the whole home (false): the dock turns into big keys, the search row goes. */
+    private val onRest: (Boolean) -> Unit,
 ) {
     private val face = EssentialFace(context, prefs, scope)
     private val minute = object : Runnable {
@@ -140,11 +142,13 @@ class EssentialHome(
             face.view.animate().cancel()
             face.view.alpha = 1f
             setHidden(true, animate = false)
+            onRest(true)
             renderSign()
         } else {
             layer.visibility = View.GONE
             sign.visibility = View.GONE
             setHidden(false, animate = false)
+            onRest(false)
         }
     }
 
@@ -169,6 +173,7 @@ class EssentialHome(
         handler.removeCallbacks(minute)
         face.stop()
         setHidden(false, animate = false)
+        onRest(false)
         root.removeView(layer)
     }
 
@@ -182,6 +187,7 @@ class EssentialHome(
         full = true
         sign.animate().alpha(0f).setDuration(200).start()
         face.view.animate().alpha(0f).setDuration(200).start()
+        onRest(false)
         setHidden(false, animate = true)
         restartTime()
         handler.removeCallbacks(ticker)
@@ -192,6 +198,7 @@ class EssentialHome(
         full = false
         handler.removeCallbacks(ticker)
         setHidden(true, animate)
+        onRest(true)
         face.view.animate().cancel()
         if (animate) face.view.animate().alpha(1f).setDuration(250).start() else face.view.alpha = 1f
         renderSign()

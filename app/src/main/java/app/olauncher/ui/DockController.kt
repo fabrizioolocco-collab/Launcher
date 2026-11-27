@@ -118,6 +118,17 @@ class DockController(
 
     // ---------------------------------------------------------------- rendering
 
+    /**
+     * Essential home at rest: the dock as big keys with their names, three to a row, like the keys of
+     * a phone; otherwise the usual row of tiles.
+     */
+    var keys = false
+        set(value) {
+            if (field == value) return
+            field = value
+            render()
+        }
+
     fun render() {
         container.removeAllViews()
         val shown = dock.mapNotNull { d -> findApp(d)?.let { d to it } }.take(max)
@@ -125,6 +136,10 @@ class DockController(
         // otherwise the home grid grows and shrinks with it and its icons get moved up for good
         container.isVisible = dock.isNotEmpty()
         if (!container.isVisible) return
+        if (keys) {
+            renderKeys(shown)
+            return
+        }
         val row = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             background = if (skinned) Skin.panel(context, cutDp = 12, radiusDp = 22) else UiKit.cardBackground(context, 20)
@@ -149,6 +164,96 @@ class DockController(
         }
         if (shown.isEmpty()) row.visibility = View.INVISIBLE
         container.addView(row, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    private fun renderKeys(shown: List<Pair<PinnedApp, AppModel.App>>) {
+        val column = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 0, 12.dpToPx())
+        }
+        shown.chunked(KEY_COLUMNS).forEachIndexed { r, line ->
+            val row = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+            for (c in 0 until KEY_COLUMNS) {
+                val lp = LinearLayout.LayoutParams(0, KEY_HEIGHT_DP.dpToPx(), 1f).apply {
+                    marginStart = if (c == 0) 0 else (KEY_GAP_DP / 2).dpToPx()
+                    marginEnd = if (c == KEY_COLUMNS - 1) 0 else (KEY_GAP_DP / 2).dpToPx()
+                }
+                val entry = line.getOrNull(c)
+                row.addView(if (entry == null) FrameLayout(context) else key(r * KEY_COLUMNS + c, entry.first, entry.second), lp)
+            }
+            column.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                if (r > 0) topMargin = KEY_GAP_DP.dpToPx()
+            })
+        }
+        container.addView(column, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+    }
+
+    /** A big key: the app's icon and name, its notifications as a red tile with their number. */
+    private fun key(index: Int, dockApp: PinnedApp, app: AppModel.App) = FrameLayout(context).apply {
+        val count = notificationCount(app)
+        val notified = count > 0
+        val red = NotificationBadge.NOTIFICATION_COLOR
+        background = if (skinned) Skin.panel(
+            context, if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor), if (notified) red else null, 10, 18,
+        ) else GradientDrawable().apply {
+            cornerRadius = 18.dpToPx().toFloat()
+            setColor(if (notified) TILE_RED else context.getColorFromAttr(R.attr.tileColor))
+            if (notified) setStroke(1.dpToPx(), red)
+        }
+        foreground = UiKit.ripple(context)
+        contentDescription = app.appLabel
+        isClickable = true
+        isLongClickable = true
+        setOnClickListener {
+            if (notificationCount(app) > 0) NotificationBadge.showNotifications(context, app) { onLaunch(app) }
+            else onLaunch(app)
+        }
+        setOnLongClickListener {
+            showAppMenu(index, dockApp, app)
+            true
+        }
+        val textColor = if (skinned) Skin.palette(context).text else context.getColorFromAttr(R.attr.primaryColor)
+        val icon = ImageView(context).apply {
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            if (skinned && Skin.palette(context).iconTint != 0)
+                colorFilter = android.graphics.PorterDuffColorFilter(Skin.palette(context).text, android.graphics.PorterDuff.Mode.MULTIPLY)
+        }
+        val label = android.widget.TextView(context).apply {
+            text = app.appLabel
+            setTextColor(textColor)
+            alpha = 0.85f
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 12f)
+            setAllCaps(true)
+            letterSpacing = 0.08f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = android.view.Gravity.CENTER
+            Skin.bodyFace(context)?.let { typeface = it }
+        }
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = android.view.Gravity.CENTER
+            setPadding(6.dpToPx(), 0, 6.dpToPx(), 0)
+            addView(icon, LinearLayout.LayoutParams(KEY_ICON_DP.dpToPx(), KEY_ICON_DP.dpToPx()))
+            addView(label, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                topMargin = 8.dpToPx()
+            })
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        if (notified) addView(android.widget.TextView(context).apply {
+            text = if (count > 99) "99+" else count.toString()
+            setTextColor(red)
+            setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
+            setTypeface(Skin.bodyFace(context) ?: typeface, android.graphics.Typeface.BOLD)
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+            android.view.Gravity.TOP or android.view.Gravity.END).apply { topMargin = 6.dpToPx(); marginEnd = 10.dpToPx() })
+        val size = KEY_ICON_DP.dpToPx()
+        val iconPack = prefs.iconPack
+        scope.launch {
+            val bitmap = withContext(Dispatchers.IO) {
+                IconPackManager.getIcon(context, app.appPackage, app.activityClassName, app.user, iconPack, size)
+            } ?: return@launch
+            icon.setImageDrawable(IconPackManager.toDrawable(context, bitmap, size))
+        }
     }
 
     private fun tile(index: Int, dockApp: PinnedApp, app: AppModel.App) = ImageView(context).apply {
@@ -227,5 +332,9 @@ class DockController(
         private const val GRID_GAP_DP = 4
         private const val TILE_RED = 0xFF3A1715.toInt()
         private const val TILE_GREEN = 0xFF14532D.toInt()
+        private const val KEY_COLUMNS = 3
+        private const val KEY_HEIGHT_DP = 84
+        private const val KEY_GAP_DP = 8
+        private const val KEY_ICON_DP = 30
     }
 }

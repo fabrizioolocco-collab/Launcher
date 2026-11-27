@@ -40,8 +40,8 @@ import kotlin.math.roundToInt
  */
 class EssentialFace(private val context: Context, private val prefs: Prefs, private val scope: CoroutineScope) {
 
-    private val text = context.getColorFromAttr(R.attr.primaryColor)
-    private val soft = (text and 0x00FFFFFF) or 0xCC000000.toInt()
+    private val ink = context.getColorFromAttr(R.attr.primaryColor)
+    private val soft = (ink and 0x00FFFFFF) or 0xCC000000.toInt()
     private val alert = 0xFFE0473E.toInt()
 
     val view = LinearLayout(context).apply {
@@ -53,7 +53,7 @@ class EssentialFace(private val context: Context, private val prefs: Prefs, priv
         format12Hour = "h:mm"
         format24Hour = "H:mm"
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 92f)
-        setTextColor(text)
+        setTextColor(ink)
         includeFontPadding = false
         gravity = Gravity.CENTER
         typeface = Skin.clockFace(context) ?: android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL)
@@ -118,7 +118,7 @@ class EssentialFace(private val context: Context, private val prefs: Prefs, priv
         }
         val value = TextView(context).apply {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-            setTextColor(text)
+            setTextColor(ink)
             Skin.bodyFace(context)?.let { typeface = it }
         }
         val box = LinearLayout(context).apply {
@@ -184,7 +184,7 @@ class EssentialFace(private val context: Context, private val prefs: Prefs, priv
             parts.first.setImageResource(if (charging) R.drawable.ic_m_bolt else R.drawable.ic_m_battery)
             parts.first.imageTintList = ColorStateList.valueOf(if (low) alert else soft)
             parts.second.text = "$batteryLevel%"
-            parts.second.setTextColor(if (low) alert else text)
+            parts.second.setTextColor(if (low) alert else ink)
         }
         updateTags()
     }

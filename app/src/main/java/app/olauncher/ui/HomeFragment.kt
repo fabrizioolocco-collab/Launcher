@@ -286,6 +286,10 @@ class HomeFragment : BaseFragment(), View.OnClickListener, View.OnLongClickListe
             prefs = prefs,
             isSearching = { search.isActive },
             scope = uiScope,
+            onRest = { rest ->
+                dock.keys = rest
+                binding.searchRow.isVisible = !rest
+            },
         )
 
         homeDetox = HomeDetoxBar(
